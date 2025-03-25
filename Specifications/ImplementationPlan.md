@@ -29,17 +29,88 @@ Vulnerability Assessment Copilot
 └── Event Handling System (Protobuf)
 ```
 
-## Dependency Installation
+### Extensibility Architecture
 
-### Prerequisites
+The system is designed for extensibility through three primary mechanisms:
 
-Before starting the implementation, ensure the following prerequisites are installed:
+1. **Tool Integration Framework**: Allows adding new security tools beyond CodeQL
+2. **Event-Driven Agent Architecture**: Enables additional agent integration through event subscription
+3. **Knowledge Source Framework**: Supports incorporating new background knowledge sources
 
-- Python 3.10+ 
-- Git
-- Docker and Docker Compose (for Neo4j containerization)
-- uv (Python package installer)
-- Poetry (Python dependency management)
+```
+Extensibility Architecture
+├── Tool Integration Framework
+│   ├── Tool Registry
+│   ├── Tool Execution Environment
+│   └── Tool Result Processors
+├── Event-Driven Agent Architecture
+│   ├── Event Type Registry
+│   ├── Event Subscription API
+│   └── Agent Registration System
+└── Knowledge Source Framework
+    ├── Knowledge Source Registry
+    ├── Source-Specific Ingestion Pipelines
+    └── Schema Integration Templates
+```
+
+### Parallel Processing Architecture
+
+The system employs parallel processing to maximize ingestion and analysis efficiency:
+
+```
+Parallel Processing Architecture
+├── Task Scheduling System
+│   ├── Dependency Graph Generator
+│   ├── Parallel Task Executor
+│   └── Resource Manager
+├── Parallel Ingestion Pipelines
+│   ├── Concurrent Repository Processing
+│   ├── Parallel Document Analysis
+│   └── Distributed AST Generation
+└── Progress Tracking & Synchronization
+    ├── Task Status Management
+    ├── Result Aggregation
+    └── Error Handling & Recovery
+```
+
+### Workflow Integration
+
+The system integrates with vulnerability management workflows through GitHub:
+
+```
+Workflow Integration
+├── Report Generation System
+│   ├── Markdown Report Generator
+│   └── Evidence Collection
+├── GitHub Issues Integration
+│   ├── Issue Template Generator
+│   ├── Bash Script Generator
+│   └── Issue Creation API Client
+└── Investigation Persistence
+    ├── Session Management
+    ├── Investigation Export/Import
+    └── Investigation Cleanup
+```
+
+## Development Environment Requirements
+
+The implementation is designed to support cross-platform development across Windows, macOS, and Linux operating systems. The following considerations ensure consistent behavior across platforms:
+
+1. **Cross-Platform Compatibility**:
+   - All scripts will be provided in both shell (.sh) and PowerShell (.ps1) formats
+   - Path handling will use platform-agnostic approaches (e.g., Path from pathlib)
+   - Environment variables will be managed consistently across platforms
+
+2. **Hardware Requirements**:
+   - **Minimum Requirements**: Standard developer hardware (8GB RAM, 4 cores)
+   - **Neo4j Configuration**: Optimized for minimal resource usage without special hardware
+   - **No GPU Dependency**: All AI operations will function without GPU acceleration
+   - **Storage**: 10GB for application code and dependencies, plus space for repositories
+
+3. **Containerization for Consistency**:
+   - Docker environments will be used to ensure identical behavior across platforms
+   - Compose files will be designed to work on all major operating systems
+   - Resource limits in containers will be set for standard hardware
 
 ### Setting Up the Development Environment
 
@@ -81,26 +152,28 @@ Follow these steps to set up your development environment:
 
 ### Installing Neo4j
 
-The system requires Neo4j for graph database functionality:
+The system requires Neo4j for graph database functionality, configured to run with minimal hardware requirements:
 
 1. **Using Docker (Recommended)**:
    ```bash
    # Create necessary directories
    mkdir -p neo4j/data neo4j/logs neo4j/import neo4j/plugins
    
-   # Start Neo4j container
+   # Start Neo4j container with latest version
+   docker pull neo4j:latest
    docker-compose up -d neo4j
    ```
 
 2. **Manual Installation (Alternative)**:
-   - Download Neo4j Community Edition from [Neo4j Download Center](https://neo4j.com/download-center/)
-   - Follow the installation instructions for your operating system
+   - Download Neo4j Community Edition (latest version) from [Neo4j Download Center](https://neo4j.com/download-center/)
+   - Follow the installation instructions for your specific operating system (Windows, macOS, or Linux)
    - Configure Neo4j to use the appropriate ports (default: 7474 for HTTP, 7687 for Bolt)
 
-3. **Neo4j Configuration**:
-   - Enable APOC and Graph Data Science libraries
-   - Configure memory settings based on your system capabilities
-   - Enable vector index support for semantic search functionality
+3. **Neo4j Configuration for Standard Hardware**:
+   - Set heap size to modest defaults (1GB initial, 2GB max)
+   - Enable APOC and Graph Data Science libraries with minimal memory settings
+   - Configure vector index with lower dimensionality options when possible
+   - Enable disk-based page cache to reduce memory pressure
 
 ### Installing External Tools
 
@@ -127,116 +200,13 @@ The system integrates with several external tools:
 
 To use Azure OpenAI services, automate the resource provisioning using Bicep and Azure CLI:
 
-1. **Create Bicep template for Azure OpenAI resources**:
-   - Create a directory for infrastructure as code resources:
-   ```bash
-   mkdir -p scripts/infrastructure/bicep
-   ```
-   
-   - Create a Bicep template file for Azure OpenAI (`scripts/infrastructure/bicep/azure-openai.bicep`):
-   ```bicep
-   @description('The name of the Azure OpenAI resource')
-   param name string = 'vuln-researcher-openai'
-
-   @description('The Azure region for the resource')
-   param location string = resourceGroup().location
-
-   @description('Tags for the resource')
-   param tags object = {
-     application: 'vulnerability-assessment-copilot'
-     environment: 'development'
-   }
-
-   @description('The SKU name for the Azure OpenAI resource')
-   param skuName string = 'S0'
-
-   resource openAI 'Microsoft.CognitiveServices/accounts@2023-05-01' = {
-     name: name
-     location: location
-     tags: tags
-     kind: 'OpenAI'
-     sku: {
-       name: skuName
-     }
-     properties: {
-       customSubDomainName: name
-       publicNetworkAccess: 'Enabled'
-     }
-   }
-
-   // Model deployments
-   resource gpt4oDeployment 'Microsoft.CognitiveServices/accounts/deployments@2023-05-01' = {
-     parent: openAI
-     name: 'gpt4o'
-     properties: {
-       model: {
-         format: 'OpenAI'
-         name: 'gpt-4o'
-         version: '2023-07-01-preview'
-       }
-       scaleSettings: {
-         scaleType: 'Standard'
-       }
-     }
-     sku: {
-       name: 'Standard'
-       capacity: 10
-     }
-   }
-
-   resource o1Deployment 'Microsoft.CognitiveServices/accounts/deployments@2023-05-01' = {
-     parent: openAI
-     name: 'o1'
-     properties: {
-       model: {
-         format: 'OpenAI'
-         name: 'o1'
-         version: '2023-07-01-preview'
-       }
-       scaleSettings: {
-         scaleType: 'Standard'
-       }
-     }
-     sku: {
-       name: 'Standard'
-       capacity: 10
-     }
-   }
-
-   resource o3Deployment 'Microsoft.CognitiveServices/accounts/deployments@2023-05-01' = {
-     parent: openAI
-     name: 'o3'
-     properties: {
-       model: {
-         format: 'OpenAI'
-         name: 'o3'
-         version: '2023-07-01-preview'
-       }
-       scaleSettings: {
-         scaleType: 'Standard'
-       }
-     }
-     sku: {
-       name: 'Standard'
-       capacity: 10
-     }
-   }
-
-   // Output the endpoint and key for use in our application
-   output endpoint string = openAI.properties.endpoint
-   output name string = openAI.name
-   ```
-
-2. **Create deployment script**:
-   - Create an Azure CLI script to deploy the Bicep template (`scripts/infrastructure/deploy-openai.sh`):
+1. **Azure Authentication and Subscription Setup**:
+   - Create an authentication script (`scripts/infrastructure/azure-auth.sh`):
    ```bash
    #!/bin/bash
    set -e
 
-   # Variables
-   RESOURCE_GROUP="vuln-researcher-rg"
-   LOCATION="eastus"  # Choose a region where Azure OpenAI is available
-   SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+   echo "🔐 Setting up Azure authentication and subscription for Skwaq..."
 
    # Check if Azure CLI is installed
    if ! command -v az &> /dev/null; then
@@ -244,16 +214,154 @@ To use Azure OpenAI services, automate the resource provisioning using Bicep and
      exit 1
    fi
 
-   # Check if logged in to Azure
-   if ! az account show &> /dev/null; then
-     echo "You need to log in to Azure first. Running 'az login'..."
-     az login
+   # Authenticate with Azure
+   echo "Authenticating with Azure..."
+   az login
+
+   # List available subscriptions
+   echo "Available subscriptions:"
+   az account list --output table
+
+   # Prompt user to select subscription or use default
+   read -p "Enter subscription ID to use (leave blank for default): " SUBSCRIPTION_ID
+   
+   if [ -z "$SUBSCRIPTION_ID" ]; then
+     SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+     echo "Using default subscription: $SUBSCRIPTION_ID"
+   else
+     # Set the subscription
+     az account set --subscription "$SUBSCRIPTION_ID"
+     echo "Subscription set to: $SUBSCRIPTION_ID"
    fi
 
-   # Create resource group if it doesn't exist
+   # Verify OpenAI resource provider is registered
+   PROVIDER_STATE=$(az provider show --namespace Microsoft.CognitiveServices --query "registrationState" -o tsv)
+   
+   if [ "$PROVIDER_STATE" != "Registered" ]; then
+     echo "Registering Microsoft.CognitiveServices resource provider..."
+     az provider register --namespace Microsoft.CognitiveServices
+     echo "Waiting for registration to complete (this may take a few minutes)..."
+     
+     # Wait for registration to complete
+     while [ "$(az provider show --namespace Microsoft.CognitiveServices --query "registrationState" -o tsv)" != "Registered" ]; do
+       echo "Still registering... waiting 10 seconds"
+       sleep 10
+     done
+     
+     echo "✅ Microsoft.CognitiveServices resource provider registered successfully"
+   else
+     echo "✅ Microsoft.CognitiveServices resource provider already registered"
+   fi
+
+   # Verify OpenAI model availability in regions
+   echo "Checking OpenAI model availability in regions..."
+   AVAILABLE_REGIONS=$(az cognitiveservices account list-kinds -o json | \
+                      jq -r '.[] | select(. == "OpenAI") | "OpenAI is available"')
+   
+   if [ -z "$AVAILABLE_REGIONS" ]; then
+     echo "⚠️  Warning: OpenAI service may not be available in your subscription."
+     echo "Please verify that your subscription has access to Azure OpenAI and that you have appropriate permissions."
+     echo "Visit https://azure.microsoft.com/en-us/products/cognitive-services/openai-service to request access if needed."
+     read -p "Do you want to continue anyway? (y/n): " CONTINUE
+     if [ "$CONTINUE" != "y" ]; then
+       echo "Exiting setup."
+       exit 1
+     fi
+   else
+     echo "✅ OpenAI service is available in your subscription"
+   fi
+
+   # Check for required permissions
+   echo "Checking for required permissions..."
+   PERMISSIONS=$(az role assignment list --assignee "$(az account show --query user.name -o tsv)" --query "[?roleDefinitionName=='Contributor' || roleDefinitionName=='Owner'].roleDefinitionName" -o tsv)
+   
+   if [ -z "$PERMISSIONS" ]; then
+     echo "⚠️  Warning: You may not have Contributor or Owner permissions required to create resources."
+     echo "The following steps may fail without proper permissions."
+     read -p "Do you want to continue anyway? (y/n): " CONTINUE
+     if [ "$CONTINUE" != "y" ]; then
+       echo "Exiting setup."
+       exit 1
+     fi
+   else
+     echo "✅ You have sufficient permissions to create resources"
+   fi
+
+   # Check for existing deployments of required models
+   echo "Checking for existing deployments of required models (o1, o3, gpt4o)..."
+   
+   # Store authentication info for later scripts
+   mkdir -p config
+   cat > config/azure_auth.json << EOF
+   {
+     "subscription_id": "$SUBSCRIPTION_ID",
+     "tenant_id": "$(az account show --query tenantId -o tsv)"
+   }
+   EOF
+
+   echo "✅ Azure authentication and subscription setup completed successfully!"
+   echo "Subscription details saved to config/azure_auth.json"
+   ```
+
+2. **Make the authentication script executable**:
+   ```bash
+   chmod +x scripts/infrastructure/azure-auth.sh
+   ```
+
+3. **Update the deployment script to use authentication data**:
+   - Modify the Azure OpenAI deployment script (`scripts/infrastructure/deploy-openai.sh`):
+   ```bash
+   #!/bin/bash
+   set -e
+
+   # Source authentication data
+   if [ -f "config/azure_auth.json" ]; then
+     echo "Loading Azure authentication data..."
+     SUBSCRIPTION_ID=$(jq -r '.subscription_id' config/azure_auth.json)
+     TENANT_ID=$(jq -r '.tenant_id' config/azure_auth.json)
+     
+     # Verify we're using the correct subscription
+     CURRENT_SUB=$(az account show --query id -o tsv)
+     if [ "$CURRENT_SUB" != "$SUBSCRIPTION_ID" ]; then
+       echo "Switching to subscription: $SUBSCRIPTION_ID"
+       az account set --subscription "$SUBSCRIPTION_ID"
+     fi
+   else
+     echo "⚠️ No authentication data found. Running authentication setup first..."
+     ./scripts/infrastructure/azure-auth.sh
+     
+     # Reload authentication data
+     SUBSCRIPTION_ID=$(jq -r '.subscription_id' config/azure_auth.json)
+     TENANT_ID=$(jq -r '.tenant_id' config/azure_auth.json)
+   fi
+
+   # Variables
+   RESOURCE_GROUP="skwaq-rg"
+   LOCATION="eastus"  # Choose a region where Azure OpenAI is available
+   
+   # Verify selected region supports the required models
+   echo "Verifying $LOCATION supports required OpenAI models..."
+   SUPPORTED_MODELS=$(az cognitiveservices account list-models --location $LOCATION --query "[?contains(name, 'gpt-4') || contains(name, 'o1') || contains(name, 'o3')].name" -o tsv 2>/dev/null || echo "")
+   
+   if [ -z "$SUPPORTED_MODELS" ]; then
+     echo "⚠️ Warning: Unable to verify model availability in $LOCATION"
+     echo "This might be due to permissions or the region not supporting the required models."
+     echo "Available Azure OpenAI regions: East US, South Central US, West Europe, West US"
+     read -p "Enter a different region or press Enter to continue with $LOCATION: " NEW_LOCATION
+     if [ ! -z "$NEW_LOCATION" ]; then
+       LOCATION=$NEW_LOCATION
+       echo "Region updated to: $LOCATION"
+     fi
+   else
+     echo "✅ Region $LOCATION supports OpenAI models"
+   fi
+
+   # Check if resource group exists
    if ! az group show --name "$RESOURCE_GROUP" &> /dev/null; then
      echo "Creating resource group $RESOURCE_GROUP in $LOCATION..."
      az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
+   else
+     echo "Using existing resource group: $RESOURCE_GROUP"
    fi
 
    # Deploy the Bicep template
@@ -261,6 +369,7 @@ To use Azure OpenAI services, automate the resource provisioning using Bicep and
    DEPLOYMENT_OUTPUT=$(az deployment group create \
      --resource-group "$RESOURCE_GROUP" \
      --template-file "scripts/infrastructure/bicep/azure-openai.bicep" \
+     --parameters location=$LOCATION \
      --output json)
 
    # Extract endpoint and resource name
@@ -284,7 +393,10 @@ To use Azure OpenAI services, automate the resource provisioning using Bicep and
        "gpt4o": "gpt4o",
        "o1": "o1",
        "o3": "o3"
-     }
+     },
+     "subscription_id": "$SUBSCRIPTION_ID",
+     "resource_group": "$RESOURCE_GROUP",
+     "region": "$LOCATION"
    }
    EOF
 
@@ -292,68 +404,120 @@ To use Azure OpenAI services, automate the resource provisioning using Bicep and
    echo "Credentials saved to config/azure_openai_credentials.json"
    echo "Resource Group: $RESOURCE_GROUP"
    echo "OpenAI Service: $RESOURCE_NAME"
+   echo "Region: $LOCATION"
    ```
 
-3. **Make the script executable**:
+4. **Create a Model Deployment Verification Script**:
+   - Add a script to verify model deployments (`scripts/infrastructure/verify-openai-models.sh`):
    ```bash
-   chmod +x scripts/infrastructure/deploy-openai.sh
+   #!/bin/bash
+   set -e
+
+   echo "🔍 Verifying Azure OpenAI model deployments for Skwaq..."
+
+   # Load credentials
+   if [ ! -f "config/azure_openai_credentials.json" ]; then
+     echo "❌ Azure OpenAI credentials not found. Please run deploy-openai.sh first."
+     exit 1
+   fi
+
+   RESOURCE_NAME=$(az resource list --resource-group $(jq -r '.resource_group' config/azure_openai_credentials.json) --resource-type "Microsoft.CognitiveServices/accounts" --query "[0].name" -o tsv)
+   
+   echo "Checking model deployments in $RESOURCE_NAME..."
+   
+   # Get current deployments
+   DEPLOYMENTS=$(az cognitiveservices account deployment list \
+     --name "$RESOURCE_NAME" \
+     --resource-group $(jq -r '.resource_group' config/azure_openai_credentials.json) \
+     --query "[].name" -o tsv)
+   
+   # Check for required models
+   REQUIRED_MODELS=("gpt4o" "o1" "o3")
+   MISSING_MODELS=()
+   
+   for MODEL in "${REQUIRED_MODELS[@]}"; do
+     if ! echo "$DEPLOYMENTS" | grep -q "$MODEL"; then
+       MISSING_MODELS+=("$MODEL")
+     fi
+   done
+   
+   if [ ${#MISSING_MODELS[@]} -eq 0 ]; then
+     echo "✅ All required models are deployed and available"
+   else
+     echo "⚠️ The following required models are not deployed: ${MISSING_MODELS[*]}"
+     echo "This could be due to quota limitations or deployment delays."
+     echo "The Azure OpenAI deployments may take up to 15 minutes to complete."
+     echo "You can check deployment status in the Azure Portal or run this script again later."
+     
+     # Suggest quota increase if needed
+     echo "If you need to request quota increases, visit:"
+     echo "https://aka.ms/oai/quotaincrease"
+   fi
+   
+   # Test a simple completion to verify connectivity
+   echo "Testing API connectivity..."
+   
+   # Use variables from credentials file
+   API_KEY=$(jq -r '.api_key' config/azure_openai_credentials.json)
+   ENDPOINT=$(jq -r '.endpoint' config/azure_openai_credentials.json)
+   MODEL=$(echo "$DEPLOYMENTS" | head -n 1)  # Use first available deployment
+   
+   if [ -z "$MODEL" ]; then
+     echo "❌ No model deployments found to test connectivity"
+   else
+     # Simple API call to test connectivity
+     RESPONSE=$(curl -s -X POST "$ENDPOINT/openai/deployments/$MODEL/chat/completions?api-version=2023-05-15" \
+       -H "Content-Type: application/json" \
+       -H "api-key: $API_KEY" \
+       -d '{
+         "messages": [{"role": "user", "content": "Say hello"}],
+         "max_tokens": 10
+       }')
+     
+     if echo "$RESPONSE" | jq -e '.choices[0].message.content' > /dev/null; then
+       echo "✅ Successfully connected to Azure OpenAI API"
+     else
+       echo "❌ Failed to connect to Azure OpenAI API"
+       echo "Response: $RESPONSE"
+       echo "Please verify your credentials and network connectivity"
+     fi
+   fi
+   
+   echo "Model verification completed"
    ```
 
-4. **Automate the setup process**:
-   - Add a task to the main setup script to deploy Azure OpenAI resources:
+5. **Make the verification script executable**:
+   ```bash
+   chmod +x scripts/infrastructure/verify-openai-models.sh
+   ```
+
+6. **Update development environment setup to include all authentication and verification steps**:
+   - Modify the main setup script (`scripts/setup/setup_dev_environment.sh`):
    ```bash
    # Add to scripts/setup/setup_dev_environment.sh
-   echo "Setting up Azure OpenAI resources..."
+   echo "Setting up Azure resources for Skwaq..."
+   
+   # Run Azure authentication first
+   ../infrastructure/azure-auth.sh
+   
+   # Deploy Azure OpenAI resources
    ../infrastructure/deploy-openai.sh
+   
+   # Verify model deployments
+   ../infrastructure/verify-openai-models.sh
+   
+   echo "Azure setup completed"
    ```
 
-5. **Using Azure Developer CLI (azd) alternative**:
-   - If you prefer using `azd`, create an `azure.yaml` file in the root directory:
-   ```yaml
-   # filepath: azure.yaml
-   name: vulnerability-assessment-copilot
-   services:
-     openai:
-       project: scripts/infrastructure
-       language: bicep
-       host: azure
-   ```
-   
-   - Then use the following commands:
-   ```bash
-   # Initialize azd with your project
-   azd init
-   
-   # Provision resources
-   azd provision
-   
-   # Retrieve and store credentials
-   RESOURCE_GROUP=$(azd env get-values | grep AZURE_RESOURCE_GROUP | cut -d= -f2)
-   RESOURCE_NAME=$(az resource list --resource-group "$RESOURCE_GROUP" --resource-type "Microsoft.CognitiveServices/accounts" --query "[0].name" -o tsv)
-   ENDPOINT=$(az cognitiveservices account show --resource-group "$RESOURCE_GROUP" --name "$RESOURCE_NAME" --query "properties.endpoint" -o tsv)
-   API_KEY=$(az cognitiveservices account keys list --resource-group "$RESOURCE_GROUP" --name "$RESOURCE_NAME" --query "key1" -o tsv)
-   
-   # Store credentials
-   mkdir -p config
-   cat > config/azure_openai_credentials.json << EOF
-   {
-     "api_key": "$API_KEY",
-     "endpoint": "$ENDPOINT",
-     "deployments": {
-       "gpt4o": "gpt4o",
-       "o1": "o1",
-       "o3": "o3"
-     }
-   }
-   EOF
-   ```
+These scripts provide a comprehensive approach to:
+1. Authenticate with Azure and select the appropriate subscription
+2. Verify necessary permissions and resource provider registrations
+3. Check for model availability in the selected region
+4. Deploy the Azure OpenAI resources using Bicep
+5. Verify model deployments and API connectivity
+6. Handle error cases and provide guidance for resolving common issues
 
-This approach has several advantages:
-- Infrastructure as code ensures consistent, repeatable deployments
-- Automated resource provisioning reduces manual errors
-- Credentials are programmatically retrieved and stored
-- The setup can be integrated into CI/CD pipelines
-- Changes to infrastructure can be version-controlled and reviewed
+The approach also stores authentication and configuration details for use in other parts of the application, ensuring consistent access to the Azure resources.
 
 ### Development Tools Setup
 
@@ -370,10 +534,800 @@ This approach has several advantages:
    ```bash
    # Run tests using pytest
    poetry run pytest
-   
+
    # Generate coverage report
-   poetry run pytest --cov=vuln_researcher
+   poetry run pytest --cov=skwaq
    ```
+
+3. **API Documentation Standards**:
+   ```bash
+   # Install documentation generators
+   poetry add sphinx sphinx-autodoc sphinx-rtd-theme
+   
+   # Install docstring linting tools
+   poetry add --group dev pydocstyle docstr-coverage
+   
+   # Run docstring coverage check
+   poetry run docstr-coverage ./skwaq --fail-under=90
+   ```
+
+## Documentation
+
+### 9.4 API Documentation Standards
+
+**Purpose**: Establish and enforce comprehensive API documentation standards throughout the codebase.
+
+**Steps**:
+1. Implement docstring standards:
+   - Adopt Google-style docstrings as the project standard
+   - Create templates for module, class, function, and method docstrings
+   - Implement mandatory sections: summary, parameters, returns, raises, examples
+   - Standardize type annotations in both signatures and docstrings
+   - Define requirements for documenting complex algorithms and design decisions
+
+2. Configure documentation automation:
+   - Set up Sphinx for automatic API documentation generation
+   - Create custom Sphinx extensions for project-specific documentation needs
+   - Configure automatic cross-referencing between related components
+   - Implement code example validation in documentation
+   - Set up GitHub Pages or ReadTheDocs for hosted documentation
+
+3. Implement documentation quality checks:
+   - Add docstring coverage checking to CI pipeline
+   - Implement pydocstyle validation in pre-commit hooks
+   - Create custom validators for project-specific requirements
+   - Add documentation quality checks to code review templates
+   - Set up automated docstring previews for pull requests
+
+**Example Google-style Docstring Template**:
+```python
+def function_name(param1: type1, param2: type2) -> return_type:
+    """Summary line describing the function's purpose.
+    
+    Additional details about the function, its algorithm, and design decisions.
+    Multiple paragraphs may be used as needed.
+    
+    Args:
+        param1: Description of param1. Include value constraints, defaults,
+            and behavior impact.
+        param2: Description of param2. For complex parameters, explain
+            format requirements and edge cases.
+    
+    Returns:
+        Description of return value, including possible values and their meaning.
+    
+    Raises:
+        ExceptionType: When and why this exception might be raised.
+        AnotherException: Conditions causing this exception.
+    
+    Examples:
+        >>> function_name('example', 42)
+        'Expected output'
+        
+        For more complex examples:
+        
+        >>> complex_input = {'key': 'value'}
+        >>> function_name('example', complex_input)
+        {'processed': True}
+    """
+    # Function implementation
+```
+
+**Documentation Completeness Requirements**:
+- **Modules**: Purpose, dependencies, main components, usage examples
+- **Classes**: Purpose, attributes, initialization parameters, usage pattern, examples
+- **Public Methods/Functions**: Full Google-style docstrings with all sections
+- **Private Methods/Functions**: Purpose and parameter descriptions at minimum
+- **Complex Algorithms**: Design decisions, algorithmic complexity, limitations
+- **Events**: Event type, payload structure, subscribers, emission conditions
+
+**Dependencies**:
+- sphinx
+- sphinx-autodoc
+- sphinx-napoleon (for Google-style docstring support)
+- sphinx-rtd-theme
+- pydocstyle
+- docstr-coverage
+
+**Testing Strategy**:
+- Automated docstring coverage checks (minimum 90% coverage)
+- Docstring style validation (pydocstyle)
+- Example code validation
+- Sphinx build validation
+- Documentation rendering verification
+
+## Implementation Milestones and Validation Criteria
+
+The implementation will proceed through a series of incremental milestones, each with specific validation criteria and testing requirements. Each milestone must pass its validation criteria before proceeding to the next milestone.
+
+### Foundation Phase Milestones
+
+#### Milestone F1: Project Setup and Environment
+**Deliverables:**
+- Project repository structure
+- Development environment configuration
+- Docker containerization
+- CI/CD pipeline setup
+- API documentation standards and tooling setup
+
+**Validation Criteria:**
+- All required directories and configuration files exist
+- Docker container builds successfully
+- Development environment scripts execute correctly
+- CI pipeline succeeds with baseline tests
+- API documentation templates and standards are defined
+- Documentation generation pipeline works correctly
+
+**Testing Requirements:**
+- Script validation on all target platforms (Windows, macOS, Linux)
+- Container startup and shutdown tests
+- Environment variable configuration tests
+- CI pipeline verification test
+- Documentation generation tests
+- Docstring style validation tests
+
+#### Milestone F2: Core Utilities and Infrastructure
+**Deliverables:**
+- Telemetry system with opt-out functionality
+- Configuration management
+- Event system implementation
+- Logging system
+
+**Validation Criteria:**
+- Telemetry data is captured and can be disabled via configuration
+- Events can be emitted and consumed by subscribers
+- Logging captures appropriate information and respects log levels
+- Configuration changes are reflected in system behavior
+
+**Testing Requirements:**
+- Unit tests for each utility component
+- Integration tests for interactions between components
+- Configuration change tests
+- Telemetry opt-out verification
+
+#### Milestone F3: Database Integration
+**Deliverables:**
+- Neo4j connection module
+- Schema implementation
+- Database initialization
+- Vector search integration
+
+**Validation Criteria:**
+- Stable connection to Neo4j can be established
+- Schema is correctly initialized
+- Queries can be executed and return expected results
+- Vector search returns relevant results for test queries
+
+**Testing Requirements:**
+- Connection reliability tests (including failure recovery)
+- Query performance benchmarks for common operations
+- Schema validation tests
+- Vector similarity search accuracy tests
+
+### Knowledge Management Phase Milestones
+
+#### Milestone K1: Knowledge Ingestion Pipeline
+**Deliverables:**
+- Document processing pipeline
+- CWE database integration
+- Core knowledge graph structure
+
+**Validation Criteria:**
+- Documents in various formats (Markdown, PDF) can be processed
+- CWE data is correctly imported and linked
+- Knowledge graph entities and relationships are created correctly
+
+**Testing Requirements:**
+- Document processing tests with various formats
+- CWE data verification tests
+- Graph consistency validation
+- Processing error handling tests
+
+#### Milestone K2: Knowledge Indexing and Retrieval
+**Deliverables:**
+- Document embedding generation
+- Vector indexing in Neo4j
+- Retrieval API implementation
+
+**Validation Criteria:**
+- Embeddings are generated consistently for similar text
+- Vector indices correctly store embeddings
+- Retrieval queries return relevant results
+- Performance meets requirements for typical queries
+
+**Testing Requirements:**
+- Embedding consistency tests
+- Retrieval accuracy evaluation
+- Performance benchmarks for indexing operations
+- Query latency tests
+
+#### Milestone K3: Knowledge Source Extensibility
+**Deliverables:**
+- Knowledge source registry
+- Source-specific ingestion pipelines
+- Schema integration templates
+
+**Validation Criteria:**
+- New knowledge sources can be registered and ingested
+- Source-specific processing correctly handles different formats
+- Knowledge from different sources is integrated properly
+
+**Testing Requirements:**
+- Integration tests with sample custom knowledge sources
+- Schema compatibility tests
+- Source registration and discovery tests
+- Error handling tests for invalid sources
+
+### Code Analysis Phase Milestones
+
+#### Milestone C1: Repository Fetching
+**Deliverables:**
+- GitHub API integration
+- Repository cloning functionality
+- Filesystem processing
+
+**Validation Criteria:**
+- Can successfully clone repositories from GitHub
+- Authentication works for private repositories
+- Repository structure is correctly processed
+- Progress is reported accurately
+
+**Testing Requirements:**
+- Tests with public and private repositories
+- Authentication failure handling tests
+- Large repository handling tests
+- Network failure recovery tests
+
+#### Milestone C2: Basic Code Analysis
+**Deliverables:**
+- Blarify integration
+- AST processing
+- Code structure mapping
+- Python and C# language support
+
+**Validation Criteria:**
+- AST is generated correctly for both Python and C# code
+- Code structure is mapped to the graph database
+- File relationships are correctly identified
+- Analysis works for both reference repositories (eShop and autogen)
+
+**Testing Requirements:**
+- Analysis correctness tests for reference repositories
+- Performance benchmarks for typical codebases
+- Language-specific validation tests
+- Error handling for malformed code
+
+#### Milestone C3: Advanced Code Analysis
+**Deliverables:**
+- Parallel analysis orchestration
+- CodeQL integration
+- Code metrics collection
+- Tool integration framework
+
+**Validation Criteria:**
+- Analysis tasks execute in parallel where appropriate
+- CodeQL queries execute and results are processed
+- Code metrics are calculated and stored
+- External tools can be integrated and executed
+
+**Testing Requirements:**
+- Parallel efficiency measurements
+- CodeQL result validation
+- Metrics accuracy verification
+- Tool integration tests with sample tools
+
+#### Milestone C4: Code Understanding and Summarization
+**Deliverables:**
+- Code summarization at multiple levels
+- Intent inference
+- Architecture reconstruction
+- Cross-reference linking
+
+**Validation Criteria:**
+- Summaries are generated at function, class, module, and system levels
+- Developer intent is inferred accurately
+- Architecture diagrams can be generated from analysis
+- Cross-references correctly link related components
+
+**Testing Requirements:**
+- Summary quality evaluation (manual review)
+- Cross-reference accuracy tests
+- Architecture reconstruction validation
+- Performance tests for large codebases
+
+### Agent System Phase Milestones
+
+#### Milestone A1: Agent Foundation
+**Deliverables:**
+- AutoGen Core integration
+- Base agent classes
+- Agent lifecycle management
+- Agent registry
+
+**Validation Criteria:**
+- Agents can be created and destroyed
+- Agents can communicate with each other
+- Agent registry correctly manages agent instances
+- Agent lifecycle events are properly tracked
+
+**Testing Requirements:**
+- Agent creation and destruction tests
+- Inter-agent communication tests
+- Registry functionality tests
+- Resource usage monitoring
+
+#### Milestone A2: Core Agents Implementation
+**Deliverables:**
+- Orchestrator agent
+- Knowledge agents
+- Code analysis agents
+- Basic workflow agents
+
+**Validation Criteria:**
+- Orchestrator correctly manages other agents
+- Knowledge agents retrieve relevant information
+- Code analysis agents process code correctly
+- Basic workflows can be executed
+
+**Testing Requirements:**
+- Agent behavior tests with mock inputs
+- End-to-end tests for simple workflows
+- Resource usage monitoring during agent operation
+- Error handling and recovery tests
+
+#### Milestone A3: Advanced Agent Capabilities
+**Deliverables:**
+- Agent communication patterns
+- Specialized workflow agents
+- Critic and verification agents
+- Advanced orchestration
+
+**Validation Criteria:**
+- Complex multi-agent interactions work correctly
+- Agents can critique and verify each other's work
+- Workflows correctly use specialized agents
+- Orchestration handles complex scenarios
+
+**Testing Requirements:**
+- Complex workflow tests
+- Critic agent effectiveness evaluation
+- Error recovery in multi-agent scenarios
+- Performance benchmarks for agent interactions
+
+### Workflow and UI Phase Milestones
+
+#### Milestone W1: Command Line Interface
+**Deliverables:**
+- CLI command structure
+- Interactive UI elements
+- Progress visualization
+- Investigation management commands
+
+**Validation Criteria:**
+- Commands work correctly and provide appropriate feedback
+- Help and documentation are comprehensive
+- Progress is visualized effectively
+- Investigations can be listed, exported, and managed
+
+**Testing Requirements:**
+- Command execution tests
+- User experience evaluation
+- Error message clarity testing
+- Investigation management functionality tests
+
+#### Milestone W2: Basic Workflows
+**Deliverables:**
+- Q&A workflow
+- Guided inquiry workflow
+- Basic tool invocation
+
+**Validation Criteria:**
+- Q&A workflow provides accurate answers
+- Guided inquiry workflow asks relevant questions
+- Tools can be invoked and results processed
+- Workflows persist across sessions
+
+**Testing Requirements:**
+- End-to-end workflow tests
+- Answer accuracy evaluation
+- Question relevance evaluation
+- Session persistence tests
+
+#### Milestone W3: Advanced Workflows
+**Deliverables:**
+- Vulnerability research workflow
+- Investigation persistence
+- Markdown reporting
+- GitHub issue integration
+
+**Validation Criteria:**
+- Vulnerability research workflow identifies actual issues
+- Investigations persist and can be resumed
+- Reports are generated in well-formatted Markdown
+- GitHub issue scripts are generated correctly
+
+**Testing Requirements:**
+- Vulnerability detection tests with known issues
+- Report quality evaluation
+- GitHub issue script validation
+- Investigation persistence tests
+
+#### Milestone W4: Workflow Refinement and Integration
+**Deliverables:**
+- Inter-workflow communication
+- Context preservation
+- Workflow chaining
+- Performance optimization
+
+**Validation Criteria:**
+- Workflows can be chained together
+- Context is preserved when switching workflows
+- Performance meets requirements under typical load
+- User experience is smooth and intuitive
+
+**Testing Requirements:**
+- Workflow transition tests
+- Context preservation verification
+- Performance benchmarks under various loads
+- Usability testing with sample scenarios
+
+### Integration and Finalization Phase Milestones
+
+#### Milestone I1: System Integration
+**Deliverables:**
+- Full system integration
+- End-to-end testing
+- Performance optimization
+- Documentation updates
+
+**Validation Criteria:**
+- All components work together seamlessly
+- Performance meets requirements
+- Documentation is complete and accurate
+- No critical bugs or issues remain
+
+**Testing Requirements:**
+- End-to-end system tests
+- Performance benchmarks
+- Documentation verification
+- Regression testing
+
+#### Milestone I2: Security and Compliance
+**Deliverables:**
+- Security implementation
+- Telemetry privacy controls
+- Data protection
+- Compliance verification
+
+**Validation Criteria:**
+- Security controls are properly implemented
+- Telemetry respects privacy settings
+- Sensitive data is protected
+- System meets all compliance requirements
+
+**Testing Requirements:**
+- Security penetration testing
+- Privacy control verification
+- Data protection tests
+- Compliance checklist verification
+
+#### Milestone I3: Final Release Preparation
+**Deliverables:**
+- Release packaging
+- Installation and deployment scripts
+- Final documentation
+- Deployment guides
+
+**Validation Criteria:**
+- Package can be installed and run correctly
+- Documentation covers all aspects of the system
+- Deployment guides are comprehensive
+- Release meets all requirements and quality standards
+
+**Testing Requirements:**
+- Installation tests on all target platforms
+- Documentation completeness verification
+- Deployment guide validation
+- Final acceptance testing
+
+### Milestone Validation and Testing Process
+
+For each milestone, the following validation and testing process will be followed:
+
+1. **Unit Testing**: Each component must pass all unit tests with at least 80% code coverage.
+
+2. **Integration Testing**: Components must work together as expected, with integration tests passing.
+
+3. **Performance Testing**: Performance must meet or exceed the defined benchmarks for the milestone.
+
+4. **Security Testing**: Security-related components must pass security review and testing.
+
+5. **Code Review**: All code must pass peer review before milestone completion.
+
+6. **Documentation Review**: Documentation must be updated to reflect the milestone deliverables.
+   - API documentation coverage must meet or exceed 90% for all new code
+   - API documentation must follow the established Google-style format
+   - Documentation must be generated successfully with Sphinx
+   - Code examples in docstrings must be valid and execute correctly
+
+7. **Milestone Demo**: A demonstration of the milestone functionality must be presented and approved.
+
+8. **Milestone Retrospective**: A retrospective must be conducted to identify lessons learned and improvements for future milestones.
+
+9. **Local CI Validation**: Before marking a milestone as complete, run the full local CI pipeline to verify that all tests pass and all requirements are met:
+   ```bash
+   ./scripts/ci/run-local-ci.sh
+   ```
+
+This ensures that the milestone meets all technical requirements and will pass validation in the GitHub Actions pipeline.
+
+## Development Phases Summary
+
+The implementation will proceed in the following phases, with each phase building on the dependencies established in previous phases:
+
+### Phase 1: Foundation
+- **Milestone F1**: Project Setup and Environment
+- **Milestone F2**: Core Utilities and Infrastructure
+- **Milestone F3**: Database Integration
+
+### Phase 2: Knowledge Management
+- **Milestone K1**: Knowledge Ingestion Pipeline
+- **Milestone K2**: Knowledge Indexing and Retrieval
+- **Milestone K3**: Knowledge Source Extensibility
+
+### Phase 3: Code Analysis
+- **Milestone C1**: Repository Fetching
+- **Milestone C2**: Basic Code Analysis
+- **Milestone C3**: Advanced Code Analysis
+- **Milestone C4**: Code Understanding and Summarization
+
+### Phase 4: Agent System
+- **Milestone A1**: Agent Foundation
+- **Milestone A2**: Core Agents Implementation
+- **Milestone A3**: Advanced Agent Capabilities
+
+### Phase 5: Workflow and UI
+- **Milestone W1**: Command Line Interface
+- **Milestone W2**: Basic Workflows
+- **Milestone W3**: Advanced Workflows
+- **Milestone W4**: Workflow Refinement and Integration
+
+### Phase 6: Integration and Finalization
+- **Milestone I1**: System Integration
+- **Milestone I2**: Security and Compliance
+- **Milestone I3**: Final Release Preparation
+
+### GitHub Actions CI Configuration
+
+The project uses GitHub Actions for continuous integration and testing. The following workflows will be implemented:
+
+1. **Create Tests and Linting Workflow**:
+   - Create `.github/workflows/tests.yml` configuration:
+   ```yaml
+   name: Tests & Linting
+
+   on:
+     push:
+       branches: [ main ]
+     pull_request:
+       branches: [ main ]
+     # Run tests when milestones are tagged
+     tags:
+       - "milestone-*"
+
+   jobs:
+     test:
+       runs-on: ubuntu-latest
+       services:
+         # Run Neo4j in a container for integration tests
+         neo4j:
+           image: neo4j:latest
+           env:
+             NEO4J_AUTH: neo4j/password
+             NEO4J_ACCEPT_LICENSE_AGREEMENT: yes
+           ports:
+             - 7474:7474
+             - 7687:7687
+           options: --health-cmd "wget -O - http://localhost:7474 || exit 1" --health-interval 10s --health-timeout 5s --health-retries 3
+       
+       strategy:
+         matrix:
+           python-version: ['3.10', '3.11']
+
+       steps:
+         - uses: actions/checkout@v3
+         
+         - name: Set up Python ${{ matrix.python-version }}
+           uses: actions/setup-python@v4
+           with:
+             python-version: ${{ matrix.python-version }}
+             cache: 'pip'
+         
+         - name: Install uv
+           run: pip install uv
+         
+         - name: Install dependencies
+           run: |
+             python -m uv venv .venv
+             source .venv/bin/activate
+             python -m uv pip install -e ".[dev,test]"
+         
+         - name: Run linting
+           run: |
+             source .venv/bin/activate
+             python -m black --check .
+             python -m flake8 .
+             python -m mypy .
+         
+         - name: Run tests
+           run: |
+             source .venv/bin/activate
+             python -m pytest --cov=skwaq tests/
+             
+         - name: Upload coverage report
+           uses: codecov/codecov-action@v3
+           with:
+             fail_ci_if_error: false
+   ```
+
+2. **Create Docker Build Workflow**:
+   - Create `.github/workflows/docker-build.yml` configuration:
+   ```yaml
+   name: Docker Build
+
+   on:
+     push:
+       branches: [ main ]
+     pull_request:
+       branches: [ main ]
+     # Build container when milestones are tagged
+     tags:
+       - "milestone-*"
+       - "v*.*.*"
+
+   jobs:
+     build:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v3
+         
+         - name: Set up Docker Buildx
+           uses: docker/setup-buildx-action@v2
+         
+         - name: Build Docker image
+           uses: docker/build-push-action@v4
+           with:
+             context: .
+             push: false
+             tags: skwaq:latest
+             cache-from: type=gha
+             cache-to: type=gha,mode=max
+             load: true
+         
+         - name: Test Docker image
+           run: |
+             docker run --rm skwaq:latest --version
+   ```
+
+3. **Create Release Automation Workflow**:
+   - Create `.github/workflows/release.yml` configuration:
+   ```yaml
+   name: Release
+
+   on:
+     push:
+       tags:
+         - "v*.*.*"
+
+   jobs:
+     release:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v3
+           with:
+             fetch-depth: 0
+         
+         - name: Set up Python
+           uses: actions/setup-python@v4
+           with:
+             python-version: '3.10'
+         
+         - name: Install dependencies
+           run: |
+             python -m pip install --upgrade pip
+             pip install build wheel
+         
+         - name: Build package
+           run: python -m build
+         
+         - name: Create Release
+           uses: softprops/action-gh-release@v1
+           with:
+             files: |
+               dist/*.whl
+               dist/*.tar.gz
+             generate_release_notes: true
+   ```
+
+4. **Create Milestone Validation Workflow**:
+   - Create `.github/workflows/milestone-validation.yml` configuration:
+   ```yaml
+   name: Milestone Validation
+
+   on:
+     push:
+       tags:
+         - "milestone-*"
+
+   jobs:
+     validate:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v3
+         
+         - name: Set up Python
+           uses: actions/setup-python@v4
+           with:
+             python-version: '3.10'
+         
+         - name: Install dependencies
+           run: |
+             python -m pip install --upgrade pip
+             pip install -e ".[dev,test]"
+         
+         - name: Extract milestone information
+           id: milestone
+           run: |
+             MILESTONE=$(echo ${{ github.ref_name }} | sed 's/milestone-//')
+             echo "milestone=$MILESTONE" >> $GITHUB_OUTPUT
+         
+         - name: Run milestone-specific validation tests
+           run: |
+             python -m pytest tests/milestones/test_${{ steps.milestone.outputs.milestone }}.py -v
+         
+         - name: Create milestone documentation
+           run: |
+             python scripts/ci/generate_milestone_docs.py ${{ steps.milestone.outputs.milestone }}
+   ```
+
+These GitHub Actions workflows ensure:
+
+1. **Continuous Testing**: All code is tested on multiple Python versions with coverage reporting
+2. **Code Quality Checks**: Linting, formatting, and type checking are enforced
+3. **Docker Builds**: Container builds are validated for every significant change
+4. **Milestone Validation**: Specific tests run when milestone tags are pushed
+5. **Release Automation**: Packages are built and published for version tags
+6. **Documentation Quality**: API documentation is comprehensive, consistent, and accurate
+
+Each workflow is designed to run on specific events (pushes, PRs, tags) and provides clear feedback on the build status. The milestone validation workflow in particular supports the milestone-based development approach by running milestone-specific tests when appropriate tags are pushed.
+
+**CI Configuration Updates for Each Milestone**:
+
+As milestones progress, specific test files should be added in the `tests/milestones/` directory following this pattern:
+- `test_F1.py` - Project Setup and Environment tests
+- `test_F2.py` - Core Utilities and Infrastructure tests
+- And so on for each milestone
+
+These dedicated test files will contain comprehensive validation tests for the specific functionality expected at each milestone, allowing the milestone validation workflow to verify that all requirements have been met.
+
+**Milestone Tagging Process**:
+
+When a milestone is completed and ready for validation:
+1. Tag the commit representing the milestone completion:
+   ```bash
+   git tag milestone-F1  # For Milestone F1
+   git push origin milestone-F1
+   ```
+2. The milestone validation workflow will automatically run
+3. Results will be available in the GitHub Actions tab
+
+**Security Considerations for CI**:
+
+1. **Secret Management**: Sensitive values (API keys, credentials) should be stored as GitHub Secrets
+2. **Dependency Scanning**: Workflows include security scanning for dependencies
+3. **Container Scanning**: Docker images are scanned for vulnerabilities
+
+These CI/CD workflows form a critical part of the development process, ensuring all deliverables meet the validation criteria specified for each milestone.
 
 ### Production Deployment Dependencies
 
@@ -382,10 +1336,10 @@ For production deployment, additional steps are required:
 1. **Containerization**:
    ```bash
    # Build the Docker image
-   docker build -t vuln-researcher:latest .
+   docker build -t skwaq:latest .
    
    # Run the container
-   docker run -p 8000:8000 -v ./data:/app/data vuln-researcher:latest
+   docker run -p 8000:8000 -v ./data:/app/data skwaq:latest
    ```
 
 2. **Securing Neo4j**:
@@ -398,1497 +1352,659 @@ For production deployment, additional steps are required:
    - Set up metrics collection
    - Implement health checks
 
-## Implementation Modules
-
-### 1. Core Infrastructure Setup
-
-#### 1.1 Project Structure and Environment Setup
-
-**Purpose**: Establish the foundational project structure and development environment.
-
-**Steps**:
-1. Initialize the project repository with the following structure:
-   ```
-   vuln-researcher/
-   ├── agents/                # Agent implementations
-   ├── cli/                   # CLI implementation
-   ├── data/
-   │   ├── knowledge/         # Background knowledge documents
-   │   └── investigations/    # Storage for investigation data
-   ├── db/                    # Database interaction modules
-   ├── events/                # Event definitions and handlers
-   ├── ingestion/             # Code and knowledge ingestion modules
-   ├── prompts/               # Prompt templates
-   ├── protos/                # Protocol buffer definitions
-   ├── scripts/               # Utility scripts for project management
-   │   ├── setup/             # Setup and installation scripts
-   │   ├── dev/               # Development workflow scripts
-   │   └── ci/                # CI/CD related scripts
-   ├── tests/                 # Test suite
-   ├── utils/                 # Utility functions
-   ├── workflows/             # Workflow implementations
-   ├── pyproject.toml         # Project metadata and dependencies
-   ├── poe.toml               # Poetry task definitions
-   └── README.md              # Project documentation
-   ```
-
-2. Set up Python environment:
-   - Use Python 3.10+ for compatibility with all dependencies
-   - Configure uv for dependency management
-   - Set up poetry/poe for build and task management
-   - Create a Dockerfile for containerization
-
-3. Configure development tools:
-   - Black for code formatting
-   - Pylint and flake8 for linting
-   - MyPy for type checking
-   - Pytest for testing
-
-4. Set up CI/CD pipeline (GitHub Actions):
-   - Automated testing
-   - Linting and type checking
-   - Docker image building
-
-**Testing Strategy**:
-- Unit tests for environment configuration
-- Integration tests for dependency resolution
-- Container build tests
-
-#### 1.2 Project Scripts Implementation
-
-**Purpose**: Create utility scripts to automate common tasks, ensure consistent environments, and simplify project management.
-
-**Steps**:
-1. Implement prerequisite installation script:
-   - Create `scripts/setup/install_prerequisites.sh` to validate and install all required system dependencies
-   - Add checks for Python, Docker, Git, and other system requirements
-   - Implement automatic installation or helpful error messages for missing components
-   - Add validation of correct versions for each dependency
-
-2. Implement development environment setup scripts:
-   - Create `scripts/setup/setup_dev_environment.sh` to automate virtual environment creation and dependency installation
-   - Implement Neo4j setup and configuration scripts
-   - Add helper scripts for database initialization and seeding
-
-3. Create project management scripts:
-   - Implement `scripts/dev/update_dependencies.sh` for keeping dependencies up to date
-   - Create scripts for common development workflows like linting, testing, and documentation generation
-   - Add helper scripts for common Git workflows and release management
-
-4. Implement CI/CD scripts:
-   - Create scripts for CI environment setup
-   - Implement build and deployment automation
-   - Add scripts for automated testing and reporting
-
-**Dependencies**:
-- bash or PowerShell (platform-dependent)
-- python-dotenv (for environment configuration)
-
-**Testing Strategy**:
-- Test scripts on different platforms (Linux, macOS, Windows)
-- Create integration tests that validate script functionality
-- Add CI steps to verify script execution
-
-**Example prerequisite installation script:**
-```bash
-#!/bin/bash
-# Example script structure for prerequisite installation
-
-set -e
-
-# Define required versions
-REQUIRED_PYTHON_VERSION="3.10"
-REQUIRED_DOCKER_VERSION="20.10.0"
-REQUIRED_UV_VERSION="0.1.0"
-
-echo "Checking prerequisites for Vulnerability Assessment Copilot..."
-
-# Check Python version
-if command -v python3 &> /dev/null; then
-    PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
-    if [[ $(echo "$PYTHON_VERSION $REQUIRED_PYTHON_VERSION" | awk '{print ($1 >= $2)}') == 1 ]]; then
-        echo "✅ Python version $PYTHON_VERSION found (required: $REQUIRED_PYTHON_VERSION)"
-    else
-        echo "❌ Python version $REQUIRED_PYTHON_VERSION or higher required, found $PYTHON_VERSION"
-        echo "Please upgrade Python: https://www.python.org/downloads/"
-        exit 1
-    fi
-else
-    echo "❌ Python 3 not found"
-    echo "Please install Python: https://www.python.org/downloads/"
-    exit 1
-fi
-
-# Check Docker
-if command -v docker &> /dev/null; then
-    DOCKER_VERSION=$(docker --version | awk '{print $3}' | sed 's/,//')
-    if [[ $(echo "$DOCKER_VERSION $REQUIRED_DOCKER_VERSION" | awk '{print ($1 >= $2)}') == 1 ]]; then
-        echo "✅ Docker version $DOCKER_VERSION found (required: $REQUIRED_DOCKER_VERSION)"
-    else
-        echo "❌ Docker version $REQUIRED_DOCKER_VERSION or higher required, found $DOCKER_VERSION"
-        echo "Please upgrade Docker: https://docs.docker.com/get-docker/"
-        exit 1
-    fi
-else
-    echo "❌ Docker not found"
-    echo "Please install Docker: https://docs.docker.com/get-docker/"
-    exit 1
-fi
-
-# Check and install poetry if needed
-if ! command -v poetry &> /dev/null; then
-    echo "Poetry not found. Installing..."
-    curl -sSL https://install.python-poetry.org | python3 -
-    echo "✅ Poetry installed"
-else
-    echo "✅ Poetry already installed"
-fi
-
-# Check and install uv if needed
-if ! command -v uv &> /dev/null; then
-    echo "uv not found. Installing..."
-    pip install uv
-    echo "✅ uv installed"
-else
-    echo "✅ uv already installed"
-fi
-
-# Check git
-if command -v git &> /dev/null; then
-    echo "✅ Git installed"
-else
-    echo "❌ Git not found"
-    echo "Please install Git: https://git-scm.com/downloads"
-    exit 1
-fi
-
-echo "All prerequisites checked and installed!"
-echo "You're ready to set up the development environment."
-echo "Next step: Run scripts/setup/setup_dev_environment.sh"
-```
-
-### 2. Neo4J Integration
-
-#### 2.1 Database Connection Module
-
-**Purpose**: Establish and maintain connections to Neo4J databases.
-
-**Steps**:
-1. Create a database connection module:
-   - Implement connection pooling for efficient DB access
-   - Support both local and remote Neo4J instances
-   - Implement authentication handling
-   - Create configuration management for DB credentials
-
-2. Implement connection health monitoring:
-   - Connection status checks
-   - Automatic reconnection logic
-   - Error handling for connection failures
-
-3. Create database initialization logic:
-   - Schema creation
-   - Index setup for both graph and vector indices
-   - Database version management
-
-**Dependencies**:
-- neo4j-python-driver
-- py2neo (for higher-level operations)
-- pydantic (for configuration models)
-
-**Testing Strategy**:
-- Unit tests with mock Neo4J instances
-- Integration tests with containerized Neo4J
-- Connection failure recovery tests
-
-#### 2.2 Vector Search Integration
-
-**Purpose**: Implement vector-based semantic search capabilities.
-
-**Steps**:
-1. Implement embedding generation:
-   - Integrate with Azure OpenAI for text embedding generation
-   - Create batch processing for efficient embedding generation
-   - Implement caching to avoid redundant embedding generation
-
-2. Implement vector indexing:
-   - Create Neo4J vector index setup
-   - Configure similarity algorithms (COSINE)
-   - Optimize index parameters for performance
-
-3. Create search functionality:
-   - Implement semantic search queries
-   - Create hybrid search capabilities (combining graph traversal with semantic search)
-   - Develop relevance scoring and ranking
-
-**Dependencies**:
-- openai (for Azure OpenAI API)
-- numpy (for vector operations)
-
-**Testing Strategy**:
-- Unit tests for embedding generation
-- Integration tests for vector search
-- Performance benchmarks for search operations
-
-### 3. Background Knowledge Management
-
-#### 3.1 Knowledge Ingestion Module
-
-**Purpose**: Ingest, process, and index background knowledge documents.
-
-**Steps**:
-1. Implement document processing pipeline:
-   - File system monitoring for new documents
-   - Document parsing for different formats (Markdown, PDF, etc.)
-   - Text extraction and cleaning
-
-2. Create knowledge graph construction:
-   - Entity extraction
-   - Relationship detection
-   - Metadata extraction and indexing
-
-3. Implement CWE database integration:
-   - Download and parse CWE data
-   - Create graph representations of vulnerabilities
-   - Link vulnerabilities to techniques and mitigations
-
-4. Develop semantic indexing:
-   - Generate embeddings for documents
-   - Create vector indices in Neo4J
-   - Implement chunking strategies for long documents
-
-**Dependencies**:
-- langchain (for document processing)
-- beautifulsoup4 (for HTML parsing)
-- pypdf (for PDF parsing)
-- requests (for downloading CWE data)
-
-**Testing Strategy**:
-- Unit tests for document parsing
-- Integration tests for graph construction
-- End-to-end tests for knowledge ingestion workflow
-
-#### 3.2 Knowledge Retrieval Module
-
-**Purpose**: Retrieve relevant information from the background knowledge graph.
-
-**Steps**:
-1. Implement semantic search:
-   - Create query embedding generation
-   - Implement vector similarity search
-   - Develop context-aware retrieval
-
-2. Create structured query generation:
-   - Implement Cypher query templates
-   - Develop dynamic query construction
-   - Create result formatting
-
-3. Develop hybrid retrieval:
-   - Combine semantic and structured search
-   - Implement relevance scoring
-   - Create result aggregation and deduplication
-
-**Dependencies**:
-- openai (for embedding generation)
-- neo4j-python-driver (for query execution)
-
-**Testing Strategy**:
-- Unit tests for query generation
-- Integration tests for retrieval accuracy
-- Benchmark tests for retrieval performance
-
-### 4. Code Ingestion System
-
-#### 4.1 Repository Fetching Module
-
-**Purpose**: Fetch and prepare code repositories for analysis.
-
-**Steps**:
-1. Implement repository cloning:
-   - Support for GitHub, GitLab, and local repositories
-   - Authentication handling for private repositories
-   - Incremental updates for existing repositories
-
-2. Create repository structure analysis:
-   - Generate file system tree
-   - Identify project structure patterns
-   - Detect build systems and project metadata
-
-3. Implement documentation collection:
-   - Extract inline documentation
-   - Collect README and other documentation files
-   - Support for external documentation sources
-
-**Dependencies**:
-- gitpython (for Git operations)
-- requests (for API calls)
-- pyyaml (for parsing configuration files)
-
-**Testing Strategy**:
-- Unit tests for repository operations
-- Integration tests with sample repositories
-- Error handling tests for network failures
-
-#### 4.2 Code Analysis Integration
-
-**Purpose**: Integrate with blarify and other tools for code analysis.
-
-**Steps**:
-1. Implement blarify integration:
-   - Setup blarify configuration
-   - Execute blarify for AST generation
-   - Process and store blarify output in Neo4J
-
-2. Create language-specific analyzers:
-   - Support for popular languages (Python, JavaScript, Java, C/C++, etc.)
-   - Language-specific AST processing
-   - Custom analyzers for specialized frameworks
-
-3. Develop code metrics collection:
-   - Calculate complexity metrics
-   - Generate dependency graphs
-   - Identify high-risk components
-
-**Dependencies**:
-- blarify
-- language-specific parsers (e.g., ast for Python)
-- radon (for code metrics)
-
-**Testing Strategy**:
-- Unit tests for analyzer components
-- Integration tests with multi-language codebases
-- Performance tests for large repositories
-
-#### 4.3 Code Summarization Module
-
-**Purpose**: Generate and refine code summaries using AI.
-
-**Steps**:
-1. Implement incremental summarization:
-   - Create module/class/function level summarization
-   - Develop subsystem and directory summarization
-   - Implement overall codebase summarization
-
-2. Create recursive refinement:
-   - Detect knowledge conflicts and gaps
-   - Update summaries with new insights
-   - Maintain summary consistency
-
-3. Develop developer intent inference:
-   - Analyze coding patterns
-   - Infer architectural decisions
-   - Document implicit assumptions
-
-**Dependencies**:
-- openai (for Azure OpenAI API)
-- networkx (for graph analysis)
-
-**Testing Strategy**:
-- Unit tests for summarization components
-- Integration tests for different codebases
-- Accuracy evaluation with human-reviewed summaries
-
-### 5. Agent System
-
-#### 5.1 AutoGen Core Integration
-
-**Purpose**: Establish the foundation for the multiagent system using AutoGen Core.
-
-**Steps**:
-1. Implement agent base classes:
-   - Create base agent with common functionality
-   - Implement message handling protocols
-   - Establish agent lifecycle management
-
-2. Set up event system:
-   - Define event interfaces and types
-   - Implement event emission and subscription
-   - Create event logging and monitoring
-
-3. Create agent registry:
-   - Implement agent discovery
-   - Create dynamic agent loading
-   - Set up agent configuration management
-
-**Dependencies**:
-- autogen-core
-- pydantic (for configuration)
-- protobuf (for event definitions)
-
-**Testing Strategy**:
-- Unit tests for agent components
-- Integration tests for event handling
-- System tests for agent interactions
-
-#### 5.2 Orchestrator Agent Implementation
-
-**Purpose**: Implement the main Vulnerability Researcher Copilot orchestrator agent.
-
-**Steps**:
-1. Create orchestrator core:
-   - Implement command handling
-   - Create workflow dispatching
-   - Develop agent coordination
-
-2. Implement state management:
-   - Create investigation tracking
-   - Implement session management
-   - Develop progress monitoring
-
-3. Develop user interaction handling:
-   - Implement command parsing
-   - Create response formatting
-   - Develop multi-turn conversations
-
-**Dependencies**:
-- autogen-core
-- rich (for CLI output)
-- pydantic (for state models)
-
-**Testing Strategy**:
-- Unit tests for command handling
-- Integration tests for workflow coordination
-- End-to-end tests for user interactions
-
-#### 5.3 Agent Implementations
-
-**Purpose**: Implement specialized agents for different system tasks.
-
-**Steps**:
-1. Create knowledge agents:
-   - Implement background knowledge ingestion agents
-   - Create knowledge retrieval agents
-   - Develop knowledge evaluation agents
-
-2. Implement code agents:
-   - Create code ingestion agents
-   - Implement code analysis agents
-   - Develop code understanding agents
-
-3. Create workflow agents:
-   - Implement Q&A workflow agents
-   - Create guided inquiry agents
-   - Develop tool invocation agents
-   - Implement vulnerability research agents
-   - Create reporting agents
-
-4. Implement critic agents:
-   - Create evaluation agents
-   - Implement validation agents
-   - Develop quality assurance agents
-
-**Dependencies**:
-- autogen-core
-- openai (for Azure OpenAI API)
-- networkx (for graph traversal)
-
-**Testing Strategy**:
-- Unit tests for individual agents
-- Integration tests for agent collaborations
-- System tests for complex scenarios
-
-### 6. Workflows
-
-#### 6.1 Q&A Workflow
-
-**Purpose**: Implement the question-answering workflow.
-
-**Steps**:
-1. Create question analysis:
-   - Implement intent recognition
-   - Create question classification
-   - Develop context extraction
-
-2. Implement retrieval augmented generation:
-   - Create retrieval strategy selection
-   - Implement context assembly
-   - Develop answer generation
-
-3. Create answer evaluation:
-   - Implement answer validation
-   - Create confidence scoring
-   - Develop clarification requests
-
-**Dependencies**:
-- autogen-core
-- openai (for Azure OpenAI API)
-- networkx (for graph traversal)
-
-**Testing Strategy**:
-- Unit tests for question analysis
-- Integration tests for retrieval performance
-- End-to-end tests with sample questions
-
-#### 6.2 Guided Inquiry Workflow
-
-**Purpose**: Implement the guided inquiry workflow.
-
-**Steps**:
-1. Create inquiry planning:
-   - Implement question generation
-   - Create inquiry path planning
-   - Develop adaptive questioning
-
-2. Implement response handling:
-   - Create answer parsing
-   - Implement knowledge integration
-   - Develop investigation graph updates
-
-3. Create educational feedback:
-   - Implement vulnerability explanation
-   - Create risk assessment
-   - Develop mitigation recommendations
-
-**Dependencies**:
-- autogen-core
-- openai (for Azure OpenAI API)
-- networkx (for graph updates)
-
-**Testing Strategy**:
-- Unit tests for question generation
-- Integration tests for inquiry paths
-- User simulation tests for end-to-end workflows
-
-#### 6.3 Tool Invocation Workflow
-
-**Purpose**: Implement the tool invocation and analysis workflow.
-
-**Steps**:
-1. Create tool integration:
-   - Implement tool registry
-   - Create tool execution environment
-   - Develop tool configuration management
-
-2. Implement result processing:
-   - Create output parsing
-   - Implement result classification
-   - Develop false positive detection
-
-3. Create result integration:
-   - Implement finding correlation
-   - Create evidence collection
-   - Develop investigation updates
-
-**Dependencies**:
-- autogen-core
-- docker (for tool isolation)
-- pydantic (for result models)
-
-**Testing Strategy**:
-- Unit tests for tool integration
-- Integration tests with security tools
-- System tests for tool workflows
-
-#### 6.4 Vulnerability Research Workflow
-
-**Purpose**: Implement the complete vulnerability research workflow.
-
-**Steps**:
-1. Create research planning:
-   - Implement vulnerability hypothesis generation
-   - Create investigation strategy planning
-   - Develop prioritization logic
-
-2. Implement iterative investigation:
-   - Create evidence gathering
-   - Implement hypothesis testing
-   - Develop finding verification
-
-3. Create report generation:
-   - Implement vulnerability documentation
-   - Create impact assessment
-   - Develop remediation recommendations
-
-**Dependencies**:
-- autogen-core
-- openai (for Azure OpenAI API)
-- networkx (for investigation graphs)
-
-**Testing Strategy**:
-- Unit tests for research components
-- Integration tests for investigation flows
-- End-to-end tests with vulnerable codebases
-
-### 7. CLI Interface
-
-#### 7.1 Command-Line Interface
-
-**Purpose**: Implement the user interface using Rich.
-
-**Steps**:
-1. Create command structure:
-   - Implement command parsing
-   - Create subcommand organization
-   - Develop help documentation
-
-2. Implement interactive UI:
-   - Create rich text formatting
-   - Implement progress indicators
-   - Develop interactive prompts
-
-3. Create result visualization:
-   - Implement graph visualization
-   - Create code highlighting
-   - Develop report formatting
-
-**Dependencies**:
-- rich
-- typer (for command structure)
-- click (for input handling)
-
-**Testing Strategy**:
-- Unit tests for command handling
-- Integration tests for UI components
-- Usability tests with sample scenarios
-
-#### 7.2 Logging and Monitoring
-
-**Purpose**: Implement comprehensive logging and monitoring.
-
-**Steps**:
-1. Create logging system:
-   - Implement structured logging
-   - Create log levels and categories
-   - Develop log filtering and storage
-
-2. Implement monitoring:
-   - Create performance metrics
-   - Implement health checks
-   - Develop alerting mechanisms
-
-3. Create debugging tools:
-   - Implement trace visualization
-   - Create event inspection
-   - Develop agent debugging
-
-**Dependencies**:
-- structlog
-- prometheus-client (for metrics)
-- rich (for visualization)
-
-**Testing Strategy**:
-- Unit tests for logging components
-- Integration tests for monitoring
-- System tests for debugging workflows
-
-### 8. Security and Compliance
-
-#### 8.1 Security Implementation
-
-**Purpose**: Ensure the security of the system itself.
-
-**Steps**:
-1. Implement authentication and authorization:
-   - Create user authentication
-   - Implement role-based access control
-   - Develop permission management
-
-2. Create data protection:
-   - Implement secure storage
-   - Create data encryption
-   - Develop data isolation
-
-3. Implement secure communications:
-   - Create TLS configuration
-   - Implement secure API endpoints
-   - Develop secure agent communications
-
-**Dependencies**:
-- cryptography
-- passlib (for authentication)
-- pydantic (for validation)
-
-**Testing Strategy**:
-- Unit tests for security components
-- Integration tests for authentication flows
-- Penetration testing for security validation
-
-## Testing Strategy
-
-### Unit Testing
-
-Each module will have comprehensive unit tests that verify:
-- Individual function behavior
-- Error handling
-- Edge cases
-- Configuration changes
-
-Tests will use pytest and include fixtures for common test setups.
-
-### Integration Testing
-
-Integration tests will verify interactions between modules:
-- Database interactions
-- Agent communications
-- Workflow transitions
-- Tool integrations
-
-These tests will use containerized dependencies and mocked external services.
-
-### System Testing
-
-System tests will verify end-to-end functionality:
-- Complete workflows
-- Multi-agent interactions
-- Performance under load
-- Error recovery
-
-These tests will use real or synthetic codebases with known vulnerabilities.
-
-### Test Automation
-
-Tests will be automated using:
-- GitHub Actions for CI/CD
-- Docker Compose for environment setup
-- Test coverage reporting
-- Automated security scanning
-
-### Detailed Test Implementation Guidelines
-
-#### Test Structure and Organization
-
-1. **Test Directory Structure**:
-   ```
-   tests/
-   ├── unit/                  # Unit tests
-   │   ├── agents/            # Tests for agent components
-   │   ├── db/                # Tests for database components
-   │   ├── ingestion/         # Tests for ingestion components
-   │   └── workflows/         # Tests for workflow components
-   ├── integration/           # Integration tests
-   │   ├── neo4j/             # Neo4j integration tests
-   │   ├── agent_comms/       # Agent communication tests
-   │   └── workflow_chains/   # Workflow chaining tests
-   ├── system/                # System tests
-   │   ├── scenarios/         # Full scenario tests
-   │   └── performance/       # Performance tests
-   ├── fixtures/              # Shared test fixtures
-   │   ├── codebases/         # Sample code repositories
-   │   ├── knowledge/         # Sample knowledge bases
-   │   └── mock_responses/    # Mocked API responses
-   └── conftest.py            # Shared pytest configuration
+## Implementation Milestones and Validation Criteria
+
+The implementation will proceed through a series of incremental milestones, each with specific validation criteria and testing requirements. Each milestone must pass its validation criteria before proceeding to the next milestone.
+
+### Foundation Phase Milestones
+
+#### Milestone F1: Project Setup and Environment
+**Deliverables:**
+- Project repository structure
+- Development environment configuration
+- Docker containerization
+- CI/CD pipeline setup
+- API documentation standards and tooling setup
+
+**Validation Criteria:**
+- All required directories and configuration files exist
+- Docker container builds successfully
+- Development environment scripts execute correctly
+- CI pipeline succeeds with baseline tests
+- API documentation templates and standards are defined
+- Documentation generation pipeline works correctly
+
+**Testing Requirements:**
+- Script validation on all target platforms (Windows, macOS, Linux)
+- Container startup and shutdown tests
+- Environment variable configuration tests
+- CI pipeline verification test
+- Documentation generation tests
+- Docstring style validation tests
+
+#### Milestone F2: Core Utilities and Infrastructure
+**Deliverables:**
+- Telemetry system with opt-out functionality
+- Configuration management
+- Event system implementation
+- Logging system
+
+**Validation Criteria:**
+- Telemetry data is captured and can be disabled via configuration
+- Events can be emitted and consumed by subscribers
+- Logging captures appropriate information and respects log levels
+- Configuration changes are reflected in system behavior
+
+**Testing Requirements:**
+- Unit tests for each utility component
+- Integration tests for interactions between components
+- Configuration change tests
+- Telemetry opt-out verification
+
+#### Milestone F3: Database Integration
+**Deliverables:**
+- Neo4j connection module
+- Schema implementation
+- Database initialization
+- Vector search integration
+
+**Validation Criteria:**
+- Stable connection to Neo4j can be established
+- Schema is correctly initialized
+- Queries can be executed and return expected results
+- Vector search returns relevant results for test queries
+
+**Testing Requirements:**
+- Connection reliability tests (including failure recovery)
+- Query performance benchmarks for common operations
+- Schema validation tests
+- Vector similarity search accuracy tests
+
+### Knowledge Management Phase Milestones
+
+#### Milestone K1: Knowledge Ingestion Pipeline
+**Deliverables:**
+- Document processing pipeline
+- CWE database integration
+- Core knowledge graph structure
+
+**Validation Criteria:**
+- Documents in various formats (Markdown, PDF) can be processed
+- CWE data is correctly imported and linked
+- Knowledge graph entities and relationships are created correctly
+
+**Testing Requirements:**
+- Document processing tests with various formats
+- CWE data verification tests
+- Graph consistency validation
+- Processing error handling tests
+
+#### Milestone K2: Knowledge Indexing and Retrieval
+**Deliverables:**
+- Document embedding generation
+- Vector indexing in Neo4j
+- Retrieval API implementation
+
+**Validation Criteria:**
+- Embeddings are generated consistently for similar text
+- Vector indices correctly store embeddings
+- Retrieval queries return relevant results
+- Performance meets requirements for typical queries
+
+**Testing Requirements:**
+- Embedding consistency tests
+- Retrieval accuracy evaluation
+- Performance benchmarks for indexing operations
+- Query latency tests
+
+#### Milestone K3: Knowledge Source Extensibility
+**Deliverables:**
+- Knowledge source registry
+- Source-specific ingestion pipelines
+- Schema integration templates
+
+**Validation Criteria:**
+- New knowledge sources can be registered and ingested
+- Source-specific processing correctly handles different formats
+- Knowledge from different sources is integrated properly
+
+**Testing Requirements:**
+- Integration tests with sample custom knowledge sources
+- Schema compatibility tests
+- Source registration and discovery tests
+- Error handling tests for invalid sources
+
+### Code Analysis Phase Milestones
+
+#### Milestone C1: Repository Fetching
+**Deliverables:**
+- GitHub API integration
+- Repository cloning functionality
+- Filesystem processing
+
+**Validation Criteria:**
+- Can successfully clone repositories from GitHub
+- Authentication works for private repositories
+- Repository structure is correctly processed
+- Progress is reported accurately
+
+**Testing Requirements:**
+- Tests with public and private repositories
+- Authentication failure handling tests
+- Large repository handling tests
+- Network failure recovery tests
+
+#### Milestone C2: Basic Code Analysis
+**Deliverables:**
+- Blarify integration
+- AST processing
+- Code structure mapping
+- Python and C# language support
+
+**Validation Criteria:**
+- AST is generated correctly for both Python and C# code
+- Code structure is mapped to the graph database
+- File relationships are correctly identified
+- Analysis works for both reference repositories (eShop and autogen)
+
+**Testing Requirements:**
+- Analysis correctness tests for reference repositories
+- Performance benchmarks for typical codebases
+- Language-specific validation tests
+- Error handling for malformed code
+
+#### Milestone C3: Advanced Code Analysis
+**Deliverables:**
+- Parallel analysis orchestration
+- CodeQL integration
+- Code metrics collection
+- Tool integration framework
+
+**Validation Criteria:**
+- Analysis tasks execute in parallel where appropriate
+- CodeQL queries execute and results are processed
+- Code metrics are calculated and stored
+- External tools can be integrated and executed
+
+**Testing Requirements:**
+- Parallel efficiency measurements
+- CodeQL result validation
+- Metrics accuracy verification
+- Tool integration tests with sample tools
+
+#### Milestone C4: Code Understanding and Summarization
+**Deliverables:**
+- Code summarization at multiple levels
+- Intent inference
+- Architecture reconstruction
+- Cross-reference linking
+
+**Validation Criteria:**
+- Summaries are generated at function, class, module, and system levels
+- Developer intent is inferred accurately
+- Architecture diagrams can be generated from analysis
+- Cross-references correctly link related components
+
+**Testing Requirements:**
+- Summary quality evaluation (manual review)
+- Cross-reference accuracy tests
+- Architecture reconstruction validation
+- Performance tests for large codebases
+
+### Agent System Phase Milestones
+
+#### Milestone A1: Agent Foundation
+**Deliverables:**
+- AutoGen Core integration
+- Base agent classes
+- Agent lifecycle management
+- Agent registry
+
+**Validation Criteria:**
+- Agents can be created and destroyed
+- Agents can communicate with each other
+- Agent registry correctly manages agent instances
+- Agent lifecycle events are properly tracked
+
+**Testing Requirements:**
+- Agent creation and destruction tests
+- Inter-agent communication tests
+- Registry functionality tests
+- Resource usage monitoring
+
+#### Milestone A2: Core Agents Implementation
+**Deliverables:**
+- Orchestrator agent
+- Knowledge agents
+- Code analysis agents
+- Basic workflow agents
+
+**Validation Criteria:**
+- Orchestrator correctly manages other agents
+- Knowledge agents retrieve relevant information
+- Code analysis agents process code correctly
+- Basic workflows can be executed
+
+**Testing Requirements:**
+- Agent behavior tests with mock inputs
+- End-to-end tests for simple workflows
+- Resource usage monitoring during agent operation
+- Error handling and recovery tests
+
+#### Milestone A3: Advanced Agent Capabilities
+**Deliverables:**
+- Agent communication patterns
+- Specialized workflow agents
+- Critic and verification agents
+- Advanced orchestration
+
+**Validation Criteria:**
+- Complex multi-agent interactions work correctly
+- Agents can critique and verify each other's work
+- Workflows correctly use specialized agents
+- Orchestration handles complex scenarios
+
+**Testing Requirements:**
+- Complex workflow tests
+- Critic agent effectiveness evaluation
+- Error recovery in multi-agent scenarios
+- Performance benchmarks for agent interactions
+
+### Workflow and UI Phase Milestones
+
+#### Milestone W1: Command Line Interface
+**Deliverables:**
+- CLI command structure
+- Interactive UI elements
+- Progress visualization
+- Investigation management commands
+
+**Validation Criteria:**
+- Commands work correctly and provide appropriate feedback
+- Help and documentation are comprehensive
+- Progress is visualized effectively
+- Investigations can be listed, exported, and managed
+
+**Testing Requirements:**
+- Command execution tests
+- User experience evaluation
+- Error message clarity testing
+- Investigation management functionality tests
+
+#### Milestone W2: Basic Workflows
+**Deliverables:**
+- Q&A workflow
+- Guided inquiry workflow
+- Basic tool invocation
+
+**Validation Criteria:**
+- Q&A workflow provides accurate answers
+- Guided inquiry workflow asks relevant questions
+- Tools can be invoked and results processed
+- Workflows persist across sessions
+
+**Testing Requirements:**
+- End-to-end workflow tests
+- Answer accuracy evaluation
+- Question relevance evaluation
+- Session persistence tests
+
+#### Milestone W3: Advanced Workflows
+**Deliverables:**
+- Vulnerability research workflow
+- Investigation persistence
+- Markdown reporting
+- GitHub issue integration
+
+**Validation Criteria:**
+- Vulnerability research workflow identifies actual issues
+- Investigations persist and can be resumed
+- Reports are generated in well-formatted Markdown
+- GitHub issue scripts are generated correctly
+
+**Testing Requirements:**
+- Vulnerability detection tests with known issues
+- Report quality evaluation
+- GitHub issue script validation
+- Investigation persistence tests
+
+#### Milestone W4: Workflow Refinement and Integration
+**Deliverables:**
+- Inter-workflow communication
+- Context preservation
+- Workflow chaining
+- Performance optimization
+
+**Validation Criteria:**
+- Workflows can be chained together
+- Context is preserved when switching workflows
+- Performance meets requirements under typical load
+- User experience is smooth and intuitive
+
+**Testing Requirements:**
+- Workflow transition tests
+- Context preservation verification
+- Performance benchmarks under various loads
+- Usability testing with sample scenarios
+
+### Integration and Finalization Phase Milestones
+
+#### Milestone I1: System Integration
+**Deliverables:**
+- Full system integration
+- End-to-end testing
+- Performance optimization
+- Documentation updates
+
+**Validation Criteria:**
+- All components work together seamlessly
+- Performance meets requirements
+- Documentation is complete and accurate
+- No critical bugs or issues remain
+
+**Testing Requirements:**
+- End-to-end system tests
+- Performance benchmarks
+- Documentation verification
+- Regression testing
+
+#### Milestone I2: Security and Compliance
+**Deliverables:**
+- Security implementation
+- Telemetry privacy controls
+- Data protection
+- Compliance verification
+
+**Validation Criteria:**
+- Security controls are properly implemented
+- Telemetry respects privacy settings
+- Sensitive data is protected
+- System meets all compliance requirements
+
+**Testing Requirements:**
+- Security penetration testing
+- Privacy control verification
+- Data protection tests
+- Compliance checklist verification
+
+#### Milestone I3: Final Release Preparation
+**Deliverables:**
+- Release packaging
+- Installation and deployment scripts
+- Final documentation
+- Deployment guides
+
+**Validation Criteria:**
+- Package can be installed and run correctly
+- Documentation covers all aspects of the system
+- Deployment guides are comprehensive
+- Release meets all requirements and quality standards
+
+**Testing Requirements:**
+- Installation tests on all target platforms
+- Documentation completeness verification
+- Deployment guide validation
+- Final acceptance testing
+
+### Milestone Validation and Testing Process
+
+For each milestone, the following validation and testing process will be followed:
+
+1. **Unit Testing**: Each component must pass all unit tests with at least 80% code coverage.
+
+2. **Integration Testing**: Components must work together as expected, with integration tests passing.
+
+3. **Performance Testing**: Performance must meet or exceed the defined benchmarks for the milestone.
+
+4. **Security Testing**: Security-related components must pass security review and testing.
+
+5. **Code Review**: All code must pass peer review before milestone completion.
+
+6. **Documentation Review**: Documentation must be updated to reflect the milestone deliverables.
+   - API documentation coverage must meet or exceed 90% for all new code
+   - API documentation must follow the established Google-style format
+   - Documentation must be generated successfully with Sphinx
+   - Code examples in docstrings must be valid and execute correctly
+
+7. **Milestone Demo**: A demonstration of the milestone functionality must be presented and approved.
+
+8. **Milestone Retrospective**: A retrospective must be conducted to identify lessons learned and improvements for future milestones.
+
+9. **Local CI Validation**: Before marking a milestone as complete, run the full local CI pipeline to verify that all tests pass and all requirements are met:
+   ```bash
+   ./scripts/ci/run-local-ci.sh
    ```
 
-2. **Naming Convention**:
-   - Test files should follow the pattern `test_<module_name>.py`
-   - Test classes should follow the pattern `Test<ClassBeingTested>`
-   - Test methods should follow the pattern `test_<functionality>_<scenario>`
-
-#### Writing Tests for Specific Components
-
-##### 1. Database Component Tests
-
-For Neo4j integration and database access modules:
-
-```python
-# Example test for the database connection module
-import pytest
-from db.connection import Neo4jConnection
-
-@pytest.fixture
-def mock_neo4j_driver(mocker):
-    """Create a mock Neo4j driver."""
-    mock_driver = mocker.patch('neo4j.GraphDatabase.driver')
-    mock_session = mocker.MagicMock()
-    mock_driver.return_value.session.return_value = mock_session
-    return mock_driver, mock_session
-
-def test_connection_initialization(mock_neo4j_driver):
-    """Test that the connection is properly initialized."""
-    mock_driver, _ = mock_neo4j_driver
-    connection = Neo4jConnection(uri="bolt://localhost:7687", 
-                                 user="neo4j", 
-                                 password="password")
-    
-    # Verify driver was created with correct parameters
-    mock_driver.assert_called_once_with(
-        "bolt://localhost:7687", 
-        auth=("neo4j", "password")
-    )
-    
-    # Test connection status
-    assert connection.is_connected() is True
-
-def test_execute_query(mock_neo4j_driver):
-    """Test query execution."""
-    _, mock_session = mock_neo4j_driver
-    mock_result = mocker.MagicMock()
-    mock_session.run.return_value = mock_result
-    mock_result.data.return_value = [{"n": "test"}]
-    
-    connection = Neo4jConnection(uri="bolt://localhost:7687", 
-                                 user="neo4j", 
-                                 password="password")
-    result = connection.execute_query("MATCH (n) RETURN n LIMIT 1")
-    
-    # Verify query was executed
-    mock_session.run.assert_called_once_with("MATCH (n) RETURN n LIMIT 1", {})
-    assert result == [{"n": "test"}]
-```
-
-##### 2. Agent Tests
-
-For testing agent components:
-
-```python
-# Example test for an agent class
-import pytest
-from agents.base import BaseAgent
-from events.event_system import EventSystem
-
-@pytest.fixture
-def mock_event_system():
-    """Create a mock event system."""
-    return MockEventSystem()
-
-class MockEventSystem:
-    """Mock implementation of event system for testing."""
-    def __init__(self):
-        self.emitted_events = []
-        self.subscriptions = {}
-    
-    def emit(self, event_type, payload):
-        self.emitted_events.append((event_type, payload))
-    
-    def subscribe(self, event_type, callback):
-        if event_type not in self.subscriptions:
-            self.subscriptions[event_type] = []
-        self.subscriptions[event_type].append(callback)
-
-def test_agent_initialization(mock_event_system):
-    """Test agent initialization."""
-    agent = BaseAgent(name="test_agent", event_system=mock_event_system)
-    assert agent.name == "test_agent"
-    assert agent.event_system == mock_event_system
-
-def test_agent_event_emission(mock_event_system):
-    """Test that agent properly emits events."""
-    agent = BaseAgent(name="test_agent", event_system=mock_event_system)
-    agent.emit_event("test_event", {"data": "value"})
-    
-    assert len(mock_event_system.emitted_events) == 1
-    event_type, payload = mock_event_system.emitted_events[0]
-    assert event_type == "test_event"
-    assert payload == {"data": "value"}
-
-def test_agent_event_handling(mock_event_system):
-    """Test that agent properly handles events."""
-    handled_events = []
-    
-    def handler(payload):
-        handled_events.append(payload)
-    
-    agent = BaseAgent(name="test_agent", event_system=mock_event_system)
-    agent.subscribe_to_event("test_event", handler)
-    
-    # Verify subscription was registered
-    assert "test_event" in mock_event_system.subscriptions
-    assert len(mock_event_system.subscriptions["test_event"]) == 1
-    
-    # Simulate event being triggered
-    mock_event_system.subscriptions["test_event"][0]({"data": "value"})
-    
-    # Verify handler was called
-    assert len(handled_events) == 1
-    assert handled_events[0] == {"data": "value"}
-```
-
-##### 3. AI Model Integration Tests
-
-For testing components that interact with Azure OpenAI:
-
-```python
-# Example test for the AI model client
-import pytest
-from utils.azure_openai_client import AzureOpenAIClient
-
-@pytest.fixture
-def mock_openai(mocker):
-    """Create a mock OpenAI client."""
-    mock_client = mocker.patch('openai.AsyncAzureOpenAI')
-    mock_completion = mocker.AsyncMock()
-    mock_completion.choices = [mocker.MagicMock(message=mocker.MagicMock(content="Test response"))]
-    mock_client.return_value.chat.completions.create = mocker.AsyncMock(return_value=mock_completion)
-    return mock_client
-
-@pytest.mark.asyncio
-async def test_generate_completion(mock_openai):
-    """Test that completions are properly generated."""
-    client = AzureOpenAIClient(
-        api_key="test_key",
-        endpoint="https://test.openai.azure.com",
-        deployment_name="gpt4o"
-    )
-    
-    response = await client.generate_completion(
-        prompt="Test prompt",
-        max_tokens=100
-    )
-    
-    # Verify OpenAI API was called correctly
-    mock_openai.return_value.chat.completions.create.assert_called_once()
-    call_args = mock_openai.return_value.chat.completions.create.call_args
-    assert call_args[1]["messages"][0]["content"] == "Test prompt"
-    assert call_args[1]["max_tokens"] == 100
-    
-    # Verify response was processed correctly
-    assert response == "Test response"
-```
-
-##### 4. CLI Component Tests
-
-For testing the command-line interface:
-
-```python
-# Example test for CLI commands
-import pytest
-from click.testing import CliRunner
-from cli.main import cli
-
-@pytest.fixture
-def cli_runner():
-    """Create a CLI runner for testing."""
-    return CliRunner()
-
-def test_cli_help(cli_runner):
-    """Test that the CLI help command works."""
-    result = cli_runner.invoke(cli, ["--help"])
-    assert result.exit_code == 0
-    assert "Usage:" in result.output
-
-def test_ingest_command(cli_runner, mocker):
-    """Test the repository ingestion command."""
-    mock_ingest = mocker.patch('cli.commands.ingest_repo')
-    result = cli_runner.invoke(cli, ["ingest", "https://github.com/example/repo"])
-    
-    assert result.exit_code == 0
-    mock_ingest.assert_called_once_with("https://github.com/example/repo", None)
-    assert "Ingestion started" in result.output
-```
-
-##### 5. Workflow Tests
-
-For testing workflow components:
-
-```python
-# Example test for the Q&A workflow
-import pytest
-from workflows.qa import QAWorkflow
-from agents.retrieval import KnowledgeRetrievalAgent
-
-@pytest.fixture
-def mock_retrieval_agent(mocker):
-    """Create a mock retrieval agent."""
-    agent = mocker.MagicMock(spec=KnowledgeRetrievalAgent)
-    agent.retrieve.return_value = [
-        {"content": "Test content", "relevance": 0.95}
-    ]
-    return agent
-
-@pytest.fixture
-def mock_llm_client(mocker):
-    """Create a mock LLM client."""
-    client = mocker.MagicMock()
-    client.generate_completion.return_value = "This is a test answer."
-    return client
-
-def test_qa_workflow_question_answering(mock_retrieval_agent, mock_llm_client):
-    """Test the question answering process."""
-    workflow = QAWorkflow(
-        retrieval_agent=mock_retrieval_agent,
-        llm_client=mock_llm_client
-    )
-    
-    answer = workflow.answer_question("What is a test?")
-    
-    # Verify retrieval agent was called
-    mock_retrieval_agent.retrieve.assert_called_once_with("What is a test?")
-    
-    # Verify LLM was called with retrieved context
-    mock_llm_client.generate_completion.assert_called_once()
-    prompt = mock_llm_client.generate_completion.call_args[0][0]
-    assert "Test content" in prompt
-    
-    # Verify answer was returned
-    assert answer == "This is a test answer."
-```
-
-#### Testing AI Components
-
-When testing components that interact with AI models, consider these approaches:
-
-1. **Use mocked responses** for deterministic testing:
-   - Create a fixture with pre-defined responses for different prompts
-   - Use these mock responses for most tests to ensure consistency
-
-2. **Create regression tests** for AI behavior:
-   - Save expected outputs for specific inputs
-   - Compare new outputs against these benchmarks
-   - Use similarity metrics rather than exact matching when appropriate
-
-3. **Test for robustness**:
-   - Verify that components handle unexpected AI outputs gracefully
-   - Test with empty, extremely long, or malformed responses
-   - Ensure error handling works properly
-
-Example of AI regression testing:
-
-```python
-import pytest
-import json
-import os
-from utils.text_similarity import cosine_similarity
-
-@pytest.fixture
-def expected_responses():
-    """Load expected model responses from fixtures."""
-    with open('tests/fixtures/mock_responses/model_responses.json', 'r') as f:
-        return json.load(f)
-
-def test_summarization_regression(code_summarizer, expected_responses):
-    """Test that code summarization produces expected results."""
-    code_snippet = "def add(a, b): return a + b"
-    expected = expected_responses["simple_function_summary"]
-    
-    summary = code_summarizer.summarize(code_snippet)
-    
-    # Use similarity rather than exact matching
-    similarity = cosine_similarity(summary, expected)
-    assert similarity > 0.85, f"Summary differs too much from expected: {summary}"
-```
-
-#### Integration Test Considerations
-
-For integration tests that require running Neo4j:
-
-```python
-import pytest
-from neo4j import GraphDatabase
-from db.connection import Neo4jConnection
-
-@pytest.fixture(scope="module")
-def neo4j_container():
-    """Start a Neo4j container for testing."""
-    import docker
-    client = docker.from_env()
-    
-    # Pull and start Neo4j container
-    container = client.containers.run(
-        "neo4j:4.4",
-        environment={
-            "NEO4J_AUTH": "neo4j/testpassword",
-            "NEO4J_ACCEPT_LICENSE_AGREEMENT": "yes"
-        },
-        ports={"7474/tcp": 7474, "7687/tcp": 7687},
-        detach=True
-    )
-    
-    # Wait for Neo4j to start
-    import time
-    time.sleep(20)  # Allow time for Neo4j to initialize
-    
-    yield container
-    
-    # Clean up
-    container.stop()
-    container.remove()
-
-@pytest.fixture
-def neo4j_connection(neo4j_container):
-    """Create a connection to the test Neo4j instance."""
-    connection = Neo4jConnection(
-        uri="bolt://localhost:7687",
-        user="neo4j",
-        password="testpassword"
-    )
-    
-    # Clear database before each test
-    connection.execute_query("MATCH (n) DETACH DELETE n")
-    
-    return connection
-
-def test_node_creation(neo4j_connection):
-    """Test that nodes can be created in Neo4j."""
-    # Create a node
-    neo4j_connection.execute_query(
-        "CREATE (n:Test {name: $name}) RETURN n",
-        parameters={"name": "test_node"}
-    )
-    
-    # Verify node was created
-    result = neo4j_connection.execute_query(
-        "MATCH (n:Test) RETURN n.name as name"
-    )
-    
-    assert len(result) == 1
-    assert result[0]["name"] == "test_node"
-```
-
-#### Test-Driven Development Approach
-
-Follow these steps for implementing components using TDD:
-
-1. **Write tests first**:
-   - Define the expected behavior through tests before implementation
-   - Focus on interface and behavioral requirements
-   - Include both happy path and error scenarios
-
-2. **Implement minimal functionality**:
-   - Write just enough code to make tests pass
-   - Focus on correctness before optimization
-
-3. **Refactor**:
-   - Improve code quality while keeping tests passing
-   - Extract common functionality into shared utilities
-   - Enhance error handling and edge cases
-
-Example TDD workflow for a new component:
-
-```python
-# Step 1: Write the test first
-def test_vulnerability_scorer_calculates_cvss():
-    """Test that the vulnerability scorer calculates CVSS scores."""
-    # Arrange
-    vulnerability = {
-        "attack_vector": "network",
-        "attack_complexity": "low",
-        "privileges_required": "none",
-        "user_interaction": "none",
-        "scope": "unchanged",
-        "confidentiality": "high",
-        "integrity": "high",
-        "availability": "high"
-    }
-    scorer = VulnerabilityScorer()
-    
-    # Act
-    score = scorer.calculate_cvss(vulnerability)
-    
-    # Assert
-    assert 9.0 <= score <= 10.0  # Should be a critical severity
-
-# Step 2: Implement the component
-class VulnerabilityScorer:
-    def calculate_cvss(self, vulnerability):
-        # Implement CVSS calculation logic
-        # ...
-        return 9.8
-```
-
-#### Test Coverage Goals
-
-Aim for the following test coverage metrics:
-
-- **Unit test coverage**: Minimum 85% code coverage
-- **Integration test coverage**: All critical paths and component interactions
-- **System test coverage**: All user-facing workflows and commands
-
-Monitor coverage using tools like pytest-cov and generate reports in CI/CD.
-
-## Development Phases
-
-### Phase 1: Foundation (Weeks 1-3)
-
-- Set up project structure and environment
-- Implement core Neo4J integration
-- Create basic agent architecture
-- Implement CLI skeleton
-
-### Phase 2: Knowledge System (Weeks 4-6)
-
-- Implement background knowledge ingestion
-- Create vector search integration
-- Develop knowledge retrieval agents
-- Implement knowledge graph visualization
-
-### Phase 3: Code Ingestion (Weeks 7-9)
-
-- Implement repository fetching
-- Create blarify integration
-- Develop code summarization
-- Implement code graph construction
-
-### Phase 4: Workflows (Weeks 10-14)
-
-- Implement Q&A workflow
-- Create guided inquiry workflow
-- Develop tool invocation workflow
-- Implement vulnerability research workflow
-
-### Phase 5: Integration and Polish (Weeks 15-16)
-
-- Integrate all components
-- Optimize performance
-- Enhance user experience
-- Comprehensive testing
-
-## Deployment Considerations
-
-### Containerization
-
-The system will be containerized using Docker:
-- Base container with Python and dependencies
-- Neo4J container for database
-- Volume mounts for data persistence
-- Network configuration for secure communications
-
-### Resource Requirements
-
-Estimated system requirements:
-- 8GB+ RAM for the application container
-- 16GB+ RAM for Neo4J instance
-- 100GB+ storage for knowledge bases and codebases
-- GPU acceleration (optional) for larger models
-
-### Scaling Considerations
-
-For larger deployments:
-- Distributed Neo4J cluster for larger graphs
-- Agent sharding for parallel processing
-- Load balancing for multiple simultaneous users
-- Caching for improved performance
-
-## Dependencies and Technologies
-
-### Core Dependencies
-
-- **Python 3.10+**: Base programming language
-- **AutoGen Core**: Agent framework
-- **Neo4j**: Graph database
-- **Azure OpenAI**: AI models
-- **Prompty.ai**: Prompt management
-- **Rich**: Terminal UI
-- **Protobuf**: Event definitions
-
-### Development Tools
-
-- **uv**: Dependency management
-- **Poetry/poe**: Build and task management
-- **Pytest**: Testing framework
-- **Black**: Code formatting
-- **Pylint/Flake8**: Linting
-- **MyPy**: Type checking
-- **Docker**: Containerization
-
-### Security Tools
-
-- **Bandit**: Security linting
-- **Safety**: Dependency scanning
-- **OWASP ZAP**: API security testing
-
-## Documentation
-
-### 9.1 Documentation Planning and Structure
-
-**Purpose**: Create comprehensive documentation for developers, contributors, and end-users.
-
-**Steps**:
-1. Create documentation structure:
-   - Establish a centralized documentation directory (`docs/`)
-   - Define documentation categories (API, user guides, developer guides, tutorials)
-   - Set up documentation versioning strategy
-
-2. Implement documentation tooling:
-   - Set up Sphinx for API and developer documentation
-   - Configure MkDocs for user-facing documentation
-   - Implement docstring standards (Google or NumPy style) for code documentation
-   - Create automated documentation generation in CI/CD pipeline
-
-3. Design documentation templates:
-   - Create standardized templates for different documentation types
-   - Establish style guides and terminology consistency
-   - Design diagrams and visualization standards
-
-**Dependencies**:
-- sphinx
-- mkdocs
-- sphinx-autodoc
-- mkdocstrings
-- mermaid-js (for diagrams)
-
-**Testing Strategy**:
-- Documentation build tests
-- Link validation
-- Example code validation
-
-### 9.2 API Documentation
-
-**Purpose**: Document all public APIs, classes, and functions to enable integration and extension.
-
-**Steps**:
-1. Document core APIs:
-   - Implement comprehensive docstrings for all public functions, classes, and methods
-   - Create usage examples for each API component
-   - Document parameter types, return values, and exceptions
-
-2. Create module documentation:
-   - Write overview documentation for each module
-   - Document module dependencies and relationships
-   - Create architectural diagrams showing module interactions
-
-3. Implement API reference generation:
-   - Configure autodoc for automatic API documentation generation
-   - Create custom documentation templates for specific API types
-   - Generate API reference documentation during builds
-
-**Dependencies**:
-- sphinx-autodoc
-- sphinx-napoleon (for Google/NumPy docstring support)
-- sphinx-apidoc
-
-**Testing Strategy**:
-- API documentation coverage checks
-- Example code testing
-- Documentation rendering tests
-
-### 9.3 User Documentation
-
-**Purpose**: Provide clear guidance for users on how to use the system effectively.
-
-**Steps**:
-1. Create getting started guides:
-   - Write installation and setup instructions
-   - Create introductory tutorials
-   - Document initial configuration
-
-2. Develop user guides:
-   - Create workflow-specific documentation
-   - Document CLI commands with examples
-   - Write troubleshooting guides
-
-3. Implement advanced user documentation:
-   - Create best practices guides
-   - Document performance optimization strategies
-   - Write integration guides with other systems
-
-**Dependencies**:
-- mkdocs
-- mkdocs-material (for enhanced styling)
-- mkdocs-exclude
-
-**Testing Strategy**:
-- User testing with documentation
-- Command example validation
-- Regular review and updates
-
-### 9.4 Developer Documentation
-
-**Purpose**: Enable contributors and developers to understand and extend the system.
-
-**Steps**:
-1. Create architecture documentation:
-   - Document system design and component interactions
-   - Create architectural decision records (ADRs)
-   - Document design patterns and implementation approaches
-
-2. Develop contribution guides:
-   - Write setup instructions for development environment
-   - Create coding standards and style guides
-   - Document pull request and code review processes
-
-3. Implement development workflow documentation:
-   - Document testing approaches and requirements
-   - Create debugging guides
-   - Document common development tasks
-
-**Dependencies**:
-- sphinx
-- sphinx-rtd-theme
-- mermaid-js (for diagrams)
-
-**Testing Strategy**:
-- Regular review by developers
-- New contributor onboarding tests
-- Documentation update triggers on code changes
-
-### 9.5 Documentation CI/CD
-
-**Purpose**: Automate documentation building, testing, and deployment.
-
-**Steps**:
-1. Set up documentation CI:
-   - Configure documentation building in CI pipeline
-   - Implement documentation linting and validation
-   - Create documentation testing jobs
-
-2. Implement documentation deployment:
-   - Configure automatic deployment to hosting services
-   - Set up versioned documentation
-   - Implement documentation preview for pull requests
-
-3. Create documentation maintenance workflows:
-   - Implement documentation issue tracking
-   - Create scheduled documentation reviews
-   - Set up documentation update notifications
-
-**Dependencies**:
-- GitHub Actions or similar CI/CD service
-- GitHub Pages, ReadTheDocs, or similar hosting
-- Vale (for documentation linting)
-
-**Testing Strategy**:
-- Documentation build status monitoring
-- Deployment verification
-- Link and reference validation
-
-## Documentation Maintenance Strategy
-
-### Regular Updates
-
-Documentation should be maintained following these principles:
-- Documentation updates should be part of feature development process
-- Regular reviews should be conducted to ensure accuracy
-- User feedback should be incorporated into documentation improvements
-
-### Documentation Reviews
-
-Implement a documentation review process:
-- Schedule quarterly comprehensive documentation reviews
-- Assign documentation owners for different sections
-- Create a feedback mechanism for users to report documentation issues
-
-### Documentation Versioning
-
-Maintain versioned documentation:
-- Major versions of documentation should align with software releases
-- Archived documentation should be available for previous versions
-- Clear migration guides should be provided between versions
-
-## Troubleshooting Common Issues
-
-### Neo4j Connectivity Issues
-
-1. **Connection Refused**:
-   - Verify Neo4j is running: `docker ps` or check service status
-   - Check if ports are correctly exposed and not blocked by firewall
-   - Ensure credentials are correct in configuration files
-
-2. **Memory Issues**:
-   - Adjust Neo4j memory settings in neo4j.conf or docker-compose.yml
-   - For large graphs, increase heap size settings
-
-### Python Dependency Problems
-
-1. **Dependency Conflicts**:
-   - Use `poetry show --tree` to identify dependency conflicts
-   - Consider isolating conflicting packages in separate environments
-
-2. **Installation Failures**:
-   - Ensure system has required build tools (gcc, make, etc.)
-   - Check for compatibility between package versions and Python version
-
-### Azure OpenAI Integration Issues
-
-1. **Authentication Errors**:
-   - Verify API key and endpoint URL
-   - Check for proper permissions on the Azure resource
-   - Ensure region is correctly specified
-
-2. **Model Availability**:
-   - Confirm models are deployed in your Azure OpenAI resource
-   - Check for quota limitations or usage restrictions
-
-## Conclusion
-
-This implementation plan provides a comprehensive roadmap for developing the Vulnerability Assessment Copilot. By following this modular approach, the system can be developed incrementally, with each component thoroughly tested before integration. The plan accommodates the key requirements from the specification while providing detailed guidance for implementation.
-
-Regular reviews and adjustments to this plan should be conducted as development progresses to address any challenges or opportunities that arise during implementation.
+This ensures that the milestone meets all technical requirements and will pass validation in the GitHub Actions pipeline.
+
+### Local CI Execution
+
+To ensure developers can validate changes before pushing to GitHub, the project will include infrastructure for running the entire CI pipeline locally:
+
+1. **Local GitHub Actions Runner Setup**:
+   - Create a script in `scripts/ci/setup-local-actions.sh` that installs and configures [act](https://github.com/nektos/act), a tool for running GitHub Actions locally:
+   ```bash
+   #!/bin/bash
+   set -e
+
+   echo "🔄 Setting up local GitHub Actions runner (act)..."
+
+   # Check if act is already installed
+   if ! command -v act &> /dev/null; then
+       echo "Installing act..."
+       # For macOS
+       if [[ "$OSTYPE" == "darwin"* ]]; then
+           brew install act
+       # For Linux
+       elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+           curl -s https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash
+       # For Windows (WSL)
+       elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+           echo "Please install act manually on Windows: https://github.com/nektos/act#installation"
+           exit 1
+       fi
+   else
+       echo "✅ act is already installed"
+   fi
+
+   # Create a local configuration file for act
+   cat > .actrc << EOF
+   # Use a medium-sized runner image for more compatibility
+   -P ubuntu-latest=ghcr.io/catthehacker/ubuntu:act-latest
+   # Mount Docker socket to be able to use Docker
+   --bind
+   EOF
+
+   # Create a basic secrets file for local testing (with placeholder values)
+   if [ ! -f ".secrets" ]; then
+       cat > .secrets << EOF
+   # Local testing secrets - NEVER COMMIT THIS FILE
+   AZURE_OPENAI_API_KEY=test-key
+   AZURE_OPENAI_ENDPOINT=https://test-endpoint.openai.azure.com/
+   GITHUB_TOKEN=github_pat_test
+   EOF
+       echo "Created .secrets file with placeholder values"
+       echo "⚠️  Update .secrets with appropriate values for local testing"
+   fi
+
+   echo "✅ Local GitHub Actions environment configured"
+   echo "To run GitHub Actions locally:"
+   echo "  act -s GITHUB_TOKEN=\$GITHUB_TOKEN pull_request"
+   echo "  act -s GITHUB_TOKEN=\$GITHUB_TOKEN push"
+   ```
+
+2. **Create a Local CI Runner Script**:
+   - Add a comprehensive script in `scripts/ci/run-local-ci.sh` that executes all CI checks locally:
+   ```bash
+   #!/bin/bash
+   set -e
+
+   echo "🧪 Running CI pipeline locally..."
+
+   # Check if venv exists and activate it
+   if [ -d ".venv" ]; then
+       source .venv/bin/activate
+   else
+       echo "⚠️  Virtual environment not found, creating one..."
+       python -m venv .venv
+       source .venv/bin/activate
+       pip install -e ".[dev,test]"
+   fi
+
+   echo "Running linting checks..."
+   python -m black --check .
+   python -m flake8 .
+   python -m mypy .
+   python -m pydocstyle ./skwaq
+
+   echo "Running unit tests..."
+   python -m pytest --cov=skwaq tests/
+
+   echo "Checking for documentation coverage..."
+   python -m docstr_coverage ./skwaq --fail-under=90
+
+   echo "Validating API docstrings..."
+   python -m pytest --doctest-modules ./skwaq
+
+   echo "Building documentation..."
+   cd docs && make clean html && cd ..
+
+   echo "Running milestone-specific tests..."
+   # Determine the current milestone based on code state
+   if [ -d "tests/milestones" ]; then
+       for test_file in $(ls tests/milestones/test_*.py 2>/dev/null || echo ""); do
+           echo "Running $test_file..."
+           python -m pytest $test_file -v
+       done
+   fi
+
+   # Optionally run full GitHub Actions simulation with act
+   if command -v act &> /dev/null; then
+       echo "Do you want to run full GitHub Actions workflows with act? (y/n)"
+       read -r run_act
+       if [ "$run_act" = "y" ]; then
+           echo "Running GitHub Actions with act..."
+           act -s GITHUB_TOKEN=local-token push
+       fi
+   fi
+
+   echo "✅ Local CI completed successfully"
+   ```
+
+3. **Add Docker Validation Script**:
+   - Create a script in `scripts/ci/validate-docker.sh` for validating Docker builds locally:
+   ```bash
+   #!/bin/bash
+   set -e
+
+   echo "🐳 Validating Docker build locally..."
+
+   # Build the Docker image
+   docker build -t skwaq:local .
+
+   # Test the image
+   echo "Testing Docker image..."
+   docker run --rm skwaq:local --version
+
+   # Run a simple functionality test
+   echo "Running basic functionality test in container..."
+   docker run --rm skwaq:local --help
+
+   echo "✅ Docker validation completed successfully"
+   ```
+
+4. **Update Development Environment Setup**:
+   - Modify `scripts/setup/setup_dev_environment.sh` to include local CI setup:
+   ```bash
+   # Add to scripts/setup/setup_dev_environment.sh
+   echo "Setting up local CI environment..."
+   
+   # Make CI scripts executable
+   chmod +x scripts/ci/setup-local-actions.sh
+   chmod +x scripts/ci/run-local-ci.sh
+   chmod +x scripts/ci/validate-docker.sh
+   
+   # Set up local GitHub Actions
+   ./scripts/ci/setup-local-actions.sh
+   
+   echo "Local CI environment setup completed"
+   echo "To run CI locally, use: ./scripts/ci/run-local-ci.sh"
+   ```
+
+5. **Document Local CI in README**:
+   - Add a section to the README.md file describing local CI usage:
+   ```markdown
+   ## Local CI Pipeline
+
+   To run the CI pipeline locally before pushing changes:
+
+   ```bash
+   # Run all linting, tests, and checks
+   ./scripts/ci/run-local-ci.sh
+
+   # Validate Docker build only
+   ./scripts/ci/validate-docker.sh
+
+   # Run GitHub Actions workflows locally (requires Docker)
+   act -s GITHUB_TOKEN=your_github_token push
+   ```
+
+   This ensures your changes will pass on the GitHub CI pipeline.
+   ```
+
+6. **Add Pre-commit Hook for CI**:
+   - Configure a pre-push hook in `.pre-commit-config.yaml` to run essential CI checks:
+   ```yaml
+   - repo: local
+     hooks:
+       - id: local-ci-check
+         name: Local CI Quick Checks
+         entry: bash -c "python -m black --check . && python -m flake8 . && python -m pytest"
+         language: system
+         pass_filenames: false
+         stages: [push]
+   ```
+
+These additions ensure that developers can:
+1. Set up the same environment locally that GitHub Actions uses
+2. Run all the same checks that would run in the CI pipeline
+3. Validate changes before pushing them to GitHub
+4. Have confidence that if changes pass locally, they will pass in the GitHub Actions workflow
+
+The local CI implementation follows the same milestone-based validation approach as the GitHub Actions workflows and provides similar feedback, making the development process more efficient by catching issues earlier.
+
+## Development Phases Summary
+
+The implementation will proceed in the following phases, with each phase building on the dependencies established in previous phases:
+
+### Phase 1: Foundation
+- **Milestone F1**: Project Setup and Environment
+- **Milestone F2**: Core Utilities and Infrastructure
+- **Milestone F3**: Database Integration
+
+### Phase 2: Knowledge Management
+- **Milestone K1**: Knowledge Ingestion Pipeline
+- **Milestone K2**: Knowledge Indexing and Retrieval
+- **Milestone K3**: Knowledge Source Extensibility
+
+### Phase 3: Code Analysis
+- **Milestone C1**: Repository Fetching
+- **Milestone C2**: Basic Code Analysis
+- **Milestone C3**: Advanced Code Analysis
+- **Milestone C4**: Code Understanding and Summarization
+
+### Phase 4: Agent System
+- **Milestone A1**: Agent Foundation
+- **Milestone A2**: Core Agents Implementation
+- **Milestone A3**: Advanced Agent Capabilities
+
+### Phase 5: Workflow and UI
+- **Milestone W1**: Command Line Interface
+- **Milestone W2**: Basic Workflows
+- **Milestone W3**: Advanced Workflows
+- **Milestone W4**: Workflow Refinement and Integration
+
+### Phase 6: Integration and Finalization
+- **Milestone I1**: System Integration
+- **Milestone I2**: Security and Compliance
+- **Milestone I3**: Final Release Preparation
