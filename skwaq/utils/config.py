@@ -6,9 +6,199 @@ vulnerability assessment copilot.
 
 import json
 import os
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Set, TypeVar, Union, cast
+import threading
+
+from skwaq.utils.logging import get_logger
+
+try:
+    from skwaq.events.system_events import ConfigEvent, publish
+
+    HAS_EVENTS = True
+except ImportError:
+    HAS_EVENTS = False
+
+logger = get_logger(__name__)
+
+# Define type for configuration sources
+ConfigSource = TypeVar("ConfigSource", bound="BaseConfigSource")
+
+
+class ConfigValidationError(Exception):
+    """Exception raised when configuration validation fails."""
+
+    pass
+
+
+class BaseConfigSource:
+    """Base class for configuration sources."""
+
+    def __init__(self, name: str, priority: int = 0):
+        """Initialize a configuration source.
+
+        Args:
+            name: Name of the configuration source
+            priority: Priority of the source (higher values take precedence)
+        """
+        self.name = name
+        self.priority = priority
+
+    def get_config(self) -> Dict[str, Any]:
+        """Get configuration from this source.
+
+        Returns:
+            Dictionary with configuration values
+        """
+        raise NotImplementedError("Subclasses must implement get_config")
+
+
+class FileConfigSource(BaseConfigSource):
+    """Configuration source that loads from a file."""
+
+    def __init__(
+        self,
+        file_path: Union[str, Path],
+        name: Optional[str] = None,
+        priority: int = 50,
+        auto_reload: bool = False,
+        reload_interval_seconds: int = 30,
+    ):
+        """Initialize a file-based configuration source.
+
+        Args:
+            file_path: Path to the configuration file
+            name: Name of the configuration source
+            priority: Priority of the source (higher values take precedence)
+            auto_reload: Whether to automatically reload configuration
+            reload_interval_seconds: Interval between reload checks
+        """
+        super().__init__(name=name or f"file:{file_path}", priority=priority)
+        self.file_path = Path(file_path)
+        self.last_modified: Optional[float] = None
+        self.last_checked: float = 0
+        self.auto_reload = auto_reload
+        self.reload_interval = reload_interval_seconds
+        self._config_cache: Dict[str, Any] = {}
+        self._lock = threading.RLock()
+
+    def get_config(self) -> Dict[str, Any]:
+        """Get configuration from this file source.
+
+        Returns:
+            Dictionary with configuration values
+        """
+        with self._lock:
+            current_time = time.time()
+
+            # Check if we need to reload configuration
+            if self.auto_reload and current_time - self.last_checked > self.reload_interval:
+                self.last_checked = current_time
+
+                if not self.file_path.exists():
+                    if self._config_cache:
+                        logger.warning(f"Configuration file {self.file_path} no longer exists")
+                        self._config_cache = {}
+                    return {}
+
+                # Check if file has been modified
+                modified_time = self.file_path.stat().st_mtime
+                if self.last_modified is None or modified_time > self.last_modified:
+                    try:
+                        with open(self.file_path) as f:
+                            new_config = json.load(f)
+
+                        # Only update if config has changed
+                        if new_config != self._config_cache:
+                            logger.info(f"Reloaded configuration from {self.file_path}")
+                            self._config_cache = new_config
+
+                        self.last_modified = modified_time
+                    except Exception as e:
+                        logger.error(f"Error reloading configuration from {self.file_path}: {e}")
+
+            # If cache is empty and file exists, load it
+            if not self._config_cache and self.file_path.exists():
+                try:
+                    with open(self.file_path) as f:
+                        self._config_cache = json.load(f)
+                    self.last_modified = self.file_path.stat().st_mtime
+                except Exception as e:
+                    logger.error(f"Error loading configuration from {self.file_path}: {e}")
+                    return {}
+
+            return self._config_cache
+
+
+class EnvConfigSource(BaseConfigSource):
+    """Configuration source that loads from environment variables."""
+
+    def __init__(self, prefix: str = "SKWAQ_", name: str = "environment", priority: int = 100):
+        """Initialize an environment-based configuration source.
+
+        Args:
+            prefix: Prefix for environment variables
+            name: Name of the configuration source
+            priority: Priority of the source (higher values take precedence)
+        """
+        super().__init__(name=name, priority=priority)
+        self.prefix = prefix
+
+    def get_config(self) -> Dict[str, Any]:
+        """Get configuration from environment variables.
+
+        Returns:
+            Dictionary with configuration values
+        """
+        config = {}
+
+        # Special case for OpenAI variables
+        if "OPENAI_API_KEY" in os.environ:
+            config["openai_api_key"] = os.environ["OPENAI_API_KEY"]
+
+        if "OPENAI_ORG_ID" in os.environ:
+            config["openai_org_id"] = os.environ["OPENAI_ORG_ID"]
+
+        if "OPENAI_MODEL" in os.environ:
+            config["openai_model"] = os.environ["OPENAI_MODEL"]
+
+        # Special case for Neo4j variables
+        if "NEO4J_URI" in os.environ:
+            config["neo4j_uri"] = os.environ["NEO4J_URI"]
+
+        if "NEO4J_USER" in os.environ:
+            config["neo4j_user"] = os.environ["NEO4J_USER"]
+
+        if "NEO4J_PASSWORD" in os.environ:
+            config["neo4j_password"] = os.environ["NEO4J_PASSWORD"]
+
+        # Special case for telemetry enabled
+        if "TELEMETRY_ENABLED" in os.environ:
+            config["telemetry_enabled"] = os.environ["TELEMETRY_ENABLED"].lower() in (
+                "true",
+                "1",
+                "yes",
+                "y",
+            )
+
+        # Look for variables with prefix
+        for key, value in os.environ.items():
+            if key.startswith(self.prefix):
+                config_key = key[len(self.prefix) :].lower()
+
+                # Convert values to appropriate types
+                if value.lower() in ("true", "false"):
+                    config[config_key] = value.lower() == "true"
+                elif value.isdigit():
+                    config[config_key] = int(value)
+                elif value.replace(".", "", 1).isdigit():
+                    config[config_key] = float(value)
+                else:
+                    config[config_key] = value
+
+        return config
 
 
 @dataclass
@@ -22,6 +212,9 @@ class Config:
         neo4j_uri: URI for Neo4j database connection
         neo4j_user: Username for Neo4j authentication
         neo4j_password: Password for Neo4j authentication
+        telemetry_enabled: Whether telemetry is enabled
+        telemetry: Detailed telemetry configuration
+        openai: Detailed OpenAI configuration
     """
 
     openai_api_key: str
@@ -31,6 +224,13 @@ class Config:
     neo4j_user: str = "neo4j"
     neo4j_password: str = "skwaqdev"
     telemetry_enabled: bool = False
+    telemetry: Dict[str, Any] = field(default_factory=dict)
+    openai: Dict[str, Any] = field(default_factory=dict)
+    log_level: str = "INFO"
+    custom_values: Dict[str, Any] = field(default_factory=dict)
+
+    # Keep track of which sources provided which values
+    _sources: Dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_file(cls, config_path: Path) -> "Config":
@@ -48,10 +248,61 @@ class Config:
         """
         with open(config_path) as f:
             config_data = json.load(f)
-        # Convert nested telemetry config to telemetry_enabled
-        telemetry_config = config_data.pop("telemetry", {})
-        config_data["telemetry_enabled"] = telemetry_config.get("enabled", False)
-        return cls(**config_data)
+
+        # Process the configuration data
+        return cls.from_dict(config_data, source=f"file:{config_path}")
+
+    @classmethod
+    def from_dict(cls, config_data: Dict[str, Any], source: str = "dict") -> "Config":
+        """Create a Config object from a dictionary.
+
+        Args:
+            config_data: Dictionary with configuration values
+            source: Source identifier for tracking
+
+        Returns:
+            Config object with values from the dictionary
+        """
+        # Make a copy to avoid modifying the original
+        data = dict(config_data)
+
+        # Process telemetry configuration
+        telemetry_data = data.pop("telemetry", {})
+        telemetry_enabled = data.get("telemetry_enabled", telemetry_data.get("enabled", False))
+
+        # Create the config
+        config = cls(
+            openai_api_key=data.pop("openai_api_key", ""),
+            openai_org_id=data.pop("openai_org_id", ""),
+            openai_model=data.pop("openai_model", None),
+            neo4j_uri=data.pop("neo4j_uri", "bolt://localhost:7687"),
+            neo4j_user=data.pop("neo4j_user", "neo4j"),
+            neo4j_password=data.pop("neo4j_password", "skwaqdev"),
+            telemetry_enabled=telemetry_enabled,
+            telemetry=telemetry_data,
+            openai=data.pop("openai", {}),
+            log_level=data.pop("log_level", "INFO"),
+            custom_values=data,  # Store remaining values as custom values
+        )
+
+        # Track sources for all fields
+        for field_name in [
+            "openai_api_key",
+            "openai_org_id",
+            "openai_model",
+            "neo4j_uri",
+            "neo4j_user",
+            "neo4j_password",
+            "telemetry_enabled",
+            "log_level",
+        ]:
+            config._sources[field_name] = source
+
+        # Track sources for nested configurations
+        config._sources["telemetry"] = source
+        config._sources["openai"] = source
+
+        return config
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -60,27 +311,306 @@ class Config:
         Returns:
             Config object with values from environment
         """
-        return cls(
-            openai_api_key=os.getenv("OPENAI_API_KEY", ""),
-            openai_org_id=os.getenv("OPENAI_ORG_ID", ""),
-            openai_model=os.getenv("OPENAI_MODEL"),
-            neo4j_uri=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
-            neo4j_user=os.getenv("NEO4J_USER", "neo4j"),
-            neo4j_password=os.getenv("NEO4J_PASSWORD", "skwaqdev"),
-            telemetry_enabled=os.getenv("TELEMETRY_ENABLED", "False").lower() in ("true", "1"),
-        )
+        env_source = EnvConfigSource()
+        config_data = env_source.get_config()
+        return cls.from_dict(config_data, source="environment")
+
+    @classmethod
+    def from_sources(cls, sources: List[BaseConfigSource]) -> "Config":
+        """Create a Config object by merging multiple sources.
+
+        Sources are processed in order of priority (highest to lowest).
+
+        Args:
+            sources: List of configuration sources
+
+        Returns:
+            Config object with merged configuration values
+        """
+        # Sort sources by priority (highest first)
+        sorted_sources = sorted(sources, key=lambda s: s.priority, reverse=True)
+
+        # Collect configuration from all sources
+        merged_config: Dict[str, Any] = {}
+        source_map: Dict[str, str] = {}
+
+        for source in sorted_sources:
+            source_config = source.get_config()
+
+            # Track source for each value
+            for key, value in source_config.items():
+                if key not in merged_config:
+                    merged_config[key] = value
+                    source_map[key] = source.name
+
+        # Create config object
+        config = cls.from_dict(merged_config)
+
+        # Update source tracking
+        config._sources.update(source_map)
+
+        return config
+
+    @classmethod
+    def validate(cls, config_data: Dict[str, Any]) -> bool:
+        """Validate configuration data.
+
+        Args:
+            config_data: Configuration data to validate
+
+        Returns:
+            True if validation succeeds
+
+        Raises:
+            ConfigValidationError: If validation fails
+        """
+        # Check for required fields
+        required_fields = ["openai_api_key", "openai_org_id"]
+        missing_fields = [f for f in required_fields if f not in config_data]
+
+        if missing_fields:
+            raise ConfigValidationError(
+                f"Missing required configuration fields: {', '.join(missing_fields)}"
+            )
+
+        # Validate Neo4j URI format
+        if "neo4j_uri" in config_data:
+            uri = config_data["neo4j_uri"]
+            if not (
+                uri.startswith("bolt://")
+                or uri.startswith("neo4j://")
+                or uri.startswith("neo4j+s://")
+            ):
+                raise ConfigValidationError(
+                    f"Invalid Neo4j URI format: {uri}. "
+                    "Must start with bolt://, neo4j://, or neo4j+s://"
+                )
+
+        return True
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a configuration value by key.
 
+        Checks direct attributes first, then nested configurations,
+        and finally custom values.
+
         Args:
-            key: The configuration key
+            key: The configuration key (can use dot notation for nested values)
             default: Default value if key is not found
 
         Returns:
             The configuration value or default
         """
-        return getattr(self, key, default)
+        # Handle nested keys with dot notation
+        if "." in key:
+            parts = key.split(".", 1)
+            parent, child = parts
+
+            # Check nested configurations
+            if parent == "openai" and self.openai:
+                return self.openai.get(child, default)
+            elif parent == "telemetry" and self.telemetry:
+                return self.telemetry.get(child, default)
+            elif parent == "custom" and self.custom_values:
+                return self.custom_values.get(child, default)
+            else:
+                return default
+
+        # Check direct attributes
+        if hasattr(self, key):
+            return getattr(self, key)
+
+        # Check nested configs
+        if key in self.openai:
+            return self.openai[key]
+
+        if key in self.telemetry:
+            return self.telemetry[key]
+
+        # Check custom values
+        if key in self.custom_values:
+            return self.custom_values[key]
+
+        return default
+
+    def set(self, key: str, value: Any, source: str = "api") -> bool:
+        """Set a configuration value.
+
+        Args:
+            key: The configuration key
+            value: The value to set
+            source: Source identifier for tracking
+
+        Returns:
+            True if the value was set, False otherwise
+        """
+        # Handle nested keys with dot notation
+        if "." in key:
+            parts = key.split(".", 1)
+            parent, child = parts
+
+            if parent == "openai":
+                old_value = self.openai.get(child)
+                self.openai[child] = value
+                self._sources[f"openai.{child}"] = source
+
+                if HAS_EVENTS:
+                    publish(
+                        ConfigEvent(
+                            sender="config", key=f"openai.{child}", value=value, old_value=old_value
+                        )
+                    )
+                return True
+
+            elif parent == "telemetry":
+                old_value = self.telemetry.get(child)
+                self.telemetry[child] = value
+                self._sources[f"telemetry.{child}"] = source
+
+                if HAS_EVENTS:
+                    publish(
+                        ConfigEvent(
+                            sender="config",
+                            key=f"telemetry.{child}",
+                            value=value,
+                            old_value=old_value,
+                        )
+                    )
+                return True
+
+            elif parent == "custom":
+                old_value = self.custom_values.get(child)
+                self.custom_values[child] = value
+                self._sources[f"custom.{child}"] = source
+
+                if HAS_EVENTS:
+                    publish(
+                        ConfigEvent(
+                            sender="config", key=f"custom.{child}", value=value, old_value=old_value
+                        )
+                    )
+                return True
+
+            else:
+                return False
+
+        # Handle direct attributes
+        if hasattr(self, key) and key not in ("_sources", "custom_values"):
+            old_value = getattr(self, key)
+            setattr(self, key, value)
+            self._sources[key] = source
+
+            if HAS_EVENTS:
+                publish(ConfigEvent(sender="config", key=key, value=value, old_value=old_value))
+            return True
+
+        # Store in custom values if not a direct attribute
+        old_value = self.custom_values.get(key)
+        self.custom_values[key] = value
+        self._sources[f"custom.{key}"] = source
+
+        if HAS_EVENTS:
+            publish(
+                ConfigEvent(sender="config", key=f"custom.{key}", value=value, old_value=old_value)
+            )
+        return True
+
+    def get_source(self, key: str) -> Optional[str]:
+        """Get the source that provided a configuration value.
+
+        Args:
+            key: The configuration key
+
+        Returns:
+            Source identifier or None if key not found
+        """
+        if "." in key:
+            return self._sources.get(key)
+        return self._sources.get(key)
+
+    def merge(self, other: "Config", source: str = "merge") -> "Config":
+        """Merge another configuration into this one.
+
+        Values from the other configuration take precedence.
+
+        Args:
+            other: Configuration to merge
+            source: Source identifier for tracking
+
+        Returns:
+            Self, for chaining
+        """
+        # Merge direct fields
+        for field in [
+            "openai_api_key",
+            "openai_org_id",
+            "openai_model",
+            "neo4j_uri",
+            "neo4j_user",
+            "neo4j_password",
+            "telemetry_enabled",
+            "log_level",
+        ]:
+            value = getattr(other, field)
+            if value:  # Don't overwrite with empty values
+                setattr(self, field, value)
+                self._sources[field] = other._sources.get(field, source)
+
+        # Merge nested dictionaries
+        self.openai.update(other.openai)
+        self._sources["openai"] = other._sources.get("openai", source)
+
+        self.telemetry.update(other.telemetry)
+        self._sources["telemetry"] = other._sources.get("telemetry", source)
+
+        self.custom_values.update(other.custom_values)
+
+        return self
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert configuration to a dictionary.
+
+        Returns:
+            Dictionary representation of the configuration
+        """
+        config_dict = asdict(self)
+
+        # Remove internal fields
+        config_dict.pop("_sources", None)
+
+        # Merge custom values
+        if not config_dict["custom_values"]:
+            config_dict.pop("custom_values")
+        else:
+            for key, value in config_dict.pop("custom_values").items():
+                config_dict[key] = value
+
+        return config_dict
+
+    def to_json(self, indent: int = 2) -> str:
+        """Convert configuration to a JSON string.
+
+        Args:
+            indent: Indentation level for JSON formatting
+
+        Returns:
+            JSON string representation of the configuration
+        """
+        return json.dumps(self.to_dict(), indent=indent)
+
+    def save_to_file(self, file_path: Union[str, Path]) -> None:
+        """Save configuration to a file.
+
+        Args:
+            file_path: Path to the file
+        """
+        file_path = Path(file_path)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(file_path, "w") as f:
+            f.write(self.to_json())
+
+        logger.info(f"Configuration saved to {file_path}")
 
     @property
     def neo4j(self) -> Dict[str, str]:
@@ -98,28 +628,82 @@ class Config:
 
 # Global config instance
 _config: Optional[Config] = None
+_config_sources: List[BaseConfigSource] = []
+_config_lock = threading.RLock()
+
+
+def register_config_source(source: BaseConfigSource) -> None:
+    """Register a configuration source.
+
+    Args:
+        source: Configuration source to register
+    """
+    global _config_sources
+    with _config_lock:
+        # Check if source with the same name already exists
+        for i, existing in enumerate(_config_sources):
+            if existing.name == source.name:
+                # Replace the existing source
+                _config_sources[i] = source
+                logger.debug(f"Replaced config source: {source.name}")
+                return
+
+        # Add the new source
+        _config_sources.append(source)
+        logger.debug(f"Added config source: {source.name}")
+
+        # Sort sources by priority
+        _config_sources.sort(key=lambda s: s.priority, reverse=True)
+
+        # Reset the global config so it will be reloaded
+        _config = None
 
 
 def get_config() -> Config:
     """Get the global configuration instance.
 
-    If no configuration has been loaded yet, attempts to load from environment
-    variables first, then falls back to default configuration.
+    If no configuration has been loaded yet, attempts to load from registered
+    sources, environment variables, and finally falls back to default configuration.
 
     Returns:
         The global Config instance
     """
-    global _config
-    if _config is None:
-        try:
-            _config = Config.from_env()
-        except Exception:
-            # Fall back to default configuration
-            _config = Config(
-                openai_api_key="",
-                openai_org_id="",
-            )
-    return _config
+    global _config, _config_sources
+    with _config_lock:
+        if _config is None:
+            try:
+                # If we have registered sources, use them
+                if _config_sources:
+                    _config = Config.from_sources(_config_sources)
+                else:
+                    # Otherwise, try environment variables
+                    _config = Config.from_env()
+
+                    # Register the environment source
+                    register_config_source(EnvConfigSource())
+
+                    # Look for default config file
+                    default_config = Path.home() / ".skwaq" / "config.json"
+                    if default_config.exists():
+                        try:
+                            file_config = Config.from_file(default_config)
+                            _config.merge(file_config)
+
+                            # Register the file source
+                            register_config_source(
+                                FileConfigSource(default_config, auto_reload=True)
+                            )
+                        except Exception as e:
+                            logger.warning(f"Error loading default config file: {e}")
+            except Exception as e:
+                logger.error(f"Error loading configuration: {e}")
+                # Fall back to default configuration
+                _config = Config(
+                    openai_api_key="",
+                    openai_org_id="",
+                )
+
+    return cast(Config, _config)
 
 
 def init_config(config: Config) -> None:
@@ -129,4 +713,40 @@ def init_config(config: Config) -> None:
         config: The configuration instance to use
     """
     global _config
-    _config = config
+    with _config_lock:
+        _config = config
+        logger.debug("Initialized global configuration")
+
+
+def reload_config() -> None:
+    """Reload configuration from all registered sources."""
+    global _config, _config_sources
+    with _config_lock:
+        if not _config_sources:
+            logger.warning("No configuration sources registered, nothing to reload")
+            return
+
+        # Create a new config from sources
+        new_config = Config.from_sources(_config_sources)
+
+        # If we have an existing config, compare and emit events for changes
+        if _config is not None:
+            old_dict = _config.to_dict()
+            new_dict = new_config.to_dict()
+
+            # Check for changes
+            for key, new_value in new_dict.items():
+                if key in old_dict and old_dict[key] != new_value:
+                    if HAS_EVENTS:
+                        publish(
+                            ConfigEvent(
+                                sender="config_reload",
+                                key=key,
+                                value=new_value,
+                                old_value=old_dict[key],
+                            )
+                        )
+
+        # Update the global config
+        _config = new_config
+        logger.info("Configuration reloaded from all sources")
