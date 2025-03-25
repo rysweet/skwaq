@@ -2,7 +2,11 @@
 
 ## Overview
 
-This document outlines a comprehensive implementation plan for the Vulnerability Assessment Copilot, a multiagent AI system designed to assist vulnerability researchers in analyzing codebases to discover potential security vulnerabilities. The plan breaks down the system into manageable modules, provides implementation steps, and addresses technical requirements for each component.
+This document outlines a comprehensive implementation plan for the Vulnerability Assessment Copilot (codenamed "skwaq"), a multiagent AI system designed to assist vulnerability researchers in analyzing codebases to discover potential security vulnerabilities. The plan breaks down the system into manageable modules, provides implementation steps, and addresses technical requirements for each component.
+
+### Project Name: Skwaq
+
+The name "skwaq" is derived from the Lushootseed language of the Pacific Northwest, meaning "Raven." In many Pacific Northwest Indigenous traditions, Raven is a trickster and creator figure known for using wit and cleverness to uncover hidden things and reveal secrets. This name was chosen to reflect the project's purpose—intelligently discovering concealed vulnerabilities within software codebases, much as the mythological Raven brings hidden truths to light.
 
 ## System Architecture
 
@@ -121,22 +125,235 @@ The system integrates with several external tools:
 
 ### Azure OpenAI Setup
 
-To use Azure OpenAI services:
+To use Azure OpenAI services, automate the resource provisioning using Bicep and Azure CLI:
 
-1. Create an Azure OpenAI resource through the [Azure Portal](https://portal.azure.com)
-2. Deploy the required models:
-   - o3 model for code analysis
-   - o1 model for reasoning tasks
-   - Gpt4o model for general tasks
-3. Create an API key and endpoint URL
-4. Store credentials securely in the project:
+1. **Create Bicep template for Azure OpenAI resources**:
+   - Create a directory for infrastructure as code resources:
    ```bash
-   # Create a credentials file (this will be ignored by git)
-   cp config/azure_openai_credentials.example.json config/azure_openai_credentials.json
-   
-   # Edit the file with your actual credentials
-   nano config/azure_openai_credentials.json
+   mkdir -p scripts/infrastructure/bicep
    ```
+   
+   - Create a Bicep template file for Azure OpenAI (`scripts/infrastructure/bicep/azure-openai.bicep`):
+   ```bicep
+   @description('The name of the Azure OpenAI resource')
+   param name string = 'vuln-researcher-openai'
+
+   @description('The Azure region for the resource')
+   param location string = resourceGroup().location
+
+   @description('Tags for the resource')
+   param tags object = {
+     application: 'vulnerability-assessment-copilot'
+     environment: 'development'
+   }
+
+   @description('The SKU name for the Azure OpenAI resource')
+   param skuName string = 'S0'
+
+   resource openAI 'Microsoft.CognitiveServices/accounts@2023-05-01' = {
+     name: name
+     location: location
+     tags: tags
+     kind: 'OpenAI'
+     sku: {
+       name: skuName
+     }
+     properties: {
+       customSubDomainName: name
+       publicNetworkAccess: 'Enabled'
+     }
+   }
+
+   // Model deployments
+   resource gpt4oDeployment 'Microsoft.CognitiveServices/accounts/deployments@2023-05-01' = {
+     parent: openAI
+     name: 'gpt4o'
+     properties: {
+       model: {
+         format: 'OpenAI'
+         name: 'gpt-4o'
+         version: '2023-07-01-preview'
+       }
+       scaleSettings: {
+         scaleType: 'Standard'
+       }
+     }
+     sku: {
+       name: 'Standard'
+       capacity: 10
+     }
+   }
+
+   resource o1Deployment 'Microsoft.CognitiveServices/accounts/deployments@2023-05-01' = {
+     parent: openAI
+     name: 'o1'
+     properties: {
+       model: {
+         format: 'OpenAI'
+         name: 'o1'
+         version: '2023-07-01-preview'
+       }
+       scaleSettings: {
+         scaleType: 'Standard'
+       }
+     }
+     sku: {
+       name: 'Standard'
+       capacity: 10
+     }
+   }
+
+   resource o3Deployment 'Microsoft.CognitiveServices/accounts/deployments@2023-05-01' = {
+     parent: openAI
+     name: 'o3'
+     properties: {
+       model: {
+         format: 'OpenAI'
+         name: 'o3'
+         version: '2023-07-01-preview'
+       }
+       scaleSettings: {
+         scaleType: 'Standard'
+       }
+     }
+     sku: {
+       name: 'Standard'
+       capacity: 10
+     }
+   }
+
+   // Output the endpoint and key for use in our application
+   output endpoint string = openAI.properties.endpoint
+   output name string = openAI.name
+   ```
+
+2. **Create deployment script**:
+   - Create an Azure CLI script to deploy the Bicep template (`scripts/infrastructure/deploy-openai.sh`):
+   ```bash
+   #!/bin/bash
+   set -e
+
+   # Variables
+   RESOURCE_GROUP="vuln-researcher-rg"
+   LOCATION="eastus"  # Choose a region where Azure OpenAI is available
+   SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+   # Check if Azure CLI is installed
+   if ! command -v az &> /dev/null; then
+     echo "❌ Azure CLI is not installed. Please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli"
+     exit 1
+   fi
+
+   # Check if logged in to Azure
+   if ! az account show &> /dev/null; then
+     echo "You need to log in to Azure first. Running 'az login'..."
+     az login
+   fi
+
+   # Create resource group if it doesn't exist
+   if ! az group show --name "$RESOURCE_GROUP" &> /dev/null; then
+     echo "Creating resource group $RESOURCE_GROUP in $LOCATION..."
+     az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
+   fi
+
+   # Deploy the Bicep template
+   echo "Deploying Azure OpenAI resources..."
+   DEPLOYMENT_OUTPUT=$(az deployment group create \
+     --resource-group "$RESOURCE_GROUP" \
+     --template-file "scripts/infrastructure/bicep/azure-openai.bicep" \
+     --output json)
+
+   # Extract endpoint and resource name
+   ENDPOINT=$(echo $DEPLOYMENT_OUTPUT | jq -r '.properties.outputs.endpoint.value')
+   RESOURCE_NAME=$(echo $DEPLOYMENT_OUTPUT | jq -r '.properties.outputs.name.value')
+
+   # Get the API key
+   API_KEY=$(az cognitiveservices account keys list \
+     --resource-group "$RESOURCE_GROUP" \
+     --name "$RESOURCE_NAME" \
+     --query "key1" \
+     --output tsv)
+
+   # Create credentials file
+   mkdir -p config
+   cat > config/azure_openai_credentials.json << EOF
+   {
+     "api_key": "$API_KEY",
+     "endpoint": "$ENDPOINT",
+     "deployments": {
+       "gpt4o": "gpt4o",
+       "o1": "o1",
+       "o3": "o3"
+     }
+   }
+   EOF
+
+   echo "✅ Azure OpenAI resources deployed successfully!"
+   echo "Credentials saved to config/azure_openai_credentials.json"
+   echo "Resource Group: $RESOURCE_GROUP"
+   echo "OpenAI Service: $RESOURCE_NAME"
+   ```
+
+3. **Make the script executable**:
+   ```bash
+   chmod +x scripts/infrastructure/deploy-openai.sh
+   ```
+
+4. **Automate the setup process**:
+   - Add a task to the main setup script to deploy Azure OpenAI resources:
+   ```bash
+   # Add to scripts/setup/setup_dev_environment.sh
+   echo "Setting up Azure OpenAI resources..."
+   ../infrastructure/deploy-openai.sh
+   ```
+
+5. **Using Azure Developer CLI (azd) alternative**:
+   - If you prefer using `azd`, create an `azure.yaml` file in the root directory:
+   ```yaml
+   # filepath: azure.yaml
+   name: vulnerability-assessment-copilot
+   services:
+     openai:
+       project: scripts/infrastructure
+       language: bicep
+       host: azure
+   ```
+   
+   - Then use the following commands:
+   ```bash
+   # Initialize azd with your project
+   azd init
+   
+   # Provision resources
+   azd provision
+   
+   # Retrieve and store credentials
+   RESOURCE_GROUP=$(azd env get-values | grep AZURE_RESOURCE_GROUP | cut -d= -f2)
+   RESOURCE_NAME=$(az resource list --resource-group "$RESOURCE_GROUP" --resource-type "Microsoft.CognitiveServices/accounts" --query "[0].name" -o tsv)
+   ENDPOINT=$(az cognitiveservices account show --resource-group "$RESOURCE_GROUP" --name "$RESOURCE_NAME" --query "properties.endpoint" -o tsv)
+   API_KEY=$(az cognitiveservices account keys list --resource-group "$RESOURCE_GROUP" --name "$RESOURCE_NAME" --query "key1" -o tsv)
+   
+   # Store credentials
+   mkdir -p config
+   cat > config/azure_openai_credentials.json << EOF
+   {
+     "api_key": "$API_KEY",
+     "endpoint": "$ENDPOINT",
+     "deployments": {
+       "gpt4o": "gpt4o",
+       "o1": "o1",
+       "o3": "o3"
+     }
+   }
+   EOF
+   ```
+
+This approach has several advantages:
+- Infrastructure as code ensures consistent, repeatable deployments
+- Automated resource provisioning reduces manual errors
+- Credentials are programmatically retrieved and stored
+- The setup can be integrated into CI/CD pipelines
+- Changes to infrastructure can be version-controlled and reviewed
 
 ### Development Tools Setup
 
