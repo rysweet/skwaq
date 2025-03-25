@@ -5,7 +5,9 @@ that work together to perform vulnerability assessment tasks.
 """
 
 from typing import Dict, Any, Optional
-from autogen_core.agent import ChatAgent
+
+# Using autogen-core instead of pyautogen
+from autogen_core.agent import Agent, ChatAgent
 
 class BaseSkwaqAgent(ChatAgent):
     """Base class for all Skwaq agents providing common functionality."""
@@ -23,7 +25,7 @@ class BaseSkwaqAgent(ChatAgent):
     async def _default_auto_reply(
         self,
         message: Optional[str],
-        sender: Optional[ChatAgent],
+        sender: Optional[Agent],
         config: Optional[Dict[str, Any]] = None,
     ) -> Optional[str]:
         """Default reply handler for messages from other agents."""

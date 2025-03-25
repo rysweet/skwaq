@@ -7,8 +7,7 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
-
+from typing import Optional, Dict, Any
 
 @dataclass
 class Config:
@@ -63,6 +62,31 @@ class Config:
             neo4j_user=os.getenv("NEO4J_USER", "neo4j"),
             neo4j_password=os.getenv("NEO4J_PASSWORD", "skwaqdev"),
         )
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get a configuration value by key.
+        
+        Args:
+            key: The configuration key
+            default: Default value if key is not found
+            
+        Returns:
+            The configuration value or default
+        """
+        return getattr(self, key, default)
+    
+    @property
+    def neo4j(self) -> Dict[str, str]:
+        """Get Neo4j configuration as a dictionary.
+        
+        Returns:
+            Dictionary with Neo4j configuration
+        """
+        return {
+            "uri": self.neo4j_uri,
+            "user": self.neo4j_user,
+            "password": self.neo4j_password,
+        }
 
 
 # Global config instance
