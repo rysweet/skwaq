@@ -2,7 +2,6 @@
 
 This module provides a standardized logging setup for the Skwaq system.
 """
-
 import logging
 import os
 import sys
@@ -48,7 +47,7 @@ def setup_logging(
     console_handler.setFormatter(logging.Formatter(LOG_FORMAT))
     logger.addHandler(console_handler)
     
-    # Create a file handler if requested
+    # Create a file handler if requested or by default
     if log_file is not None or True:  # Always create a log file
         # If log_file is not specified, create a default one
         if log_file is None:
@@ -83,8 +82,8 @@ def get_logger(module_name: str = "skwaq") -> logging.Logger:
     """Get the global logger instance.
     
     Args:
-        module_name: The name of the module to create a logger for
-                    
+        module_name: The name of the module to get a logger for
+        
     Returns:
         The configured logger instance
     """

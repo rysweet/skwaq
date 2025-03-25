@@ -3,8 +3,8 @@
 This module provides configuration management functionality for the Skwaq
 vulnerability assessment copilot.
 """
-
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -55,8 +55,6 @@ class Config:
         Returns:
             Config object with values from environment
         """
-        import os
-        
         return cls(
             openai_api_key=os.getenv("OPENAI_API_KEY", ""),
             openai_org_id=os.getenv("OPENAI_ORG_ID", ""),
@@ -65,3 +63,39 @@ class Config:
             neo4j_user=os.getenv("NEO4J_USER", "neo4j"),
             neo4j_password=os.getenv("NEO4J_PASSWORD", "skwaqdev"),
         )
+
+
+# Global config instance
+_config: Optional[Config] = None
+
+
+def get_config() -> Config:
+    """Get the global configuration instance.
+    
+    If no configuration has been loaded yet, attempts to load from environment
+    variables first, then falls back to default configuration.
+    
+    Returns:
+        The global Config instance
+    """
+    global _config
+    if _config is None:
+        try:
+            _config = Config.from_env()
+        except Exception:
+            # Fall back to default configuration
+            _config = Config(
+                openai_api_key="",
+                openai_org_id="",
+            )
+    return _config
+
+
+def init_config(config: Config) -> None:
+    """Initialize the global configuration with a specific config instance.
+    
+    Args:
+        config: The configuration instance to use
+    """
+    global _config
+    _config = config
