@@ -1,0 +1,43 @@
+name: Docker Build
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build development image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        target: development
+        push: false
+        load: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Test development image
+      run: |
+        docker compose up -d
+        docker compose exec -T skwaq poetry run pytest tests/
+        docker compose down -v
+
+    - name: Build production image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        target: production
+        push: false
+        load: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max

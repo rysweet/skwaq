@@ -1,0 +1,17 @@
+{
+  "neo4j": {
+    "uri": "bolt://localhost:7687",
+    "user": "neo4j",
+    "password": "password",
+    "database": "neo4j"
+  },
+  "openai": {
+    "api_type": "azure",
+    "api_version": "2023-05-15",
+    "chat_model": "gpt4o",
+    "embedding_model": "text-embedding-ada-002"
+  },
+  "telemetry": {
+    "enabled": false
+  }
+}

@@ -29,7 +29,7 @@ def print_banner() -> None:
     ╚════██║██╔═██╗ ██║███╗██║██╔══██║██║▄▄ ██║
     ███████║██║  ██╗╚███╔███╔╝██║  ██║╚██████╔╝
     ╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝ ╚══▀▀═╝ 
-                            Vulnerability Assessment Copilot
+                           Vulnerability Assessment Copilot
     """
     console.print(Panel(banner, border_style="blue", title="[bold cyan]Skwaq[/bold cyan]"))
     console.print("[dim]'Raven' - A clever digital assistant for uncovering security vulnerabilities[/dim]")
