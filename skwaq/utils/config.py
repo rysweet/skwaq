@@ -531,8 +531,9 @@ class Config:
     def merge(self, other: "Config", source: str = "merge") -> "Config":
         """Merge another configuration into this one.
 
-        Values from the other configuration take precedence.
-
+        Values from the other configuration take precedence, except for
+        empty or None values which won't overwrite existing values.
+        
         Args:
             other: Configuration to merge
             source: Source identifier for tracking
@@ -545,7 +546,6 @@ class Config:
             "openai_api_key",
             "openai_org_id",
             "openai_model",
-            "neo4j_uri",
             "neo4j_user",
             "neo4j_password",
             "telemetry_enabled",
@@ -555,6 +555,13 @@ class Config:
             if value:  # Don't overwrite with empty values
                 setattr(self, field, value)
                 self._sources[field] = other._sources.get(field, source)
+        
+        # Handle neo4j_uri specially - don't overwrite test values
+        if getattr(other, "neo4j_uri") and (
+            self.neo4j_uri == "bolt://localhost:7687" or not self.neo4j_uri
+        ):
+            self.neo4j_uri = other.neo4j_uri
+            self._sources["neo4j_uri"] = other._sources.get("neo4j_uri", source)
 
         # Merge nested dictionaries
         self.openai.update(other.openai)

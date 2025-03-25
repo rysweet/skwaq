@@ -17,4 +17,6 @@ Do not use autogen-agentchat, only autogen-core.
 Any modules that are using pyautogen should be corrected/rewritten to use autogen-core. 
 For the implementation, you will need to use my az credentials to access the Azure OpenAI API using Tenant: Microsoft
 Subscription: adapt-appsci1 (be51a72b-4d76-4627-9a17-7dd26245da7b). You will need to use my Github credentials using the gh cli. You will need to do a commit after each step of the implementation. If a step of the implementation is not clear, please ask me for clarification.
+Do not move on to the next milestone until the current milestone is complete with all tests passing.
+Do not move on to the next milestone whele there are problems in the workspace. 
 If a step of the implemenation fails, try again by attempting to correct the error. If you are unable to correct the error, updat the status.md and please ask me for help.
