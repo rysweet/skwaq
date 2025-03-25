@@ -25,6 +25,162 @@ Vulnerability Assessment Copilot
 └── Event Handling System (Protobuf)
 ```
 
+## Dependency Installation
+
+### Prerequisites
+
+Before starting the implementation, ensure the following prerequisites are installed:
+
+- Python 3.10+ 
+- Git
+- Docker and Docker Compose (for Neo4j containerization)
+- uv (Python package installer)
+- Poetry (Python dependency management)
+
+### Setting Up the Development Environment
+
+Follow these steps to set up your development environment:
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/rysweet/skwaq
+   cd skwaq
+   ```
+
+2. **Install Python Dependencies Management Tools**:
+   ```bash
+   # Install uv
+   pip install uv
+   
+   # Install poetry
+   curl -sSL https://install.python-poetry.org | python3 -
+   ```
+
+3. **Create Virtual Environment and Install Dependencies**:
+   ```bash
+   # Using uv to create virtual environment
+   uv venv
+
+   # Activate the virtual environment
+   source .venv/bin/activate  # On Unix/macOS
+   # OR
+   .\.venv\Scripts\activate   # On Windows
+   
+   # Install dependencies using poetry
+   poetry install
+   ```
+
+4. **Install Development Dependencies**:
+   ```bash
+   poetry install --with dev
+   ```
+
+### Installing Neo4j
+
+The system requires Neo4j for graph database functionality:
+
+1. **Using Docker (Recommended)**:
+   ```bash
+   # Create necessary directories
+   mkdir -p neo4j/data neo4j/logs neo4j/import neo4j/plugins
+   
+   # Start Neo4j container
+   docker-compose up -d neo4j
+   ```
+
+2. **Manual Installation (Alternative)**:
+   - Download Neo4j Community Edition from [Neo4j Download Center](https://neo4j.com/download-center/)
+   - Follow the installation instructions for your operating system
+   - Configure Neo4j to use the appropriate ports (default: 7474 for HTTP, 7687 for Bolt)
+
+3. **Neo4j Configuration**:
+   - Enable APOC and Graph Data Science libraries
+   - Configure memory settings based on your system capabilities
+   - Enable vector index support for semantic search functionality
+
+### Installing External Tools
+
+The system integrates with several external tools:
+
+1. **Blarify** (for code graph generation):
+   ```bash
+   pip install blarify
+   ```
+
+2. **Prompty.ai** (for prompt management):
+   ```bash
+   pip install prompty
+   ```
+
+3. **Protocol Buffers**:
+   - Install protobuf compiler from [Protocol Buffers Releases](https://github.com/protocolbuffers/protobuf/releases)
+   - Install Python protobuf package:
+     ```bash
+     pip install protobuf grpcio grpcio-tools
+     ```
+
+### Azure OpenAI Setup
+
+To use Azure OpenAI services:
+
+1. Create an Azure OpenAI resource through the [Azure Portal](https://portal.azure.com)
+2. Deploy the required models:
+   - o3 model for code analysis
+   - o1 model for reasoning tasks
+   - Gpt4o model for general tasks
+3. Create an API key and endpoint URL
+4. Store credentials securely in the project:
+   ```bash
+   # Create a credentials file (this will be ignored by git)
+   cp config/azure_openai_credentials.example.json config/azure_openai_credentials.json
+   
+   # Edit the file with your actual credentials
+   nano config/azure_openai_credentials.json
+   ```
+
+### Development Tools Setup
+
+1. **Configure linting and formatting tools**:
+   ```bash
+   # Install pre-commit hooks
+   pre-commit install
+   
+   # Run pre-commit hooks on all files
+   pre-commit run --all-files
+   ```
+
+2. **Testing tools**:
+   ```bash
+   # Run tests using pytest
+   poetry run pytest
+   
+   # Generate coverage report
+   poetry run pytest --cov=vuln_researcher
+   ```
+
+### Production Deployment Dependencies
+
+For production deployment, additional steps are required:
+
+1. **Containerization**:
+   ```bash
+   # Build the Docker image
+   docker build -t vuln-researcher:latest .
+   
+   # Run the container
+   docker run -p 8000:8000 -v ./data:/app/data vuln-researcher:latest
+   ```
+
+2. **Securing Neo4j**:
+   - Configure authentication
+   - Enable TLS for connections
+   - Set up proper backup procedures
+
+3. **Setting up Monitoring**:
+   - Configure logging to external systems
+   - Set up metrics collection
+   - Implement health checks
+
 ## Implementation Modules
 
 ### 1. Core Infrastructure Setup
@@ -47,6 +203,10 @@ Vulnerability Assessment Copilot
    ├── ingestion/             # Code and knowledge ingestion modules
    ├── prompts/               # Prompt templates
    ├── protos/                # Protocol buffer definitions
+   ├── scripts/               # Utility scripts for project management
+   │   ├── setup/             # Setup and installation scripts
+   │   ├── dev/               # Development workflow scripts
+   │   └── ci/                # CI/CD related scripts
    ├── tests/                 # Test suite
    ├── utils/                 # Utility functions
    ├── workflows/             # Workflow implementations
@@ -76,6 +236,119 @@ Vulnerability Assessment Copilot
 - Unit tests for environment configuration
 - Integration tests for dependency resolution
 - Container build tests
+
+#### 1.2 Project Scripts Implementation
+
+**Purpose**: Create utility scripts to automate common tasks, ensure consistent environments, and simplify project management.
+
+**Steps**:
+1. Implement prerequisite installation script:
+   - Create `scripts/setup/install_prerequisites.sh` to validate and install all required system dependencies
+   - Add checks for Python, Docker, Git, and other system requirements
+   - Implement automatic installation or helpful error messages for missing components
+   - Add validation of correct versions for each dependency
+
+2. Implement development environment setup scripts:
+   - Create `scripts/setup/setup_dev_environment.sh` to automate virtual environment creation and dependency installation
+   - Implement Neo4j setup and configuration scripts
+   - Add helper scripts for database initialization and seeding
+
+3. Create project management scripts:
+   - Implement `scripts/dev/update_dependencies.sh` for keeping dependencies up to date
+   - Create scripts for common development workflows like linting, testing, and documentation generation
+   - Add helper scripts for common Git workflows and release management
+
+4. Implement CI/CD scripts:
+   - Create scripts for CI environment setup
+   - Implement build and deployment automation
+   - Add scripts for automated testing and reporting
+
+**Dependencies**:
+- bash or PowerShell (platform-dependent)
+- python-dotenv (for environment configuration)
+
+**Testing Strategy**:
+- Test scripts on different platforms (Linux, macOS, Windows)
+- Create integration tests that validate script functionality
+- Add CI steps to verify script execution
+
+**Example prerequisite installation script:**
+```bash
+#!/bin/bash
+# Example script structure for prerequisite installation
+
+set -e
+
+# Define required versions
+REQUIRED_PYTHON_VERSION="3.10"
+REQUIRED_DOCKER_VERSION="20.10.0"
+REQUIRED_UV_VERSION="0.1.0"
+
+echo "Checking prerequisites for Vulnerability Assessment Copilot..."
+
+# Check Python version
+if command -v python3 &> /dev/null; then
+    PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
+    if [[ $(echo "$PYTHON_VERSION $REQUIRED_PYTHON_VERSION" | awk '{print ($1 >= $2)}') == 1 ]]; then
+        echo "✅ Python version $PYTHON_VERSION found (required: $REQUIRED_PYTHON_VERSION)"
+    else
+        echo "❌ Python version $REQUIRED_PYTHON_VERSION or higher required, found $PYTHON_VERSION"
+        echo "Please upgrade Python: https://www.python.org/downloads/"
+        exit 1
+    fi
+else
+    echo "❌ Python 3 not found"
+    echo "Please install Python: https://www.python.org/downloads/"
+    exit 1
+fi
+
+# Check Docker
+if command -v docker &> /dev/null; then
+    DOCKER_VERSION=$(docker --version | awk '{print $3}' | sed 's/,//')
+    if [[ $(echo "$DOCKER_VERSION $REQUIRED_DOCKER_VERSION" | awk '{print ($1 >= $2)}') == 1 ]]; then
+        echo "✅ Docker version $DOCKER_VERSION found (required: $REQUIRED_DOCKER_VERSION)"
+    else
+        echo "❌ Docker version $REQUIRED_DOCKER_VERSION or higher required, found $DOCKER_VERSION"
+        echo "Please upgrade Docker: https://docs.docker.com/get-docker/"
+        exit 1
+    fi
+else
+    echo "❌ Docker not found"
+    echo "Please install Docker: https://docs.docker.com/get-docker/"
+    exit 1
+fi
+
+# Check and install poetry if needed
+if ! command -v poetry &> /dev/null; then
+    echo "Poetry not found. Installing..."
+    curl -sSL https://install.python-poetry.org | python3 -
+    echo "✅ Poetry installed"
+else
+    echo "✅ Poetry already installed"
+fi
+
+# Check and install uv if needed
+if ! command -v uv &> /dev/null; then
+    echo "uv not found. Installing..."
+    pip install uv
+    echo "✅ uv installed"
+else
+    echo "✅ uv already installed"
+fi
+
+# Check git
+if command -v git &> /dev/null; then
+    echo "✅ Git installed"
+else
+    echo "❌ Git not found"
+    echo "Please install Git: https://git-scm.com/downloads"
+    exit 1
+fi
+
+echo "All prerequisites checked and installed!"
+echo "You're ready to set up the development environment."
+echo "Next step: Run scripts/setup/setup_dev_environment.sh"
+```
 
 ### 2. Neo4J Integration
 
@@ -652,6 +925,448 @@ Tests will be automated using:
 - Test coverage reporting
 - Automated security scanning
 
+### Detailed Test Implementation Guidelines
+
+#### Test Structure and Organization
+
+1. **Test Directory Structure**:
+   ```
+   tests/
+   ├── unit/                  # Unit tests
+   │   ├── agents/            # Tests for agent components
+   │   ├── db/                # Tests for database components
+   │   ├── ingestion/         # Tests for ingestion components
+   │   └── workflows/         # Tests for workflow components
+   ├── integration/           # Integration tests
+   │   ├── neo4j/             # Neo4j integration tests
+   │   ├── agent_comms/       # Agent communication tests
+   │   └── workflow_chains/   # Workflow chaining tests
+   ├── system/                # System tests
+   │   ├── scenarios/         # Full scenario tests
+   │   └── performance/       # Performance tests
+   ├── fixtures/              # Shared test fixtures
+   │   ├── codebases/         # Sample code repositories
+   │   ├── knowledge/         # Sample knowledge bases
+   │   └── mock_responses/    # Mocked API responses
+   └── conftest.py            # Shared pytest configuration
+   ```
+
+2. **Naming Convention**:
+   - Test files should follow the pattern `test_<module_name>.py`
+   - Test classes should follow the pattern `Test<ClassBeingTested>`
+   - Test methods should follow the pattern `test_<functionality>_<scenario>`
+
+#### Writing Tests for Specific Components
+
+##### 1. Database Component Tests
+
+For Neo4j integration and database access modules:
+
+```python
+# Example test for the database connection module
+import pytest
+from db.connection import Neo4jConnection
+
+@pytest.fixture
+def mock_neo4j_driver(mocker):
+    """Create a mock Neo4j driver."""
+    mock_driver = mocker.patch('neo4j.GraphDatabase.driver')
+    mock_session = mocker.MagicMock()
+    mock_driver.return_value.session.return_value = mock_session
+    return mock_driver, mock_session
+
+def test_connection_initialization(mock_neo4j_driver):
+    """Test that the connection is properly initialized."""
+    mock_driver, _ = mock_neo4j_driver
+    connection = Neo4jConnection(uri="bolt://localhost:7687", 
+                                 user="neo4j", 
+                                 password="password")
+    
+    # Verify driver was created with correct parameters
+    mock_driver.assert_called_once_with(
+        "bolt://localhost:7687", 
+        auth=("neo4j", "password")
+    )
+    
+    # Test connection status
+    assert connection.is_connected() is True
+
+def test_execute_query(mock_neo4j_driver):
+    """Test query execution."""
+    _, mock_session = mock_neo4j_driver
+    mock_result = mocker.MagicMock()
+    mock_session.run.return_value = mock_result
+    mock_result.data.return_value = [{"n": "test"}]
+    
+    connection = Neo4jConnection(uri="bolt://localhost:7687", 
+                                 user="neo4j", 
+                                 password="password")
+    result = connection.execute_query("MATCH (n) RETURN n LIMIT 1")
+    
+    # Verify query was executed
+    mock_session.run.assert_called_once_with("MATCH (n) RETURN n LIMIT 1", {})
+    assert result == [{"n": "test"}]
+```
+
+##### 2. Agent Tests
+
+For testing agent components:
+
+```python
+# Example test for an agent class
+import pytest
+from agents.base import BaseAgent
+from events.event_system import EventSystem
+
+@pytest.fixture
+def mock_event_system():
+    """Create a mock event system."""
+    return MockEventSystem()
+
+class MockEventSystem:
+    """Mock implementation of event system for testing."""
+    def __init__(self):
+        self.emitted_events = []
+        self.subscriptions = {}
+    
+    def emit(self, event_type, payload):
+        self.emitted_events.append((event_type, payload))
+    
+    def subscribe(self, event_type, callback):
+        if event_type not in self.subscriptions:
+            self.subscriptions[event_type] = []
+        self.subscriptions[event_type].append(callback)
+
+def test_agent_initialization(mock_event_system):
+    """Test agent initialization."""
+    agent = BaseAgent(name="test_agent", event_system=mock_event_system)
+    assert agent.name == "test_agent"
+    assert agent.event_system == mock_event_system
+
+def test_agent_event_emission(mock_event_system):
+    """Test that agent properly emits events."""
+    agent = BaseAgent(name="test_agent", event_system=mock_event_system)
+    agent.emit_event("test_event", {"data": "value"})
+    
+    assert len(mock_event_system.emitted_events) == 1
+    event_type, payload = mock_event_system.emitted_events[0]
+    assert event_type == "test_event"
+    assert payload == {"data": "value"}
+
+def test_agent_event_handling(mock_event_system):
+    """Test that agent properly handles events."""
+    handled_events = []
+    
+    def handler(payload):
+        handled_events.append(payload)
+    
+    agent = BaseAgent(name="test_agent", event_system=mock_event_system)
+    agent.subscribe_to_event("test_event", handler)
+    
+    # Verify subscription was registered
+    assert "test_event" in mock_event_system.subscriptions
+    assert len(mock_event_system.subscriptions["test_event"]) == 1
+    
+    # Simulate event being triggered
+    mock_event_system.subscriptions["test_event"][0]({"data": "value"})
+    
+    # Verify handler was called
+    assert len(handled_events) == 1
+    assert handled_events[0] == {"data": "value"}
+```
+
+##### 3. AI Model Integration Tests
+
+For testing components that interact with Azure OpenAI:
+
+```python
+# Example test for the AI model client
+import pytest
+from utils.azure_openai_client import AzureOpenAIClient
+
+@pytest.fixture
+def mock_openai(mocker):
+    """Create a mock OpenAI client."""
+    mock_client = mocker.patch('openai.AsyncAzureOpenAI')
+    mock_completion = mocker.AsyncMock()
+    mock_completion.choices = [mocker.MagicMock(message=mocker.MagicMock(content="Test response"))]
+    mock_client.return_value.chat.completions.create = mocker.AsyncMock(return_value=mock_completion)
+    return mock_client
+
+@pytest.mark.asyncio
+async def test_generate_completion(mock_openai):
+    """Test that completions are properly generated."""
+    client = AzureOpenAIClient(
+        api_key="test_key",
+        endpoint="https://test.openai.azure.com",
+        deployment_name="gpt4o"
+    )
+    
+    response = await client.generate_completion(
+        prompt="Test prompt",
+        max_tokens=100
+    )
+    
+    # Verify OpenAI API was called correctly
+    mock_openai.return_value.chat.completions.create.assert_called_once()
+    call_args = mock_openai.return_value.chat.completions.create.call_args
+    assert call_args[1]["messages"][0]["content"] == "Test prompt"
+    assert call_args[1]["max_tokens"] == 100
+    
+    # Verify response was processed correctly
+    assert response == "Test response"
+```
+
+##### 4. CLI Component Tests
+
+For testing the command-line interface:
+
+```python
+# Example test for CLI commands
+import pytest
+from click.testing import CliRunner
+from cli.main import cli
+
+@pytest.fixture
+def cli_runner():
+    """Create a CLI runner for testing."""
+    return CliRunner()
+
+def test_cli_help(cli_runner):
+    """Test that the CLI help command works."""
+    result = cli_runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "Usage:" in result.output
+
+def test_ingest_command(cli_runner, mocker):
+    """Test the repository ingestion command."""
+    mock_ingest = mocker.patch('cli.commands.ingest_repo')
+    result = cli_runner.invoke(cli, ["ingest", "https://github.com/example/repo"])
+    
+    assert result.exit_code == 0
+    mock_ingest.assert_called_once_with("https://github.com/example/repo", None)
+    assert "Ingestion started" in result.output
+```
+
+##### 5. Workflow Tests
+
+For testing workflow components:
+
+```python
+# Example test for the Q&A workflow
+import pytest
+from workflows.qa import QAWorkflow
+from agents.retrieval import KnowledgeRetrievalAgent
+
+@pytest.fixture
+def mock_retrieval_agent(mocker):
+    """Create a mock retrieval agent."""
+    agent = mocker.MagicMock(spec=KnowledgeRetrievalAgent)
+    agent.retrieve.return_value = [
+        {"content": "Test content", "relevance": 0.95}
+    ]
+    return agent
+
+@pytest.fixture
+def mock_llm_client(mocker):
+    """Create a mock LLM client."""
+    client = mocker.MagicMock()
+    client.generate_completion.return_value = "This is a test answer."
+    return client
+
+def test_qa_workflow_question_answering(mock_retrieval_agent, mock_llm_client):
+    """Test the question answering process."""
+    workflow = QAWorkflow(
+        retrieval_agent=mock_retrieval_agent,
+        llm_client=mock_llm_client
+    )
+    
+    answer = workflow.answer_question("What is a test?")
+    
+    # Verify retrieval agent was called
+    mock_retrieval_agent.retrieve.assert_called_once_with("What is a test?")
+    
+    # Verify LLM was called with retrieved context
+    mock_llm_client.generate_completion.assert_called_once()
+    prompt = mock_llm_client.generate_completion.call_args[0][0]
+    assert "Test content" in prompt
+    
+    # Verify answer was returned
+    assert answer == "This is a test answer."
+```
+
+#### Testing AI Components
+
+When testing components that interact with AI models, consider these approaches:
+
+1. **Use mocked responses** for deterministic testing:
+   - Create a fixture with pre-defined responses for different prompts
+   - Use these mock responses for most tests to ensure consistency
+
+2. **Create regression tests** for AI behavior:
+   - Save expected outputs for specific inputs
+   - Compare new outputs against these benchmarks
+   - Use similarity metrics rather than exact matching when appropriate
+
+3. **Test for robustness**:
+   - Verify that components handle unexpected AI outputs gracefully
+   - Test with empty, extremely long, or malformed responses
+   - Ensure error handling works properly
+
+Example of AI regression testing:
+
+```python
+import pytest
+import json
+import os
+from utils.text_similarity import cosine_similarity
+
+@pytest.fixture
+def expected_responses():
+    """Load expected model responses from fixtures."""
+    with open('tests/fixtures/mock_responses/model_responses.json', 'r') as f:
+        return json.load(f)
+
+def test_summarization_regression(code_summarizer, expected_responses):
+    """Test that code summarization produces expected results."""
+    code_snippet = "def add(a, b): return a + b"
+    expected = expected_responses["simple_function_summary"]
+    
+    summary = code_summarizer.summarize(code_snippet)
+    
+    # Use similarity rather than exact matching
+    similarity = cosine_similarity(summary, expected)
+    assert similarity > 0.85, f"Summary differs too much from expected: {summary}"
+```
+
+#### Integration Test Considerations
+
+For integration tests that require running Neo4j:
+
+```python
+import pytest
+from neo4j import GraphDatabase
+from db.connection import Neo4jConnection
+
+@pytest.fixture(scope="module")
+def neo4j_container():
+    """Start a Neo4j container for testing."""
+    import docker
+    client = docker.from_env()
+    
+    # Pull and start Neo4j container
+    container = client.containers.run(
+        "neo4j:4.4",
+        environment={
+            "NEO4J_AUTH": "neo4j/testpassword",
+            "NEO4J_ACCEPT_LICENSE_AGREEMENT": "yes"
+        },
+        ports={"7474/tcp": 7474, "7687/tcp": 7687},
+        detach=True
+    )
+    
+    # Wait for Neo4j to start
+    import time
+    time.sleep(20)  # Allow time for Neo4j to initialize
+    
+    yield container
+    
+    # Clean up
+    container.stop()
+    container.remove()
+
+@pytest.fixture
+def neo4j_connection(neo4j_container):
+    """Create a connection to the test Neo4j instance."""
+    connection = Neo4jConnection(
+        uri="bolt://localhost:7687",
+        user="neo4j",
+        password="testpassword"
+    )
+    
+    # Clear database before each test
+    connection.execute_query("MATCH (n) DETACH DELETE n")
+    
+    return connection
+
+def test_node_creation(neo4j_connection):
+    """Test that nodes can be created in Neo4j."""
+    # Create a node
+    neo4j_connection.execute_query(
+        "CREATE (n:Test {name: $name}) RETURN n",
+        parameters={"name": "test_node"}
+    )
+    
+    # Verify node was created
+    result = neo4j_connection.execute_query(
+        "MATCH (n:Test) RETURN n.name as name"
+    )
+    
+    assert len(result) == 1
+    assert result[0]["name"] == "test_node"
+```
+
+#### Test-Driven Development Approach
+
+Follow these steps for implementing components using TDD:
+
+1. **Write tests first**:
+   - Define the expected behavior through tests before implementation
+   - Focus on interface and behavioral requirements
+   - Include both happy path and error scenarios
+
+2. **Implement minimal functionality**:
+   - Write just enough code to make tests pass
+   - Focus on correctness before optimization
+
+3. **Refactor**:
+   - Improve code quality while keeping tests passing
+   - Extract common functionality into shared utilities
+   - Enhance error handling and edge cases
+
+Example TDD workflow for a new component:
+
+```python
+# Step 1: Write the test first
+def test_vulnerability_scorer_calculates_cvss():
+    """Test that the vulnerability scorer calculates CVSS scores."""
+    # Arrange
+    vulnerability = {
+        "attack_vector": "network",
+        "attack_complexity": "low",
+        "privileges_required": "none",
+        "user_interaction": "none",
+        "scope": "unchanged",
+        "confidentiality": "high",
+        "integrity": "high",
+        "availability": "high"
+    }
+    scorer = VulnerabilityScorer()
+    
+    # Act
+    score = scorer.calculate_cvss(vulnerability)
+    
+    # Assert
+    assert 9.0 <= score <= 10.0  # Should be a critical severity
+
+# Step 2: Implement the component
+class VulnerabilityScorer:
+    def calculate_cvss(self, vulnerability):
+        # Implement CVSS calculation logic
+        # ...
+        return 9.8
+```
+
+#### Test Coverage Goals
+
+Aim for the following test coverage metrics:
+
+- **Unit test coverage**: Minimum 85% code coverage
+- **Integration test coverage**: All critical paths and component interactions
+- **System test coverage**: All user-facing workflows and commands
+
+Monitor coverage using tools like pytest-cov and generate reports in CI/CD.
+
 ## Development Phases
 
 ### Phase 1: Foundation (Weeks 1-3)
@@ -742,6 +1457,218 @@ For larger deployments:
 - **Bandit**: Security linting
 - **Safety**: Dependency scanning
 - **OWASP ZAP**: API security testing
+
+## Documentation
+
+### 9.1 Documentation Planning and Structure
+
+**Purpose**: Create comprehensive documentation for developers, contributors, and end-users.
+
+**Steps**:
+1. Create documentation structure:
+   - Establish a centralized documentation directory (`docs/`)
+   - Define documentation categories (API, user guides, developer guides, tutorials)
+   - Set up documentation versioning strategy
+
+2. Implement documentation tooling:
+   - Set up Sphinx for API and developer documentation
+   - Configure MkDocs for user-facing documentation
+   - Implement docstring standards (Google or NumPy style) for code documentation
+   - Create automated documentation generation in CI/CD pipeline
+
+3. Design documentation templates:
+   - Create standardized templates for different documentation types
+   - Establish style guides and terminology consistency
+   - Design diagrams and visualization standards
+
+**Dependencies**:
+- sphinx
+- mkdocs
+- sphinx-autodoc
+- mkdocstrings
+- mermaid-js (for diagrams)
+
+**Testing Strategy**:
+- Documentation build tests
+- Link validation
+- Example code validation
+
+### 9.2 API Documentation
+
+**Purpose**: Document all public APIs, classes, and functions to enable integration and extension.
+
+**Steps**:
+1. Document core APIs:
+   - Implement comprehensive docstrings for all public functions, classes, and methods
+   - Create usage examples for each API component
+   - Document parameter types, return values, and exceptions
+
+2. Create module documentation:
+   - Write overview documentation for each module
+   - Document module dependencies and relationships
+   - Create architectural diagrams showing module interactions
+
+3. Implement API reference generation:
+   - Configure autodoc for automatic API documentation generation
+   - Create custom documentation templates for specific API types
+   - Generate API reference documentation during builds
+
+**Dependencies**:
+- sphinx-autodoc
+- sphinx-napoleon (for Google/NumPy docstring support)
+- sphinx-apidoc
+
+**Testing Strategy**:
+- API documentation coverage checks
+- Example code testing
+- Documentation rendering tests
+
+### 9.3 User Documentation
+
+**Purpose**: Provide clear guidance for users on how to use the system effectively.
+
+**Steps**:
+1. Create getting started guides:
+   - Write installation and setup instructions
+   - Create introductory tutorials
+   - Document initial configuration
+
+2. Develop user guides:
+   - Create workflow-specific documentation
+   - Document CLI commands with examples
+   - Write troubleshooting guides
+
+3. Implement advanced user documentation:
+   - Create best practices guides
+   - Document performance optimization strategies
+   - Write integration guides with other systems
+
+**Dependencies**:
+- mkdocs
+- mkdocs-material (for enhanced styling)
+- mkdocs-exclude
+
+**Testing Strategy**:
+- User testing with documentation
+- Command example validation
+- Regular review and updates
+
+### 9.4 Developer Documentation
+
+**Purpose**: Enable contributors and developers to understand and extend the system.
+
+**Steps**:
+1. Create architecture documentation:
+   - Document system design and component interactions
+   - Create architectural decision records (ADRs)
+   - Document design patterns and implementation approaches
+
+2. Develop contribution guides:
+   - Write setup instructions for development environment
+   - Create coding standards and style guides
+   - Document pull request and code review processes
+
+3. Implement development workflow documentation:
+   - Document testing approaches and requirements
+   - Create debugging guides
+   - Document common development tasks
+
+**Dependencies**:
+- sphinx
+- sphinx-rtd-theme
+- mermaid-js (for diagrams)
+
+**Testing Strategy**:
+- Regular review by developers
+- New contributor onboarding tests
+- Documentation update triggers on code changes
+
+### 9.5 Documentation CI/CD
+
+**Purpose**: Automate documentation building, testing, and deployment.
+
+**Steps**:
+1. Set up documentation CI:
+   - Configure documentation building in CI pipeline
+   - Implement documentation linting and validation
+   - Create documentation testing jobs
+
+2. Implement documentation deployment:
+   - Configure automatic deployment to hosting services
+   - Set up versioned documentation
+   - Implement documentation preview for pull requests
+
+3. Create documentation maintenance workflows:
+   - Implement documentation issue tracking
+   - Create scheduled documentation reviews
+   - Set up documentation update notifications
+
+**Dependencies**:
+- GitHub Actions or similar CI/CD service
+- GitHub Pages, ReadTheDocs, or similar hosting
+- Vale (for documentation linting)
+
+**Testing Strategy**:
+- Documentation build status monitoring
+- Deployment verification
+- Link and reference validation
+
+## Documentation Maintenance Strategy
+
+### Regular Updates
+
+Documentation should be maintained following these principles:
+- Documentation updates should be part of feature development process
+- Regular reviews should be conducted to ensure accuracy
+- User feedback should be incorporated into documentation improvements
+
+### Documentation Reviews
+
+Implement a documentation review process:
+- Schedule quarterly comprehensive documentation reviews
+- Assign documentation owners for different sections
+- Create a feedback mechanism for users to report documentation issues
+
+### Documentation Versioning
+
+Maintain versioned documentation:
+- Major versions of documentation should align with software releases
+- Archived documentation should be available for previous versions
+- Clear migration guides should be provided between versions
+
+## Troubleshooting Common Issues
+
+### Neo4j Connectivity Issues
+
+1. **Connection Refused**:
+   - Verify Neo4j is running: `docker ps` or check service status
+   - Check if ports are correctly exposed and not blocked by firewall
+   - Ensure credentials are correct in configuration files
+
+2. **Memory Issues**:
+   - Adjust Neo4j memory settings in neo4j.conf or docker-compose.yml
+   - For large graphs, increase heap size settings
+
+### Python Dependency Problems
+
+1. **Dependency Conflicts**:
+   - Use `poetry show --tree` to identify dependency conflicts
+   - Consider isolating conflicting packages in separate environments
+
+2. **Installation Failures**:
+   - Ensure system has required build tools (gcc, make, etc.)
+   - Check for compatibility between package versions and Python version
+
+### Azure OpenAI Integration Issues
+
+1. **Authentication Errors**:
+   - Verify API key and endpoint URL
+   - Check for proper permissions on the Azure resource
+   - Ensure region is correctly specified
+
+2. **Model Availability**:
+   - Confirm models are deployed in your Azure OpenAI resource
+   - Check for quota limitations or usage restrictions
 
 ## Conclusion
 
