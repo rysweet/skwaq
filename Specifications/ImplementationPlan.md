@@ -1,4 +1,4 @@
-# Vulnerability Assessment Copilot - Implementation Plan
+# Skwaq - Vulnerability Assessment Copilot - Implementation Plan
 
 ## Overview
 
