@@ -209,6 +209,7 @@ def setup_logging(
     log_to_console: bool = True,
     structured: bool = False,
     rotation: Optional[RotationConfig] = None,
+    testing: bool = False,
 ) -> Union[logging.Logger, ContextAdapter]:
     """Set up logging with consistent formatting.
 
@@ -219,6 +220,7 @@ def setup_logging(
         log_to_console: Whether to log to console (default: True)
         structured: Whether to use structured JSON logging
         rotation: Log rotation configuration
+        testing: Whether this is being run in a test environment
 
     Returns:
         Configured logger instance or context adapter
@@ -247,39 +249,65 @@ def setup_logging(
         else:
             formatter = logging.Formatter(DEFAULT_FORMAT, datefmt=LOG_DATEFMT)
 
-        # Add console handler if requested
-        if log_to_console:
-            console_handler = logging.StreamHandler(sys.stdout)
+        # Add handlers based on testing mode
+        if testing:
+            # For testing, use StringIO for both console and file output
+            from io import StringIO
+            
+            # Console output (always enabled in testing)
+            console_stream = StringIO()
+            console_handler = logging.StreamHandler(console_stream)
             console_handler.setLevel(level)
             console_handler.setFormatter(formatter)
+            console_handler.stream = console_stream  # Make stream accessible
             logger.addHandler(console_handler)
-
-        # Add file handler if requested or use default
-        if log_file is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            log_dir = Path(os.getenv("SKWAQ_LOG_DIR", Path.home() / ".skwaq" / "logs"))
-            log_dir.mkdir(parents=True, exist_ok=True)
-            log_file = log_dir / f"skwaq_{timestamp}.log"
-
-        # Create log file handler with rotation if specified
-        if rotation is not None:
-            if rotation.rotation_type == "size":
-                file_handler = RotatingFileHandler(
-                    log_file, maxBytes=rotation.max_bytes, backupCount=rotation.backup_count
-                )
-            else:  # time-based rotation
-                file_handler = TimedRotatingFileHandler(
-                    log_file,
-                    when=rotation.when,
-                    interval=rotation.interval,
-                    backupCount=rotation.backup_count,
-                )
+            
+            # File output (if requested)
+            if log_file:
+                file_stream = StringIO()
+                file_handler = logging.StreamHandler(file_stream)
+                file_handler.setLevel(level)
+                file_handler.setFormatter(formatter)
+                file_handler.stream = file_stream  # Make stream accessible
+                # Store the path for reference
+                setattr(file_handler, 'log_file_path', log_file)
+                logger.addHandler(file_handler)
         else:
-            file_handler = logging.FileHandler(log_file)
+            # Normal non-testing mode
+            
+            # Console output
+            if log_to_console:
+                console_handler = logging.StreamHandler(sys.stdout)
+                console_handler.setLevel(level)
+                console_handler.setFormatter(formatter)
+                logger.addHandler(console_handler)
+            
+            # File output
+            if log_file is None:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                log_dir = Path(os.getenv("SKWAQ_LOG_DIR", Path.home() / ".skwaq" / "logs"))
+                log_dir.mkdir(parents=True, exist_ok=True)
+                log_file = log_dir / f"skwaq_{timestamp}.log"
 
-        file_handler.setLevel(level)
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
+            # Create log file handler with rotation if specified
+            if rotation is not None:
+                if rotation.rotation_type == "size":
+                    file_handler = RotatingFileHandler(
+                        log_file, maxBytes=rotation.max_bytes, backupCount=rotation.backup_count
+                    )
+                else:  # time-based rotation
+                    file_handler = TimedRotatingFileHandler(
+                        log_file,
+                        when=rotation.when,
+                        interval=rotation.interval,
+                        backupCount=rotation.backup_count,
+                    )
+            else:
+                file_handler = logging.FileHandler(log_file)
+
+            file_handler.setLevel(level)
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
 
         # Store logger in global registry
         _loggers[module_name] = logger

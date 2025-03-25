@@ -32,25 +32,62 @@ class TelemetryEndpoint:
 class Telemetry:
     """Telemetry system for capturing and reporting events."""
 
-    def __init__(self):
-        """Initialize the telemetry system."""
-        config = get_config()
-        self.enabled = config.telemetry_enabled
+    def __init__(self, config=None, enabled=None, testing=False):
+        """Initialize the telemetry system.
+        
+        Args:
+            config: Optional configuration object to use
+            enabled: Optional explicit enabled state to override the config
+            testing: Whether this is being run in a test environment
+        """
+        self.testing = testing
+        
+        if config is None:
+            try:
+                config = get_config()
+            except Exception as e:
+                if testing:
+                    # Use default values for testing
+                    from dataclasses import dataclass
+                    
+                    @dataclass
+                    class TestConfig:
+                        telemetry_enabled: bool = False
+                        telemetry: Dict[str, Any] = None
+                        
+                    config = TestConfig()
+                    config.telemetry = {}
+                else:
+                    # Re-raise if not in testing mode
+                    raise e
+            
+        # Allow explicit override of enabled state
+        self.enabled = enabled if enabled is not None else config.telemetry_enabled
         self.session_id = str(uuid.uuid4())
         self.endpoints: Dict[str, TelemetryEndpoint] = {}
+        self.captured_events = [] if testing else None  # Track events for testing
 
         # Initialize endpoints from config if available
         telemetry_config = getattr(config, "telemetry", {})
         endpoints = telemetry_config.get("endpoints", [])
-        for endpoint in endpoints:
-            if isinstance(endpoint, dict) and "name" in endpoint and "url" in endpoint:
-                self.add_endpoint(
-                    name=endpoint["name"],
-                    url=endpoint["url"],
-                    enabled=endpoint.get("enabled", True),
-                    headers=endpoint.get("headers"),
-                    timeout_seconds=endpoint.get("timeout_seconds", 5),
-                )
+        
+        if endpoints:
+            for endpoint in endpoints:
+                if isinstance(endpoint, dict) and "name" in endpoint and "url" in endpoint:
+                    self.add_endpoint(
+                        name=endpoint["name"],
+                        url=endpoint["url"],
+                        enabled=endpoint.get("enabled", True),
+                        headers=endpoint.get("headers"),
+                        timeout_seconds=endpoint.get("timeout_seconds", 5),
+                    )
+        elif testing:
+            # Add a default testing endpoint
+            self.add_endpoint(
+                name="test_endpoint",
+                url="https://test.example.com/telemetry",
+                enabled=True
+            )
 
         if self.enabled:
             logger.info("Telemetry is enabled.")
@@ -150,24 +187,40 @@ class Telemetry:
 
         if user_id:
             payload["user_id"] = user_id
+            
+        # Store event for testing if needed
+        if self.testing and self.captured_events is not None:
+            self.captured_events.append({
+                "event_name": event_name,
+                "data": data,
+                "user_id": user_id,
+                "payload": payload
+            })
 
         # In a real implementation, this would send the data to endpoints
         # For now, just log it
         for name, endpoint in self.endpoints.items():
             if endpoint.enabled:
                 try:
-                    # This is a placeholder for actual HTTP request
-                    # In production, you would use requests or aiohttp
-                    # requests.post(
-                    #     endpoint.url,
-                    #     json=payload,
-                    #     headers=endpoint.headers,
-                    #     timeout=endpoint.timeout_seconds
-                    # )
-                    logger.debug(
-                        f"Would send telemetry to {name} ({endpoint.url}): "
-                        f"{json.dumps(payload)}"
-                    )
+                    if self.testing:
+                        # Skip actual HTTP requests in testing
+                        logger.debug(
+                            f"[TEST] Telemetry event to {name} ({endpoint.url}): "
+                            f"{json.dumps(payload)}"
+                        )
+                    else:
+                        # This is a placeholder for actual HTTP request
+                        # In production, you would use requests or aiohttp
+                        # requests.post(
+                        #     endpoint.url,
+                        #     json=payload,
+                        #     headers=endpoint.headers,
+                        #     timeout=endpoint.timeout_seconds
+                        # )
+                        logger.debug(
+                            f"Would send telemetry to {name} ({endpoint.url}): "
+                            f"{json.dumps(payload)}"
+                        )
                 except Exception as e:
                     logger.error(f"Error sending telemetry to {name}: {e}")
 
@@ -186,3 +239,15 @@ class Telemetry:
 
 # Global telemetry instance
 telemetry_instance = Telemetry()
+
+# Get a telemetry instance for testing
+def get_test_telemetry(enabled=True):
+    """Get a telemetry instance configured for testing.
+    
+    Args:
+        enabled: Whether telemetry should be enabled in the test instance
+        
+    Returns:
+        A telemetry instance configured for testing
+    """
+    return Telemetry(enabled=enabled, testing=True)
