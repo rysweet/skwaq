@@ -11,6 +11,18 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
 
+    # Install Azure CLI if not present
+    if ! command -v az &> /dev/null; then
+        echo "Installing Azure CLI..."
+        brew install azure-cli
+    fi
+
+    # Install jq if not present
+    if ! command -v jq &> /dev/null; then
+        echo "Installing jq..."
+        brew install jq
+    fi
+
     # Install Docker Desktop if not present
     if ! command -v docker &> /dev/null; then
         echo "Installing Docker Desktop..."
@@ -35,6 +47,18 @@ elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
         sudo usermod -aG docker $USER
         echo "Please log out and back in for Docker permissions to take effect"
         exit 1
+    fi
+
+    # Install Azure CLI if not present
+    if ! command -v az &> /dev/null; then
+        echo "Installing Azure CLI..."
+        curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+    fi
+
+    # Install jq if not present
+    if ! command -v jq &> /dev/null; then
+        echo "Installing jq..."
+        sudo apt-get update && sudo apt-get install -y jq
     fi
 fi
 
@@ -66,6 +90,18 @@ poetry install --with dev
 # Install pre-commit hooks
 echo "Installing pre-commit hooks..."
 poetry run pre-commit install
+
+# Setting up Azure resources for Skwaq
+echo "Setting up Azure resources for Skwaq..."
+
+# Run Azure authentication first
+../infrastructure/azure-auth.sh
+
+# Deploy Azure OpenAI resources
+../infrastructure/deploy-openai.sh
+
+# Verify model deployments
+../infrastructure/verify-openai-models.sh
 
 # Initialize Neo4j containers
 echo "Starting Neo4j containers..."

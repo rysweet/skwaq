@@ -5,13 +5,15 @@ that work together to perform vulnerability assessment tasks.
 """
 
 from typing import Dict, Any, Optional
-from autogen.core import Agent, ConversableAgent
+from autogen_core.agent import ChatAgent
 
-class BaseSkwaqAgent(ConversableAgent):
+class BaseSkwaqAgent(ChatAgent):
     """Base class for all Skwaq agents providing common functionality."""
-    
+
     def __init__(self, name: str, system_message: str, **kwargs):
-        super().__init__(name=name, system_message=system_message, **kwargs)
+        super().__init__(**kwargs)
+        self.name = name
+        self.system_message = system_message
         self.register_reply(
             Agent,
             self._default_auto_reply,
@@ -21,7 +23,7 @@ class BaseSkwaqAgent(ConversableAgent):
     async def _default_auto_reply(
         self,
         message: Optional[str],
-        sender: Optional[Agent],
+        sender: Optional[ChatAgent],
         config: Optional[Dict[str, Any]] = None,
     ) -> Optional[str]:
         """Default reply handler for messages from other agents."""
