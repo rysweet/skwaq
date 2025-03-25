@@ -33,14 +33,16 @@ def print_banner() -> None:
                            Vulnerability Assessment Copilot
     """
     console.print(Panel(banner, border_style="blue", title="[bold cyan]Skwaq[/bold cyan]"))
-    console.print("[dim]'Raven' - A clever digital assistant for uncovering security vulnerabilities[/dim]")
+    console.print(
+        "[dim]'Raven' - A clever digital assistant for uncovering security vulnerabilities[/dim]"
+    )
     console.print()
 
 
 def cmd_version(args: argparse.Namespace) -> None:
     """Display version information."""
     from skwaq import __version__
-    
+
     console.print(f"[bold]Skwaq[/bold] version: [cyan]{__version__}[/cyan]")
 
 
@@ -56,6 +58,7 @@ def cmd_config(args: argparse.Namespace) -> None:
 def cmd_init(args: argparse.Namespace) -> None:
     console.print("[bold]Initializing Skwaq environment...[/bold]")
     from skwaq.db.neo4j_connector import get_connector
+
     try:
         connector = get_connector()
         console.print("[green]Neo4j connection verified.[/green]")
@@ -64,6 +67,7 @@ def cmd_init(args: argparse.Namespace) -> None:
         return
 
     from skwaq.core.openai_client import get_openai_client
+
     try:
         client = get_openai_client()
         console.print("[green]OpenAI API connection verified.[/green]")
@@ -86,6 +90,7 @@ def cmd_ingest(args: argparse.Namespace) -> None:
         ingest_knowledge_source(str(source_path))
     elif args.type == "cve":
         from skwaq.ingestion import ingest_cve_source
+
         ingest_cve_source(str(source_path))
     else:
         console.print("[red]Unknown ingestion type.[/red]")
@@ -106,9 +111,10 @@ def cmd_query(args: argparse.Namespace) -> None:
 
 def create_parser() -> argparse.ArgumentParser:
     import argparse
+
     parser = argparse.ArgumentParser(
         description="Skwaq - Vulnerability Assessment Copilot",
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     subparsers = parser.add_subparsers(title="commands", dest="command", help="Command to run")
@@ -125,9 +131,12 @@ def create_parser() -> argparse.ArgumentParser:
     init_parser.set_defaults(func=cmd_init)
 
     ingest_parser = subparsers.add_parser("ingest", help="Ingest a repository or knowledge source")
-    ingest_parser.add_argument("source", help="Path to the repository or knowledge source to ingest")
-    ingest_parser.add_argument("--type", choices=["repo", "cve", "kb"], default="repo",
-                               help="Type of source to ingest")
+    ingest_parser.add_argument(
+        "source", help="Path to the repository or knowledge source to ingest"
+    )
+    ingest_parser.add_argument(
+        "--type", choices=["repo", "cve", "kb"], default="repo", help="Type of source to ingest"
+    )
     ingest_parser.set_defaults(func=cmd_ingest)
 
     query_parser = subparsers.add_parser("query", help="Run a query in the knowledge base")

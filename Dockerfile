@@ -15,9 +15,15 @@ ENV PYTHONUNBUFFERED=1 \
 ENV PATH="$POETRY_HOME/bin:$VENV_PATH/bin:$PATH"
 
 FROM python-base as builder-base
-RUN apt-get update && apt-get install --no-install-recommends -y \
+RUN apt-get update --allow-insecure-repositories && apt-get install --no-install-recommends -y \
     curl \
-    build-essential
+    build-essential \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/*
+# Add the GPG key for the Debian package repository
+RUN curl -fsSL https://deb.debian.org/debian-archive/debian-archive-keyring.gpg | gpg --dearmor -o /usr/share/keyrings/debian-archive-keyring.gpg
+# Update the package lists again
+RUN apt-get update --allow-insecure-repositories
 
 # Install poetry
 RUN curl -sSL https://install.python-poetry.org | python3 -

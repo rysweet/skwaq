@@ -12,13 +12,13 @@ from skwaq.utils.config import Config, get_config
 def test_project_structure():
     """Test that all required project directories and files exist."""
     root = Path(__file__).parent.parent.parent
-    
+
     # Check core directories
     assert (root / "skwaq").is_dir()
     assert (root / "tests").is_dir()
     assert (root / "docs").is_dir()
     assert (root / "scripts").is_dir()
-    
+
     # Check core module structure
     assert (root / "skwaq/utils").is_dir()
     assert (root / "skwaq/db").is_dir()
@@ -27,7 +27,7 @@ def test_project_structure():
     assert (root / "skwaq/agents").is_dir()
     assert (root / "skwaq/ingestion").is_dir()
     assert (root / "skwaq/workflows").is_dir()
-    
+
     # Check configuration files
     assert (root / "pyproject.toml").is_file()
     assert (root / ".pre-commit-config.yaml").is_file()
@@ -38,7 +38,7 @@ def test_project_structure():
 def test_infrastructure_scripts():
     """Test that infrastructure scripts are executable and properly configured."""
     root = Path(__file__).parent.parent.parent
-    
+
     # Check Azure scripts
     azure_scripts = [
         "scripts/infrastructure/azure-auth.sh",
@@ -54,7 +54,7 @@ def test_infrastructure_scripts():
 def test_ci_scripts():
     """Test that CI scripts are executable and properly configured."""
     root = Path(__file__).parent.parent.parent
-    
+
     # Check CI scripts
     ci_scripts = [
         "scripts/ci/run-local-ci.sh",
@@ -69,7 +69,7 @@ def test_development_environment():
     """Test that development environment setup script is executable and configured."""
     root = Path(__file__).parent.parent.parent
     setup_script = root / "scripts/setup/setup_dev_environment.sh"
-    
+
     assert setup_script.is_file()
     assert os.access(setup_script, os.X_OK), "setup_dev_environment.sh is not executable"
 
@@ -79,11 +79,11 @@ def test_configuration_loading():
     # Test environment configuration
     os.environ["OPENAI_API_KEY"] = "test-key"
     os.environ["OPENAI_ORG_ID"] = "test-org"
-    
+
     config = Config.from_env()
     assert config.openai_api_key == "test-key"
     assert config.openai_org_id == "test-org"
-    
+
     # Test global configuration
     global_config = get_config()
     assert isinstance(global_config, Config)

@@ -17,20 +17,20 @@ def mock_neo4j_driver():
         mock_session = mock.MagicMock()
         mock_result = mock.MagicMock()
         mock_record = mock.MagicMock()
-        
+
         # Configure mocks
         mock_graph_db.driver.return_value = mock_driver
         mock_driver.session.return_value.__enter__.return_value = mock_session
         mock_session.run.return_value = mock_result
         mock_result.single.return_value = mock_record
         mock_record.__getitem__.return_value = 1
-        
+
         yield {
             "driver": mock_driver,
             "session": mock_session,
             "result": mock_result,
             "record": mock_record,
-            "graph_db": mock_graph_db
+            "graph_db": mock_graph_db,
         }
 
 
@@ -43,7 +43,7 @@ def mock_config():
             "uri": "bolt://localhost:7687",
             "user": "neo4j",
             "password": "password",
-            "database": "neo4j"
+            "database": "neo4j",
         }
         mock_get_config.return_value = mock_config
         yield mock_config
@@ -52,13 +52,13 @@ def mock_config():
 def test_init_with_config(mock_config, mock_neo4j_driver):
     """Test initializing the connector with config."""
     connector = Neo4jConnector()
-    
+
     # Verify config was used
     assert connector._uri == "bolt://localhost:7687"
     assert connector._user == "neo4j"
     assert connector._password == "password"
     assert connector._database == "neo4j"
-    
+
     # Verify driver was created
     mock_neo4j_driver["graph_db"].driver.assert_called_once_with(
         "bolt://localhost:7687", auth=("neo4j", "password")
@@ -68,16 +68,14 @@ def test_init_with_config(mock_config, mock_neo4j_driver):
 def test_init_with_params(mock_config, mock_neo4j_driver):
     """Test initializing the connector with parameters."""
     connector = Neo4jConnector(
-        uri="bolt://custom:7687", 
-        user="custom_user", 
-        password="custom_password"
+        uri="bolt://custom:7687", user="custom_user", password="custom_password"
     )
-    
+
     # Verify params were used instead of config
     assert connector._uri == "bolt://custom:7687"
     assert connector._user == "custom_user"
     assert connector._password == "custom_password"
-    
+
     # Verify driver was created with custom params
     mock_neo4j_driver["graph_db"].driver.assert_called_once_with(
         "bolt://custom:7687", auth=("custom_user", "custom_password")
@@ -86,23 +84,19 @@ def test_init_with_params(mock_config, mock_neo4j_driver):
 
 def test_connect_success(mock_neo4j_driver):
     """Test successful connection to Neo4j."""
-    connector = Neo4jConnector(
-        uri="bolt://localhost:7687", 
-        user="neo4j", 
-        password="password"
-    )
-    
+    connector = Neo4jConnector(uri="bolt://localhost:7687", user="neo4j", password="password")
+
     # Set up mock for server info
     with mock.patch.object(connector, "get_server_info") as mock_server_info:
         mock_server_info.return_value = {"version": "5.0.0"}
-        
+
         # Connect
         result = connector.connect()
-        
+
         # Verify connection was successful
         assert result is True
         assert connector._connected is True
-        
+
         # Verify driver's session was used
         mock_neo4j_driver["driver"].session.assert_called_once()
         mock_neo4j_driver["session"].run.assert_called_once_with("RETURN 1 AS test")
@@ -111,34 +105,26 @@ def test_connect_success(mock_neo4j_driver):
 
 def test_connect_failure(mock_neo4j_driver):
     """Test failed connection to Neo4j."""
-    connector = Neo4jConnector(
-        uri="bolt://localhost:7687", 
-        user="neo4j", 
-        password="password"
-    )
-    
+    connector = Neo4jConnector(uri="bolt://localhost:7687", user="neo4j", password="password")
+
     # Configure session to raise an exception
     mock_neo4j_driver["driver"].session.side_effect = ServiceUnavailable("Connection refused")
-    
+
     # Connect with fewer retries
     result = connector.connect(max_retries=2, retry_delay=0.1)
-    
+
     # Verify connection failed
     assert result is False
     assert connector._connected is False
-    
+
     # Verify retry was attempted
     assert mock_neo4j_driver["driver"].session.call_count == 2
 
 
 def test_run_query(mock_neo4j_driver):
     """Test running a Cypher query."""
-    connector = Neo4jConnector(
-        uri="bolt://localhost:7687", 
-        user="neo4j", 
-        password="password"
-    )
-    
+    connector = Neo4jConnector(uri="bolt://localhost:7687", user="neo4j", password="password")
+
     # Set up connection status and mock records
     connector._connected = True
     mock_record1 = {"name": "node1", "value": 42}
@@ -146,22 +132,20 @@ def test_run_query(mock_neo4j_driver):
     mock_neo4j_driver["result"].single.return_value = None
     mock_neo4j_driver["result"].__iter__.return_value = [
         mock.MagicMock(**{"items.return_value": list(mock_record1.items())}),
-        mock.MagicMock(**{"items.return_value": list(mock_record2.items())})
+        mock.MagicMock(**{"items.return_value": list(mock_record2.items())}),
     ]
-    
+
     # Run query
     result = connector.run_query(
-        "MATCH (n) WHERE n.name = $name RETURN n.name, n.value",
-        {"name": "test"}
+        "MATCH (n) WHERE n.name = $name RETURN n.name, n.value", {"name": "test"}
     )
-    
+
     # Verify query was run
     mock_neo4j_driver["driver"].session.assert_called_once()
     mock_neo4j_driver["session"].run.assert_called_once_with(
-        "MATCH (n) WHERE n.name = $name RETURN n.name, n.value",
-        {"name": "test"}
+        "MATCH (n) WHERE n.name = $name RETURN n.name, n.value", {"name": "test"}
     )
-    
+
     # Verify results
     assert len(result) == 2
     assert result[0] == mock_record1
@@ -170,42 +154,33 @@ def test_run_query(mock_neo4j_driver):
 
 def test_create_node(mock_neo4j_driver):
     """Test creating a node in the graph."""
-    connector = Neo4jConnector(
-        uri="bolt://localhost:7687", 
-        user="neo4j", 
-        password="password"
-    )
+    connector = Neo4jConnector(uri="bolt://localhost:7687", user="neo4j", password="password")
     connector._connected = True
-    
+
     # Mock the run_query method
     with mock.patch.object(connector, "run_query") as mock_run_query:
         mock_run_query.return_value = [{"node_id": 123}]
-        
+
         # Create a node
         node_id = connector.create_node(
-            labels=["Person", "Employee"],
-            properties={"name": "John", "age": 30}
+            labels=["Person", "Employee"], properties={"name": "John", "age": 30}
         )
-        
+
         # Verify query was constructed correctly
         mock_run_query.assert_called_once_with(
             "CREATE (n:Person:Employee $properties) RETURN id(n) AS node_id",
-            {"properties": {"name": "John", "age": 30}}
+            {"properties": {"name": "John", "age": 30}},
         )
-        
+
         # Verify node ID was returned
         assert node_id == 123
 
 
 def test_vector_search(mock_neo4j_driver):
     """Test vector similarity search."""
-    connector = Neo4jConnector(
-        uri="bolt://localhost:7687", 
-        user="neo4j", 
-        password="password"
-    )
+    connector = Neo4jConnector(uri="bolt://localhost:7687", user="neo4j", password="password")
     connector._connected = True
-    
+
     # Mock the run_query method
     with mock.patch.object(connector, "run_query") as mock_run_query:
         # Set up mock records with node data
@@ -213,24 +188,24 @@ def test_vector_search(mock_neo4j_driver):
             {
                 "n": {"name": "doc1", "content": "test content"},
                 "score": 0.95,
-                "labels": ["Document"]
+                "labels": ["Document"],
             },
             {
                 "n": {"name": "doc2", "content": "more content"},
                 "score": 0.85,
-                "labels": ["Document"]
-            }
+                "labels": ["Document"],
+            },
         ]
-        
+
         # Perform vector search
         results = connector.vector_search(
             node_label="Document",
             vector_property="embedding",
             query_vector=[0.1, 0.2, 0.3],
             similarity_cutoff=0.8,
-            limit=2
+            limit=2,
         )
-        
+
         # Verify query was constructed correctly
         mock_run_query.assert_called_once()
         args, kwargs = mock_run_query.call_args
@@ -238,7 +213,7 @@ def test_vector_search(mock_neo4j_driver):
         assert "vector.similarity" in args[0]
         assert kwargs["params"]["query_vector"] == [0.1, 0.2, 0.3]
         assert kwargs["params"]["cutoff"] == 0.8
-        
+
         # Verify results
         assert len(results) == 2
         assert results[0]["name"] == "doc1"
@@ -252,17 +227,18 @@ def test_get_connector(mock_config, mock_neo4j_driver):
     """Test the global connector getter."""
     # Reset the global connector
     import skwaq.db.neo4j_connector
+
     skwaq.db.neo4j_connector._connector = None
-    
+
     # Mock the Neo4jConnector class
     with mock.patch("skwaq.db.neo4j_connector.Neo4jConnector") as mock_connector_class:
         mock_connector_instance = mock.MagicMock()
         mock_connector_class.return_value = mock_connector_instance
-        
+
         # First call should create a new instance
         connector1 = get_connector()
         mock_connector_class.assert_called_once()
-        
+
         # Second call should return the same instance
         connector2 = get_connector()
         assert connector1 is connector2

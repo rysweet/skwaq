@@ -34,20 +34,18 @@ def test_openai_client_async_initialization(mock_config):
 async def test_get_completion(mock_config, mocker):
     """Test getting completions from OpenAI."""
     mock_response = mocker.Mock()
-    mock_response.choices = [
-        mocker.Mock(message=mocker.Mock(content="Test completion"))
-    ]
-    
+    mock_response.choices = [mocker.Mock(message=mocker.Mock(content="Test completion"))]
+
     mock_create = mocker.AsyncMock(return_value=mock_response)
     mock_chat = mocker.Mock(completions=mocker.Mock(create=mock_create))
     mock_client = mocker.Mock(chat=mock_chat)
-    
+
     client = OpenAIClient(mock_config, async_mode=True)
     client.client = mock_client
-    
+
     result = await client.get_completion("Test prompt")
     assert result == "Test completion"
-    
+
     mock_create.assert_called_once_with(
         model="gpt-4-turbo-preview",
         messages=[{"role": "user", "content": "Test prompt"}],

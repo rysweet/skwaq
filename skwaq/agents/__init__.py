@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional
 # Using autogen-core instead of pyautogen
 from autogen_core.agent import Agent, ChatAgent
 
+
 class BaseSkwaqAgent(ChatAgent):
     """Base class for all Skwaq agents providing common functionality."""
 
@@ -16,12 +17,8 @@ class BaseSkwaqAgent(ChatAgent):
         super().__init__(**kwargs)
         self.name = name
         self.system_message = system_message
-        self.register_reply(
-            Agent,
-            self._default_auto_reply,
-            position=0
-        )
-    
+        self.register_reply(Agent, self._default_auto_reply, position=0)
+
     async def _default_auto_reply(
         self,
         message: Optional[str],
@@ -31,7 +28,7 @@ class BaseSkwaqAgent(ChatAgent):
         """Default reply handler for messages from other agents."""
         if message is None:
             return None
-            
+
         # Process the message and generate appropriate response
         # This will be overridden by specific agent implementations
         return f"Received message from {sender.name}: {message}"

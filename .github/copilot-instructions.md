@@ -1,4 +1,4 @@
-Please contninue to implement the software described in the Vulnerability Assessment Copilot.md document by following the plan in the ImplementationPlan.md document. 
+Please contninue to implement the software described in the "/Specifications/Vulnerability Assessment Copilot.md" document by following the plan in the "/Specifications/ImplementationPlan.md" document. 
 The plan should be followed step by step, and the code should be implemented in the order specified in the plan.
 Keep the plan status up to date by updating a file called status.md in the root of the repository. You can check this file to find out the most recent status of the plan.
 
