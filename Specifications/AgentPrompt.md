@@ -1,0 +1,17 @@
+Please implement the software described in the Vulnerability Assessment Copilot.md document by following the plan in the ImplementationPlan.md document. 
+The plan should be followed step by step, and the code should be implemented in the order specified in the plan.
+You should also use the following resources to help you implement the software:
+# - [Vulnerability Assessment Copilot.md](Vulnerability%20Assessment%20Copilot.md)
+# - [ImplementationPlan.md](ImplementationPlan.md)
+# - [AutoGen Core Documentation](https://microsoft.github.io/autogen/stable/user-guide/core-user-guide/index.html)
+# - [AutoGen API Documentation](https://microsoft.github.io/autogen/stable/api/index.html)
+# - [AutoGen Examples](https://microsoft.github.io/autogen/stable/examples/index.html)
+# - [Neo4J Documentation](https://neo4j.com/docs/)
+# - [Rich CLI Documentation](https://rich.readthedocs.io/en/stable/)
+# - [Neo4J Blog on Semantic indexes](https://neo4j.com/blog/developer/knowledge-graph-structured-semantic-search/)
+
+For the implementation, you will need to use my az credentials to access the Azure OpenAI API using Tenant: Microsoft
+Subscription: adapt-appsci1 (be51a72b-4d76-4627-9a17-7dd26245da7b). You will need to use my Githb credentials using the gh cli. You will need to do a commit after each step of the implementation. If a step of the implementation is not clear, please ask me for clarification.
+If a step of the implemenation failes, try again by attempting to crrect the error. If you are unable to correct the error, please ask me for help.
+
+
