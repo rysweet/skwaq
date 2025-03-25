@@ -8,6 +8,10 @@ This document outlines a comprehensive implementation plan for the Vulnerability
 
 The name "skwaq" is derived from the Lushootseed language of the Pacific Northwest, meaning "Raven." In many Pacific Northwest Indigenous traditions, Raven is a trickster and creator figure known for using wit and cleverness to uncover hidden things and reveal secrets. This name was chosen to reflect the project's purpose—intelligently discovering concealed vulnerabilities within software codebases, much as the mythological Raven brings hidden truths to light.
 
+### Implementation Summary
+
+The implementation follows a phased, milestone-driven approach spanning six major phases: Foundation, Knowledge Management, Code Analysis, Agent System, Workflow and UI, and Integration and Finalization. Each phase contains specific milestones with clear deliverables, validation criteria, and testing requirements. The system will be built using a modular architecture centered around Neo4J graph databases for knowledge and code representation, Azure OpenAI models for inference, and AutoGen Core for the multi-agent framework. The plan emphasizes comprehensive testing at each stage, including local CI pipeline execution, and incorporates documentation standards requiring 90% API documentation coverage with Google-style docstrings. Development will progress through incremental milestones, each requiring validation before proceeding, with GitHub Actions workflows automating testing, Docker builds, and documentation validation. This methodical approach ensures a robust, maintainable system that can assist vulnerability researchers in discovering security issues through various interactive workflows.
+
 ## System Architecture
 
 The system architecture follows a modular design with the following high-level components:
