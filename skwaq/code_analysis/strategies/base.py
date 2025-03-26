@@ -19,44 +19,44 @@ logger = get_logger(__name__)
 
 class AnalysisStrategy(ABC):
     """Base class for code analysis strategies.
-    
+
     This abstract class defines the interface for different code analysis strategies
     used to detect vulnerabilities in source code.
     """
-    
+
     def __init__(self) -> None:
         """Initialize the analysis strategy."""
         self.connector = get_connector()
         self.openai_client = get_openai_client(async_mode=True)
-    
+
     @abstractmethod
     async def analyze(
-        self, 
-        file_id: int, 
-        content: str, 
+        self,
+        file_id: int,
+        content: str,
         language: str,
-        options: Optional[Dict[str, Any]] = None
+        options: Optional[Dict[str, Any]] = None,
     ) -> List[Finding]:
         """Analyze a file for potential vulnerabilities.
-        
+
         Args:
             file_id: ID of the file in the database
             content: Content of the file
             language: Programming language of the file
             options: Additional options for the analysis
-            
+
         Returns:
             List of findings
         """
         pass
-    
+
     def _create_finding_node(self, file_id: int, finding: Finding) -> Optional[int]:
         """Create a finding node in the graph database.
-        
+
         Args:
             file_id: ID of the file node in the graph
             finding: Dictionary with finding information
-            
+
         Returns:
             ID of the created finding node, or None if creation failed
         """
@@ -73,44 +73,38 @@ class AnalysisStrategy(ABC):
                 "suggestion": finding.suggestion or "",
                 "timestamp": self._get_timestamp(),
             }
-            
+
             # Create the finding node
             finding_id = self.connector.create_node(
                 labels=["Finding"],
                 properties=properties,
             )
-            
+
             if finding_id is None:
                 logger.error("Failed to create finding node")
                 return None
-            
+
             # Link the finding to the file
-            self.connector.create_relationship(
-                file_id, 
-                finding_id, 
-                "HAS_FINDING"
-            )
-            
+            self.connector.create_relationship(file_id, finding_id, "HAS_FINDING")
+
             # If there is a pattern_id, link to the pattern
             if finding.pattern_id:
                 self.connector.create_relationship(
-                    finding_id,
-                    finding.pattern_id,
-                    "MATCHES_PATTERN"
+                    finding_id, finding.pattern_id, "MATCHES_PATTERN"
                 )
-            
+
             return finding_id
-            
+
         except Exception as e:
             logger.error(f"Error creating finding node: {e}")
             return None
-    
+
     def _get_timestamp(self) -> str:
         """Get the current timestamp as an ISO 8601 string.
-        
+
         Returns:
             Timestamp string
         """
         from datetime import datetime
-        
+
         return datetime.utcnow().isoformat()

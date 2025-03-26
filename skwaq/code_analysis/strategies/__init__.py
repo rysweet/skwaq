@@ -10,8 +10,8 @@ from .semantic_analysis import SemanticAnalysisStrategy
 from .ast_analysis import ASTAnalysisStrategy
 
 __all__ = [
-    "AnalysisStrategy", 
-    "PatternMatchingStrategy", 
-    "SemanticAnalysisStrategy", 
-    "ASTAnalysisStrategy"
+    "AnalysisStrategy",
+    "PatternMatchingStrategy",
+    "SemanticAnalysisStrategy",
+    "ASTAnalysisStrategy",
 ]

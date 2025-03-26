@@ -21,10 +21,11 @@ def test_repo():
     test_dir = tempfile.TemporaryDirectory()
     repo_dir = Path(test_dir.name) / "test_repo"
     repo_dir.mkdir()
-    
+
     # Create a test Python file with vulnerabilities
     python_file = repo_dir / "login.py"
-    python_file.write_text("""
+    python_file.write_text(
+        """
 import sqlite3
 import subprocess
 import pickle
@@ -49,11 +50,13 @@ def deserialize_data(data):
 def parse_yaml_config(yaml_data):
     # Vulnerable to code execution via YAML
     return yaml.load(yaml_data)
-""")
-    
+"""
+    )
+
     # Create a test JavaScript file with vulnerabilities
     js_file = repo_dir / "auth.js"
-    js_file.write_text("""
+    js_file.write_text(
+        """
 // Authentication module
 
 function authenticateUser(username, password) {
@@ -84,55 +87,56 @@ function mergeConfigs(target, source) {
     }
     return target;
 }
-""")
-    
+"""
+    )
+
     yield repo_dir
-    
+
     # Clean up after the test
     test_dir.cleanup()
 
 
 class TestDirectVulnerabilityDetection:
     """Tests that directly check for vulnerability patterns in code files.
-    
+
     This approach doesn't require importing the actual modules, but tests the same
     detection patterns that would be used by the production code.
     """
-    
+
     def test_python_vulnerability_detection(self, test_repo):
         """Test detecting vulnerabilities in Python code files."""
         # Get the Python test file
         python_file = test_repo / "login.py"
         content = python_file.read_text()
-        
+
         # Define vulnerability patterns
         patterns = [
             # SQL Injection
             {
                 "name": "SQL Injection",
                 "pattern": r'query\s*=\s*["\']SELECT.+[\'"]\s*\+\s*\w+',
-                "severity": "High"
+                "severity": "High",
             },
             # Command Injection
             {
                 "name": "Command Injection",
                 "pattern": r'subprocess\.(?:call|run|Popen)\s*\(\s*(?:["\'].+["\']\s*\+\s*|[f"\'])',
-                "severity": "High"
+                "severity": "High",
             },
             # Insecure Deserialization
             {
                 "name": "Insecure Deserialization",
-                "pattern": r'pickle\.(?:loads|load)\s*\(',
-                "severity": "High"
+                "pattern": r"pickle\.(?:loads|load)\s*\(",
+                "severity": "High",
             },
             # Unsafe YAML Load
             {
                 "name": "Unsafe YAML Loading",
-                "pattern": r'yaml\.load\s*\(',
-                "severity": "Medium"
-            }
+                "pattern": r"yaml\.load\s*\(",
+                "severity": "Medium",
+            },
         ]
-        
+
         # Check each pattern
         findings = []
         for p in patterns:
@@ -140,60 +144,62 @@ class TestDirectVulnerabilityDetection:
             if matches:
                 for match in matches:
                     # Calculate line number for the finding
-                    line_number = content[:match.start()].count('\n') + 1
-                    findings.append({
-                        "vulnerability_type": p["name"],
-                        "line_number": line_number,
-                        "matched_text": match.group(0),
-                        "severity": p["severity"]
-                    })
-        
+                    line_number = content[: match.start()].count("\n") + 1
+                    findings.append(
+                        {
+                            "vulnerability_type": p["name"],
+                            "line_number": line_number,
+                            "matched_text": match.group(0),
+                            "severity": p["severity"],
+                        }
+                    )
+
         # Verify that we found all expected vulnerabilities
         assert len(findings) >= 4  # Should find at least 4 vulnerabilities
-        
+
         # Check types of vulnerabilities found
         vuln_types = {f["vulnerability_type"] for f in findings}
         assert "SQL Injection" in vuln_types
         assert "Command Injection" in vuln_types
         assert "Insecure Deserialization" in vuln_types
         assert "Unsafe YAML Loading" in vuln_types
-        
+
         print(f"Successfully detected vulnerabilities in {python_file}")
-    
+
     def test_javascript_vulnerability_detection(self, test_repo):
         """Test detecting vulnerabilities in JavaScript code files."""
         # Get the JavaScript test file
         js_file = test_repo / "auth.js"
         content = js_file.read_text()
-        
+
         # Define vulnerability patterns
         patterns = [
             # SQL Injection
             {
                 "name": "SQL Injection",
                 "pattern": r'query\s*=\s*["\']SELECT.+[\'"]\s*\+',
-                "severity": "High"
+                "severity": "High",
             },
             # DOM XSS
             {
                 "name": "DOM-based XSS",
-                "pattern": r'\.innerHTML\s*=',
-                "severity": "High"
+                "pattern": r"\.innerHTML\s*=",
+                "severity": "High",
             },
             # Eval Code Injection
             {
                 "name": "Eval Code Injection",
-                "pattern": r'eval\s*\(',
-                "severity": "High"
+                "pattern": r"eval\s*\(",
+                "severity": "High",
             },
             # Prototype Pollution
             {
                 "name": "Prototype Pollution",
-                "pattern": r'for\s*\(\s*(?:var|let|const)?\s*\w+\s+in\s+',
-                "severity": "Medium"
-            }
+                "pattern": r"for\s*\(\s*(?:var|let|const)?\s*\w+\s+in\s+",
+                "severity": "Medium",
+            },
         ]
-        
+
         # Check each pattern
         findings = []
         for p in patterns:
@@ -201,26 +207,28 @@ class TestDirectVulnerabilityDetection:
             if matches:
                 for match in matches:
                     # Calculate line number for the finding
-                    line_number = content[:match.start()].count('\n') + 1
-                    findings.append({
-                        "vulnerability_type": p["name"],
-                        "line_number": line_number,
-                        "matched_text": match.group(0),
-                        "severity": p["severity"]
-                    })
-        
+                    line_number = content[: match.start()].count("\n") + 1
+                    findings.append(
+                        {
+                            "vulnerability_type": p["name"],
+                            "line_number": line_number,
+                            "matched_text": match.group(0),
+                            "severity": p["severity"],
+                        }
+                    )
+
         # Verify that we found all expected vulnerabilities
         assert len(findings) >= 4  # Should find at least 4 vulnerabilities
-        
+
         # Check types of vulnerabilities found
         vuln_types = {f["vulnerability_type"] for f in findings}
         assert "SQL Injection" in vuln_types
         assert "DOM-based XSS" in vuln_types
         assert "Eval Code Injection" in vuln_types
         assert "Prototype Pollution" in vuln_types
-        
+
         print(f"Successfully detected vulnerabilities in {js_file}")
-    
+
     def test_vulnerability_pattern_system(self):
         """Test the creation and validation of vulnerability patterns."""
         # Create test patterns for different languages
@@ -230,24 +238,24 @@ class TestDirectVulnerabilityDetection:
                 "description": "SQL query with user input",
                 "regex_pattern": r'query\s*=\s*["\']SELECT.+[\'"]\s*\+',
                 "language": "Python",
-                "severity": "High"
+                "severity": "High",
             },
             {
                 "name": "XSS (JavaScript)",
                 "description": "DOM-based XSS vulnerability",
-                "regex_pattern": r'\.innerHTML\s*=',
+                "regex_pattern": r"\.innerHTML\s*=",
                 "language": "JavaScript",
-                "severity": "High"
+                "severity": "High",
             },
             {
                 "name": "Command Injection (PHP)",
                 "description": "OS command with user input",
                 "regex_pattern": r'(?:exec|system|passthru|shell_exec)\s*\(\s*(?:[\'"].+[\'"]\s*\.\s*\$|\$[^)]+\s*\.)',
                 "language": "PHP",
-                "severity": "High"
-            }
+                "severity": "High",
+            },
         ]
-        
+
         # Validate each pattern
         for pattern in patterns:
             assert "name" in pattern
@@ -255,14 +263,14 @@ class TestDirectVulnerabilityDetection:
             assert "regex_pattern" in pattern
             assert "language" in pattern
             assert "severity" in pattern
-            
+
             # Check pattern validity (should compile as regex)
             try:
                 compiled_regex = re.compile(pattern["regex_pattern"])
                 assert compiled_regex is not None
             except re.error as e:
                 assert False, f"Invalid regex pattern: {e}"
-        
+
         print("Vulnerability pattern validation successful")
 
 

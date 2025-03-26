@@ -19,111 +19,134 @@ from .strategies.ast_analysis import ASTAnalysisStrategy
 from .languages.base import LanguageAnalyzer
 from .languages.python import PythonAnalyzer
 from .languages.javascript import JavaScriptAnalyzer
+from .languages.csharp import CSharpAnalyzer
+from .blarify_integration import BlarifyIntegration, BLARIFY_AVAILABLE
 
 logger = get_logger(__name__)
 
 
 class CodeAnalyzer:
     """Code analyzer for vulnerability assessment.
-    
+
     This class provides static code analysis capabilities to identify potential
     vulnerabilities in source code repositories. It orchestrates different analysis
     strategies and language-specific analyzers to detect security issues.
     """
+
+    _instance = None
+    
+    def __new__(cls):
+        """Create a singleton instance of CodeAnalyzer."""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
     
     def __init__(self) -> None:
         """Initialize the code analyzer."""
+        # Skip initialization if already done (singleton pattern)
+        if getattr(self, '_initialized', False):
+            return
+            
         self.connector = get_connector()
         self.openai_client = get_openai_client(async_mode=True)
         self.config = get_config()
-        
+
+        # Initialize Blarify integration if available
+        self.blarify_integration = BlarifyIntegration() if BLARIFY_AVAILABLE else None
+
         # Initialize strategies
         self.strategies: Dict[str, AnalysisStrategy] = {
             "pattern_matching": PatternMatchingStrategy(),
             "semantic_analysis": SemanticAnalysisStrategy(),
-            "ast_analysis": ASTAnalysisStrategy()
+            "ast_analysis": ASTAnalysisStrategy(),
         }
-        
+
         # Initialize language analyzers
         self.language_analyzers: Dict[str, LanguageAnalyzer] = {}
         self._register_default_language_analyzers()
-    
+        
+        # Mark as initialized
+        self._initialized = True
+
     def _register_default_language_analyzers(self) -> None:
         """Register default language analyzers."""
         # Register Python analyzer
         python_analyzer = PythonAnalyzer()
         self.register_language_analyzer(python_analyzer)
-        
+
         # Register JavaScript/TypeScript analyzer
         js_analyzer = JavaScriptAnalyzer()
         self.register_language_analyzer(js_analyzer)
         
+        # Register C# analyzer
+        csharp_analyzer = CSharpAnalyzer()
+        self.register_language_analyzer(csharp_analyzer)
+
         # Add language analyzers to the AST strategy
         ast_strategy = self.strategies.get("ast_analysis")
         # Skip type check in tests by checking if method exists
         if ast_strategy and hasattr(ast_strategy, "register_language_analyzer"):
             for analyzer in self.language_analyzers.values():
                 ast_strategy.register_language_analyzer(analyzer)
-    
+
     def register_language_analyzer(self, analyzer: LanguageAnalyzer) -> None:
         """Register a language-specific analyzer.
-        
+
         Args:
             analyzer: Language analyzer instance
         """
         language = analyzer.get_language_name()
         self.language_analyzers[language] = analyzer
         logger.info(f"Registered language analyzer for {language}")
-        
+
         # Also register with AST strategy
         ast_strategy = self.strategies.get("ast_analysis")
         # Skip type check in tests by checking if method exists
         if ast_strategy and hasattr(ast_strategy, "register_language_analyzer"):
             ast_strategy.register_language_analyzer(analyzer)
-    
+
     def register_strategy(self, name: str, strategy: AnalysisStrategy) -> None:
         """Register an analysis strategy.
-        
+
         Args:
             name: Strategy name
             strategy: Strategy instance
         """
         self.strategies[name] = strategy
         logger.info(f"Registered analysis strategy: {name}")
-    
+
     async def analyze_repository(
-        self, 
-        repo_id: int, 
-        analysis_options: Optional[Dict[str, Any]] = None
+        self, repo_id: int, analysis_options: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Analyze a repository for potential vulnerabilities.
-        
+
         Args:
             repo_id: ID of the repository node in the graph
             analysis_options: Optional dictionary with analysis configuration
-            
+
         Returns:
             Dictionary with analysis results and statistics
         """
         logger.info(f"Analyzing repository (ID: {repo_id})")
-        
+
         if analysis_options is None:
             analysis_options = {}
-            
+
         # Get repository info
         repo_info = self.connector.run_query(
             "MATCH (r:Repository) WHERE id(r) = $repo_id RETURN r.name, r.path",
-            {"repo_id": repo_id}
+            {"repo_id": repo_id},
         )
-        
+
         if not repo_info:
             raise ValueError(f"Repository with ID {repo_id} not found")
-            
+
         repo_name = repo_info[0]["r.name"]
         repo_path = repo_info[0]["r.path"]
-        
+
         logger.info(f"Starting analysis for repository: {repo_name} ({repo_path})")
-        
+
         # Initialize results
         results = {
             "repository_id": repo_id,
@@ -133,7 +156,7 @@ class CodeAnalyzer:
             "patterns_matched": 0,
             "analysis_details": [],
         }
-        
+
         try:
             # Get all code files in the repository
             code_files = self.connector.run_query(
@@ -142,110 +165,231 @@ class CodeAnalyzer:
                 WHERE id(r) = $repo_id AND EXISTS(f.language)
                 RETURN id(f) as file_id, f.path as file_path, f.language as language
                 """,
-                {"repo_id": repo_id}
+                {"repo_id": repo_id},
             )
-            
+
             # Analyze each file
             for file_info in code_files:
                 file_id = file_info["file_id"]
                 file_path = file_info["file_path"]
                 language = file_info["language"]
-                
+
                 logger.debug(f"Analyzing file: {file_path} ({language})")
-                
+
                 # Perform file analysis
-                file_results = await self.analyze_file(file_id, language, analysis_options)
-                
+                file_results = await self.analyze_file(
+                    file_id, language, analysis_options
+                )
+
                 # Update overall results
                 results["files_analyzed"] += 1
                 results["vulnerabilities_found"] += file_results.vulnerabilities_found
                 results["patterns_matched"] += file_results.patterns_matched
-                results["analysis_details"].append({
-                    "file_id": file_id,
-                    "file_path": file_path,
-                    "language": language,
-                    "results": file_results.to_dict(),
-                })
-            
+                results["analysis_details"].append(
+                    {
+                        "file_id": file_id,
+                        "file_path": file_path,
+                        "language": language,
+                        "results": file_results.to_dict(),
+                    }
+                )
+
             logger.info(
                 f"Repository analysis complete: {results['files_analyzed']} files analyzed, "
                 f"{results['vulnerabilities_found']} vulnerabilities found"
             )
-            
+
             return results
-            
+
         except Exception as e:
             logger.error(f"Error analyzing repository {repo_name}: {e}")
             raise
-    
+
     async def analyze_file(
-        self, 
-        file_id: int, 
+        self,
+        file_id: int,
         language: str,
-        analysis_options: Optional[Dict[str, Any]] = None
+        analysis_options: Optional[Dict[str, Any]] = None,
     ) -> AnalysisResult:
         """Analyze a file for potential vulnerabilities.
-        
+
         Args:
             file_id: ID of the file node in the graph
             language: Programming language of the file
             analysis_options: Dictionary with analysis configuration
-            
+
         Returns:
             AnalysisResult with findings
         """
         if analysis_options is None:
             analysis_options = {}
-            
+
         # Get file content
         file_content = self.connector.run_query(
             """
             MATCH (f:File)-[:HAS_CONTENT]->(c:CodeContent)
             WHERE id(f) = $file_id
-            RETURN c.content as content
+            RETURN c.content as content, f.path as path
             """,
-            {"file_id": file_id}
+            {"file_id": file_id},
         )
-        
+
         if not file_content:
             logger.warning(f"No content found for file ID {file_id}")
             return AnalysisResult(file_id=file_id)
-        
+
         content = file_content[0]["content"]
-        
+        file_path = file_content[0].get("path", "")
+
         # Initialize analysis result
         result = AnalysisResult(file_id=file_id)
-        
+
+        # Perform Blarify-based code structure mapping if available and enabled
+        if (
+            self.blarify_integration 
+            and self.blarify_integration.is_available()
+            and analysis_options.get("code_structure_mapping", True)
+        ):
+            try:
+                # Extract code structure
+                code_structure = self.blarify_integration.extract_code_structure(content, language)
+                
+                if code_structure:
+                    # Store code structure in the database
+                    self._store_code_structure(file_id, code_structure)
+                    
+                    # Add Blarify-based security findings
+                    blarify_findings = self.blarify_integration.analyze_security_patterns(
+                        content, language, file_id
+                    )
+                    result.add_findings(blarify_findings)
+                    
+                    logger.info(f"Performed Blarify code structure mapping for file ID {file_id}")
+                    
+                    # Add Blarify code structure to the analysis options for strategies to use
+                    analysis_options["code_structure"] = code_structure
+            except Exception as e:
+                logger.error(f"Error performing Blarify code structure mapping: {e}")
+
         # Apply each analysis strategy based on options
         tasks = []
-        
-        if analysis_options.get("pattern_matching", True) and "pattern_matching" in self.strategies:
+
+        if (
+            analysis_options.get("pattern_matching", True)
+            and "pattern_matching" in self.strategies
+        ):
             tasks.append(
                 self.strategies["pattern_matching"].analyze(
                     file_id, content, language, analysis_options
                 )
             )
-        
-        if analysis_options.get("semantic_analysis", True) and "semantic_analysis" in self.strategies:
+
+        if (
+            analysis_options.get("semantic_analysis", True)
+            and "semantic_analysis" in self.strategies
+        ):
             tasks.append(
                 self.strategies["semantic_analysis"].analyze(
                     file_id, content, language, analysis_options
                 )
             )
-        
-        if analysis_options.get("ast_analysis", True) and "ast_analysis" in self.strategies:
+
+        if (
+            analysis_options.get("ast_analysis", True)
+            and "ast_analysis" in self.strategies
+        ):
             tasks.append(
                 self.strategies["ast_analysis"].analyze(
                     file_id, content, language, analysis_options
                 )
             )
-        
+
         # Run strategies in parallel
         if tasks:
             findings_lists = await asyncio.gather(*tasks)
-            
+
             # Add findings from all strategies
             for findings in findings_lists:
                 result.add_findings(findings)
-        
+
         return result
+        
+    def _store_code_structure(self, file_id: int, code_structure: Dict[str, Any]) -> None:
+        """Store code structure information in the graph database.
+        
+        Args:
+            file_id: ID of the file in the database
+            code_structure: Code structure information extracted by Blarify
+        """
+        try:
+            # Create a CodeStructure node
+            structure_props = {
+                "timestamp": self._get_timestamp(),
+                "structure_version": "1.0",
+            }
+            
+            structure_id = self.connector.create_node(
+                labels=["CodeStructure"],
+                properties=structure_props
+            )
+            
+            # Link CodeStructure to the File node
+            self.connector.create_relationship(
+                start_id=file_id,
+                end_id=structure_id,
+                rel_type="HAS_STRUCTURE",
+                properties={}
+            )
+            
+            # Add Function nodes
+            for func in code_structure.get("functions", []):
+                func_id = self.connector.create_node(
+                    labels=["Function"],
+                    properties={
+                        "name": func.get("name", ""),
+                        "line_start": func.get("line_start", 0),
+                        "line_end": func.get("line_end", 0),
+                        "complexity": func.get("complexity", 0),
+                    }
+                )
+                
+                # Link Function to CodeStructure
+                self.connector.create_relationship(
+                    start_id=structure_id,
+                    end_id=func_id,
+                    rel_type="HAS_FUNCTION",
+                    properties={}
+                )
+            
+            # Add Class nodes
+            for cls in code_structure.get("classes", []):
+                cls_id = self.connector.create_node(
+                    labels=["Class"],
+                    properties={
+                        "name": cls.get("name", ""),
+                        "line_start": cls.get("line_start", 0),
+                        "line_end": cls.get("line_end", 0),
+                    }
+                )
+                
+                # Link Class to CodeStructure
+                self.connector.create_relationship(
+                    start_id=structure_id,
+                    end_id=cls_id,
+                    rel_type="HAS_CLASS",
+                    properties={}
+                )
+                
+            logger.info(f"Stored code structure for file ID {file_id}")
+            
+        except Exception as e:
+            logger.error(f"Error storing code structure in database: {e}")
+    
+    def _get_timestamp(self) -> str:
+        """Get the current timestamp in ISO format.
+        
+        Returns:
+            Current timestamp as string
+        """
+        from datetime import datetime, UTC
+        return datetime.now(UTC).isoformat()

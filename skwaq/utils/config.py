@@ -94,12 +94,17 @@ class FileConfigSource(BaseConfigSource):
             current_time = time.time()
 
             # Check if we need to reload configuration
-            if self.auto_reload and current_time - self.last_checked > self.reload_interval:
+            if (
+                self.auto_reload
+                and current_time - self.last_checked > self.reload_interval
+            ):
                 self.last_checked = current_time
 
                 if not self.file_path.exists():
                     if self._config_cache:
-                        logger.warning(f"Configuration file {self.file_path} no longer exists")
+                        logger.warning(
+                            f"Configuration file {self.file_path} no longer exists"
+                        )
                         self._config_cache = {}
                     return {}
 
@@ -117,7 +122,9 @@ class FileConfigSource(BaseConfigSource):
 
                         self.last_modified = modified_time
                     except Exception as e:
-                        logger.error(f"Error reloading configuration from {self.file_path}: {e}")
+                        logger.error(
+                            f"Error reloading configuration from {self.file_path}: {e}"
+                        )
 
             # If cache is empty and file exists, load it
             if not self._config_cache and self.file_path.exists():
@@ -126,7 +133,9 @@ class FileConfigSource(BaseConfigSource):
                         self._config_cache = json.load(f)
                     self.last_modified = self.file_path.stat().st_mtime
                 except Exception as e:
-                    logger.error(f"Error loading configuration from {self.file_path}: {e}")
+                    logger.error(
+                        f"Error loading configuration from {self.file_path}: {e}"
+                    )
                     return {}
 
             return self._config_cache
@@ -135,7 +144,9 @@ class FileConfigSource(BaseConfigSource):
 class EnvConfigSource(BaseConfigSource):
     """Configuration source that loads from environment variables."""
 
-    def __init__(self, prefix: str = "SKWAQ_", name: str = "environment", priority: int = 100):
+    def __init__(
+        self, prefix: str = "SKWAQ_", name: str = "environment", priority: int = 100
+    ):
         """Initialize an environment-based configuration source.
 
         Args:
@@ -268,7 +279,9 @@ class Config:
 
         # Process telemetry configuration
         telemetry_data = data.pop("telemetry", {})
-        telemetry_enabled = data.get("telemetry_enabled", telemetry_data.get("enabled", False))
+        telemetry_enabled = data.get(
+            "telemetry_enabled", telemetry_data.get("enabled", False)
+        )
 
         # Create the config
         config = cls(
@@ -457,7 +470,10 @@ class Config:
                 if HAS_EVENTS:
                     publish(
                         ConfigEvent(
-                            sender="config", key=f"openai.{child}", value=value, old_value=old_value
+                            sender="config",
+                            key=f"openai.{child}",
+                            value=value,
+                            old_value=old_value,
                         )
                     )
                 return True
@@ -486,7 +502,10 @@ class Config:
                 if HAS_EVENTS:
                     publish(
                         ConfigEvent(
-                            sender="config", key=f"custom.{child}", value=value, old_value=old_value
+                            sender="config",
+                            key=f"custom.{child}",
+                            value=value,
+                            old_value=old_value,
                         )
                     )
                 return True
@@ -501,7 +520,11 @@ class Config:
             self._sources[key] = source
 
             if HAS_EVENTS:
-                publish(ConfigEvent(sender="config", key=key, value=value, old_value=old_value))
+                publish(
+                    ConfigEvent(
+                        sender="config", key=key, value=value, old_value=old_value
+                    )
+                )
             return True
 
         # Store in custom values if not a direct attribute
@@ -511,7 +534,12 @@ class Config:
 
         if HAS_EVENTS:
             publish(
-                ConfigEvent(sender="config", key=f"custom.{key}", value=value, old_value=old_value)
+                ConfigEvent(
+                    sender="config",
+                    key=f"custom.{key}",
+                    value=value,
+                    old_value=old_value,
+                )
             )
         return True
 
@@ -533,7 +561,7 @@ class Config:
 
         Values from the other configuration take precedence, except for
         empty or None values which won't overwrite existing values.
-        
+
         Args:
             other: Configuration to merge
             source: Source identifier for tracking
@@ -555,7 +583,7 @@ class Config:
             if value:  # Don't overwrite with empty values
                 setattr(self, field, value)
                 self._sources[field] = other._sources.get(field, source)
-        
+
         # Handle neo4j_uri specially - don't overwrite test values
         if getattr(other, "neo4j_uri") and (
             self.neo4j_uri == "bolt://localhost:7687" or not self.neo4j_uri

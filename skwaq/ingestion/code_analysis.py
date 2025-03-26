@@ -19,15 +19,14 @@ logger = get_logger(__name__)
 
 @LogEvent("repo_analysis")
 async def analyze_repository(
-    repo_id: int, 
-    analysis_options: Optional[Dict[str, Any]] = None
+    repo_id: int, analysis_options: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """Analyze a repository for potential vulnerabilities.
-    
+
     Args:
         repo_id: ID of the repository node in the graph
         analysis_options: Optional dictionary with analysis configuration
-        
+
     Returns:
         Dictionary with analysis results and statistics
     """
@@ -37,8 +36,8 @@ async def analyze_repository(
 
 @LogEvent("vulnerability_pattern_registration")
 async def register_vulnerability_pattern(
-    name: str, 
-    description: str, 
+    name: str,
+    description: str,
     regex_pattern: Optional[str] = None,
     language: Optional[str] = None,
     severity: str = "Medium",
@@ -46,7 +45,7 @@ async def register_vulnerability_pattern(
     examples: Optional[List[Dict[str, str]]] = None,
 ) -> int:
     """Register a new vulnerability pattern.
-    
+
     Args:
         name: Name of the vulnerability pattern
         description: Description of the vulnerability and its impact
@@ -55,7 +54,7 @@ async def register_vulnerability_pattern(
         severity: Severity level (Low, Medium, High)
         cwe_id: Optional CWE ID associated with this vulnerability
         examples: Optional list of code examples with "code" and "language" keys
-        
+
     Returns:
         ID of the created pattern node
     """
@@ -74,7 +73,7 @@ async def register_vulnerability_pattern(
 @LogEvent("pattern_generation")
 async def generate_vulnerability_patterns() -> List[int]:
     """Generate vulnerability patterns from the CWE database.
-    
+
     Returns:
         List of created pattern IDs
     """

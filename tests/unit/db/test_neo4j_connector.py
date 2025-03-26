@@ -84,7 +84,9 @@ def test_init_with_params(mock_config, mock_neo4j_driver):
 
 def test_connect_success(mock_neo4j_driver):
     """Test successful connection to Neo4j."""
-    connector = Neo4jConnector(uri="bolt://localhost:7687", user="neo4j", password="password")
+    connector = Neo4jConnector(
+        uri="bolt://localhost:7687", user="neo4j", password="password"
+    )
 
     # Set up mock for server info
     with mock.patch.object(connector, "get_server_info") as mock_server_info:
@@ -105,10 +107,14 @@ def test_connect_success(mock_neo4j_driver):
 
 def test_connect_failure(mock_neo4j_driver):
     """Test failed connection to Neo4j."""
-    connector = Neo4jConnector(uri="bolt://localhost:7687", user="neo4j", password="password")
+    connector = Neo4jConnector(
+        uri="bolt://localhost:7687", user="neo4j", password="password"
+    )
 
     # Configure session to raise an exception
-    mock_neo4j_driver["driver"].session.side_effect = ServiceUnavailable("Connection refused")
+    mock_neo4j_driver["driver"].session.side_effect = ServiceUnavailable(
+        "Connection refused"
+    )
 
     # Connect with fewer retries
     result = connector.connect(max_retries=2, retry_delay=0.1)
@@ -123,29 +129,31 @@ def test_connect_failure(mock_neo4j_driver):
 
 def test_run_query(mock_neo4j_driver):
     """Test running a Cypher query."""
-    connector = Neo4jConnector(uri="bolt://localhost:7687", user="neo4j", password="password")
+    connector = Neo4jConnector(
+        uri="bolt://localhost:7687", user="neo4j", password="password"
+    )
 
     # Set up connection status
     connector._connected = True
-    
+
     # Mock records for Neo4j result
     mock_record1 = mock.MagicMock()
     mock_record1.__iter__.return_value = [("name", "node1"), ("value", 42)]
     mock_record1.keys.return_value = ["name", "value"]
     mock_record1.items.return_value = [("name", "node1"), ("value", 42)]
-    
+
     mock_record2 = mock.MagicMock()
     mock_record2.__iter__.return_value = [("name", "node2"), ("value", 43)]
     mock_record2.keys.return_value = ["name", "value"]
     mock_record2.items.return_value = [("name", "node2"), ("value", 43)]
-    
+
     # Override the dict() function behavior for mock_record objects
     mock_record1.__getitem__.side_effect = lambda key: "node1" if key == "name" else 42
     mock_record2.__getitem__.side_effect = lambda key: "node2" if key == "name" else 43
-    
+
     # Configure the mock to return our mock records
     mock_neo4j_driver["result"].__iter__.return_value = [mock_record1, mock_record2]
-    
+
     # Run query
     result = connector.run_query(
         "MATCH (n) WHERE n.name = $name RETURN n.name, n.value", {"name": "test"}
@@ -167,7 +175,9 @@ def test_run_query(mock_neo4j_driver):
 
 def test_create_node(mock_neo4j_driver):
     """Test creating a node in the graph."""
-    connector = Neo4jConnector(uri="bolt://localhost:7687", user="neo4j", password="password")
+    connector = Neo4jConnector(
+        uri="bolt://localhost:7687", user="neo4j", password="password"
+    )
     connector._connected = True
 
     # Mock the run_query method
@@ -191,7 +201,9 @@ def test_create_node(mock_neo4j_driver):
 
 def test_vector_search(mock_neo4j_driver):
     """Test vector similarity search."""
-    connector = Neo4jConnector(uri="bolt://localhost:7687", user="neo4j", password="password")
+    connector = Neo4jConnector(
+        uri="bolt://localhost:7687", user="neo4j", password="password"
+    )
     connector._connected = True
 
     # Mock the run_query method
@@ -226,7 +238,7 @@ def test_vector_search(mock_neo4j_driver):
         assert "vector.similarity" in args[0]
         assert "ORDER BY score DESC" in args[0]
         assert "LIMIT 2" in args[0]
-        
+
         # Check parameters - they're passed as a single unnamed dict
         params = args[1] if len(args) > 1 else {}
         assert "query_vector" in params
@@ -236,7 +248,7 @@ def test_vector_search(mock_neo4j_driver):
 
         # Verify results format matches implementation
         assert len(results) == 2
-        
+
         # First result checking
         assert "name" in results[0]
         assert "content" in results[0]
@@ -244,7 +256,7 @@ def test_vector_search(mock_neo4j_driver):
         assert "labels" in results[0]
         assert results[0]["name"] == "doc1"
         assert results[0]["similarity_score"] == 0.95
-        
+
         # Second result checking
         assert "name" in results[1]
         assert "content" in results[1]

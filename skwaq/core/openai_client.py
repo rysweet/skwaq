@@ -5,8 +5,7 @@ specific to the Skwaq vulnerability assessment copilot.
 
 from typing import Dict, List, Optional, Union
 import json
-import autogen
-from autogen.core import chat_complete_tokens
+import autogen_core as autogen
 from ..utils.config import Config, get_config
 from ..utils.logging import get_logger
 
@@ -44,7 +43,9 @@ class OpenAIClient:
                     "model": config.get("openai", {}).get("chat_model", "gpt4o"),
                     "api_type": "azure",
                     "api_key": config.openai_api_key,
-                    "api_version": config.get("openai", {}).get("api_version", "2023-05-15"),
+                    "api_version": config.get("openai", {}).get(
+                        "api_version", "2023-05-15"
+                    ),
                     "base_url": config.get("openai", {}).get(
                         "endpoint", "https://skwaq-openai.openai.azure.com/"
                     ),
@@ -74,7 +75,7 @@ class OpenAIClient:
         max_tokens: Optional[int] = None,
         stop_sequences: Optional[List[str]] = None,
     ) -> str:
-        """Get a completion using autogen-core's completion management.
+        """Get a completion using autogen-core's chat client.
 
         Args:
             prompt: The prompt to send to the model
@@ -86,20 +87,18 @@ class OpenAIClient:
             The generated completion text
         """
         messages = [{"role": "user", "content": prompt}]
-
-        response = await chat_complete_tokens(
-            messages,
-            is_async=True,
-            config_list=self.config_list,
+        chat_client = autogen.core.ChatCompletionClient(
+            config_list=self.config_list, is_async=True
+        )
+        response = await chat_client.generate(
+            messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
             stop=stop_sequences,
         )
-
-        if not response or not response.get("choices"):
+        if not response or not response.choices:
             raise ValueError("No completion received from the model")
-
-        return response["choices"][0]["message"]["content"]
+        return response.choices[0].message["content"]
 
     async def get_embeddings(
         self, texts: List[str], model: Optional[str] = None
@@ -134,7 +133,7 @@ class OpenAIClient:
         max_tokens: Optional[int] = None,
         stop_sequences: Optional[List[str]] = None,
     ) -> Dict[str, str]:
-        """Get a chat completion using autogen-core.
+        """Get a chat completion using autogen-core's chat client.
 
         Args:
             messages: List of message dictionaries with role and content
@@ -145,42 +144,63 @@ class OpenAIClient:
         Returns:
             The response message as a dictionary with role and content
         """
-        response = await chat_complete_tokens(
-            messages,
-            is_async=True,
-            config_list=self.config_list,
+        chat_client = autogen.core.ChatCompletionClient(
+            config_list=self.config_list, is_async=True
+        )
+        response = await chat_client.generate(
+            messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
             stop=stop_sequences,
         )
-
-        if not response or not response.get("choices"):
+        if not response or not response.choices:
             raise ValueError("No completion received from the model")
-
-        return response["choices"][0]["message"]
-
-
-# Global client instances
-_sync_client: Optional[OpenAIClient] = None
-_async_client: Optional[OpenAIClient] = None
+        return response.choices[0].message
 
 
-def get_openai_client(async_mode: bool = False) -> OpenAIClient:
-    """Get the global OpenAI client instance.
+# Use a client registry instead of global instances
+_client_registry: Dict[str, OpenAIClient] = {}
+
+
+def get_openai_client(
+    config: Optional[Config] = None,
+    async_mode: bool = False,
+    registry_key: Optional[str] = None,
+) -> OpenAIClient:
+    """Get an OpenAI client instance from the registry or create a new one.
+
+    This function provides backward compatibility with the previous singleton pattern
+    while allowing for proper dependency injection and testing.
 
     Args:
+        config: Optional configuration object. If None, the global config will be used.
         async_mode: Whether to return an async client
+        registry_key: Key to use for storing the client in the registry.
+                     If None, defaults to "sync" or "async" based on async_mode.
 
     Returns:
         OpenAI client instance configured with autogen-core
     """
-    global _sync_client, _async_client
+    global _client_registry
 
-    if async_mode:
-        if _async_client is None:
-            _async_client = OpenAIClient(get_config(), async_mode=True)
-        return _async_client
-    else:
-        if _sync_client is None:
-            _sync_client = OpenAIClient(get_config(), async_mode=False)
-        return _sync_client
+    if registry_key is None:
+        registry_key = "async" if async_mode else "sync"
+
+    if registry_key in _client_registry:
+        return _client_registry[registry_key]
+
+    if config is None:
+        config = get_config()
+
+    client = OpenAIClient(config, async_mode=async_mode)
+    _client_registry[registry_key] = client
+    return client
+
+
+def reset_client_registry() -> None:
+    """Reset the client registry - primarily for testing.
+
+    This function clears all stored client instances from the registry.
+    """
+    global _client_registry
+    _client_registry.clear()

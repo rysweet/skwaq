@@ -25,7 +25,10 @@ class Neo4jConnector:
     """
 
     def __init__(
-        self, uri: Optional[str] = None, user: Optional[str] = None, password: Optional[str] = None
+        self,
+        uri: Optional[str] = None,
+        user: Optional[str] = None,
+        password: Optional[str] = None,
     ):
         """Initialize the Neo4j connector.
 
@@ -51,7 +54,9 @@ class Neo4jConnector:
             raise ValueError(error_msg)
 
         # Create the driver but don't connect yet
-        self._driver = GraphDatabase.driver(self._uri, auth=(self._user, self._password))
+        self._driver = GraphDatabase.driver(
+            self._uri, auth=(self._user, self._password)
+        )
 
         # Initialize connection status
         self._connected = False
@@ -83,11 +88,15 @@ class Neo4jConnector:
                         # Log server version
                         server_info = self.get_server_info()
                         if server_info:
-                            logger.info(f"Neo4j Server: {server_info.get('version', 'Unknown')}")
+                            logger.info(
+                                f"Neo4j Server: {server_info.get('version', 'Unknown')}"
+                            )
 
                         return True
             except ServiceUnavailable as e:
-                logger.warning(f"Connection attempt {attempt}/{max_retries} failed: {e}")
+                logger.warning(
+                    f"Connection attempt {attempt}/{max_retries} failed: {e}"
+                )
                 if attempt < max_retries:
                     logger.info(f"Retrying in {retry_delay} seconds...")
                     time.sleep(retry_delay)
@@ -263,7 +272,11 @@ class Neo4jConnector:
             "RETURN id(r) AS rel_id"
         )
 
-        params = {"start_id": start_node_id, "end_id": end_node_id, "properties": properties}
+        params = {
+            "start_id": start_node_id,
+            "end_id": end_node_id,
+            "properties": properties,
+        }
 
         try:
             result = self.run_query(query, params)
@@ -352,7 +365,11 @@ class Neo4jConnector:
         return nodes
 
     def create_vector_index(
-        self, index_name: str, node_label: str, vector_property: str, embedding_dimension: int = 768
+        self,
+        index_name: str,
+        node_label: str,
+        vector_property: str,
+        embedding_dimension: int = 768,
     ) -> bool:
         """Create a vector index for semantic search.
 
@@ -468,17 +485,44 @@ class Neo4jConnector:
         self.close()
 
 
-# Global connector instance
-_connector: Optional[Neo4jConnector] = None
+# Use a connector registry instead of global instance
+_connector_registry: Dict[str, Neo4jConnector] = {}
 
 
-def get_connector() -> Neo4jConnector:
-    """Get the global Neo4j connector instance.
+def get_connector(
+    uri: Optional[str] = None,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    registry_key: str = "default",
+) -> Neo4jConnector:
+    """Get a Neo4j connector instance from the registry or create a new one.
+
+    This function provides backward compatibility with the previous singleton pattern
+    while allowing for proper dependency injection and testing.
+
+    Args:
+        uri: Neo4j connection URI (e.g., bolt://localhost:7687)
+        user: Neo4j username
+        password: Neo4j password
+        registry_key: Key to use for storing the connector in the registry
 
     Returns:
-        The global Neo4jConnector instance
+        A Neo4jConnector instance
     """
-    global _connector
-    if _connector is None:
-        _connector = Neo4jConnector()
-    return _connector
+    global _connector_registry
+
+    if registry_key in _connector_registry:
+        return _connector_registry[registry_key]
+
+    connector = Neo4jConnector(uri, user, password)
+    _connector_registry[registry_key] = connector
+    return connector
+
+
+def reset_connector_registry() -> None:
+    """Reset the connector registry - primarily for testing.
+
+    This function clears all stored connector instances from the registry.
+    """
+    global _connector_registry
+    _connector_registry.clear()

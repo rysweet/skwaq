@@ -71,7 +71,9 @@ def test_development_environment():
     setup_script = root / "scripts/setup/setup_dev_environment.sh"
 
     assert setup_script.is_file()
-    assert os.access(setup_script, os.X_OK), "setup_dev_environment.sh is not executable"
+    assert os.access(
+        setup_script, os.X_OK
+    ), "setup_dev_environment.sh is not executable"
 
 
 def test_configuration_loading():

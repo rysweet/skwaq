@@ -46,7 +46,7 @@ def test_telemetry_event_capture():
 
     # Test with telemetry enabled
     telemetry.set_enabled(True)
-    
+
     # Use the direct testing interface rather than mocking
     telemetry.capture_event("test_event", {"data": "value"})
     assert len(telemetry.captured_events) == 1
@@ -66,9 +66,11 @@ def test_telemetry_endpoints():
 
     # The test telemetry should already have a test endpoint
     initial_endpoint_count = len(telemetry.endpoints)
-    
+
     # Add an endpoint
-    telemetry.add_endpoint(name="test_endpoint2", url="https://example.com/telemetry", enabled=True)
+    telemetry.add_endpoint(
+        name="test_endpoint2", url="https://example.com/telemetry", enabled=True
+    )
 
     assert "test_endpoint2" in telemetry.endpoints
     assert telemetry.endpoints["test_endpoint2"].url == "https://example.com/telemetry"
@@ -144,12 +146,16 @@ def test_config_merge():
     """Test that configurations can be merged correctly."""
     # Create base config
     base_config = Config(
-        openai_api_key="base-key", openai_org_id="base-org", neo4j_uri="bolt://base:7687"
+        openai_api_key="base-key",
+        openai_org_id="base-org",
+        neo4j_uri="bolt://base:7687",
     )
 
     # Create overlay config
     overlay_config = Config(
-        openai_api_key="overlay-key", openai_org_id="overlay-org", neo4j_user="overlay-user"
+        openai_api_key="overlay-key",
+        openai_org_id="overlay-org",
+        neo4j_user="overlay-user",
     )
 
     # Merge configs
@@ -223,8 +229,9 @@ def test_event_inheritance():
 def test_logging_system(caplog):
     """Test that the logging system captures appropriate information."""
     import logging
+
     caplog.set_level(logging.DEBUG)
-    
+
     # Use console logging without a file
     logger = setup_logging(level=10, log_file=None, log_to_console=True)
 
@@ -233,7 +240,7 @@ def test_logging_system(caplog):
     logger.info("Info message")
     logger.warning("Warning message")
     logger.error("Error message")
-    
+
     # Check log records
     assert "Debug message" in caplog.text
     assert "Info message" in caplog.text
@@ -244,17 +251,20 @@ def test_logging_system(caplog):
 def test_structured_logging(caplog):
     """Test structured logging functionality."""
     import logging
+
     caplog.set_level(logging.DEBUG)
-    
+
     # Use console logging with structured format
-    logger = setup_logging(level=10, log_file=None, log_to_console=True, structured=True)
+    logger = setup_logging(
+        level=10, log_file=None, log_to_console=True, structured=True
+    )
 
     # Log with additional context
     logger.info(
         "Structured message",
         extra={"context": {"user_id": "123", "action": "login", "status": "success"}},
     )
-    
+
     # Check that the log output contains the expected data
     assert "Structured message" in caplog.text
     assert "user_id" in caplog.text
@@ -266,10 +276,13 @@ def test_structured_logging(caplog):
 def test_logger_context(caplog):
     """Test logger context functionality."""
     import logging
+
     caplog.set_level(logging.DEBUG)
-    
+
     # Use console logging with structured format
-    logger = setup_logging(level=10, log_file=None, log_to_console=True, structured=True)
+    logger = setup_logging(
+        level=10, log_file=None, log_to_console=True, structured=True
+    )
 
     # Create contextual logger
     if hasattr(logger, "with_context"):
@@ -277,7 +290,7 @@ def test_logger_context(caplog):
 
         # Log with the contextual logger
         contextual_logger.info("User authenticated")
-        
+
         # Check log content
         assert "User authenticated" in caplog.text
         assert "component" in caplog.text
@@ -295,8 +308,9 @@ def sample_function(arg1, arg2):
 def test_log_event_decorator(caplog):
     """Test the LogEvent decorator."""
     import logging
+
     caplog.set_level(logging.DEBUG)
-    
+
     # Use console logging
     logger = setup_logging(level=10, log_file=None, log_to_console=True)
 
@@ -305,7 +319,7 @@ def test_log_event_decorator(caplog):
 
     # Check result
     assert result == 12
-    
+
     # Check log content
     assert "test_event" in caplog.text
     assert "sample_function called" in caplog.text
@@ -315,8 +329,9 @@ def test_log_event_decorator(caplog):
 def test_component_integration(caplog):
     """Test integration between telemetry, logging, and event systems."""
     import logging
+
     caplog.set_level(logging.DEBUG)
-    
+
     # Initialize systems
     # Use console logging
     logger = setup_logging(level=10, log_file=None, log_to_console=True)
@@ -339,11 +354,11 @@ def test_component_integration(caplog):
     # Check that events were received
     assert len(events_received) > 0
     assert any(isinstance(e, TelemetryEvent) for e in events_received)
-    
+
     # Verify events were captured in the telemetry instance
     assert len(telemetry.captured_events) > 0
     assert telemetry.captured_events[0]["event_name"] == "user_action"
     assert telemetry.captured_events[0]["data"]["action"] == "click"
-    
+
     # Check log content contains telemetry entries
     assert "Telemetry event captured" in caplog.text

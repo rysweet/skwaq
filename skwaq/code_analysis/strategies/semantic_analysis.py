@@ -17,46 +17,46 @@ logger = get_logger(__name__)
 
 class SemanticAnalysisStrategy(AnalysisStrategy):
     """Semantic analysis strategy for vulnerability detection.
-    
+
     This class implements a vulnerability detection strategy that uses
     AI models to analyze code semantically and identify potential security issues.
     """
-    
+
     def __init__(self) -> None:
         """Initialize the semantic analysis strategy."""
         super().__init__()
-    
+
     async def analyze(
-        self, 
-        file_id: int, 
-        content: str, 
+        self,
+        file_id: int,
+        content: str,
         language: str,
-        options: Optional[Dict[str, Any]] = None
+        options: Optional[Dict[str, Any]] = None,
     ) -> List[Finding]:
         """Analyze a file for potential vulnerabilities using semantic analysis.
-        
+
         Args:
             file_id: ID of the file node in the graph
             content: Content of the file
             language: Programming language of the file
             options: Optional dictionary with analysis configuration
-            
+
         Returns:
             List of findings
         """
         logger.debug(f"Performing semantic analysis for file ID {file_id}")
-        
+
         # Maximum content length for analysis
         max_chars = 8000
         if len(content) > max_chars:
             truncated_content = content[:max_chars] + "\n... (truncated)"
         else:
             truncated_content = content
-        
+
         # Get relevant vulnerability patterns as context
         # First, get an embedding for the file content
         embedding = await self.openai_client.get_embedding(truncated_content)
-        
+
         # Query for similar patterns
         similar_patterns = self.connector.run_query(
             f"""
@@ -68,15 +68,14 @@ class SemanticAnalysisStrategy(AnalysisStrategy):
             ORDER BY similarity DESC
             LIMIT 5
             """,
-            {"embedding": embedding}
+            {"embedding": embedding},
         )
-        
+
         # Construct context from patterns
-        pattern_context = "\n".join([
-            f"- {p['name']}: {p['description']}"
-            for p in similar_patterns
-        ])
-        
+        pattern_context = "\n".join(
+            [f"- {p['name']}: {p['description']}" for p in similar_patterns]
+        )
+
         # Prepare prompt for vulnerability analysis
         prompt = f"""Analyze this {language} code for potential security vulnerabilities and coding issues:
 
@@ -98,43 +97,49 @@ Return your analysis as a JSON array of objects. Each object should have:
 Only include actual security issues or vulnerabilities, not minor code quality issues.
 If no vulnerabilities are found, return an empty array [].
 """
-        
+
         findings = []
         try:
             # Get analysis from AI model
-            analysis_result = await self.openai_client.get_completion(prompt, temperature=0.1)
-            
+            analysis_result = await self.openai_client.get_completion(
+                prompt, temperature=0.1
+            )
+
             # Parse JSON result
             try:
                 json_findings = json.loads(analysis_result)
                 if not isinstance(json_findings, list):
                     json_findings = []
             except json.JSONDecodeError:
-                logger.error(f"Failed to parse semantic analysis result as JSON: {analysis_result}")
+                logger.error(
+                    f"Failed to parse semantic analysis result as JSON: {analysis_result}"
+                )
                 json_findings = []
-            
+
             # Process findings
             for json_finding in json_findings:
                 # Create finding object
                 finding = Finding(
                     type="semantic_analysis",
-                    vulnerability_type=json_finding.get("vulnerability_type", "Unknown"),
+                    vulnerability_type=json_finding.get(
+                        "vulnerability_type", "Unknown"
+                    ),
                     description=json_finding.get("description", ""),
                     file_id=file_id,
                     line_number=json_finding.get("line_number", 0),
                     severity=json_finding.get("severity", "Medium"),
                     confidence=json_finding.get("confidence", 0.5),
-                    suggestion=json_finding.get("suggestion", "")
+                    suggestion=json_finding.get("suggestion", ""),
                 )
-                
+
                 # Create finding node in graph
                 self._create_finding_node(file_id, finding)
-                
+
                 findings.append(finding)
-            
+
             logger.debug(f"Semantic analysis complete: {len(findings)} findings")
-            
+
         except Exception as e:
             logger.error(f"Error during semantic analysis: {e}")
-        
+
         return findings

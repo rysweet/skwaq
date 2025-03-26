@@ -179,7 +179,10 @@ class QAWorkflow(Workflow):
             Progress updates and answers for each question
         """
         for i, question in enumerate(questions):
-            yield {"status": "processing", "message": f"Processing question {i+1}/{len(questions)}"}
+            yield {
+                "status": "processing",
+                "message": f"Processing question {i+1}/{len(questions)}",
+            }
 
             async for result in self.run(question):
                 if result["status"] == "completed":
@@ -275,9 +278,7 @@ vulnerabilities, be sure to explain the security implications clearly."""
                 file_path = item.get("path", "Unknown")
                 language = item.get("language", "Unknown")
                 content = item.get("content", "")
-                code_text += (
-                    f"{i+1}. File: {file_path} ({language})\n```{language}\n{content}\n```\n\n"
-                )
+                code_text += f"{i+1}. File: {file_path} ({language})\n```{language}\n{content}\n```\n\n"
 
         # Prepare the full prompt
         prompt = f"""I need an answer to the following question about security or vulnerability assessment:

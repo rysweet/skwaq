@@ -11,111 +11,215 @@ from ...utils.logging import get_logger
 from ..languages.base import LanguageAnalyzer
 from .base import AnalysisStrategy
 
+# Try to import Blarify integration
+try:
+    from ..blarify_integration import BlarifyIntegration, BLARIFY_AVAILABLE
+except ImportError:
+    BLARIFY_AVAILABLE = False
+
 logger = get_logger(__name__)
 
 
 class ASTAnalysisStrategy(AnalysisStrategy):
     """AST-based analysis strategy for vulnerability detection.
-    
+
     This class implements a vulnerability detection strategy that uses
     language-specific analyzers to parse code into Abstract Syntax Trees
     and identify potential security vulnerabilities.
     """
-    
+
     def __init__(self):
         """Initialize the AST analysis strategy."""
         super().__init__()
         self.language_analyzers: Dict[str, LanguageAnalyzer] = {}
-    
+        
+        # Initialize Blarify integration if available
+        self.blarify_integration = BlarifyIntegration() if BLARIFY_AVAILABLE else None
+
     def register_language_analyzer(self, analyzer: LanguageAnalyzer) -> None:
         """Register a language-specific analyzer.
-        
+
         Args:
             analyzer: Language analyzer instance
         """
         language = analyzer.get_language_name()
         self.language_analyzers[language] = analyzer
         logger.info(f"Registered language analyzer for {language}")
-    
+
     def get_language_analyzer(self, language: str) -> Optional[LanguageAnalyzer]:
         """Get a language analyzer by language name.
-        
+
         Args:
             language: Language name
-            
+
         Returns:
             Language analyzer instance or None if not found
         """
         # Try exact match first
         if language in self.language_analyzers:
             return self.language_analyzers[language]
-        
+
         # Try case-insensitive match
         for lang, analyzer in self.language_analyzers.items():
             if lang.lower() == language.lower():
                 return analyzer
-        
+
         # Try partial match for combined languages (e.g., "JavaScript/React")
         for lang, analyzer in self.language_analyzers.items():
             if lang in language or language in lang:
                 return analyzer
-        
+
         return None
-    
+
     async def analyze(
-        self, 
-        file_id: int, 
-        content: str, 
+        self,
+        file_id: int,
+        content: str,
         language: str,
-        options: Optional[Dict[str, Any]] = None
+        options: Optional[Dict[str, Any]] = None,
     ) -> List[Finding]:
         """Analyze a file for potential vulnerabilities using AST analysis.
-        
+
         Args:
             file_id: ID of the file node in the graph
             content: Content of the file
             language: Programming language of the file
             options: Optional dictionary with analysis configuration
-            
+
         Returns:
             List of findings
         """
         logger.debug(f"Performing AST analysis for file ID {file_id}")
         
+        if options is None:
+            options = {}
+
         # AST analysis is language-specific
         supported_languages = {
-            "Python", "JavaScript", "TypeScript", "Java", 
-            "C#", "PHP", "Ruby", "Go"
+            "Python",
+            "JavaScript",
+            "TypeScript",
+            "Java",
+            "C#",
+            "PHP",
+            "Ruby",
+            "Go",
         }
-        
+
         # Check if language is supported
         normalized_language = self._normalize_language(language)
         if normalized_language not in supported_languages:
             logger.debug(f"AST analysis not supported for {language}")
             return []
+            
+        # Initialize findings list
+        findings = []
         
-        # Get appropriate language analyzer
+        # Try to use Blarify for advanced AST analysis if available
+        if (
+            self.blarify_integration 
+            and self.blarify_integration.is_available()
+            and options.get("use_blarify", True)
+        ):
+            try:
+                # Analyze with Blarify
+                blarify_findings = self.blarify_integration.analyze_security_patterns(
+                    content, normalized_language, file_id
+                )
+                findings.extend(blarify_findings)
+                
+                logger.info(f"Performed Blarify AST analysis for file ID {file_id}")
+                
+                # Use code structure information if available from options
+                if "code_structure" in options:
+                    code_structure = options["code_structure"]
+                    findings.extend(self._analyze_code_structure(file_id, code_structure, content))
+                
+            except Exception as e:
+                logger.error(f"Error in Blarify AST analysis: {e}")
+                # Fall back to language analyzer
+                logger.info(f"Falling back to language analyzer for {normalized_language}")
+
+        # Get appropriate language analyzer for regular analysis
         analyzer = self.get_language_analyzer(normalized_language)
-        if not analyzer:
+        if analyzer:
+            # Perform AST analysis using the language analyzer
+            analyzer_findings = analyzer.analyze_ast(file_id, content)
+            findings.extend(analyzer_findings)
+        else:
             logger.warning(f"No language analyzer available for {language}")
-            return []
-        
-        # Perform AST analysis using the language analyzer
-        findings = analyzer.analyze_ast(file_id, content)
-        
+
         # Create finding nodes in the database
         for finding in findings:
             self._create_finding_node(file_id, finding)
-        
+
         logger.debug(f"AST analysis complete: {len(findings)} findings")
         return findings
-    
-    def _normalize_language(self, language: str) -> str:
-        """Normalize language name for consistent lookup.
+        
+    def _analyze_code_structure(
+        self, file_id: int, code_structure: Dict[str, Any], content: str
+    ) -> List[Finding]:
+        """Analyze code structure information for potential vulnerabilities.
         
         Args:
-            language: Language name to normalize
+            file_id: ID of the file in the database
+            code_structure: Code structure information from Blarify
+            content: Original code content
             
+        Returns:
+            List of additional findings based on code structure
+        """
+        findings = []
+        
+        # Example: Check for overly complex functions
+        for func in code_structure.get("functions", []):
+            if func.get("complexity", 0) > 10:  # Threshold for cyclomatic complexity
+                # Get line number range for the function
+                line_start = func.get("line_start", 0)
+                line_end = func.get("line_end", 0)
+                
+                if line_start and line_end:
+                    findings.append(
+                        Finding(
+                            type="ast_analysis",
+                            vulnerability_type="Code Complexity",
+                            description=f"Function '{func.get('name', 'unknown')}' has high cyclomatic complexity",
+                            file_id=file_id,
+                            line_number=line_start,
+                            matched_text=f"Lines {line_start}-{line_end}",
+                            severity="Low",
+                            confidence=0.8,
+                            suggestion="Consider refactoring to reduce complexity and improve maintainability.",
+                        )
+                    )
+        
+        # Example: Check for large classes (potential code smells)
+        for cls in code_structure.get("classes", []):
+            method_count = len(cls.get("methods", []))
+            if method_count > 20:  # Threshold for method count
+                line_start = cls.get("line_start", 0)
+                findings.append(
+                    Finding(
+                        type="ast_analysis",
+                        vulnerability_type="Design Issue",
+                        description=f"Class '{cls.get('name', 'unknown')}' has {method_count} methods",
+                        file_id=file_id,
+                        line_number=line_start,
+                        matched_text=f"Class with {method_count} methods",
+                        severity="Info",
+                        confidence=0.7,
+                        suggestion="Consider breaking down large classes into smaller, more focused components.",
+                    )
+                )
+        
+        return findings
+
+    def _normalize_language(self, language: str) -> str:
+        """Normalize language name for consistent lookup.
+
+        Args:
+            language: Language name to normalize
+
         Returns:
             Normalized language name
         """
@@ -130,5 +234,5 @@ class ASTAnalysisStrategy(AnalysisStrategy):
             return "Java"
         elif "PHP" in language:
             return "PHP"
-        
+
         return language

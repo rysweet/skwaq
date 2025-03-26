@@ -17,5 +17,5 @@ __all__ = [
     "JavaScriptAnalyzer",
     "JavaAnalyzer",
     "CSharpAnalyzer",
-    "PHPAnalyzer"
+    "PHPAnalyzer",
 ]

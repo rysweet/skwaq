@@ -11,13 +11,13 @@ import asyncio
 import functools
 import logging
 
-T = TypeVar('T')
+T = TypeVar("T")
 logger = logging.getLogger(__name__)
 
 
 def get_timestamp() -> str:
     """Get the current timestamp as an ISO 8601 string.
-    
+
     Returns:
         Timestamp string
     """
@@ -26,15 +26,15 @@ def get_timestamp() -> str:
 
 def detect_language(file_path: Path) -> Optional[str]:
     """Detect the programming language of a file based on its extension.
-    
+
     Args:
         file_path: Path to the file
-    
+
     Returns:
         Language name or None if unknown
     """
     ext = file_path.suffix.lower()
-    
+
     # Map of file extensions to languages
     language_map = {
         ".py": "Python",
@@ -74,18 +74,20 @@ def detect_language(file_path: Path) -> Optional[str]:
         ".m": "Objective-C",
         ".mm": "Objective-C++",
     }
-    
+
     return language_map.get(ext)
 
 
-async def safe_run(func: Callable[..., Awaitable[T]], *args: Any, **kwargs: Any) -> Optional[T]:
+async def safe_run(
+    func: Callable[..., Awaitable[T]], *args: Any, **kwargs: Any
+) -> Optional[T]:
     """Safely run an async function and catch exceptions.
-    
+
     Args:
         func: The async function to run
         *args: Positional arguments to pass to the function
         **kwargs: Keyword arguments to pass to the function
-        
+
     Returns:
         The result of the function call, or None if an exception was raised
     """
@@ -98,10 +100,10 @@ async def safe_run(func: Callable[..., Awaitable[T]], *args: Any, **kwargs: Any)
 
 def is_code_file(file_path: Path) -> bool:
     """Check if a file is a code file that should be analyzed.
-    
+
     Args:
         file_path: Path to the file
-    
+
     Returns:
         True if the file is a code file, False otherwise
     """
@@ -143,17 +145,17 @@ def is_code_file(file_path: Path) -> bool:
         ".m",
         ".mm",
     }
-    
+
     # Check extension
     return file_path.suffix.lower() in code_extensions
 
 
 def normalize_language(language: str) -> str:
     """Normalize language name for consistent lookup.
-    
+
     Args:
         language: Language name to normalize
-        
+
     Returns:
         Normalized language name
     """
@@ -168,5 +170,5 @@ def normalize_language(language: str) -> str:
         return "Java"
     elif "PHP" in language:
         return "PHP"
-    
+
     return language

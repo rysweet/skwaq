@@ -30,7 +30,6 @@ typer = "^0.9.0"
 protobuf = "^4.24.4"
 grpcio = "^1.59.2"
 grpcio-tools = "^1.59.2"
-blarify = "^0.1.0"
 prompty = "^0.1.0"
 
 # Azure and OpenAI dependencies
@@ -40,6 +39,9 @@ openai = "^1.2.4"
 
 # GitHub integration
 pygithub = "^2.1.1"
+
+# Code analysis dependencies
+blarify = "^1.0.6"
 
 [tool.poetry.group.dev]
 optional = true
