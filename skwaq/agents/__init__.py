@@ -21,20 +21,19 @@ from .autogen_integration import (
     AutogenGroupChatAdapter,
 )
 
-# Core agent implementations
-from .core_agents import (
-    # Communication events
+# Agent communication events
+from .events import (
     AgentCommunicationEvent,
     TaskAssignmentEvent,
     TaskResultEvent,
     Task,
-    
-    # Core agents
-    OrchestratorAgent,
-    KnowledgeAgent,
-    CodeAnalysisAgent,
-    CriticAgent,
 )
+
+# Core agent implementations
+from .orchestrator_agent import OrchestratorAgent
+from .knowledge_agent import KnowledgeAgent
+from .code_analysis_agent import CodeAnalysisAgent
+from .critic_agent import CriticAgent
 
 # Legacy import to maintain compatibility
 from .vulnerability_agents import (
