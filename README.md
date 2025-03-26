@@ -63,6 +63,19 @@ The system uses a modular architecture with the following components:
 - AutoGen Core framework for the multiagent system
 - Azure OpenAI models for AI inference
 
+### Key Modules
+
+- **skwaq.core**: Core functionality including OpenAI client integration
+- **skwaq.db**: Database interface and schema management
+- **skwaq.utils**: Configuration, logging, and telemetry utilities
+- **skwaq.ingestion**: Code and knowledge ingestion pipelines
+- **skwaq.code_analysis**: Vulnerability detection and code analysis
+  - **languages**: Language-specific analyzers
+  - **strategies**: Analysis strategies (pattern matching, semantic, AST)
+  - **patterns**: Vulnerability pattern management
+- **skwaq.shared**: Common utilities and data models
+- **skwaq.workflows**: Workflow implementations for different user interactions
+
 ## Development
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.

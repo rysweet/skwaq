@@ -2,6 +2,10 @@
 
 This module handles the ingestion of code repositories and background knowledge
 into the system for analysis.
+
+Note: The code_analysis functionality is now available in the skwaq.code_analysis module.
+Legacy compatibility functions are still provided in skwaq.ingestion.code_analysis,
+but new code should use the new module structure.
 """
 
 
