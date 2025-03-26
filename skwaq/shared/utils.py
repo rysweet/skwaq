@@ -3,10 +3,16 @@
 This module provides common utility functions used across the application.
 """
 
-from typing import Dict, List, Any, Optional, Set
+from typing import Dict, List, Any, Optional, Set, Callable, TypeVar, Awaitable
 from pathlib import Path
 from datetime import datetime
 import re
+import asyncio
+import functools
+import logging
+
+T = TypeVar('T')
+logger = logging.getLogger(__name__)
 
 
 def get_timestamp() -> str:
@@ -70,6 +76,24 @@ def detect_language(file_path: Path) -> Optional[str]:
     }
     
     return language_map.get(ext)
+
+
+async def safe_run(func: Callable[..., Awaitable[T]], *args: Any, **kwargs: Any) -> Optional[T]:
+    """Safely run an async function and catch exceptions.
+    
+    Args:
+        func: The async function to run
+        *args: Positional arguments to pass to the function
+        **kwargs: Keyword arguments to pass to the function
+        
+    Returns:
+        The result of the function call, or None if an exception was raised
+    """
+    try:
+        return await func(*args, **kwargs)
+    except Exception as e:
+        logger.error(f"Error running {func.__name__}: {e}")
+        return None
 
 
 def is_code_file(file_path: Path) -> bool:
