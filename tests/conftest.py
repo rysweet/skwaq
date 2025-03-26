@@ -228,9 +228,46 @@ def mock_config():
         yield config
 
 
+@pytest.fixture(autouse=True)
+def mock_github_everywhere():
+    """Mock GitHub API interactions globally across all tests.
+    
+    This fixture applies to all tests automatically and provides consistent
+    GitHub API mocking to prevent any real GitHub API calls during testing.
+    """
+    # Create mock GitHub client
+    github_instance = MagicMock()
+    github_instance.get_rate_limit = MagicMock(return_value=MagicMock())
+    github_instance.get_repo = MagicMock(return_value=MagicMock())
+    
+    # Set up repo attributes
+    repo_mock = github_instance.get_repo.return_value
+    repo_mock.name = "test-repo"
+    repo_mock.full_name = "test-user/test-repo"
+    repo_mock.description = "Test repository for unit tests"
+    repo_mock.stargazers_count = 10
+    repo_mock.forks_count = 5
+    repo_mock.default_branch = "main"
+    repo_mock.get_languages.return_value = {"Python": 1000, "JavaScript": 500}
+    repo_mock.html_url = "https://github.com/test-user/test-repo"
+    repo_mock.clone_url = "https://github.com/test-user/test-repo.git"
+    repo_mock.ssh_url = "git@github.com:test-user/test-repo.git"
+    
+    # Mock the PyGithub Auth class
+    auth_mock = MagicMock()
+    auth_token_mock = MagicMock()
+    auth_mock.Token = MagicMock(return_value=auth_token_mock)
+    
+    # Apply patches 
+    with patch("github.Github", return_value=github_instance):
+        with patch("github.Auth", auth_mock):
+            with patch("github.Auth.Token", auth_mock.Token):
+                yield github_instance
+
+
 @pytest.fixture
 def mock_github():
-    """Mock GitHub client."""
+    """Mock GitHub client for specific tests that need direct access to the mock."""
     github_instance = MagicMock()
     github_instance.get_rate_limit = MagicMock(return_value=MagicMock())
     github_instance.get_repo = MagicMock(return_value=MagicMock())
@@ -246,8 +283,7 @@ def mock_github():
     repo_mock.get_languages.return_value = {"Python": 1000, "JavaScript": 500}
     repo_mock.html_url = "https://github.com/test-user/test-repo"
     
-    with patch("github.Github", return_value=github_instance):
-        yield github_instance
+    yield github_instance
 
 
 @pytest.fixture
