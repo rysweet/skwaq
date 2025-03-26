@@ -41,7 +41,9 @@ Please follow these guidelines for code design and implementation:
 - Log errors with appropriate context before re-raising
 
 ### Testing
-- Write tests for each refactored component
+- Write tests for each component
+- Write unit tests for individual functions and methods
+- Write integration tests for module interactions
 - Ensure public interfaces are well-tested
 - Use dependency injection to make components testable
 - Maintain test coverage during refactoring
@@ -77,6 +79,6 @@ Do not use autogen-agentchat, only autogen-core.
 Any modules that are using pyautogen should be corrected/rewritten to use autogen-core. 
 For the implementation, you will need to use my az credentials to access the Azure OpenAI API using Tenant: Microsoft
 Subscription: adapt-appsci1 (be51a72b-4d76-4627-9a17-7dd26245da7b). You will need to use my Github credentials using the gh cli. You will need to do a commit after each step of the implementation. If a step of the implementation is not clear, please ask me for clarification.
-Do not move on to the next milestone until the current milestone is complete with all tests passing.
+Do not move on to the next milestone until the current milestone is complete with all tests for all milestones passing.
 Do not move on to the next milestone while there are problems in the workspace. 
 If a step of the implementation fails, try again by attempting to correct the error. If you are unable to correct the error, update the status.md and please ask me for help.
