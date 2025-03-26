@@ -43,6 +43,7 @@ Please follow these guidelines for code design and implementation:
 ### Testing
 - Write tests for each component
 - Write unit tests for individual functions and methods
+- When unit test failures occur, we do not move on, instead we stop, think carefully about the code being tested, consider carefully the necessary setup conditions, and then carefully construct the test to ensure it is validating the functionality of the code. Then we either fix the code being tested or fix the test.
 - Write integration tests for module interactions
 - Ensure public interfaces are well-tested
 - Use dependency injection to make components testable
