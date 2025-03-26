@@ -21,7 +21,7 @@ Skwaq is a multiagent AI system designed to assist vulnerability researchers in 
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/skwaq.git
+git clone https://github.com/rysweet/skwaq.git
 cd skwaq
 
 # Install dependencies

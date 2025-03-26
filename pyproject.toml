@@ -1,62 +1,100 @@
 [tool.poetry]
 name = "skwaq"
 version = "0.1.0"
-description = "Skwaq - Vulnerability Assessment Copilot"
-authors = ["Microsoft Hack Team <example@example.com>"]
+description = "Vulnerability Assessment Copilot - A Multiagent AI System for Vulnerability Discovery"
+authors = ["Ryan Sweet <rysweet@microsoft.com>"]
 readme = "README.md"
-license = "MIT"
+repository = "https://github.com/rysweet/skwaq"
+keywords = ["security", "vulnerability", "ai", "copilot", "multiagent"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "Intended Audience :: Information Technology",
+    "Topic :: Security",
+    "Topic :: Software Development :: Quality Assurance",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
 ]
 
 [tool.poetry.dependencies]
-python = "^3.10"
-autogen-core = ">=0.4.9"
-openai = "1.10.0"
-rich = "^12.0.0"
-neo4j = "^5.0.0"
-protobuf = ">=5.29.3,<5.30.0"
-grpcio = "^1.59.0"
-grpcio-tools = "^1.59.0"
-pygithub = "^2.6.1"
-gitpython = "^3.1.44"
-tqdm = "^4.67.1"
+python = ">=3.10,<3.12"
+# Core dependencies
+neo4j = "^5.15.0"
+rich = "^13.7.0"
+click = "^8.1.7"
+pydantic = "^2.5.2"
+autogen-core = "^0.2.2"
+loguru = "^0.7.2"
+typer = "^0.9.0"
+protobuf = "^4.24.4"
+grpcio = "^1.59.2"
+grpcio-tools = "^1.59.2"
+blarify = "^0.1.0"
+prompty = "^0.1.0"
+
+# Azure and OpenAI dependencies
+azure-identity = "^1.15.0"
+azure-mgmt-cognitiveservices = "^13.5.0"
+openai = "^1.2.4"
+
+# GitHub integration
+pygithub = "^2.1.1"
+
+[tool.poetry.group.dev]
+optional = true
 
 [tool.poetry.group.dev.dependencies]
-black = "^23.0.0"
-mypy = "^1.0.0"
-flake8 = "^6.0.0"
-isort = "^5.0.0"
-pydocstyle = "^6.0.0"
-docstr-coverage = "^2.0.0"
-pre-commit = "^3.0.0"
-sphinx = "^7.0.0"
-sphinx-rtd-theme = "^1.0.0"
-sphinx-autodoc-typehints = "^1.0.0"
-
-[tool.poetry.group.test.dependencies]
-pytest = "^7.0.0"
-pytest-cov = "^4.0.0"
-pytest-asyncio = "^0.23.0"
+# Development tools
+black = "^23.11.0"
+mypy = "^1.7.0"
+isort = "^5.12.0"
+flake8 = "^6.1.0"
+pre-commit = "^3.5.0"
+pytest = "^7.4.3"
+pytest-cov = "^4.1.0"
 pytest-mock = "^3.12.0"
+types-protobuf = "^4.24.0.2"
+pydocstyle = "^6.3.0"
+docstr-coverage = "^2.3.0"
+bandit = "^1.7.5"
+
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.docs.dependencies]
+sphinx = "^7.2.6"
+sphinx-autoapi = "^2.1.0"
+sphinx-rtd-theme = "^1.3.0"
+sphinx-autodoc-typehints = "^1.25.2"
+
+[tool.poetry.extras]
+all = ["dev", "docs"]
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=1.0.0", "setuptools>=42", "wheel"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.black]
-line-length = 100
-target-version = ["py39", "py310", "py311"]
+line-length = 88
+target-version = ["py310", "py311"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | build
+  | dist
+)/
+'''
 
 [tool.isort]
 profile = "black"
-line-length = 100
+line_length = 88
 multi_line_output = 3
 
 [tool.flake8]
@@ -98,15 +136,17 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
 python_classes = "Test*"
-addopts = "--cov=skwaq --cov-report=term-missing"
+addopts = "--cov=skwaq --cov-report=term --cov-report=xml --cov-report=html"
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
 asyncio_default_test_loop_scope = "function"
 
 [tool.coverage.run]
-source = ["skwaq", "tests"]
-omit = ["*/__init__.py"]
-disable_warnings = ["no-data-collected"]
+source = ["skwaq"]
+omit = [
+    "tests/*",
+    "*/__init__.py",
+]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -127,11 +167,8 @@ skwaq = "skwaq.cli.main:main"
 
 [tool.poe.tasks]
 test = "pytest"
-unit = "pytest tests/unit/"
-milestones = "pytest tests/milestones/"
-coverage = "pytest --cov=skwaq tests/"
-all-tests = [
-    { cmd = "poe unit" },
-    { cmd = "poe milestones" },
-    { cmd = "poe coverage" }
-]
+lint = { cmd = "flake8 skwaq tests" }
+format = { cmd = "black skwaq tests" }
+mypy = { cmd = "mypy skwaq" }
+check_docs = { cmd = "docstr-coverage ./skwaq --fail-under=90" }
+all = ["format", "lint", "mypy", "test", "check_docs"]
