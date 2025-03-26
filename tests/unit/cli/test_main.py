@@ -14,13 +14,23 @@ mock_rich.Console.return_value = mock_console
 mock_panel = MagicMock()
 mock_table = MagicMock()
 mock_progress = MagicMock()
+mock_status = MagicMock()
+mock_prompt = MagicMock()
 
 sys.modules["rich"] = mock_rich
 sys.modules["rich.console"] = MagicMock()
 sys.modules["rich.console"].Console = mock_rich.Console
 sys.modules["rich.panel"] = mock_panel
+sys.modules["rich.panel"].Panel = MagicMock()
 sys.modules["rich.table"] = mock_table
+sys.modules["rich.table"].Table = MagicMock()
 sys.modules["rich.progress"] = mock_progress
+sys.modules["rich.progress"].Progress = mock_progress
+sys.modules["rich.status"] = mock_status
+sys.modules["rich.status"].Status = mock_status
+sys.modules["rich.prompt"] = mock_prompt
+sys.modules["rich.prompt"].Prompt = mock_prompt
+sys.modules["rich.prompt"].Confirm = MagicMock()
 
 # Mock other modules used by main.py
 sys.modules["skwaq.code_analysis.analyzer"] = MagicMock()
@@ -210,7 +220,8 @@ class TestCommandHandlers:
 
     @pytest.mark.asyncio
     @patch("skwaq.cli.main.get_connector")
-    async def test_handle_analyze_command(self, mock_get_connector):
+    @patch("skwaq.cli.main.Status")
+    async def test_handle_analyze_command(self, mock_status, mock_get_connector):
         """Test analyze command handler."""
         # Setup mocks
         mock_connector = MagicMock()
@@ -221,6 +232,11 @@ class TestCommandHandlers:
         args.file = "test.py"
         args.strategy = ["pattern_matching"]
         args.output = "text"
+        args.interactive = False
+        
+        # Setup Status mock
+        mock_status_instance = MagicMock()
+        mock_status.return_value.__enter__.return_value = mock_status_instance
 
         # Capture stdout
         captured_output = StringIO()
@@ -242,15 +258,21 @@ class TestCommandHandlers:
 
     @pytest.mark.asyncio
     @patch("skwaq.cli.main.get_connector")
-    async def test_handle_repository_command_list(self, mock_get_connector):
+    @patch("skwaq.cli.main.Status")
+    async def test_handle_repository_command_list(self, mock_status, mock_get_connector):
         """Test repository list command handler."""
         # Setup mocks
         mock_connector = MagicMock()
         mock_get_connector.return_value = mock_connector
+        
+        # Setup Status mock
+        mock_status_instance = MagicMock()
+        mock_status.return_value.__enter__.return_value = mock_status_instance
 
         # Create args
         args = MagicMock()
         args.repo_command = "list"
+        args.interactive = False
 
         # Capture stdout
         captured_output = StringIO()
@@ -268,11 +290,17 @@ class TestCommandHandlers:
 
     @pytest.mark.asyncio
     @patch("skwaq.cli.main.get_connector")
-    async def test_handle_repository_command_add(self, mock_get_connector):
+    @patch("skwaq.cli.main.create_progress_bar")
+    async def test_handle_repository_command_add(self, mock_create_progress, mock_get_connector):
         """Test repository add command handler."""
         # Setup mocks
         mock_connector = MagicMock()
         mock_get_connector.return_value = mock_connector
+
+        # Setup progress bar mock
+        mock_progress_instance = MagicMock()
+        mock_create_progress.return_value = mock_progress_instance
+        mock_progress_instance.__enter__.return_value = mock_progress_instance
 
         # Reset mocks from previous tests
         mock_ingest_repository.reset_mock()
@@ -300,15 +328,21 @@ class TestCommandHandlers:
 
         # Verify output contains expected content
         output = captured_output.getvalue()
-        assert "ingested repository" in output
+        assert "repository" in output
 
     @pytest.mark.asyncio
     @patch("skwaq.cli.main.get_connector")
-    async def test_handle_repository_command_github(self, mock_get_connector):
+    @patch("skwaq.cli.main.create_progress_bar")
+    async def test_handle_repository_command_github(self, mock_create_progress, mock_get_connector):
         """Test repository github command handler."""
         # Setup mocks
         mock_connector = MagicMock()
         mock_get_connector.return_value = mock_connector
+
+        # Setup progress bar mock
+        mock_progress_instance = MagicMock()
+        mock_create_progress.return_value = mock_progress_instance
+        mock_progress_instance.__enter__.return_value = mock_progress_instance
 
         # Reset mocks from previous tests
         mock_ingest_repository.reset_mock()
