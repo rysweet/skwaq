@@ -17,8 +17,16 @@ class TestIngestionFunctions:
 
     async def test_ingest_repository_local(self):
         """Test ingesting a repository from a local path."""
-        # Mock RepositoryIngestor and its methods
-        with patch("skwaq.ingestion.code_ingestion.RepositoryIngestor") as mock_ingestor_cls:
+        # Mock logger to avoid log errors
+        with patch("skwaq.ingestion.code_ingestion.logger") as mock_logger, \
+             patch("skwaq.ingestion.code_ingestion.RepositoryIngestor") as mock_ingestor_cls, \
+             patch("skwaq.ingestion.code_ingestion.get_connector") as mock_get_connector, \
+             patch("skwaq.ingestion.code_ingestion.get_openai_client") as mock_get_openai_client:
+            
+            # Set up mock dependencies
+            mock_get_connector.return_value = MagicMock()
+            mock_get_openai_client.return_value = MagicMock()
+            
             # Set up the mock ingestor
             mock_ingestor = MagicMock()
             mock_ingestor.ingest_from_path = AsyncMock(
@@ -67,8 +75,16 @@ class TestIngestionFunctions:
 
     async def test_ingest_repository_github(self):
         """Test ingesting a repository from a GitHub URL."""
-        # Mock RepositoryIngestor and its methods
-        with patch("skwaq.ingestion.code_ingestion.RepositoryIngestor") as mock_ingestor_cls:
+        # Mock dependencies
+        with patch("skwaq.ingestion.code_ingestion.logger") as mock_logger, \
+             patch("skwaq.ingestion.code_ingestion.RepositoryIngestor") as mock_ingestor_cls, \
+             patch("skwaq.ingestion.code_ingestion.get_connector") as mock_get_connector, \
+             patch("skwaq.ingestion.code_ingestion.get_openai_client") as mock_get_openai_client:
+            
+            # Set up mock dependencies
+            mock_get_connector.return_value = MagicMock()
+            mock_get_openai_client.return_value = MagicMock()
+            
             # Set up the mock ingestor
             mock_ingestor = MagicMock()
             mock_ingestor.ingest_from_github = AsyncMock(
@@ -121,13 +137,22 @@ class TestIngestionFunctions:
 
     async def test_ingest_repository_auto_detect_github(self):
         """Test auto-detection of GitHub URLs."""
-        # Mock RepositoryIngestor and its methods
-        with patch("skwaq.ingestion.code_ingestion.RepositoryIngestor") as mock_ingestor_cls:
+        # Mock dependencies
+        with patch("skwaq.ingestion.code_ingestion.logger") as mock_logger, \
+             patch("skwaq.ingestion.code_ingestion.RepositoryIngestor") as mock_ingestor_cls, \
+             patch("skwaq.ingestion.code_ingestion.get_connector") as mock_get_connector, \
+             patch("skwaq.ingestion.code_ingestion.get_openai_client") as mock_get_openai_client:
+            
+            # Set up mock dependencies
+            mock_get_connector.return_value = MagicMock()
+            mock_get_openai_client.return_value = MagicMock()
+            
             # Set up the mock ingestor
             mock_ingestor = MagicMock()
             mock_ingestor.ingest_from_github = AsyncMock(
                 return_value={"repository_name": "test-repo"}
             )
+            mock_ingestor.ingest_from_path = AsyncMock()
             mock_ingestor_cls.return_value = mock_ingestor
             
             # Call the function with GitHub URL (without specifying is_github_url)
@@ -141,8 +166,16 @@ class TestIngestionFunctions:
 
     async def test_get_github_repository_info(self):
         """Test getting GitHub repository info without ingesting."""
-        # Mock RepositoryIngestor and its methods
-        with patch("skwaq.ingestion.code_ingestion.RepositoryIngestor") as mock_ingestor_cls:
+        # Mock dependencies
+        with patch("skwaq.ingestion.code_ingestion.logger") as mock_logger, \
+             patch("skwaq.ingestion.code_ingestion.RepositoryIngestor") as mock_ingestor_cls, \
+             patch("skwaq.ingestion.code_ingestion.get_connector") as mock_get_connector, \
+             patch("skwaq.ingestion.code_ingestion.get_openai_client") as mock_get_openai_client:
+            
+            # Set up mock dependencies
+            mock_get_connector.return_value = MagicMock()
+            mock_get_openai_client.return_value = MagicMock()
+            
             # Set up the mock ingestor
             mock_ingestor = MagicMock()
             mock_ingestor.ingest_from_github = AsyncMock(
@@ -181,8 +214,10 @@ class TestIngestionFunctions:
 
     async def test_list_repositories(self):
         """Test listing repositories."""
-        # Mock Neo4j connector
-        with patch("skwaq.ingestion.code_ingestion.get_connector") as mock_connector_fn:
+        # Mock dependencies
+        with patch("skwaq.ingestion.code_ingestion.logger") as mock_logger, \
+             patch("skwaq.ingestion.code_ingestion.get_connector") as mock_connector_fn:
+            
             # Set up the mock connector
             mock_connector = MagicMock()
             mock_connector.run_query.return_value = [

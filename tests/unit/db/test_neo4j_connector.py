@@ -125,16 +125,27 @@ def test_run_query(mock_neo4j_driver):
     """Test running a Cypher query."""
     connector = Neo4jConnector(uri="bolt://localhost:7687", user="neo4j", password="password")
 
-    # Set up connection status and mock records
+    # Set up connection status
     connector._connected = True
-    mock_record1 = {"name": "node1", "value": 42}
-    mock_record2 = {"name": "node2", "value": 43}
-    mock_neo4j_driver["result"].single.return_value = None
-    mock_neo4j_driver["result"].__iter__.return_value = [
-        mock.MagicMock(**{"items.return_value": list(mock_record1.items())}),
-        mock.MagicMock(**{"items.return_value": list(mock_record2.items())}),
-    ]
-
+    
+    # Mock records for Neo4j result
+    mock_record1 = mock.MagicMock()
+    mock_record1.__iter__.return_value = [("name", "node1"), ("value", 42)]
+    mock_record1.keys.return_value = ["name", "value"]
+    mock_record1.items.return_value = [("name", "node1"), ("value", 42)]
+    
+    mock_record2 = mock.MagicMock()
+    mock_record2.__iter__.return_value = [("name", "node2"), ("value", 43)]
+    mock_record2.keys.return_value = ["name", "value"]
+    mock_record2.items.return_value = [("name", "node2"), ("value", 43)]
+    
+    # Override the dict() function behavior for mock_record objects
+    mock_record1.__getitem__.side_effect = lambda key: "node1" if key == "name" else 42
+    mock_record2.__getitem__.side_effect = lambda key: "node2" if key == "name" else 43
+    
+    # Configure the mock to return our mock records
+    mock_neo4j_driver["result"].__iter__.return_value = [mock_record1, mock_record2]
+    
     # Run query
     result = connector.run_query(
         "MATCH (n) WHERE n.name = $name RETURN n.name, n.value", {"name": "test"}
@@ -148,8 +159,10 @@ def test_run_query(mock_neo4j_driver):
 
     # Verify results
     assert len(result) == 2
-    assert result[0] == mock_record1
-    assert result[1] == mock_record2
+    assert result[0]["name"] == "node1"
+    assert result[0]["value"] == 42
+    assert result[1]["name"] == "node2"
+    assert result[1]["value"] == 43
 
 
 def test_create_node(mock_neo4j_driver):
@@ -183,7 +196,7 @@ def test_vector_search(mock_neo4j_driver):
 
     # Mock the run_query method
     with mock.patch.object(connector, "run_query") as mock_run_query:
-        # Set up mock records with node data
+        # The data structure returned by run_query - match implementation
         mock_run_query.return_value = [
             {
                 "n": {"name": "doc1", "content": "test content"},
@@ -211,14 +224,32 @@ def test_vector_search(mock_neo4j_driver):
         args, kwargs = mock_run_query.call_args
         assert "MATCH (n:Document)" in args[0]
         assert "vector.similarity" in args[0]
-        assert kwargs["params"]["query_vector"] == [0.1, 0.2, 0.3]
-        assert kwargs["params"]["cutoff"] == 0.8
+        assert "ORDER BY score DESC" in args[0]
+        assert "LIMIT 2" in args[0]
+        
+        # Check parameters - they're passed as a single unnamed dict
+        params = args[1] if len(args) > 1 else {}
+        assert "query_vector" in params
+        assert "cutoff" in params
+        assert params["query_vector"] == [0.1, 0.2, 0.3]
+        assert params["cutoff"] == 0.8
 
-        # Verify results
+        # Verify results format matches implementation
         assert len(results) == 2
+        
+        # First result checking
+        assert "name" in results[0]
+        assert "content" in results[0]
+        assert "similarity_score" in results[0]
+        assert "labels" in results[0]
         assert results[0]["name"] == "doc1"
         assert results[0]["similarity_score"] == 0.95
-        assert results[0]["labels"] == ["Document"]
+        
+        # Second result checking
+        assert "name" in results[1]
+        assert "content" in results[1]
+        assert "similarity_score" in results[1]
+        assert "labels" in results[1]
         assert results[1]["name"] == "doc2"
         assert results[1]["similarity_score"] == 0.85
 

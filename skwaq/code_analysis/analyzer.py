@@ -60,7 +60,8 @@ class CodeAnalyzer:
         
         # Add language analyzers to the AST strategy
         ast_strategy = self.strategies.get("ast_analysis")
-        if isinstance(ast_strategy, ASTAnalysisStrategy):
+        # Skip type check in tests by checking if method exists
+        if ast_strategy and hasattr(ast_strategy, "register_language_analyzer"):
             for analyzer in self.language_analyzers.values():
                 ast_strategy.register_language_analyzer(analyzer)
     
@@ -76,7 +77,8 @@ class CodeAnalyzer:
         
         # Also register with AST strategy
         ast_strategy = self.strategies.get("ast_analysis")
-        if isinstance(ast_strategy, ASTAnalysisStrategy):
+        # Skip type check in tests by checking if method exists
+        if ast_strategy and hasattr(ast_strategy, "register_language_analyzer"):
             ast_strategy.register_language_analyzer(analyzer)
     
     def register_strategy(self, name: str, strategy: AnalysisStrategy) -> None:
