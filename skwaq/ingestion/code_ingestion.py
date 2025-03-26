@@ -40,33 +40,44 @@ class RepositoryIngestor:
     """
 
     def __init__(
-        self, 
+        self,
         github_token: Optional[str] = None,
         max_workers: int = 4,
         progress_bar: bool = True,
+        connector=None,
+        openai_client=None,
     ):
         """Initialize the repository ingestor.
-        
+
         Args:
             github_token: GitHub Personal Access Token for authentication with GitHub API
             max_workers: Maximum number of parallel workers for file processing
             progress_bar: Whether to display progress bars during ingestion
+            connector: Optional Neo4j connector to use. If None, a new one will be created.
+            openai_client: Optional OpenAI client to use. If None, a new one will be created.
         """
-        self.connector = get_connector()
-        self.openai_client = get_openai_client(async_mode=True)
+        self.connector = connector or get_connector()
+        self.openai_client = openai_client or get_openai_client(async_mode=True)
         self.temp_dir = None
         self.github_token = github_token or os.getenv("GITHUB_TOKEN")
         self.github_client = None
         self.max_workers = max_workers
         self.show_progress = progress_bar
-        self.excluded_dirs = {".git", "__pycache__", "node_modules", ".venv", "venv", "env"}
-        
+        self.excluded_dirs = {
+            ".git",
+            "__pycache__",
+            "node_modules",
+            ".venv",
+            "venv",
+            "env",
+        }
+
     def _init_github_client(self) -> Github:
         """Initialize the GitHub client with authentication.
-        
+
         Returns:
             Authenticated GitHub client
-            
+
         Raises:
             RuntimeError: If authentication fails
         """
@@ -79,12 +90,14 @@ class RepositoryIngestor:
                     self.github_client.get_rate_limit()
                     logger.info("Successfully authenticated with GitHub API")
                 else:
-                    logger.warning("No GitHub token provided, using unauthenticated client with rate limits")
+                    logger.warning(
+                        "No GitHub token provided, using unauthenticated client with rate limits"
+                    )
                     self.github_client = Github()
             except GithubException as e:
                 logger.error(f"GitHub authentication error: {e}")
                 raise RuntimeError(f"Failed to authenticate with GitHub: {e}")
-                
+
         return self.github_client
 
     async def ingest_from_path(
@@ -110,7 +123,7 @@ class RepositoryIngestor:
 
         Returns:
             Dictionary with ingestion metadata and results
-            
+
         Raises:
             FileNotFoundError: If the repository path doesn't exist
             RuntimeError: If creating repository node fails
@@ -144,7 +157,9 @@ class RepositoryIngestor:
                 )
 
                 if repo_id is None:
-                    raise RuntimeError(f"Failed to create repository node for {repo_name}")
+                    raise RuntimeError(
+                        f"Failed to create repository node for {repo_name}"
+                    )
 
             # Check for .git directory to identify if this is a Git repository
             git_dir = path / ".git"
@@ -152,17 +167,21 @@ class RepositoryIngestor:
                 try:
                     # Get Git repository information
                     repo = Repo(path)
-                    
+
                     # Get current branch
                     branch = repo.active_branch.name
-                    
+
                     # Get latest commit
                     latest_commit = repo.head.commit
                     commit_hash = latest_commit.hexsha
-                    commit_author = f"{latest_commit.author.name} <{latest_commit.author.email}>"
-                    commit_date = datetime.fromtimestamp(latest_commit.committed_date).isoformat()
+                    commit_author = (
+                        f"{latest_commit.author.name} <{latest_commit.author.email}>"
+                    )
+                    commit_date = datetime.fromtimestamp(
+                        latest_commit.committed_date
+                    ).isoformat()
                     commit_message = latest_commit.message.strip()
-                    
+
                     # Update repository node with Git information
                     self.connector.run_query(
                         "MATCH (r:Repository) WHERE id(r) = $repo_id "
@@ -173,7 +192,7 @@ class RepositoryIngestor:
                         "r.git_commit_date = $commit_date, "
                         "r.git_commit_message = $commit_message",
                         {
-                            "repo_id": repo_id, 
+                            "repo_id": repo_id,
                             "branch": branch,
                             "commit_hash": commit_hash,
                             "commit_author": commit_author,
@@ -181,25 +200,25 @@ class RepositoryIngestor:
                             "commit_message": commit_message,
                         },
                     )
-                    
+
                     # Add Git labels to the repository node
                     self.connector.run_query(
                         "MATCH (r:Repository) WHERE id(r) = $repo_id "
                         "SET r:GitRepository",
                         {"repo_id": repo_id},
                     )
-                    
+
                 except Exception as e:
                     logger.warning(f"Failed to get Git information: {e}")
                     # Continue with ingestion even if Git info extraction fails
-            
+
             # Process file system structure with parallel processing
             start_time = time.time()
             fs_stats = await self._process_filesystem(
                 repo_path, repo_id, include_patterns, exclude_patterns
             )
             processing_time = time.time() - start_time
-            
+
             # Generate repository summary
             summary = await self._generate_repo_summary(repo_path, repo_name)
 
@@ -212,7 +231,7 @@ class RepositoryIngestor:
                 "r.code_files_count = $code_files_count, "
                 "r.processing_time_seconds = $processing_time",
                 {
-                    "repo_id": repo_id, 
+                    "repo_id": repo_id,
                     "summary": summary,
                     "file_count": fs_stats["file_count"],
                     "directory_count": fs_stats["directory_count"],
@@ -221,7 +240,9 @@ class RepositoryIngestor:
                 },
             )
 
-            logger.info(f"Repository ingestion complete for {repo_name} in {processing_time:.2f} seconds")
+            logger.info(
+                f"Repository ingestion complete for {repo_name} in {processing_time:.2f} seconds"
+            )
 
             return {
                 "repository_id": repo_id,
@@ -262,28 +283,30 @@ class RepositoryIngestor:
 
         Returns:
             Dictionary with ingestion metadata and results
-            
+
         Raises:
             ValueError: If the GitHub URL is invalid
             RuntimeError: If cloning or API access fails
         """
         logger.info(f"Ingesting repository from GitHub URL: {github_url}")
-        
+
         # Initialize GitHub client
         github = self._init_github_client()
-        
+
         # Parse the GitHub URL to get owner and repo name
         try:
             owner, repo_name = self._parse_github_url(github_url)
         except ValueError as e:
             logger.error(f"Invalid GitHub URL: {github_url}")
             raise
-            
+
         # Get repository information from GitHub API
         try:
             repo_info = self._get_github_repo_info(owner, repo_name)
-            logger.info(f"Repository info fetched: {repo_info['name']} ({repo_info['description']})")
-            
+            logger.info(
+                f"Repository info fetched: {repo_info['name']} ({repo_info['description']})"
+            )
+
             # Store repository metadata in Neo4j
             repo_props = {
                 "name": repo_info["name"],
@@ -301,15 +324,17 @@ class RepositoryIngestor:
                 "url": github_url,
                 "ingest_timestamp": self._get_timestamp(),
             }
-            
+
             repo_id = self.connector.create_node(
                 labels=["Repository", "GitHubRepository"],
                 properties=repo_props,
             )
-            
+
             if repo_id is None:
-                raise RuntimeError(f"Failed to create repository node for {repo_info['name']}")
-                
+                raise RuntimeError(
+                    f"Failed to create repository node for {repo_info['name']}"
+                )
+
             # If only metadata was requested, return now
             if metadata_only:
                 return {
@@ -318,74 +343,79 @@ class RepositoryIngestor:
                     "metadata": repo_props,
                     "content_ingested": False,
                 }
-                
+
             # Determine branch to clone
             clone_branch = branch or repo_info["default_branch"]
-            
+
             # Create temporary directory for cloning
             self.temp_dir = tempfile.mkdtemp(prefix="skwaq_repo_")
-            
+
             # Clone the repository with GitPython and progress reporting
-            logger.info(f"Cloning {github_url} (branch: {clone_branch}) to {self.temp_dir}")
-            
+            logger.info(
+                f"Cloning {github_url} (branch: {clone_branch}) to {self.temp_dir}"
+            )
+
             try:
                 # Determine clone URL (use authenticated URL if token is available)
                 clone_url = repo_info["clone_url"]
                 if self.github_token and "https://" in clone_url:
-                    clone_url = clone_url.replace("https://", f"https://{self.github_token}@")
-                
+                    clone_url = clone_url.replace(
+                        "https://", f"https://{self.github_token}@"
+                    )
+
                 # Create progress reporting callback
                 progress_output = None
                 if self.show_progress:
                     progress_output = tqdm(
-                        total=100, 
-                        desc=f"Cloning {repo_info['name']}", 
+                        total=100,
+                        desc=f"Cloning {repo_info['name']}",
                         unit="%",
-                        leave=True
+                        leave=True,
                     )
-                
+
                 # Clone with GitPython
                 clone_args = {
                     "url": clone_url,
                     "to_path": self.temp_dir,
                     "branch": clone_branch,
                 }
-                
+
                 if depth > 0:
                     clone_args["depth"] = depth
-                
+
                 # Add progress callback if needed
                 if progress_output:
+
                     def progress_callback(op_code, cur_count, max_count, message):
                         if max_count:
                             progress = int(cur_count / max_count * 100)
                             progress_output.update(progress - progress_output.n)
-                    
+
                     clone_args["progress"] = progress_callback
-                
+
                 # Perform the clone operation
                 Repo.clone_from(**clone_args)
-                
+
                 # Close progress bar if used
                 if progress_output:
                     progress_output.close()
-                
+
                 logger.info(f"Successfully cloned {github_url} to {self.temp_dir}")
-                
+
                 # Update repository node with file system statistics
                 repo_props["cloned_branch"] = clone_branch
                 repo_props["clone_timestamp"] = self._get_timestamp()
-                
+
                 self.connector.run_query(
                     "MATCH (r:Repository) WHERE id(r) = $repo_id "
                     "SET r.cloned_branch = $branch, r.clone_timestamp = $timestamp",
                     {
-                        "repo_id": repo_id, 
+                        "repo_id": repo_id,
                         "branch": clone_branch,
-                        "timestamp": repo_props["clone_timestamp"]
+                        "timestamp": repo_props["clone_timestamp"],
                     },
                 )
-                
+
                 # Process the cloned repository
                 ingest_result = await self.ingest_from_path(
                     self.temp_dir,
@@ -394,20 +424,22 @@ class RepositoryIngestor:
                     exclude_patterns,
                     existing_repo_id=repo_id,
                 )
-                
+
                 # Add GitHub-specific information to the result
-                ingest_result.update({
-                    "github_url": github_url,
-                    "github_metadata": repo_props,
-                    "branch": clone_branch,
-                })
-                
+                ingest_result.update(
+                    {
+                        "github_url": github_url,
+                        "github_metadata": repo_props,
+                        "branch": clone_branch,
+                    }
+                )
+
                 return ingest_result
-                
+
             except GitCommandError as e:
                 logger.error(f"Git clone failed: {e}")
                 raise RuntimeError(f"Failed to clone repository: {e}")
-            
+
         except GithubException as e:
             logger.error(f"GitHub API error: {e}")
             if e.status == 404:
@@ -416,83 +448,85 @@ class RepositoryIngestor:
                 raise RuntimeError("Rate limit exceeded or insufficient permissions")
             else:
                 raise RuntimeError(f"GitHub API error: {e}")
-                
+
         except Exception as e:
             logger.error(f"Error ingesting GitHub repository {github_url}: {e}")
             raise
-            
+
         finally:
             # Clean up temporary directory
             if self.temp_dir and os.path.exists(self.temp_dir):
                 logger.info(f"Cleaning up temporary directory: {self.temp_dir}")
                 shutil.rmtree(self.temp_dir)
                 self.temp_dir = None
-                
+
     def _parse_github_url(self, url: str) -> Tuple[str, str]:
         """Parse a GitHub repository URL to extract owner and repo name.
-        
+
         Args:
             url: GitHub repository URL
-            
+
         Returns:
             Tuple of (owner, repo_name)
-            
+
         Raises:
             ValueError: If the URL is not a valid GitHub repository URL
         """
         try:
             parsed = urlparse(url)
-            
+
             # Verify this is a GitHub URL
-            if not (parsed.netloc == "github.com" or parsed.netloc.endswith(".github.com")):
+            if not (
+                parsed.netloc == "github.com" or parsed.netloc.endswith(".github.com")
+            ):
                 raise ValueError(f"Not a GitHub URL: {url}")
-                
+
             # Remove .git suffix if present
             path = parsed.path.strip("/")
             if path.endswith(".git"):
                 path = path[:-4]
-                
+
             # Split path into components
             parts = path.split("/")
-            
+
             # GitHub URLs should have at least owner/repo
             if len(parts) < 2:
                 raise ValueError(f"Invalid GitHub repository URL format: {url}")
-                
+
             owner = parts[0]
             repo_name = parts[1]
-            
+
             return owner, repo_name
-            
+
         except Exception as e:
             raise ValueError(f"Error parsing GitHub URL {url}: {e}")
-            
+
     def _get_github_repo_info(self, owner: str, repo_name: str) -> Dict[str, Any]:
         """Get repository information from GitHub API.
-        
+
         Args:
             owner: Repository owner (username or organization)
             repo_name: Repository name
-            
+
         Returns:
             Dictionary with repository metadata
-            
+
         Raises:
             GithubException: If API access fails
         """
         github = self._init_github_client()
-        
+
         try:
             # Get repository object
             repo = github.get_repo(f"{owner}/{repo_name}")
-            
+
             # Get language statistics
             languages = repo.get_languages()
-            
+
             # Format dates as ISO strings
             created_at = repo.created_at.isoformat() if repo.created_at else None
             updated_at = repo.updated_at.isoformat() if repo.updated_at else None
-            
+
             # Build repository info dictionary
             return {
                 "name": repo.name,
@@ -511,7 +545,7 @@ class RepositoryIngestor:
                 "ssh_url": repo.ssh_url,
                 "html_url": repo.html_url,
             }
-            
+
         except GithubException as e:
             logger.error(f"GitHub API error: {e}")
             raise
@@ -565,63 +599,69 @@ class RepositoryIngestor:
         # Collect all files and directories first
         all_files = []
         all_dirs = []
-        
+
         # Create a progress bar for directory scanning
         logger.info("Scanning repository directory structure...")
-        
+
         # Convert patterns to Path objects for matching
         include_path_patterns = [Path(p) for p in (include_patterns or [])]
         exclude_path_patterns = [Path(p) for p in (exclude_patterns or [])]
-        
+
         # Walk the directory tree
         for root, dirs, files in os.walk(repo_path):
             root_path = Path(root)
-            
+
             # Filter out excluded directories
-            dirs[:] = [d for d in dirs if d not in self.excluded_dirs and 
-                      not any(Path(d).match(pattern) for pattern in exclude_path_patterns)]
-            
+            dirs[:] = [
+                d
+                for d in dirs
+                if d not in self.excluded_dirs
+                and not any(Path(d).match(pattern) for pattern in exclude_path_patterns)
+            ]
+
             # Track directory
             if root_path != repo_path:  # Skip root as we already created it
                 rel_path = root_path.relative_to(repo_path)
                 all_dirs.append((root_path, rel_path))
                 stats["directory_count"] += 1
-            
+
             # Track files
             for file in files:
                 file_path = root_path / file
                 rel_path = file_path.relative_to(repo_path)
-                
+
                 # Check exclusion patterns
-                if exclude_patterns and any(rel_path.match(pattern) for pattern in exclude_path_patterns):
+                if exclude_patterns and any(
+                    rel_path.match(pattern) for pattern in exclude_path_patterns
+                ):
                     continue
-                
+
                 # Check inclusion patterns if provided
-                if include_patterns and not any(rel_path.match(pattern) for pattern in include_path_patterns):
+                if include_patterns and not any(
+                    rel_path.match(pattern) for pattern in include_path_patterns
+                ):
                     continue
-                
+
                 all_files.append(file_path)
                 stats["file_count"] += 1
-        
+
         # Create directory nodes and relationships
         logger.info(f"Creating directory structure ({len(all_dirs)} directories)...")
-        
+
         # Show progress bar for directories if enabled
         if self.show_progress and all_dirs:
             dir_progress = tqdm(
-                total=len(all_dirs),
-                desc="Processing directories",
-                unit="dir"
+                total=len(all_dirs), desc="Processing directories", unit="dir"
             )
         else:
             dir_progress = None
-            
+
         # Map to store directory path to node ID
         dir_node_map = {str(repo_path): root_dir_id}
-        
+
         # Sort directories by depth to ensure parent directories are processed first
         all_dirs.sort(key=lambda x: len(x[1].parts))
-        
+
         for dir_path, rel_path in all_dirs:
             # Create node for directory
             dir_node_id = self.connector.create_node(
@@ -633,41 +673,39 @@ class RepositoryIngestor:
                     "is_root": False,
                 },
             )
-            
+
             # Store node ID in map
             dir_node_map[str(dir_path)] = dir_node_id
-            
+
             # Link to parent directory
             parent_path = str(dir_path.parent)
             parent_id = dir_node_map.get(parent_path)
-            
+
             if parent_id:
                 self.connector.create_relationship(parent_id, dir_node_id, "CONTAINS")
-            
+
             # Link repository to directory
             self.connector.create_relationship(repo_id, dir_node_id, "HAS_DIRECTORY")
-            
+
             # Update progress
             if dir_progress:
                 dir_progress.update(1)
-        
+
         # Close progress bar
         if dir_progress:
             dir_progress.close()
-        
+
         # Process files with parallel processing
         logger.info(f"Processing {len(all_files)} files...")
-        
+
         # Show progress bar for files if enabled
         if self.show_progress and all_files:
             file_progress = tqdm(
-                total=len(all_files),
-                desc="Processing files",
-                unit="file"
+                total=len(all_files), desc="Processing files", unit="file"
             )
         else:
             file_progress = None
-        
+
         # Define file processing function for parallel execution
         async def process_file(file_path: Path) -> Optional[Dict[str, Any]]:
             try:
@@ -675,7 +713,7 @@ class RepositoryIngestor:
                 if file_path.stat().st_size > 10 * 1024 * 1024:  # 10MB limit
                     logger.debug(f"Skipping large file: {file_path}")
                     return None
-                
+
                 # Create file node
                 file_props = {
                     "name": file_path.name,
@@ -684,33 +722,35 @@ class RepositoryIngestor:
                     "extension": file_path.suffix,
                     "size": file_path.stat().st_size,
                 }
-                
+
                 file_node_id = self.connector.create_node(
                     labels=["File"],
                     properties=file_props,
                 )
-                
+
                 # Find parent directory
                 parent_path = str(file_path.parent)
                 parent_id = dir_node_map.get(parent_path)
-                
+
                 if parent_id:
-                    self.connector.create_relationship(parent_id, file_node_id, "CONTAINS")
-                
+                    self.connector.create_relationship(
+                        parent_id, file_node_id, "CONTAINS"
+                    )
+
                 # Link repository to file
                 self.connector.create_relationship(repo_id, file_node_id, "HAS_FILE")
-                
+
                 result = {"file_node_id": file_node_id}
-                
+
                 # Process code files
                 if self._is_code_file(file_path):
                     await self._process_code_file(file_path, file_node_id, repo_id)
                     result["is_code_file"] = True
                 else:
                     result["is_code_file"] = False
-                
+
                 return result
-                
+
             except Exception as e:
                 logger.error(f"Error processing file {file_path}: {e}")
                 return None
@@ -718,38 +758,39 @@ class RepositoryIngestor:
                 # Update progress
                 if file_progress:
                     file_progress.update(1)
-        
+
         # Process files in parallel
         tasks = []
         semaphore = asyncio.Semaphore(self.max_workers)
-        
+
         async def process_with_semaphore(file_path: Path) -> Optional[Dict[str, Any]]:
             async with semaphore:
                 return await process_file(file_path)
-        
+
         # Create tasks for all files
         for file_path in all_files:
             tasks.append(process_with_semaphore(file_path))
-        
+
         # Execute all tasks
         results = await asyncio.gather(*tasks)
-        
+
         # Close progress bar
         if file_progress:
             file_progress.close()
-        
+
         # Count code files processed
-        stats["code_files_processed"] = sum(1 for r in results if r and r.get("is_code_file", False))
-        
+        stats["code_files_processed"] = sum(
+            1 for r in results if r and r.get("is_code_file", False)
+        )
+
         logger.info(
             f"Filesystem processing complete. "
             f"Directories: {stats['directory_count']}, "
             f"Files: {stats['file_count']}, "
             f"Code files: {stats['code_files_processed']}"
         )
-        
-        return stats
 
+        return stats
 
     async def _process_code_file(
         self,
@@ -803,7 +844,9 @@ class RepositoryIngestor:
             )
 
             # Link file to code content
-            self.connector.create_relationship(file_node_id, code_node_id, "HAS_CONTENT")
+            self.connector.create_relationship(
+                file_node_id, code_node_id, "HAS_CONTENT"
+            )
 
             logger.debug(f"Processed code file: {file_path}")
 
@@ -840,7 +883,9 @@ class RepositoryIngestor:
                         stats["languages"][lang] = stats["languages"].get(lang, 0) + 1
 
             # Check for certain types of files
-            has_readme = any(f.name.lower() == "readme.md" for f in repo_dir.glob("*.md"))
+            has_readme = any(
+                f.name.lower() == "readme.md" for f in repo_dir.glob("*.md")
+            )
             has_license = any(
                 f.name.lower() == "license" or f.name.lower() == "license.md"
                 for f in repo_dir.glob("*")
@@ -1038,9 +1083,9 @@ Be concise and focus on aspects relevant for security assessment.
         Returns:
             Timestamp string
         """
-        from datetime import datetime
+        from datetime import datetime, UTC
 
-        return datetime.utcnow().isoformat()
+        return datetime.now(UTC).isoformat()
 
 
 async def ingest_repository(
@@ -1053,6 +1098,8 @@ async def ingest_repository(
     show_progress: bool = True,
     max_workers: int = 4,
     github_metadata_only: bool = False,
+    connector=None,
+    openai_client=None,
 ) -> Dict[str, Any]:
     """Ingest a repository for vulnerability assessment with enhanced functionality.
 
@@ -1070,24 +1117,30 @@ async def ingest_repository(
         show_progress: Whether to display progress bars during ingestion
         max_workers: Maximum number of parallel workers for file processing
         github_metadata_only: If True, only fetch GitHub metadata without cloning (only for GitHub repositories)
+        connector: Optional Neo4j connector to use. If None, a new one will be created.
+        openai_client: Optional OpenAI client to use. If None, a new one will be created.
 
     Returns:
         Dictionary with ingestion metadata and results
-        
+
     Raises:
         ValueError: If the path or URL is invalid
         RuntimeError: If repository ingestion fails
     """
     # Detect GitHub URLs automatically if not specified
-    if not is_github_url and repo_path_or_url.startswith(("https://github.com/", "http://github.com/")):
+    if not is_github_url and repo_path_or_url.startswith(
+        ("https://github.com/", "http://github.com/")
+    ):
         is_github_url = True
         logger.info(f"Automatically detected GitHub URL: {repo_path_or_url}")
-    
+
     # Create repository ingestor with configuration
     ingestor = RepositoryIngestor(
         github_token=github_token,
         max_workers=max_workers,
         progress_bar=show_progress,
+        connector=connector,
+        openai_client=openai_client,
     )
 
     try:
@@ -1104,7 +1157,7 @@ async def ingest_repository(
             path = Path(repo_path_or_url)
             if not path.exists():
                 raise ValueError(f"Repository path does not exist: {repo_path_or_url}")
-            
+
             return await ingestor.ingest_from_path(
                 repo_path_or_url,
                 None,  # Use directory name
@@ -1119,25 +1172,33 @@ async def ingest_repository(
 async def get_github_repository_info(
     github_url: str,
     github_token: Optional[str] = None,
+    connector=None,
+    openai_client=None,
 ) -> Dict[str, Any]:
     """Get metadata for a GitHub repository without ingesting it.
-    
+
     This function fetches repository information from the GitHub API without
     cloning or processing the repository content.
-    
+
     Args:
         github_url: GitHub repository URL
         github_token: Optional GitHub Personal Access Token for private repositories
-        
+        connector: Optional Neo4j connector to use. If None, a new one will be created.
+        openai_client: Optional OpenAI client to use. If None, a new one will be created.
+
     Returns:
         Dictionary with repository metadata
-        
+
     Raises:
         ValueError: If the GitHub URL is invalid
         RuntimeError: If GitHub API access fails
     """
-    ingestor = RepositoryIngestor(github_token=github_token)
-    
+    ingestor = RepositoryIngestor(
+        github_token=github_token,
+        connector=connector,
+        openai_client=openai_client,
+    )
+
     try:
         return await ingestor.ingest_from_github(
             github_url,
@@ -1148,14 +1209,18 @@ async def get_github_repository_info(
         raise
 
 
-async def list_repositories() -> List[Dict[str, Any]]:
+async def list_repositories(connector=None) -> List[Dict[str, Any]]:
     """List all repositories ingested into the system.
-    
+
+    Args:
+        connector: Optional Neo4j connector to use. If None, a new one will be created.
+
     Returns:
         List of dictionaries with repository information
     """
-    connector = get_connector()
-    
+    if connector is None:
+        connector = get_connector()
+
     result = connector.run_query(
         "MATCH (r:Repository) "
         "RETURN id(r) as id, r.name as name, r.path as path, r.url as url, "
@@ -1165,5 +1230,5 @@ async def list_repositories() -> List[Dict[str, Any]]:
         "ORDER BY r.ingest_timestamp DESC",
         {},
     )
-    
+
     return result
