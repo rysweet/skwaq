@@ -69,7 +69,8 @@ resource openai 'Microsoft.CognitiveServices/accounts@2023-05-01' = {
 // Model deployments
 @batchSize(1)
 resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2023-05-01' = [for deployment in modelDeployments: {
-  name: '${openai.name}/${deployment.name}'
+  parent: openai
+  name: '${deployment.name}'
   properties: {
     model: deployment.model
     raiPolicyName: 'Microsoft.Default'
