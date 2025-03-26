@@ -76,6 +76,7 @@ def test_repo_path():
 class TestRepositoryIngestor:
     """Tests for the RepositoryIngestor class."""
 
+    @pytest.mark.isolated  # This test needs to run in isolation
     def test_initialization(self, isolated_repository_ingestor, mock_connector, mock_openai_client):
         """Test RepositoryIngestor initialization directly."""
         # Use the isolated fixture
@@ -391,6 +392,7 @@ class TestGitHubIntegration:
         # - tests/integration/ingestion/test_github_integration.py::TestGitHubMocks for mocked tests
         pass
 
+    @pytest.mark.isolated  # This test needs to run in isolation
     @pytest.mark.asyncio
     async def test_ingest_from_github_metadata_only(self, isolated_repository_ingestor, mock_connector, mock_openai_client):
         """Test fetching GitHub repository metadata without cloning."""
@@ -455,6 +457,7 @@ class TestGitHubIntegration:
                 assert metadata["stars"] == 10
                 assert metadata["languages"] == {"Python": 1000, "JavaScript": 500}
     
+    @pytest.mark.isolated  # This test needs to run in isolation
     @pytest.mark.asyncio
     async def test_high_level_ingest(self, isolated_repository_ingestor, mock_connector, mock_openai_client):
         """Test the high-level ingest_repository function with GitHub URL."""
@@ -503,6 +506,7 @@ class TestGitHubIntegration:
                 metadata_only=True
             )
     
+    @pytest.mark.isolated  # This test needs to run in isolation
     @pytest.mark.asyncio
     async def test_high_level_ingest_auto_detection(self, isolated_repository_ingestor, mock_connector, mock_openai_client):
         """Test that the high-level function automatically detects GitHub URLs."""

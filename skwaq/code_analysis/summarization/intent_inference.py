@@ -22,8 +22,22 @@ class IntentInferenceEngine:
     code at function, class, and module levels.
     """
     
+    # Class variable for singleton pattern
+    _instance = None
+    
+    def __new__(cls):
+        """Create a new instance or return the existing one."""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+    
     def __init__(self) -> None:
         """Initialize the intent inference engine."""
+        # Skip initialization if already done (singleton pattern)
+        if getattr(self, '_initialized', False):
+            return
+            
         self.config = get_config()
         self.openai_client = get_openai_client(async_mode=True)
         
@@ -56,6 +70,9 @@ class IntentInferenceEngine:
         self.default_model = self.config.get("intent_inference.default_model", "o1")
         
         logger.info("IntentInferenceEngine initialized with LLM capabilities")
+        
+        # Mark as initialized
+        self._initialized = True
     
     async def _get_llm_intent(self, code: str, level: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Get intent inference from LLM for the provided code.

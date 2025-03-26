@@ -24,8 +24,22 @@ class CodeSummarizer:
     class, module, and system levels to aid in understanding and analysis.
     """
     
+    # Class variable for singleton pattern
+    _instance = None
+    
+    def __new__(cls):
+        """Create a new instance or return the existing one."""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+    
     def __init__(self) -> None:
         """Initialize the code summarizer."""
+        # Skip initialization if already done (singleton pattern)
+        if getattr(self, '_initialized', False):
+            return
+            
         self.config = get_config()
         self.openai_client = get_openai_client(async_mode=True)
         
@@ -65,6 +79,9 @@ class CodeSummarizer:
         self.default_model = self.config.get("summarization.default_model", "o1")
         
         logger.info("CodeSummarizer initialized with LLM capabilities")
+        
+        # Mark as initialized
+        self._initialized = True
     
     async def _get_llm_summary(self, code: str, level: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Get summary from LLM for the provided code.

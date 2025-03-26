@@ -28,8 +28,22 @@ class ArchitectureReconstructor:
     the architecture of the software system, identifying components and their relationships.
     """
     
+    # Class variable for singleton pattern
+    _instance = None
+    
+    def __new__(cls):
+        """Create a new instance or return the existing one."""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+    
     def __init__(self) -> None:
         """Initialize the architecture reconstructor."""
+        # Skip initialization if already done (singleton pattern)
+        if getattr(self, '_initialized', False):
+            return
+            
         self.config = get_config()
         self.openai_client = get_openai_client(async_mode=True)
         self.pattern_matcher = PatternMatcher()
@@ -96,6 +110,9 @@ class ArchitectureReconstructor:
         }
         
         logger.info("ArchitectureReconstructor initialized")
+        
+        # Mark as initialized
+        self._initialized = True
     
     def _get_file_language(self, file_path: str) -> str:
         """Determine the programming language of a file based on its extension.

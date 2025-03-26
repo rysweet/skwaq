@@ -421,12 +421,15 @@ class CodeAnalyzer:
 
         return result
         
-    def _store_code_structure(self, file_id: int, code_structure: Dict[str, Any]) -> None:
+    def _store_code_structure(self, file_id: int, code_structure: Dict[str, Any]) -> int:
         """Store code structure information in the graph database.
         
         Args:
             file_id: ID of the file in the database
             code_structure: Code structure information extracted by Blarify
+            
+        Returns:
+            ID of the created structure node
         """
         try:
             # Create a CodeStructure node
@@ -488,9 +491,12 @@ class CodeAnalyzer:
                 )
                 
             logger.info(f"Stored code structure for file ID {file_id}")
+            return structure_id
             
         except Exception as e:
             logger.error(f"Error storing code structure in database: {e}")
+            # Always return an integer (0 indicates failure)
+            return 0
     
     def _get_timestamp(self) -> str:
         """Get the current timestamp in ISO format.

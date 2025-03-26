@@ -3,6 +3,11 @@
 This module provides fixtures and configuration for testing.
 """
 
+import pytest
+
+# Configure pytest-asyncio to use strict mode
+pytest.register_assert_rewrite("tests.unit.ingestion.test_isolated_github")
+
 import sys
 import os
 import pytest
@@ -72,18 +77,128 @@ def pytest_sessionstart(session):
 
 
 @pytest.fixture(autouse=True)
-def reset_registries(monkeypatch):
-    """Reset all service registries before each test and enhance mocking.
+def reset_registries_and_modules(monkeypatch):
+    """Reset all service registries and critical modules before each test and enhance mocking.
 
-    This fixture ensures that tests don't interfere with each other by
-    resetting all service registries between tests and enforcing proper mocking.
+    This fixture ensures that tests don't interfere with each other by completely
+    resetting key modules and all service registries between tests.
     It also handles Path.exists mocking that can cause test interference.
+    
+    IMPORTANT: This fixture is crucial for test isolation. Each test should be
+    completely independent, with no shared state or dependencies on other tests.
     """
     # Import the modules that have registries
     neo4j_connector_module = importlib.import_module("skwaq.db.neo4j_connector")
     openai_client_module = importlib.import_module("skwaq.core.openai_client")
-    code_ingestion_module = importlib.import_module("skwaq.ingestion.code_ingestion")
     patterns_registry_module = importlib.import_module("skwaq.code_analysis.patterns.registry")
+    
+    # Import all critical modules that need to be reset between tests
+    # These modules often contain singleton patterns or global state
+    modules_to_reset = [
+        "skwaq.ingestion.code_ingestion",
+        "skwaq.code_analysis.analyzer",
+        "skwaq.db.neo4j_connector",
+        "skwaq.core.openai_client",
+        "skwaq.utils.config",
+        "skwaq.utils.logging",
+        "skwaq.code_analysis.summarization.architecture_reconstruction",
+        "skwaq.code_analysis.summarization.code_summarizer",
+        "skwaq.code_analysis.summarization.cross_referencer",
+        "skwaq.code_analysis.summarization.intent_inference"
+    ]
+    
+    module_cache = {}
+    
+    # Import modules safely
+    for module_path in modules_to_reset:
+        try:
+            module = importlib.import_module(module_path)
+            module_cache[module_path] = module
+        except (ImportError, ModuleNotFoundError):
+            module_cache[module_path] = None
+            
+    # Create a reference to code_ingestion_module for backward compatibility
+    code_ingestion_module = module_cache.get("skwaq.ingestion.code_ingestion")
+    
+    # Reset critical modules state
+    # We'll patch the modules directly rather than trying to replace them,
+    # which can cause import errors for submodules in a complex package
+    
+    # First patch the github module 
+    with patch.dict("sys.modules", {"github": MagicMock()}):
+        # Create the Repository submodule mock
+        repo_module_mock = MagicMock()
+        repo_class_mock = MagicMock()
+        repo_module_mock.Repository = repo_class_mock
+        sys.modules["github.Repository"] = repo_module_mock
+        
+        # Create the Auth submodule mock
+        auth_module_mock = MagicMock()
+        auth_class_mock = MagicMock()
+        auth_module_mock.Auth = auth_class_mock
+        sys.modules["github.Auth"] = auth_module_mock
+        
+        # Set up the github instance
+        github_instance = MagicMock()
+        github_instance.get_rate_limit = MagicMock(return_value=MagicMock())
+        github_instance.get_repo = MagicMock(return_value=MagicMock())
+        
+        # Set up repo mock
+        repo_mock = github_instance.get_repo.return_value
+        repo_mock.name = "test-repo"
+        repo_mock.full_name = "test-user/test-repo"
+        repo_mock.description = "Test repository for unit tests"
+        repo_mock.stargazers_count = 10
+        repo_mock.forks_count = 5
+        repo_mock.default_branch = "main"
+        repo_mock.get_languages.return_value = {"Python": 1000, "JavaScript": 500}
+        repo_mock.html_url = "https://github.com/test-user/test-repo"
+        repo_mock.clone_url = "https://github.com/test-user/test-repo.git"
+        repo_mock.ssh_url = "git@github.com:test-user/test-repo.git"
+        
+        # Mock content iteration
+        content_mock = MagicMock()
+        content_mock.path = "test_file.py"
+        content_mock.type = "file"
+        content_mock.decoded_content = b"# Test content"
+        repo_mock.get_contents.return_value = [content_mock]
+        
+        # Set up GitHub class in the module
+        sys.modules["github"].Github = MagicMock(return_value=github_instance)
+        sys.modules["github"].Auth = MagicMock()
+        sys.modules["github"].Auth.Token = MagicMock()
+        sys.modules["github"].GithubException = type("GithubException", (Exception,), {})
+        
+    # Next patch the git module    
+    with patch.dict("sys.modules", {"git": MagicMock()}):
+        git_repo_mock = MagicMock()
+        git_repo_mock.active_branch.name = "main"
+        
+        # Mock commit properties
+        commit_mock = MagicMock()
+        commit_mock.hexsha = "abc123def456"
+        commit_mock.author.name = "Test User"
+        commit_mock.author.email = "test@example.com"
+        commit_mock.committed_date = 1616161616
+        commit_mock.message = "Test commit message"
+        git_repo_mock.head.commit = commit_mock
+        
+        # Setup git repo's git obj for commands
+        git_cmd_mock = MagicMock()
+        git_cmd_mock.ls_files.return_value = "file1.py\nfile2.py\nREADME.md"
+        git_repo_mock.git = git_cmd_mock
+        
+        # Mock the repo's remote info
+        origin_mock = MagicMock()
+        origin_mock.url = "https://github.com/test-user/test-repo.git"
+        git_repo_mock.remotes.origin = origin_mock
+        
+        # Set up Git classes and exceptions in the module
+        sys.modules["git"].Repo = MagicMock(return_value=git_repo_mock)
+        sys.modules["git"].Repo.clone_from = MagicMock(return_value=git_repo_mock)
+        sys.modules["git"].GitCommandError = type("GitCommandError", (Exception,), {})
+        sys.modules["git"].InvalidGitRepositoryError = type("InvalidGitRepositoryError", (Exception,), {})
+        sys.modules["git"].NoSuchPathError = type("NoSuchPathError", (Exception,), {})
     
     # Create a safe replacement for the GitHub client initialization
     def safe_init_github_client(self):
@@ -94,17 +209,42 @@ def reset_registries(monkeypatch):
             self.github_client.get_rate_limit = MagicMock(return_value=MagicMock())
             self.github_client.get_repo = MagicMock(return_value=MagicMock())
             
+            # Setup repo attributes
+            repo_mock = self.github_client.get_repo.return_value
+            repo_mock.name = "test-repo"
+            repo_mock.full_name = "test-user/test-repo"
+            repo_mock.description = "Test repository for unit tests"
+            repo_mock.stargazers_count = 10
+            repo_mock.forks_count = 5
+            repo_mock.default_branch = "main"
+            repo_mock.get_languages.return_value = {"Python": 1000, "JavaScript": 500}
+            repo_mock.html_url = "https://github.com/test-user/test-repo"
+            repo_mock.clone_url = "https://github.com/test-user/test-repo.git"
+            repo_mock.ssh_url = "git@github.com:test-user/test-repo.git"
+            
+            # Mock content iteration
+            content_mock = MagicMock()
+            content_mock.path = "test_file.py"
+            content_mock.type = "file"
+            content_mock.decoded_content = b"# Test content"
+            repo_mock.get_contents.return_value = [content_mock]
+            
         return self.github_client
     
     # Patch the GitHub client initialization method in RepositoryIngestor
-    if hasattr(code_ingestion_module, "RepositoryIngestor"):
+    if code_ingestion_module is not None and hasattr(code_ingestion_module, "RepositoryIngestor"):
         monkeypatch.setattr(code_ingestion_module.RepositoryIngestor, "_init_github_client", safe_init_github_client)
     
-    # Keep track of any global instances of CodeAnalyzer
+    # Reset singleton instances
     try:
+        # Reset CodeAnalyzer singleton
         analyzer_module = importlib.import_module("skwaq.code_analysis.analyzer")
         if hasattr(analyzer_module, "CodeAnalyzer") and hasattr(analyzer_module.CodeAnalyzer, "_instance"):
             analyzer_module.CodeAnalyzer._instance = None
+            
+        # Reset RepositoryIngestor singleton if it exists
+        if hasattr(code_ingestion_module, "RepositoryIngestor") and hasattr(code_ingestion_module.RepositoryIngestor, "_instance"):
+            code_ingestion_module.RepositoryIngestor._instance = None
     except (ImportError, AttributeError):
         pass
     
@@ -165,7 +305,8 @@ def reset_registries(monkeypatch):
             "/path/to/repo", 
             "/tmp/mock_repo",
             "/tmp/mock_temp_dir",
-            "/test/path"
+            "/test/path",
+            "/test/repo"
         }
         
         if str(self) in test_paths:
@@ -180,20 +321,47 @@ def reset_registries(monkeypatch):
     # Run the test
     yield
 
-    # Reset registries after the test
-    neo4j_connector_module.reset_connector_registry()
-    openai_client_module.reset_client_registry()
+    # Import logging to avoid "logger not defined" errors in teardown
+    import logging
+    logger = logging.getLogger(__name__)
     
-    # Reset other global state as needed
-    if hasattr(patterns_registry_module, "reset_registry"):
-        patterns_registry_module.reset_registry()
-        
-    # Reset any CodeAnalyzer instance
     try:
-        analyzer_module = importlib.import_module("skwaq.code_analysis.analyzer")
-        if hasattr(analyzer_module, "CodeAnalyzer") and hasattr(analyzer_module.CodeAnalyzer, "_instance"):
-            analyzer_module.CodeAnalyzer._instance = None
-    except (ImportError, AttributeError):
+        # Reset registries after the test
+        neo4j_connector_module.reset_connector_registry()
+        openai_client_module.reset_client_registry()
+        
+        # Reset other global state as needed
+        if hasattr(patterns_registry_module, "reset_registry"):
+            patterns_registry_module.reset_registry()
+            
+        # Reset all singleton instances and global state in our modules
+        for module_name, module in module_cache.items():
+            if module is None:
+                continue
+                
+            # Reset any class with an _instance attribute (common singleton pattern)
+            for name in dir(module):
+                try:
+                    cls = getattr(module, name)
+                    if isinstance(cls, type) and hasattr(cls, "_instance"):
+                        setattr(cls, "_instance", None)
+                        logger.debug(f"Reset singleton instance for {module_name}.{name}")
+                except (AttributeError, TypeError):
+                    continue
+                    
+            # Reset specific known global variables or attributes
+            if module_name == "skwaq.db.neo4j_connector":
+                if hasattr(module, "_connector"):
+                    module._connector = None
+                    
+            elif module_name == "skwaq.core.openai_client":
+                if hasattr(module, "_openai_client"):
+                    module._openai_client = None
+                    if hasattr(module, "_async_openai_client"):
+                        module._async_openai_client = None
+    except Exception as e:
+        # Log any errors but don't let them crash the test teardown
+        logger.error(f"Error during test teardown: {e}")
         pass
 
 
@@ -229,7 +397,7 @@ def mock_config():
 
 
 @pytest.fixture(autouse=True)
-def mock_github_everywhere():
+def mock_github_everywhere(monkeypatch):
     """Mock GitHub API interactions globally across all tests.
     
     This fixture applies to all tests automatically and provides consistent
@@ -253,16 +421,29 @@ def mock_github_everywhere():
     repo_mock.clone_url = "https://github.com/test-user/test-repo.git"
     repo_mock.ssh_url = "git@github.com:test-user/test-repo.git"
     
+    # Mock content iteration
+    content_mock = MagicMock()
+    content_mock.path = "test_file.py"
+    content_mock.type = "file"
+    content_mock.decoded_content = b"# Test content"
+    repo_mock.get_contents.return_value = [content_mock]
+    
     # Mock the PyGithub Auth class
     auth_mock = MagicMock()
     auth_token_mock = MagicMock()
     auth_mock.Token = MagicMock(return_value=auth_token_mock)
     
-    # Apply patches 
-    with patch("github.Github", return_value=github_instance):
-        with patch("github.Auth", auth_mock):
-            with patch("github.Auth.Token", auth_mock.Token):
-                yield github_instance
+    # Create system-wide mock for GitHub modules
+    with patch.dict("sys.modules", {"github": MagicMock()}):
+        sys.modules["github"].Github = MagicMock(return_value=github_instance)
+        sys.modules["github"].Auth = auth_mock
+        sys.modules["github"].Auth.Token = auth_mock.Token
+        
+        # Also mock github.GithubException for error handling tests
+        exception_mock = type("GithubException", (Exception,), {})
+        sys.modules["github"].GithubException = exception_mock
+        
+        yield github_instance
 
 
 @pytest.fixture
@@ -286,9 +467,17 @@ def mock_github():
     yield github_instance
 
 
-@pytest.fixture
-def mock_git_repo():
-    """Mock Git repository."""
+@pytest.fixture(autouse=True)
+def mock_git_everywhere(monkeypatch):
+    """Mock Git interactions globally across all tests.
+    
+    This fixture applies to all tests automatically and provides consistent
+    Git mocking to prevent any real Git operations during testing.
+    """
+    # Create a mock git module
+    git_module_mock = MagicMock()
+    
+    # Set up the Repo class
     git_repo_mock = MagicMock()
     git_repo_mock.active_branch.name = "main"
     
@@ -303,6 +492,32 @@ def mock_git_repo():
     # Link commit to repo
     git_repo_mock.head.commit = commit_mock
     
-    with patch("git.Repo", return_value=git_repo_mock):
-        with patch("git.Repo.clone_from", return_value=git_repo_mock):
-            yield git_repo_mock
+    # Setup git repo's git obj for commands
+    git_cmd_mock = MagicMock()
+    git_cmd_mock.ls_files.return_value = "file1.py\nfile2.py\nREADME.md"
+    git_repo_mock.git = git_cmd_mock
+    
+    # Mock the repo's remote info
+    origin_mock = MagicMock()
+    origin_mock.url = "https://github.com/test-user/test-repo.git"
+    git_repo_mock.remotes.origin = origin_mock
+    
+    # Setup the Repo constructor and class methods
+    git_module_mock.Repo = MagicMock(return_value=git_repo_mock)
+    git_module_mock.Repo.clone_from = MagicMock(return_value=git_repo_mock)
+    
+    # Git exceptions
+    git_module_mock.GitCommandError = type("GitCommandError", (Exception,), {})
+    git_module_mock.InvalidGitRepositoryError = type("InvalidGitRepositoryError", (Exception,), {})
+    git_module_mock.NoSuchPathError = type("NoSuchPathError", (Exception,), {})
+    
+    # Apply the mock to sys.modules
+    monkeypatch.setitem(sys.modules, "git", git_module_mock)
+    
+    yield git_repo_mock
+
+@pytest.fixture
+def mock_git_repo():
+    """Mock Git repository for tests that need direct access to the mock."""
+    # Use the global mock from mock_git_everywhere
+    yield sys.modules["git"].Repo()

@@ -24,8 +24,22 @@ class CrossReferencer:
     code components, creating a graph of relationships.
     """
     
+    # Class variable for singleton pattern
+    _instance = None
+    
+    def __new__(cls):
+        """Create a new instance or return the existing one."""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+    
     def __init__(self) -> None:
         """Initialize the cross referencer."""
+        # Skip initialization if already done (singleton pattern)
+        if getattr(self, '_initialized', False):
+            return
+            
         self.config = get_config()
         self.openai_client = get_openai_client(async_mode=True)
         
@@ -36,6 +50,9 @@ class CrossReferencer:
         self.context_lines = self.config.get("cross_referencer.context_lines", 3)
         
         logger.info("CrossReferencer initialized")
+        
+        # Mark as initialized
+        self._initialized = True
     
     def _get_files(self, repo_path: str, include_patterns: Optional[List[str]] = None) -> List[str]:
         """Get all code files in a repository.

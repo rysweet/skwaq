@@ -217,78 +217,161 @@ class TestCodeAnalyzerWithBlarify:
                 analyzer.blarify_integration.analyze_security_patterns.assert_called_once()
 
 
-@pytest.mark.asyncio
 class TestCodeStructureMapping:
     """Test code structure mapping functionality."""
     
-    async def test_store_code_structure(self, analyzer):
-        """Test storing code structure in the database."""
-        # Mock the connector's create_node and create_relationship methods
-        analyzer.connector.create_node.return_value = 100  # Mock structure node ID
-        analyzer.connector.create_relationship.return_value = True
+    def test_store_code_structure(self):
+        """Test storing code structure in the database using completely isolated mocks."""
+        import sys
+        import importlib
+        from unittest.mock import patch, MagicMock
+        from pathlib import Path
+        from neo4j import GraphDatabase
         
-        # Create a spy on _get_timestamp to be able to verify it's called
-        # but don't actually mock it, since the implementation varies
-        with patch.object(analyzer, '_get_timestamp', wraps=analyzer._get_timestamp) as timestamp_spy:
-            # Sample code structure
-            code_structure = {
-                "functions": [
-                    {
-                        "name": "test_function",
-                        "line_start": 10,
-                        "line_end": 20,
-                        "complexity": 5
+        # Create clean mocks for all external dependencies
+        mock_modules = {
+            "github": MagicMock(),
+            "github.Repository": MagicMock(),
+            "github.Auth": MagicMock(),
+            "git": MagicMock(),
+            "pygit2": MagicMock(),
+            "blarify": MagicMock(),
+            "codeql": MagicMock(),
+        }
+        
+        # Save original modules to restore later
+        original_modules = {}
+        for mod_name in mock_modules:
+            if mod_name in sys.modules:
+                original_modules[mod_name] = sys.modules[mod_name]
+        
+        try:
+            # Apply the module mocks
+            for mod_name, mock_mod in mock_modules.items():
+                sys.modules[mod_name] = mock_mod
+            
+            # Create our mock objects for core dependencies
+            mock_connector = MagicMock()
+            mock_connector.create_node.return_value = 100  # Mock structure node ID
+            mock_connector.create_relationship.return_value = True
+            
+            mock_config = MagicMock()
+            mock_openai_client = MagicMock()
+            
+            # Create a mock timestamp function
+            mock_timestamp = MagicMock(return_value="2023-01-01T00:00:00")
+            
+            # Reset Path.exists to avoid issues
+            original_path_exists = Path.exists
+            Path.exists = lambda self: True
+            
+            # Apply all our patch functions
+            with patch("skwaq.db.neo4j_connector.get_connector", return_value=mock_connector), \
+                 patch("skwaq.core.openai_client.get_openai_client", return_value=mock_openai_client), \
+                 patch("skwaq.utils.config.get_config", return_value=mock_config), \
+                 patch.object(GraphDatabase, "driver", return_value=MagicMock()):
+                
+                # Force reload of the module to pick up our patches
+                if "skwaq.code_analysis.analyzer" in sys.modules:
+                    del sys.modules["skwaq.code_analysis.analyzer"]
+                
+                # Now import with all patches active
+                from skwaq.code_analysis.analyzer import CodeAnalyzer
+                
+                # Reset singleton instance for clean test
+                CodeAnalyzer._instance = None
+                
+                # Create an analyzer with our mocks
+                analyzer = CodeAnalyzer()
+                analyzer.connector = mock_connector  # Ensure the mock connector is used
+                
+                # Patch the timestamp method
+                original_get_timestamp = analyzer._get_timestamp
+                analyzer._get_timestamp = mock_timestamp
+                
+                try:
+                    # Sample code structure
+                    code_structure = {
+                        "functions": [
+                            {
+                                "name": "test_function",
+                                "line_start": 10,
+                                "line_end": 20,
+                                "complexity": 5
+                            }
+                        ],
+                        "classes": [
+                            {
+                                "name": "TestClass",
+                                "line_start": 30,
+                                "line_end": 100,
+                                "methods": ["method1", "method2", "method3"]
+                            }
+                        ],
+                        "imports": [
+                            {"name": "os", "line": 1},
+                            {"name": "sys", "line": 2}
+                        ],
+                        "variables": [
+                            {"name": "VERSION", "line": 5, "value": "1.0"}
+                        ]
                     }
-                ],
-                "classes": [
-                    {
-                        "name": "TestClass",
-                        "line_start": 30,
-                        "line_end": 100,
-                        "methods": ["method1", "method2", "method3"]
-                    }
-                ],
-                "imports": [
-                    {"name": "os", "line": 1},
-                    {"name": "sys", "line": 2}
-                ],
-                "variables": [
-                    {"name": "VERSION", "line": 5, "value": "1.0"}
-                ]
-            }
-            
-            # Store the code structure
-            analyzer._store_code_structure(file_id=1, code_structure=code_structure)
-            
-            # Verify _get_timestamp was called
-            timestamp_spy.assert_called_once()
-            
-            # Verify create_node was called at least 3 times 
-            # (structure, function, class)
-            assert analyzer.connector.create_node.call_count >= 3
-            
-            # Verify create_relationship was called at least 3 times
-            # (file->structure, structure->function, structure->class)
-            assert analyzer.connector.create_relationship.call_count >= 3
-            
-            # Verify create_node was called for the structure node
-            structure_call_found = False
-            for call in analyzer.connector.create_node.call_args_list:
-                args, kwargs = call
-                if kwargs.get("labels") == ["CodeStructure"]:
-                    structure_call_found = True
-                    assert "timestamp" in kwargs["properties"]
-                    assert kwargs["properties"]["structure_version"] == "1.0"
-                    break
-            assert structure_call_found, "CodeStructure node creation not found"
-            
-            # Verify create_relationship was called to link structure to file
-            has_structure_found = False
-            for call in analyzer.connector.create_relationship.call_args_list:
-                args, kwargs = call
-                if kwargs.get("rel_type") == "HAS_STRUCTURE":
-                    has_structure_found = True
-                    assert kwargs["start_id"] == 1  # file_id
-                    assert kwargs["end_id"] == 100  # structure_id
-                    break
-            assert has_structure_found, "HAS_STRUCTURE relationship not found"
+                    
+                    # Store the code structure
+                    result = analyzer._store_code_structure(file_id=1, code_structure=code_structure)
+                    
+                    # Verify the structure was stored
+                    assert result == 100  # Structure ID was returned
+                    
+                    # Verify _get_timestamp was called
+                    mock_timestamp.assert_called_once()
+                    
+                    # Verify create_node was called at least 3 times 
+                    # (structure, function, class)
+                    assert mock_connector.create_node.call_count >= 3
+                    
+                    # Verify create_relationship was called at least 3 times
+                    # (file->structure, structure->function, structure->class)
+                    assert mock_connector.create_relationship.call_count >= 3
+                    
+                    # Verify create_node was called for the structure node
+                    structure_call_found = False
+                    for call in mock_connector.create_node.call_args_list:
+                        args, kwargs = call
+                        if kwargs.get("labels") == ["CodeStructure"]:
+                            structure_call_found = True
+                            assert "timestamp" in kwargs["properties"]
+                            assert kwargs["properties"]["structure_version"] == "1.0"
+                            break
+                    assert structure_call_found, "CodeStructure node creation not found"
+                    
+                    # Verify create_relationship was called to link structure to file
+                    has_structure_found = False
+                    for call in mock_connector.create_relationship.call_args_list:
+                        args, kwargs = call
+                        if kwargs.get("rel_type") == "HAS_STRUCTURE":
+                            has_structure_found = True
+                            assert kwargs["start_id"] == 1  # file_id
+                            assert kwargs["end_id"] == 100  # structure_id
+                            break
+                    assert has_structure_found, "HAS_STRUCTURE relationship not found"
+                
+                finally:
+                    # Clean up patches
+                    analyzer._get_timestamp = original_get_timestamp
+                    
+                    # Reset the singleton instance
+                    CodeAnalyzer._instance = None
+                
+            # Clean up other patches
+            Path.exists = original_path_exists
+        
+        finally:
+            # Restore original modules
+            for mod_name, original_mod in original_modules.items():
+                sys.modules[mod_name] = original_mod
+                
+            # Clean up any added modules
+            for mod_name in mock_modules:
+                if mod_name in sys.modules and mod_name not in original_modules:
+                    del sys.modules[mod_name]
