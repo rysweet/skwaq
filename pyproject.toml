@@ -76,6 +76,20 @@ warn_no_return = true
 warn_unreachable = true
 strict_optional = true
 
+[[tool.mypy.overrides]]
+module = [
+    "skwaq.code_analysis.languages.java",
+    "skwaq.code_analysis.languages.csharp",
+    "skwaq.code_analysis.languages.php"
+]
+warn_return_any = false
+disallow_untyped_defs = false
+check_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = ["neo4j.*", "autogen.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
@@ -89,6 +103,7 @@ asyncio_default_test_loop_scope = "function"
 [tool.coverage.run]
 source = ["skwaq", "tests"]
 omit = ["*/__init__.py"]
+disable_warnings = ["no-data-collected"]
 
 [tool.coverage.report]
 exclude_lines = [
