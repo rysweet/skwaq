@@ -4,6 +4,8 @@ These are prompts that we are writing in advance for future use. They are not cu
 
 Commit everything, update the status, and then we will move to the next step in the ImplementationPlan.md.  
 
+Run the full test suite and fix any remaining failures. For any tests that are failing, do not move on, instead we stop, think carefully about the code being tested, consider carefully the necessary setup conditions, and then carefully construct the test to ensure it is validating the functionality of the code. Then we either fix the code being tested or fix the test. Do not create shared fixtures that may not work when tests are run together.                        
+
 Please ensure that all the new code has thorough unit tests and that all the existing tests (unit, integration, milestone) pass. The tests need to pass when they are run in isolation as well as when they are run in the full test suite.
 
 How many steps remain in the ImplementationPlan.md?
