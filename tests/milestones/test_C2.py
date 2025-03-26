@@ -11,6 +11,7 @@ import os
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from pathlib import Path
+from neo4j import GraphDatabase
 
 from skwaq.code_analysis.analyzer import CodeAnalyzer
 from skwaq.code_analysis.languages.python import PythonAnalyzer
@@ -23,10 +24,15 @@ def analyzer():
     """Create a CodeAnalyzer instance with mocked dependencies."""
     with patch("skwaq.code_analysis.analyzer.get_connector") as mock_get_connector, \
          patch("skwaq.code_analysis.analyzer.get_openai_client") as mock_get_openai_client, \
-         patch("skwaq.code_analysis.analyzer.get_config") as mock_get_config:
+         patch("skwaq.code_analysis.analyzer.get_config") as mock_get_config, \
+         patch.object(GraphDatabase, "driver", side_effect=lambda *args, **kwargs: MagicMock()):
         
         # Mock the connector
         mock_connector = MagicMock()
+        mock_connector.is_connected = MagicMock(return_value=True)
+        mock_connector.run_query = MagicMock(return_value=[{"content": "test code", "path": "/test/file.py"}])
+        mock_connector.create_node = MagicMock(return_value=123)
+        mock_connector.create_relationship = MagicMock(return_value=True)
         mock_get_connector.return_value = mock_connector
         
         # Mock the OpenAI client
@@ -160,18 +166,26 @@ class TestCodeAnalyzerWithBlarify:
     
     async def test_analyze_file_with_blarify(self, analyzer):
         """Test analyzing a file with Blarify integration."""
-        # Mock the connector's run_query method
-        analyzer.connector.run_query.return_value = [{
-            "content": "def vulnerable_function(user_input):\n    return eval(user_input)",
-            "path": "/path/to/file.py"
-        }]
+        # Set up the necessary mocks
+        from skwaq.shared.finding import Finding
+        finding = Finding(
+            type="ast_analysis",
+            vulnerability_type="Code Injection",
+            description="Test finding",
+            file_id=1,
+            line_number=1,
+            severity="High",
+            confidence=0.8,
+        )
         
-        # Mock BlarifyIntegration.extract_code_structure
+        # Mock strategy analysis to return our test finding
+        for strategy in analyzer.strategies.values():
+            if hasattr(strategy, "analyze"):
+                strategy.analyze = AsyncMock(return_value=[finding])
+        
+        # Mock BlarifyIntegration if available
         if analyzer.blarify_integration:
-            # Save original method
-            original_extract = analyzer.blarify_integration.extract_code_structure
-            
-            # Mock the method
+            # Mock Blarify methods
             analyzer.blarify_integration.extract_code_structure = MagicMock(return_value={
                 "functions": [
                     {
@@ -183,66 +197,24 @@ class TestCodeAnalyzerWithBlarify:
                 ],
                 "classes": []
             })
-            
-            # Mock analyze_security_patterns
             analyzer.blarify_integration.analyze_security_patterns = MagicMock(return_value=[])
+        
+        # Mock finding storage
+        with patch("skwaq.code_analysis.strategies.base.AnalysisStrategy._create_finding_node"):
+            # Analyze with Blarify integration
+            result = await analyzer.analyze_file(
+                file_id=1,
+                language="Python",
+                analysis_options={"code_structure_mapping": True}
+            )
             
-            try:
-                # Analyze the file
-                # Mock the AST analyzer to return at least one finding
-                from skwaq.shared.finding import Finding
-                finding = Finding(
-                    type="ast_analysis",
-                    vulnerability_type="Code Injection",
-                    description="Test finding",
-                    file_id=1,
-                    line_number=1,
-                    severity="High",
-                    confidence=0.8,
-                )
-                
-                for strategy in analyzer.strategies.values():
-                    if hasattr(strategy, "analyze"):
-                        strategy.analyze = AsyncMock(return_value=[finding])
-                
-                # Mock the Neo4j connector to avoid database connection issues
-                with patch("skwaq.code_analysis.strategies.base.AnalysisStrategy._create_finding_node"), \
-                     patch.object(analyzer.connector, "run_query", return_value=[{"content": "test code", "path": "/test/file.py"}]), \
-                     patch.object(analyzer.connector, "create_node", return_value=123), \
-                     patch.object(analyzer.connector, "create_relationship", return_value=True):
-                    result = await analyzer.analyze_file(
-                        file_id=1,
-                        language="Python",
-                        analysis_options={"code_structure_mapping": True}
-                    )
-                
-                # Verify Blarify methods were called if available
-                if BLARIFY_AVAILABLE:
-                    analyzer.blarify_integration.extract_code_structure.assert_called_once()
-                    analyzer.blarify_integration.analyze_security_patterns.assert_called_once()
-                
-                # We're mocking the response, so just check that the result exists
-                assert hasattr(result, "vulnerabilities_found")
-                
-            finally:
-                # Restore original method
-                if hasattr(analyzer.blarify_integration, "extract_code_structure"):
-                    analyzer.blarify_integration.extract_code_structure = original_extract
-        else:
-            # Mock the Neo4j connector to avoid database connection issues
-            with patch("skwaq.code_analysis.strategies.base.AnalysisStrategy._create_finding_node"), \
-                 patch.object(analyzer.connector, "run_query", return_value=[{"content": "test code", "path": "/test/file.py"}]), \
-                 patch.object(analyzer.connector, "create_node", return_value=123), \
-                 patch.object(analyzer.connector, "create_relationship", return_value=True):
-                # If Blarify is not available, still test regular analysis
-                result = await analyzer.analyze_file(
-                    file_id=1,
-                    language="Python",
-                    analysis_options={}
-                )
-                
-                # We're mocking the response, so we just need to verify the result object exists
-                assert hasattr(result, "vulnerabilities_found")
+            # Verify the result
+            assert hasattr(result, "vulnerabilities_found")
+            
+            # Verify Blarify methods were called if available
+            if analyzer.blarify_integration:
+                analyzer.blarify_integration.extract_code_structure.assert_called_once()
+                analyzer.blarify_integration.analyze_security_patterns.assert_called_once()
 
 
 @pytest.mark.asyncio
