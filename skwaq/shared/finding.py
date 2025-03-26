@@ -9,6 +9,37 @@ from typing import Dict, Any, Optional, List
 
 
 @dataclass
+class CodeSummary:
+    """Represents a summary of a code component.
+    
+    This class provides a standardized structure for representing code summaries
+    at different levels of abstraction (function, class, module, system).
+    """
+    
+    name: str  # Name of the code component
+    summary: str  # Summary of the component
+    complexity: int  # Complexity rating
+    component_type: str  # Type of component (function, class, module, system)
+    responsible_for: List[str]  # List of responsibilities
+    input_types: List[str]  # List of input types (for functions)
+    output_types: List[str]  # List of output types (for functions)
+    security_considerations: List[str]  # Security considerations
+    
+
+@dataclass
+class ArchitectureModel:
+    """Represents an architectural model of a system.
+    
+    This class provides a standardized structure for representing the
+    architecture of a software system, with components and relationships.
+    """
+    
+    name: str  # Name of the system
+    components: List[Dict[str, Any]]  # List of components
+    relationships: List[Dict[str, Any]]  # List of relationships between components
+
+
+@dataclass
 class Finding:
     """Represents a potential vulnerability finding in source code.
 
@@ -140,6 +171,7 @@ class AnalysisResult:
     metadata: Dict[str, Any] = field(default_factory=dict)  # Analysis metadata
     metrics: Optional[Dict[str, Any]] = None  # Code metrics if collected
     advanced_analysis_results: Dict[str, Any] = field(default_factory=dict)  # Results from advanced analysis
+    summary: Optional[CodeSummary] = None  # Code summary if generated
 
     @property
     def vulnerabilities_found(self) -> int:

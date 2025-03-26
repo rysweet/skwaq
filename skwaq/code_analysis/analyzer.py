@@ -13,7 +13,7 @@ from ..db.neo4j_connector import get_connector
 from ..core.openai_client import get_openai_client
 from ..utils.logging import get_logger, LogEvent
 from ..utils.config import get_config
-from ..shared.finding import Finding, AnalysisResult
+from ..shared.finding import Finding, AnalysisResult, CodeSummary, ArchitectureModel
 from .strategies.base import AnalysisStrategy
 from .strategies.pattern_matching import PatternMatchingStrategy
 from .strategies.semantic_analysis import SemanticAnalysisStrategy
@@ -489,3 +489,81 @@ class CodeAnalyzer:
         """
         from datetime import datetime, UTC
         return datetime.now(UTC).isoformat()
+        
+    async def summarize_code(self, code: str, level: str = "function") -> CodeSummary:
+        """Summarize code at the specified level.
+        
+        Args:
+            code: Code to summarize
+            level: Level of summarization (function, class, module, system)
+            
+        Returns:
+            CodeSummary object
+        """
+        # This is a placeholder method for the C4 milestone
+        # It will be implemented in the next development phase
+        return CodeSummary(
+            name="placeholder",
+            summary="Code summary placeholder",
+            complexity=0,
+            component_type=level,
+            responsible_for=[],
+            input_types=[],
+            output_types=[],
+            security_considerations=[]
+        )
+    
+    async def infer_intent(self, code: str, level: str = "function") -> Dict[str, Any]:
+        """Infer developer intent from code.
+        
+        Args:
+            code: Code to analyze
+            level: Level of intent inference (function, class, module)
+            
+        Returns:
+            Dictionary with intent information
+        """
+        # This is a placeholder method for the C4 milestone
+        # It will be implemented in the next development phase
+        return {
+            "intent": "Placeholder intent",
+            "purpose": "Placeholder purpose",
+            "confidence": 0.5
+        }
+    
+    async def reconstruct_architecture(self, repo_path: str) -> ArchitectureModel:
+        """Reconstruct the architecture of a repository.
+        
+        Args:
+            repo_path: Path to the repository
+            
+        Returns:
+            ArchitectureModel representing the system architecture
+        """
+        # This is a placeholder method for the C4 milestone
+        # It will be implemented in the next development phase
+        return ArchitectureModel(
+            name="Placeholder Architecture",
+            components=[
+                {"name": "component1", "type": "module"}
+            ],
+            relationships=[
+                {"source": "component1", "target": "component2", "type": "uses"}
+            ]
+        )
+    
+    async def find_cross_references(self, symbol: Dict[str, Any]) -> Dict[str, Any]:
+        """Find cross-references for a symbol.
+        
+        Args:
+            symbol: Dictionary with symbol information
+            
+        Returns:
+            Dictionary with cross-reference information
+        """
+        # This is a placeholder method for the C4 milestone
+        # It will be implemented in the next development phase
+        return {
+            "symbol": symbol.get("name", ""),
+            "references": []
+        }
