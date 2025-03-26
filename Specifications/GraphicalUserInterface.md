@@ -34,3 +34,16 @@ The GUI will have the following main components:
 10. **Status Bar**: A status bar at the bottom of the window to display system status, notifications, and other relevant information.
 11. **Search Bar**: A search bar for quickly finding specific nodes, edges, or vulnerabilities within the knowledge graph or investigation results.
 12. **Export Options**: Options for exporting the knowledge graph, investigation results, and vulnerability assessment reports in various formats (e.g., PDF, CSV, JSON).
+
+## Implementation Guidelines
+
+The GUI code will be in typescript with a React frontend and a Python backend. The GUI will be designed to be modular and extensible, allowing for future enhancements and additional features as needed. The following guidelines should be followed during implementation:
+- Use a consistent design language and style throughout the GUI to ensure a cohesive user experience.
+- Follow best practices for accessibility and usability, ensuring that the GUI is easy to navigate and use for all users.
+- Implement responsive design principles to ensure the GUI works well on different screen sizes and devices.
+- Use appropriate libraries and frameworks for graph visualization, chat interfaces, and workflow management to provide a smooth and efficient user experience. For 3D graph visualization we would like to use https://github.com/vasturiano/3d-force-graph
+- Ensure that the GUI is well-documented, with clear instructions and examples for users to understand how to use each feature and functionality.
+- Implement error handling and logging to capture any issues that may arise during the use of the GUI, providing users with helpful feedback and support.
+- Ensure that the GUI is thoroughly tested, with unit tests and integration tests to verify the functionality and performance of each component.
+- Use version control (e.g., Git) to manage changes to the GUI code, allowing for easy collaboration and tracking of modifications.
+- The python backend will leverage the same APIs and libraries used in the CLI version of the copilot, ensuring consistency and compatibility between the two interfaces. 
