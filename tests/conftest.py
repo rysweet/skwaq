@@ -89,45 +89,10 @@ def reset_registries(monkeypatch):
             return mock_openai_client
         return original_get_openai_client(config, async_mode, registry_key)
 
-    # Make sure RepositoryIngestor methods aren't mocked when directly called in unit tests
-    class UnitTestRepositoryIngestor(code_ingestion_module.RepositoryIngestor):
-        """Specialized ingestor for unit tests to prevent method mocking issues."""
-
-        # Store original method references
-        orig_parse_github_url = code_ingestion_module.RepositoryIngestor._parse_github_url
-        orig_is_code_file = code_ingestion_module.RepositoryIngestor._is_code_file
-        orig_detect_language = code_ingestion_module.RepositoryIngestor._detect_language
-        orig_get_timestamp = code_ingestion_module.RepositoryIngestor._get_timestamp
-        orig_generate_repo_summary = code_ingestion_module.RepositoryIngestor._generate_repo_summary
-
-        # Override with direct calls to original methods
-        def _parse_github_url(self, url):
-            return self.orig_parse_github_url(self, url)
-            
-        def _is_code_file(self, file_path):
-            return self.orig_is_code_file(self, file_path)
-            
-        def _detect_language(self, file_path):
-            return self.orig_detect_language(self, file_path)
-            
-        def _get_timestamp(self):
-            return self.orig_get_timestamp(self)
-            
-        async def _generate_repo_summary(self, repo_path, repo_name):
-            # For testing just return the mocked response directly
-            if hasattr(self, 'openai_client') and self.openai_client:
-                if hasattr(self.openai_client, 'get_completion'):
-                    if callable(getattr(self.openai_client.get_completion, 'assert_called_once', None)):
-                        # This is a mock - call it once and return its value
-                        return await self.openai_client.get_completion()
-
-    # Apply the patches
+    # Apply the patches for the registry functions
     monkeypatch.setattr("skwaq.db.neo4j_connector.get_connector", mock_get_connector)
     monkeypatch.setattr(
         "skwaq.core.openai_client.get_openai_client", mock_get_openai_client
-    )
-    monkeypatch.setattr(
-        "skwaq.ingestion.code_ingestion.RepositoryIngestor", UnitTestRepositoryIngestor
     )
 
     # Run the test
