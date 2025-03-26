@@ -349,9 +349,19 @@ class TestIngestionFunctions:
             assert args[0] == github_url
             assert kwargs.get('metadata_only') is True
 
-    @pytest.mark.isolated  # This test needs to run in isolation
-    async def test_list_repositories(self, mock_connector):
-        """Test listing repositories."""
+    async def test_list_repositories(self):
+        """Test listing repositories with completely isolated environment."""
+        # Create a clean environment for this test
+        import sys
+        import importlib
+        
+        # Remove module from sys.modules to force reload
+        if "skwaq.ingestion.code_ingestion" in sys.modules:
+            del sys.modules["skwaq.ingestion.code_ingestion"]
+            
+        # Create fresh mock connector
+        mock_connector = MagicMock()
+        
         # Define mock query result
         mock_query_result = [
             {
@@ -378,42 +388,16 @@ class TestIngestionFunctions:
             }
         ]
         
-        # Configure the mock connector to return our mock data
-        # We need to reset the mock first to avoid previous calls interfering
-        mock_connector.reset_mock()
+        # Configure the mock connector
         mock_connector.run_query.return_value = mock_query_result
         
-        # Import the function directly (not from a mock)
-        # Note: This function is simpler and doesn't need as much mocking
-        from skwaq.ingestion.code_ingestion import list_repositories
-        
-        # Apply our test-specific implementation (not needed for this test,
-        # but helps to isolate from potential issues in surrounding code)
-        async def mock_list_repositories_fn(connector):
-            # Prepare the query (similar to the original implementation)
-            query = """
-            MATCH (r:Repository)
-            OPTIONAL MATCH (r)-[:HAS_FILE]->(f:File)
-            WITH r, COUNT(f) as files, COUNT(CASE WHEN f.is_code = true THEN f END) as code_files
-            RETURN 
-                id(r) as id, 
-                r.name as name, 
-                r.path as path, 
-                r.url as url, 
-                r.ingested_at as ingested_at,
-                files, 
-                code_files,
-                r.summary as summary,
-                labels(r) as labels
-            ORDER BY r.ingested_at DESC
-            """
+        # Apply patches for external dependencies
+        with patch("skwaq.db.neo4j_connector.get_connector", return_value=mock_connector), \
+             patch("skwaq.ingestion.code_ingestion.get_connector", return_value=mock_connector):
             
-            # Call the connector's run_query method
-            return connector.run_query(query, {})
-        
-        # Patch the function with our implementation
-        with patch("skwaq.ingestion.code_ingestion.list_repositories", 
-                  side_effect=mock_list_repositories_fn):
+            # Import the function after patching dependencies
+            from skwaq.ingestion.code_ingestion import list_repositories
+            
             # Call the function
             result = await list_repositories(connector=mock_connector)
             
@@ -424,7 +408,15 @@ class TestIngestionFunctions:
             
             # Verify the result
             assert len(result) == 2
-            assert result[0]["name"] == "repo1"
-            assert result[0]["id"] == 1
-            assert result[1]["name"] == "repo2"
-            assert result[1]["id"] == 2
+            
+            # First repository
+            repo1 = result[0]
+            assert repo1["name"] == "repo1"
+            assert repo1["id"] == 1
+            assert repo1["path"] == "/path/to/repo1"
+            
+            # Second repository
+            repo2 = result[1]
+            assert repo2["name"] == "repo2"
+            assert repo2["id"] == 2
+            assert repo2["path"] == "/path/to/repo2"
