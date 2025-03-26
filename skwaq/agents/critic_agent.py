@@ -24,7 +24,7 @@ logger = get_logger(__name__)
 
 class CriticAgent(AutogenChatAgent):
     """Critic agent for evaluating vulnerability findings.
-    
+
     The critic agent evaluates findings from other agents, looking for
     false positives, missed vulnerabilities, and providing feedback.
     """
@@ -77,22 +77,22 @@ vulnerability assessment.
             agent_id=agent_id,
             model=model,
         )
-        
+
         # Task handling
         self.assigned_tasks: Dict[str, Task] = {}
-        
+
     async def _start(self):
         """Initialize critic agent on startup."""
         await super()._start()
-        
+
         # Register for task assignments
         self.register_event_handler(TaskAssignmentEvent, self._handle_task_assignment)
-        
+
         # Register capabilities with orchestrator
         await self._register_capabilities()
-        
+
         logger.info(f"Critic agent started: {self.name}")
-        
+
     async def _register_capabilities(self):
         """Register capabilities with the orchestrator."""
         # Find orchestrator
@@ -101,43 +101,43 @@ vulnerability assessment.
             if "orchestrator" in agent.name.lower():
                 orchestrator = agent
                 break
-                
+
         if not orchestrator:
             logger.warning("No orchestrator found to register capabilities with")
             return
-            
+
         # Register capabilities
         capabilities = {
             "capabilities": [
                 "criticism",
                 "false_positive_detection",
                 "finding_evaluation",
-                "vulnerability_prioritization"
+                "vulnerability_prioritization",
             ]
         }
-        
+
         registration_event = AgentCommunicationEvent(
             sender_id=self.agent_id,
             receiver_id=orchestrator.agent_id,
             message=json.dumps(capabilities),
             message_type="register_capability",
         )
-        
+
         self.emit_event(registration_event)
         logger.debug(f"Registered capabilities with orchestrator: {capabilities}")
-    
+
     async def _handle_task_assignment(self, event: TaskAssignmentEvent) -> None:
         """Handle task assignment event.
-        
+
         Args:
             event: Task assignment event
         """
         # Only handle tasks assigned to this agent
         if event.receiver_id != self.agent_id:
             return
-            
+
         logger.debug(f"Received task assignment: {event.task_id} - {event.task_type}")
-        
+
         # Create task object
         task = Task(
             task_id=event.task_id,
@@ -148,16 +148,16 @@ vulnerability assessment.
             sender_id=event.sender_id,
             receiver_id=event.receiver_id,
         )
-        
+
         # Store task
         self.assigned_tasks[event.task_id] = task
-        
+
         # Process task asynchronously
         asyncio.create_task(self._process_task(event.task_id))
-    
+
     async def _process_task(self, task_id: str) -> None:
         """Process an assigned task.
-        
+
         Args:
             task_id: ID of the task to process
         """
@@ -165,32 +165,36 @@ vulnerability assessment.
         if not task:
             logger.error(f"Task {task_id} not found")
             return
-            
+
         try:
             # Update task status
             task.status = "processing"
-            
+
             # Import the critic provider here to avoid circular imports
             from .data_providers import critic_provider
-            
+
             # Process task based on type
             if task.task_type == "critique_findings":
                 result = await critic_provider.critique_findings(task.task_parameters)
             elif task.task_type == "prioritize_vulnerabilities":
-                result = await critic_provider.prioritize_vulnerabilities(task.task_parameters)
+                result = await critic_provider.prioritize_vulnerabilities(
+                    task.task_parameters
+                )
             elif task.task_type == "analyze_false_positives":
-                result = await critic_provider.analyze_false_positives(task.task_parameters)
+                result = await critic_provider.analyze_false_positives(
+                    task.task_parameters
+                )
             else:
                 logger.warning(f"Unknown task type: {task.task_type}")
                 task.status = "failed"
                 task.result = {"error": f"Unknown task type: {task.task_type}"}
                 return
-                
+
             # Update task with result
             task.status = "completed"
             task.result = result
             task.completed_time = time.time()
-            
+
             # Send task result event
             result_event = TaskResultEvent(
                 sender_id=self.agent_id,
@@ -199,18 +203,18 @@ vulnerability assessment.
                 status="completed",
                 result=result,
             )
-            
+
             self.emit_event(result_event)
             logger.debug(f"Completed task {task_id}")
-            
+
         except Exception as e:
             logger.exception(f"Error processing task {task_id}: {e}")
-            
+
             # Update task with error
             task.status = "failed"
             task.result = {"error": str(e)}
             task.completed_time = time.time()
-            
+
             # Send task failure event
             failure_event = TaskResultEvent(
                 sender_id=self.agent_id,
@@ -219,5 +223,5 @@ vulnerability assessment.
                 status="failed",
                 result={"error": str(e)},
             )
-            
+
             self.emit_event(failure_event)

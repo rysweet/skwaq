@@ -12,7 +12,8 @@ from autogen_core.agent import Agent
 from autogen_core.event import BaseEvent, Event, EventHook
 
 from .base import Workflow
-from ..agents.vulnerability_agents import SkwaqAgent, KnowledgeRetrievalEvent
+from ..agents.skwaq_agent import SkwaqAgent
+from ..agents.vulnerability_events import KnowledgeRetrievalEvent
 from ..db.neo4j_connector import get_connector
 from ..utils.logging import get_logger
 

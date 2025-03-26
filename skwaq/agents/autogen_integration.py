@@ -22,10 +22,10 @@ from ..utils.config import get_config
 from ..utils.logging import get_logger
 from ..core.openai_client import get_openai_client
 from ..events.system_events import (
-    EventBus, 
-    SystemEvent, 
-    AgentLifecycleEvent, 
-    AgentLifecycleState
+    EventBus,
+    SystemEvent,
+    AgentLifecycleEvent,
+    AgentLifecycleState,
 )
 
 logger = get_logger(__name__)
@@ -40,9 +40,11 @@ class AutogenEventBridge:
 
     def __init__(self) -> None:
         """Initialize the event bridge."""
-        self.autogen_event_handlers: Dict[Type[BaseEvent], List[Callable[[BaseEvent], None]]] = {}
+        self.autogen_event_handlers: Dict[
+            Type[BaseEvent], List[Callable[[BaseEvent], None]]
+        ] = {}
         self.skwaq_event_bus = EventBus()
-        
+
         # Register with AutoGen Core's event system
         self._setup_autogen_hooks()
 
@@ -60,7 +62,7 @@ class AutogenEventBridge:
                 filters={},
             ),
         )
-        
+
         # Register for AgentCloseEvent
         register_hook(
             autogen_core.event.AgentCloseEvent,
@@ -69,7 +71,7 @@ class AutogenEventBridge:
                 filters={},
             ),
         )
-        
+
         # Register for GroupChatInitEvent
         register_hook(
             autogen_core.event.GroupChatInitEvent,
@@ -78,7 +80,7 @@ class AutogenEventBridge:
                 filters={},
             ),
         )
-        
+
         # Register for MessageEvent
         register_hook(
             autogen_core.event.MessageEvent,
@@ -87,7 +89,7 @@ class AutogenEventBridge:
                 filters={},
             ),
         )
-        
+
         logger.info("AutoGen Core event hooks registered")
 
     def _handle_agent_init_event(self, event: BaseEvent) -> None:
@@ -98,7 +100,7 @@ class AutogenEventBridge:
         """
         # Cast to correct event type
         agent_init_event = cast(autogen_core.event.AgentInitEvent, event)
-        
+
         # Convert to Skwaq event
         skwaq_event = AgentLifecycleEvent(
             agent_id=str(id(agent_init_event.agent)),
@@ -109,11 +111,13 @@ class AutogenEventBridge:
                 "autogen_event": "AgentInitEvent",
             },
         )
-        
+
         # Publish to Skwaq event bus
         self.skwaq_event_bus.publish(skwaq_event)
-        
-        logger.debug(f"Converted AutoGen AgentInitEvent to Skwaq AgentLifecycleEvent for {agent_init_event.agent.name}")
+
+        logger.debug(
+            f"Converted AutoGen AgentInitEvent to Skwaq AgentLifecycleEvent for {agent_init_event.agent.name}"
+        )
 
     def _handle_agent_close_event(self, event: BaseEvent) -> None:
         """Handle AutoGen AgentCloseEvent.
@@ -123,7 +127,7 @@ class AutogenEventBridge:
         """
         # Cast to correct event type
         agent_close_event = cast(autogen_core.event.AgentCloseEvent, event)
-        
+
         # Convert to Skwaq event
         skwaq_event = AgentLifecycleEvent(
             agent_id=str(id(agent_close_event.agent)),
@@ -134,11 +138,13 @@ class AutogenEventBridge:
                 "autogen_event": "AgentCloseEvent",
             },
         )
-        
+
         # Publish to Skwaq event bus
         self.skwaq_event_bus.publish(skwaq_event)
-        
-        logger.debug(f"Converted AutoGen AgentCloseEvent to Skwaq AgentLifecycleEvent for {agent_close_event.agent.name}")
+
+        logger.debug(
+            f"Converted AutoGen AgentCloseEvent to Skwaq AgentLifecycleEvent for {agent_close_event.agent.name}"
+        )
 
     def _handle_group_chat_init_event(self, event: BaseEvent) -> None:
         """Handle AutoGen GroupChatInitEvent.
@@ -148,7 +154,7 @@ class AutogenEventBridge:
         """
         # Cast to correct event type
         group_chat_init_event = cast(autogen_core.event.GroupChatInitEvent, event)
-        
+
         # For each agent in the group chat, emit a lifecycle event
         for agent in group_chat_init_event.agents:
             skwaq_event = AgentLifecycleEvent(
@@ -161,11 +167,13 @@ class AutogenEventBridge:
                     "group_chat_id": str(id(group_chat_init_event.manager)),
                 },
             )
-            
+
             # Publish to Skwaq event bus
             self.skwaq_event_bus.publish(skwaq_event)
-        
-        logger.debug(f"Processed AutoGen GroupChatInitEvent with {len(group_chat_init_event.agents)} agents")
+
+        logger.debug(
+            f"Processed AutoGen GroupChatInitEvent with {len(group_chat_init_event.agents)} agents"
+        )
 
     def _handle_message_event(self, event: BaseEvent) -> None:
         """Handle AutoGen MessageEvent.
@@ -175,7 +183,7 @@ class AutogenEventBridge:
         """
         # Cast to correct event type
         message_event = cast(autogen_core.event.MessageEvent, event)
-        
+
         # For now, we just log this event
         logger.debug(
             f"AutoGen MessageEvent: {message_event.sender} -> {message_event.receiver}: "
@@ -209,16 +217,16 @@ class AutogenAgentAdapter:
         self.system_message = system_message
         self.config = get_config()
         self.openai_client = get_openai_client()
-        
+
         self.model = model or self.config.get("openai", {}).get("chat_model", "gpt4o")
         self.kwargs = kwargs
-        
+
         # The actual AutoGen agent
         self.agent: Optional[Agent] = None
-        
+
         # Create event bridge for this agent
         self.event_bridge = AutogenEventBridge()
-        
+
         logger.info(f"Created AutoGen agent adapter for {name}")
 
     async def create_agent(self) -> Agent:
@@ -229,7 +237,7 @@ class AutogenAgentAdapter:
         """
         if self.agent is not None:
             return self.agent
-            
+
         # Get LLM configuration
         model_config = {
             "model": self.model,
@@ -238,7 +246,7 @@ class AutogenAgentAdapter:
             "api_type": self.openai_client.api_type,
             "api_version": self.openai_client.api_version,
         }
-        
+
         # Create the ChatAgent
         self.agent = ChatAgent(
             name=self.name,
@@ -246,7 +254,7 @@ class AutogenAgentAdapter:
             llm_config=model_config,
             **self.kwargs,
         )
-        
+
         logger.info(f"Created AutoGen ChatAgent {self.name} with model {self.model}")
         return self.agent
 
@@ -281,14 +289,16 @@ class AutogenGroupChatAdapter:
         self.name = name
         self.agents = agents
         self.kwargs = kwargs
-        
+
         # The actual AutoGen GroupChat
         self.group_chat: Optional[autogen_core.GroupChat] = None
-        
+
         # Create event bridge for this group chat
         self.event_bridge = AutogenEventBridge()
-        
-        logger.info(f"Created AutoGen GroupChat adapter for {name} with {len(agents)} agents")
+
+        logger.info(
+            f"Created AutoGen GroupChat adapter for {name} with {len(agents)} agents"
+        )
 
     async def create_group_chat(self) -> autogen_core.GroupChat:
         """Create and initialize the AutoGen GroupChat.
@@ -298,14 +308,16 @@ class AutogenGroupChatAdapter:
         """
         if self.group_chat is not None:
             return self.group_chat
-            
+
         # Create the GroupChat
         self.group_chat = autogen_core.GroupChat(
             agents=self.agents,
             **self.kwargs,
         )
-        
-        logger.info(f"Created AutoGen GroupChat {self.name} with {len(self.agents)} agents")
+
+        logger.info(
+            f"Created AutoGen GroupChat {self.name} with {len(self.agents)} agents"
+        )
         return self.group_chat
 
     async def close_group_chat(self) -> None:

@@ -4,7 +4,18 @@ This module provides the foundation for the Skwaq agent system, including base
 agent classes, agent lifecycle management, and other core agent functionality.
 """
 
-from typing import Dict, List, Any, Optional, Set, Callable, Awaitable, Type, Union, cast
+from typing import (
+    Dict,
+    List,
+    Any,
+    Optional,
+    Set,
+    Callable,
+    Awaitable,
+    Type,
+    Union,
+    cast,
+)
 import inspect
 import asyncio
 import uuid
@@ -84,34 +95,40 @@ class BaseAgent:
         self.config_key = config_key
         self.agent_id = agent_id or str(uuid.uuid4())
         self.config = get_config()
-        
+
         # Create agent context
         self.context = AgentContext(
             agent_id=self.agent_id,
             config=self.config.get(config_key, {}),
         )
-        
+
         # Set up event handlers
-        self._event_handlers: Dict[Type[BaseEvent], List[Callable[[BaseEvent], Awaitable[None]]]] = {}
-        
+        self._event_handlers: Dict[
+            Type[BaseEvent], List[Callable[[BaseEvent], Awaitable[None]]]
+        ] = {}
+
         # Register with AgentRegistry
         self._register_with_registry()
-        
+
     def _register_with_registry(self):
         """Register this agent with the AgentRegistry.
-        
+
         This method exists as a separate function to make it easier to mock in tests.
         """
         # Import registry only when needed to avoid circular dependency
         import skwaq.agents.registry
+
         skwaq.agents.registry.AgentRegistry.register(self)
-        
+
         # Emit agent creation event
-        self._emit_lifecycle_event(AgentLifecycleState.CREATED, {
-            "description": self.description,
-            "config_key": self.config_key,
-        })
-        
+        self._emit_lifecycle_event(
+            AgentLifecycleState.CREATED,
+            {
+                "description": self.description,
+                "config_key": self.config_key,
+            },
+        )
+
         logger.info(f"Agent {self.name} (ID: {self.agent_id}) initialized")
 
     async def start(self) -> None:
@@ -130,26 +147,26 @@ class BaseAgent:
         try:
             self.context.state = AgentState.STARTING
             self.context.start_time = time.time()
-            
+
             # Emit agent starting event
             self._emit_lifecycle_event(AgentLifecycleState.STARTING)
-            
+
             # Call agent-specific startup logic
             await self._start()
-            
+
             self.context.state = AgentState.RUNNING
-            
+
             # Emit agent started event
             self._emit_lifecycle_event(AgentLifecycleState.STARTED)
-            
+
             logger.info(f"Agent {self.name} (ID: {self.agent_id}) started")
         except Exception as e:
             self.context.state = AgentState.ERROR
             self.context.error = e
-            
+
             # Emit agent error event
             self._emit_lifecycle_event(AgentLifecycleState.ERROR, {"error": str(e)})
-            
+
             logger.error(f"Error starting agent {self.name} (ID: {self.agent_id}): {e}")
             raise
 
@@ -175,27 +192,27 @@ class BaseAgent:
 
         try:
             self.context.state = AgentState.STOPPING
-            
+
             # Emit agent stopping event
             self._emit_lifecycle_event(AgentLifecycleState.STOPPING)
-            
+
             # Call agent-specific shutdown logic
             await self._stop()
-            
+
             self.context.state = AgentState.STOPPED
             self.context.stop_time = time.time()
-            
+
             # Emit agent stopped event
             self._emit_lifecycle_event(AgentLifecycleState.STOPPED)
-            
+
             logger.info(f"Agent {self.name} (ID: {self.agent_id}) stopped")
         except Exception as e:
             self.context.state = AgentState.ERROR
             self.context.error = e
-            
+
             # Emit agent error event
             self._emit_lifecycle_event(AgentLifecycleState.ERROR, {"error": str(e)})
-            
+
             logger.error(f"Error stopping agent {self.name} (ID: {self.agent_id}): {e}")
             raise
 
@@ -222,20 +239,20 @@ class BaseAgent:
         try:
             # Call agent-specific pause logic
             await self._pause()
-            
+
             self.context.state = AgentState.PAUSED
-            
+
             # Emit agent paused event
             self._emit_lifecycle_event(AgentLifecycleState.PAUSED)
-            
+
             logger.info(f"Agent {self.name} (ID: {self.agent_id}) paused")
         except Exception as e:
             self.context.state = AgentState.ERROR
             self.context.error = e
-            
+
             # Emit agent error event
             self._emit_lifecycle_event(AgentLifecycleState.ERROR, {"error": str(e)})
-            
+
             logger.error(f"Error pausing agent {self.name} (ID: {self.agent_id}): {e}")
             raise
 
@@ -262,20 +279,20 @@ class BaseAgent:
         try:
             # Call agent-specific resume logic
             await self._resume()
-            
+
             self.context.state = AgentState.RUNNING
-            
+
             # Emit agent resumed event
             self._emit_lifecycle_event(AgentLifecycleState.RESUMED)
-            
+
             logger.info(f"Agent {self.name} (ID: {self.agent_id}) resumed")
         except Exception as e:
             self.context.state = AgentState.ERROR
             self.context.error = e
-            
+
             # Emit agent error event
             self._emit_lifecycle_event(AgentLifecycleState.ERROR, {"error": str(e)})
-            
+
             logger.error(f"Error resuming agent {self.name} (ID: {self.agent_id}): {e}")
             raise
 
@@ -297,7 +314,7 @@ class BaseAgent:
             event: The event to process
         """
         event_type = type(event)
-        
+
         if event_type in self._event_handlers:
             for handler in self._event_handlers[event_type]:
                 try:
@@ -308,7 +325,9 @@ class BaseAgent:
                     )
 
     def register_event_handler(
-        self, event_type: Type[BaseEvent], handler: Callable[[BaseEvent], Awaitable[None]]
+        self,
+        event_type: Type[BaseEvent],
+        handler: Callable[[BaseEvent], Awaitable[None]],
     ) -> None:
         """Register a handler for a specific event type.
 
@@ -318,9 +337,9 @@ class BaseAgent:
         """
         if event_type not in self._event_handlers:
             self._event_handlers[event_type] = []
-        
+
         self._event_handlers[event_type].append(handler)
-        
+
         # Register with autogen_core's event system
         register_hook(
             event_type,
@@ -329,16 +348,18 @@ class BaseAgent:
                 filters={"agent_id": self.agent_id},
             ),
         )
-        
+
         logger.debug(
             f"Registered handler for {event_type.__name__} events in agent {self.name}"
         )
 
-    def _emit_lifecycle_event(self, state: AgentLifecycleState, metadata: Optional[Dict[str, Any]] = None) -> None:
+    def _emit_lifecycle_event(
+        self, state: AgentLifecycleState, metadata: Optional[Dict[str, Any]] = None
+    ) -> None:
         """Emit a lifecycle event.
-        
+
         This is a helper method to emit standardized lifecycle events.
-        
+
         Args:
             state: The lifecycle state to emit
             metadata: Optional metadata to include in the event
@@ -350,7 +371,7 @@ class BaseAgent:
             metadata=metadata or {},
         )
         self.emit_event(event)
-    
+
     def emit_event(self, event: BaseEvent) -> None:
         """Emit an event.
 
@@ -400,7 +421,7 @@ class AutogenChatAgent(BaseAgent):
             **kwargs: Additional arguments to pass to ChatAgent
         """
         super().__init__(name, description, config_key, agent_id)
-        
+
         self.system_message = system_message
         self.model = model or self.config.get("openai", {}).get("chat_model", "gpt4o")
         self.kwargs = kwargs
@@ -410,7 +431,7 @@ class AutogenChatAgent(BaseAgent):
         """Start the Autogen chat agent."""
         # Create an AutoGen ChatAgent
         openai_client = get_openai_client()
-        
+
         # Get LLM configuration
         model_config = {
             "model": self.model,
@@ -419,21 +440,21 @@ class AutogenChatAgent(BaseAgent):
             "api_type": openai_client.api_type,
             "api_version": openai_client.api_version,
         }
-        
+
         self.chat_agent = ChatAgent(
             name=self.name,
             system_message=self.system_message,
             llm_config=model_config,
             **self.kwargs,
         )
-        
+
         logger.info(f"AutoGen chat agent {self.name} created with model {self.model}")
 
     async def _stop(self) -> None:
         """Stop the Autogen chat agent."""
         # Currently, there's no specific shutdown needed for ChatAgent
         self.chat_agent = None
-        
+
     async def chat(self, message: str, sender: Optional[str] = None) -> str:
         """Send a chat message to the agent and get its response.
 
@@ -448,16 +469,18 @@ class AutogenChatAgent(BaseAgent):
             ValueError: If the agent is not in the RUNNING state
         """
         if self.context.state != AgentState.RUNNING:
-            raise ValueError(f"Agent is not running (current state: {self.context.state.value})")
-        
+            raise ValueError(
+                f"Agent is not running (current state: {self.context.state.value})"
+            )
+
         if self.chat_agent is None:
             raise ValueError("Chat agent not initialized")
-        
+
         # TODO: Implement proper async communication with AutoGen
         # For now, we'll just use a direct call
         response = self.chat_agent.generate_reply(
             message=message,
             sender=sender or "user",
         )
-        
+
         return response

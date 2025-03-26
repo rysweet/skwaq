@@ -26,10 +26,10 @@ class AgentRegistry:
     _agents: Dict[str, "BaseAgent"] = {}
     _agents_by_name: Dict[str, List["BaseAgent"]] = {}
     _agents_by_type: Dict[Type["BaseAgent"], List["BaseAgent"]] = {}
-    
+
     # Lock for thread safety
     _lock = threading.RLock()
-    
+
     @classmethod
     def register(cls, agent: "BaseAgent") -> None:
         """Register an agent with the registry.
@@ -39,25 +39,27 @@ class AgentRegistry:
         """
         # Avoiding circular imports
         from .base import BaseAgent
-        
+
         if not isinstance(agent, BaseAgent):
-            raise TypeError(f"Agent must be an instance of BaseAgent, got {type(agent)}")
-        
+            raise TypeError(
+                f"Agent must be an instance of BaseAgent, got {type(agent)}"
+            )
+
         with cls._lock:
             # Register agent by ID
             cls._agents[agent.agent_id] = agent
-            
+
             # Register agent by name
             if agent.name not in cls._agents_by_name:
                 cls._agents_by_name[agent.name] = []
             cls._agents_by_name[agent.name].append(agent)
-            
+
             # Register agent by type
             agent_type = type(agent)
             if agent_type not in cls._agents_by_type:
                 cls._agents_by_type[agent_type] = []
             cls._agents_by_type[agent_type].append(agent)
-            
+
             logger.debug(f"Agent {agent.name} (ID: {agent.agent_id}) registered")
 
     @classmethod
@@ -71,12 +73,12 @@ class AgentRegistry:
             if agent_id not in cls._agents:
                 logger.warning(f"Agent with ID {agent_id} not found in registry")
                 return
-            
+
             agent = cls._agents[agent_id]
-            
+
             # Remove from agents by ID
             del cls._agents[agent_id]
-            
+
             # Remove from agents by name
             if agent.name in cls._agents_by_name:
                 cls._agents_by_name[agent.name] = [
@@ -84,7 +86,7 @@ class AgentRegistry:
                 ]
                 if not cls._agents_by_name[agent.name]:
                     del cls._agents_by_name[agent.name]
-            
+
             # Remove from agents by type
             agent_type = type(agent)
             if agent_type in cls._agents_by_type:
@@ -93,7 +95,7 @@ class AgentRegistry:
                 ]
                 if not cls._agents_by_type[agent_type]:
                     del cls._agents_by_type[agent_type]
-            
+
             logger.debug(f"Agent {agent.name} (ID: {agent_id}) unregistered")
 
     @classmethod
@@ -153,17 +155,18 @@ class AgentRegistry:
         """
         # Import here to avoid circular imports
         from .base import AgentState
-        
+
         with cls._lock:
             agents_to_start = [
-                agent for agent in cls._agents.values()
+                agent
+                for agent in cls._agents.values()
                 if agent.context.state in (AgentState.INITIALIZED, AgentState.STOPPED)
             ]
-        
+
         # Start agents outside of the lock to avoid deadlocks
         start_tasks = [agent.start() for agent in agents_to_start]
         await asyncio.gather(*start_tasks)
-        
+
         logger.info(f"Started {len(agents_to_start)} agents")
 
     @classmethod
@@ -174,17 +177,18 @@ class AgentRegistry:
         """
         # Import here to avoid circular imports
         from .base import AgentState
-        
+
         with cls._lock:
             agents_to_stop = [
-                agent for agent in cls._agents.values()
+                agent
+                for agent in cls._agents.values()
                 if agent.context.state == AgentState.RUNNING
             ]
-        
+
         # Stop agents outside of the lock to avoid deadlocks
         stop_tasks = [agent.stop() for agent in agents_to_stop]
         await asyncio.gather(*stop_tasks)
-        
+
         logger.info(f"Stopped {len(agents_to_stop)} agents")
 
     @classmethod
@@ -198,5 +202,5 @@ class AgentRegistry:
             cls._agents.clear()
             cls._agents_by_name.clear()
             cls._agents_by_type.clear()
-            
+
             logger.warning("Agent registry cleared")

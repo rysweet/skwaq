@@ -73,13 +73,15 @@ class TaskAssignmentEvent(SystemEvent):
             metadata: Optional metadata for the task
         """
         task_metadata = metadata or {}
-        task_metadata.update({
-            "task_id": task_id,
-            "task_type": task_type,
-            "task_parameters": task_parameters or {},
-            "priority": priority
-        })
-        
+        task_metadata.update(
+            {
+                "task_id": task_id,
+                "task_type": task_type,
+                "task_parameters": task_parameters or {},
+                "priority": priority,
+            }
+        )
+
         super().__init__(
             sender=sender_id,
             message=task_description,
@@ -118,14 +120,18 @@ class TaskResultEvent(SystemEvent):
             metadata: Optional metadata for the result
         """
         result_metadata = metadata or {}
-        result_metadata.update({
-            "task_id": task_id,
-            "status": status,
-            "result_summary": str(result)[:100],  # Include a summary in the metadata
-        })
-        
+        result_metadata.update(
+            {
+                "task_id": task_id,
+                "status": status,
+                "result_summary": str(result)[
+                    :100
+                ],  # Include a summary in the metadata
+            }
+        )
+
         message = f"Task {task_id} {status}"
-        
+
         super().__init__(
             sender=sender_id,
             message=message,
