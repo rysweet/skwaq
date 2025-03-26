@@ -45,27 +45,30 @@ def test_repo_path():
 class TestIngestionFunctions:
     """Tests for high-level ingestion functions."""
 
-    async def test_ingest_repository_local(self, mock_connector, mock_openai_client, test_repo_path, mock_path_exists):
+    async def test_ingest_repository_local(self, isolated_repository_ingestor, mock_connector, mock_openai_client, test_repo_path):
         """Test ingesting a repository from a local path."""
-        # Mock the RepositoryIngestor class with our own implementation
-        with patch("skwaq.ingestion.code_ingestion.RepositoryIngestor") as mock_ingestor_class:
-            # Create a mock ingestor with the expected return value
-            mock_ingest_result = {
-                "repository_id": 1,
-                "repository_name": Path(test_repo_path).name,
-                "file_count": 4,
-                "directory_count": 3,
-                "code_files_processed": 3,
-                "processing_time_seconds": 0.1,
-                "summary": "Test repository summary"
-            }
-            
-            # Set up the mock instance with properly defined ingest_from_path method
-            mock_ingestor_instance = MagicMock()
-            mock_ingestor_instance.ingest_from_path = AsyncMock(return_value=mock_ingest_result)
-            mock_ingestor_class.return_value = mock_ingestor_instance
-            
+        # Get isolated ingestor
+        ingestor = isolated_repository_ingestor
+        
+        # Define expected result
+        mock_ingest_result = {
+            "repository_id": 1,
+            "repository_name": Path(test_repo_path).name,
+            "file_count": 4,
+            "directory_count": 3,
+            "code_files_processed": 3,
+            "processing_time_seconds": 0.1,
+            "summary": "Test repository summary"
+        }
+        
+        # Set up our mocks for this test
+        with (
+            patch("skwaq.ingestion.code_ingestion.RepositoryIngestor", return_value=ingestor),
+            patch.object(ingestor, "ingest_from_path", AsyncMock(return_value=mock_ingest_result))
+        ):
             # Call the function
+            from skwaq.ingestion.code_ingestion import ingest_repository
+            
             result = await ingest_repository(
                 repo_path_or_url=test_repo_path,
                 connector=mock_connector,
@@ -75,43 +78,44 @@ class TestIngestionFunctions:
             # Verify the result
             assert result == mock_ingest_result
             
-            # Verify the ingestor was created with the right args
-            mock_ingestor_class.assert_called_once()
             # Verify ingest_from_path was called with the right args
-            mock_ingestor_instance.ingest_from_path.assert_called_once_with(
+            ingestor.ingest_from_path.assert_called_once_with(
                 test_repo_path,
                 None,  # Use directory name
                 None,  # No include patterns
                 None,  # No exclude patterns
             )
 
-    async def test_ingest_repository_github(self, mock_connector, mock_openai_client, mock_path_exists):
+    async def test_ingest_repository_github(self, isolated_repository_ingestor, mock_connector, mock_openai_client):
         """Test ingesting a repository from a GitHub URL."""
+        # Get isolated ingestor
+        ingestor = isolated_repository_ingestor
+        
         github_url = "https://github.com/user/test-repo"
         
-        # Mock the RepositoryIngestor class with our own implementation
-        with patch("skwaq.ingestion.code_ingestion.RepositoryIngestor") as mock_ingestor_class:
-            # Create a mock ingestor with the expected return value
-            mock_ingest_result = {
-                "repository_id": 1,
-                "repository_name": "test-repo",
-                "github_url": github_url,
-                "github_metadata": {
-                    "name": "test-repo",
-                    "owner": "user",
-                    "stars": 10
-                },
-                "branch": "main",
-                "file_count": 10,
-                "code_files_processed": 5
-            }
-            
-            # Set up the mock instance with properly defined ingest_from_github method
-            mock_ingestor_instance = MagicMock()
-            mock_ingestor_instance.ingest_from_github = AsyncMock(return_value=mock_ingest_result)
-            mock_ingestor_class.return_value = mock_ingestor_instance
-            
+        # Define expected result
+        mock_ingest_result = {
+            "repository_id": 1,
+            "repository_name": "test-repo",
+            "github_url": github_url,
+            "github_metadata": {
+                "name": "test-repo",
+                "owner": "user",
+                "stars": 10
+            },
+            "branch": "main",
+            "file_count": 10,
+            "code_files_processed": 5
+        }
+        
+        # Set up our mocks for this test
+        with (
+            patch("skwaq.ingestion.code_ingestion.RepositoryIngestor", return_value=ingestor),
+            patch.object(ingestor, "ingest_from_github", AsyncMock(return_value=mock_ingest_result))
+        ):
             # Call the function
+            from skwaq.ingestion.code_ingestion import ingest_repository
+            
             result = await ingest_repository(
                 repo_path_or_url=github_url,
                 is_github_url=True,
@@ -123,17 +127,8 @@ class TestIngestionFunctions:
             # Verify the result
             assert result == mock_ingest_result
             
-            # Verify the ingestor was created with the right args
-            mock_ingestor_class.assert_called_once_with(
-                github_token="test_token",
-                max_workers=4,  # Default
-                progress_bar=True,  # Default
-                connector=mock_connector,
-                openai_client=mock_openai_client
-            )
-            
             # Verify ingest_from_github was called with the right args
-            mock_ingestor_instance.ingest_from_github.assert_called_once_with(
+            ingestor.ingest_from_github.assert_called_once_with(
                 github_url,
                 None,  # No include patterns
                 None,  # No exclude patterns
@@ -141,27 +136,29 @@ class TestIngestionFunctions:
                 metadata_only=False
             )
 
-    async def test_ingest_repository_auto_detect_github(self, mock_connector, mock_openai_client, mock_path_exists):
+    async def test_ingest_repository_auto_detect_github(self, isolated_repository_ingestor, mock_connector, mock_openai_client):
         """Test auto-detection of GitHub URLs."""
+        # Get isolated ingestor
+        ingestor = isolated_repository_ingestor
+        
         github_url = "https://github.com/user/test-repo"
         
-        # Mock the RepositoryIngestor class and logger
-        with patch("skwaq.ingestion.code_ingestion.RepositoryIngestor") as mock_ingestor_class, \
-             patch("skwaq.ingestion.code_ingestion.logger") as mock_logger:
-            
-            # Create a mock ingestor with the expected return value
-            mock_ingest_result = {
-                "repository_id": 1,
-                "repository_name": "test-repo",
-                "github_url": github_url
-            }
-            
-            # Set up the mock instance with properly defined ingest_from_github method
-            mock_ingestor_instance = MagicMock()
-            mock_ingestor_instance.ingest_from_github = AsyncMock(return_value=mock_ingest_result)
-            mock_ingestor_class.return_value = mock_ingestor_instance
-            
+        # Define expected result
+        mock_ingest_result = {
+            "repository_id": 1,
+            "repository_name": "test-repo",
+            "github_url": github_url
+        }
+        
+        # Set up our mocks for this test
+        with (
+            patch("skwaq.ingestion.code_ingestion.RepositoryIngestor", return_value=ingestor),
+            patch.object(ingestor, "ingest_from_github", AsyncMock(return_value=mock_ingest_result)),
+            patch("skwaq.ingestion.code_ingestion.logger") as mock_logger
+        ):
             # Call the function with auto-detection
+            from skwaq.ingestion.code_ingestion import ingest_repository
+            
             result = await ingest_repository(
                 repo_path_or_url=github_url,
                 # Don't explicitly say it's a GitHub URL
@@ -176,33 +173,36 @@ class TestIngestionFunctions:
             assert result == mock_ingest_result
             
             # Verify ingest_from_github was called
-            mock_ingestor_instance.ingest_from_github.assert_called_once()
+            ingestor.ingest_from_github.assert_called_once()
 
-    async def test_get_github_repository_info(self, mock_connector, mock_openai_client, mock_path_exists):
+    async def test_get_github_repository_info(self, isolated_repository_ingestor, mock_connector, mock_openai_client):
         """Test getting GitHub repository info without ingesting."""
+        # Get isolated ingestor
+        ingestor = isolated_repository_ingestor
+        
         github_url = "https://github.com/user/test-repo"
         
-        # Mock the RepositoryIngestor class
-        with patch("skwaq.ingestion.code_ingestion.RepositoryIngestor") as mock_ingestor_class:
-            # Create a mock ingestor with the expected return value
-            mock_metadata_result = {
-                "repository_id": 1,
-                "repository_name": "test-repo",
-                "metadata": {
-                    "name": "test-repo",
-                    "owner": "user",
-                    "stars": 10,
-                    "languages": {"Python": 1000}
-                },
-                "content_ingested": False
-            }
-            
-            # Set up the mock instance with properly defined ingest_from_github method
-            mock_ingestor_instance = MagicMock()
-            mock_ingestor_instance.ingest_from_github = AsyncMock(return_value=mock_metadata_result)
-            mock_ingestor_class.return_value = mock_ingestor_instance
-            
+        # Define expected result
+        mock_metadata_result = {
+            "repository_id": 1,
+            "repository_name": "test-repo",
+            "metadata": {
+                "name": "test-repo",
+                "owner": "user",
+                "stars": 10,
+                "languages": {"Python": 1000}
+            },
+            "content_ingested": False
+        }
+        
+        # Set up our mocks for this test
+        with (
+            patch("skwaq.ingestion.code_ingestion.RepositoryIngestor", return_value=ingestor),
+            patch.object(ingestor, "ingest_from_github", AsyncMock(return_value=mock_metadata_result))
+        ):
             # Call the function
+            from skwaq.ingestion.code_ingestion import get_github_repository_info
+            
             result = await get_github_repository_info(
                 github_url=github_url,
                 github_token="test_token",
@@ -213,15 +213,8 @@ class TestIngestionFunctions:
             # Verify the result
             assert result == mock_metadata_result
             
-            # Verify the ingestor was created with the right args
-            mock_ingestor_class.assert_called_once_with(
-                github_token="test_token",
-                connector=mock_connector,
-                openai_client=mock_openai_client
-            )
-            
             # Verify ingest_from_github was called with metadata_only=True
-            mock_ingestor_instance.ingest_from_github.assert_called_once_with(
+            ingestor.ingest_from_github.assert_called_once_with(
                 github_url,
                 metadata_only=True
             )

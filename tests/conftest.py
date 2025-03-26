@@ -63,6 +63,14 @@ def reset_registries(monkeypatch):
     code_ingestion_module = importlib.import_module("skwaq.ingestion.code_ingestion")
     patterns_registry_module = importlib.import_module("skwaq.code_analysis.patterns.registry")
     
+    # Keep track of any global instances of CodeAnalyzer
+    try:
+        analyzer_module = importlib.import_module("skwaq.code_analysis.analyzer")
+        if hasattr(analyzer_module, "CodeAnalyzer") and hasattr(analyzer_module.CodeAnalyzer, "_instance"):
+            analyzer_module.CodeAnalyzer._instance = None
+    except (ImportError, AttributeError):
+        pass
+    
     # Reset all known registries before the test
     neo4j_connector_module.reset_connector_registry()
     openai_client_module.reset_client_registry()
@@ -119,7 +127,8 @@ def reset_registries(monkeypatch):
         test_paths = {
             "/path/to/repo", 
             "/tmp/mock_repo",
-            "/tmp/mock_temp_dir"
+            "/tmp/mock_temp_dir",
+            "/test/path"
         }
         
         if str(self) in test_paths:
@@ -141,6 +150,14 @@ def reset_registries(monkeypatch):
     # Reset other global state as needed
     if hasattr(patterns_registry_module, "reset_registry"):
         patterns_registry_module.reset_registry()
+        
+    # Reset any CodeAnalyzer instance
+    try:
+        analyzer_module = importlib.import_module("skwaq.code_analysis.analyzer")
+        if hasattr(analyzer_module, "CodeAnalyzer") and hasattr(analyzer_module.CodeAnalyzer, "_instance"):
+            analyzer_module.CodeAnalyzer._instance = None
+    except (ImportError, AttributeError):
+        pass
 
 
 @pytest.fixture
