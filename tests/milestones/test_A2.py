@@ -150,124 +150,223 @@ class TestMilestoneA2:
     @pytest.mark.asyncio
     async def test_knowledge_agent_functionality(self):
         """Test core knowledge agent functionality."""
-        with patch.object(KnowledgeAgent, '_emit_lifecycle_event'):
-            with patch.object(KnowledgeAgent, 'emit_event'):
-                # Initialize the knowledge agent
-                agent = KnowledgeAgent(name="TestKnowledge")
-                
-                # Test agent creation
-                assert agent.name == "TestKnowledge"
-                assert isinstance(agent.assigned_tasks, dict)
-                
-                # Test knowledge retrieval function
-                result = await agent._retrieve_knowledge({
-                    "query": "test query",
-                    "context": {"test": "context"}
-                })
-                
-                # Check result structure
-                assert "query" in result
-                assert "results" in result
-                assert isinstance(result["results"], list)
-                assert len(result["results"]) > 0
-                
-                # Test task processing (with mock)
-                task_id = str(uuid.uuid4())
-                task = Task(
-                    task_id=task_id,
-                    task_type="retrieve_knowledge",
-                    task_description="Test retrieval",
-                    task_parameters={"query": "test"},
-                    priority=1,
-                    sender_id="test_sender",
-                    receiver_id=agent.agent_id
-                )
-                
-                agent.assigned_tasks[task_id] = task
-                
-                # Mock emit_event for result
-                agent.emit_event = MagicMock()
-                
-                # Process task
-                await agent._process_task(task_id)
-                
-                # Verify task was processed
-                assert agent.assigned_tasks[task_id].status == "completed"
-                assert agent.assigned_tasks[task_id].result is not None
-                
-                # Verify event was emitted
-                agent.emit_event.assert_called_once()
-                event = agent.emit_event.call_args[0][0]
-                assert isinstance(event, TaskResultEvent)
-                assert event.task_id == task_id
-                assert event.status == "completed"
+        # Mock the knowledge provider
+        with patch('skwaq.agents.data_providers.knowledge_provider.retrieve_knowledge') as mock_retrieve:
+            mock_result = {
+                "query": "test query",
+                "results": [
+                    {
+                        "type": "cwe",
+                        "id": "CWE-79",
+                        "name": "Cross-site Scripting",
+                        "description": "XSS description",
+                    }
+                ],
+                "context": {"test": "context"}
+            }
+            mock_retrieve.return_value = mock_result
+            
+            with patch.object(KnowledgeAgent, '_emit_lifecycle_event'):
+                with patch.object(KnowledgeAgent, 'emit_event'):
+                    # Initialize the knowledge agent
+                    agent = KnowledgeAgent(name="TestKnowledge")
+                    
+                    # Test agent creation
+                    assert agent.name == "TestKnowledge"
+                    assert isinstance(agent.assigned_tasks, dict)
+                    
+                    # Test task processing (with mock)
+                    task_id = str(uuid.uuid4())
+                    task = Task(
+                        task_id=task_id,
+                        task_type="retrieve_knowledge",
+                        task_description="Test retrieval",
+                        task_parameters={"query": "test query", "context": {"test": "context"}},
+                        priority=1,
+                        sender_id="test_sender",
+                        receiver_id=agent.agent_id
+                    )
+                    
+                    agent.assigned_tasks[task_id] = task
+                    
+                    # Mock emit_event for result
+                    agent.emit_event = MagicMock()
+                    
+                    # Process task
+                    await agent._process_task(task_id)
+                    
+                    # Verify task was processed
+                    assert agent.assigned_tasks[task_id].status == "completed"
+                    result = agent.assigned_tasks[task_id].result
+                    
+                    # Check result structure
+                    assert "query" in result
+                    assert "results" in result
+                    assert isinstance(result["results"], list)
+                    assert len(result["results"]) > 0
+                    
+                    # Verify event was emitted
+                    agent.emit_event.assert_called_once()
+                    event = agent.emit_event.call_args[0][0]
+                    assert isinstance(event, TaskResultEvent)
+                    assert event.task_id == task_id
+                    assert event.status == "completed"
     
     @pytest.mark.asyncio
     async def test_code_analysis_agent_functionality(self):
         """Test core code analysis agent functionality."""
-        with patch.object(CodeAnalysisAgent, '_emit_lifecycle_event'):
-            with patch.object(CodeAnalysisAgent, 'emit_event'):
-                # Initialize the code analysis agent
-                agent = CodeAnalysisAgent(name="TestCodeAnalysis")
-                
-                # Test agent creation
-                assert agent.name == "TestCodeAnalysis"
-                assert isinstance(agent.assigned_tasks, dict)
-                
-                # Test repository analysis function
-                result = await agent._analyze_repository({
-                    "repository": "test/repo"
-                })
-                
-                # Check result structure
-                assert "repository" in result
-                assert "findings" in result
-                assert isinstance(result["findings"], list)
-                assert len(result["findings"]) > 0
-                assert "summary" in result
-                
-                # Verify findings structure
-                finding = result["findings"][0]
-                assert "file_path" in finding
-                assert "line_number" in finding
-                assert "vulnerability_type" in finding
-                assert "severity" in finding
-                assert "confidence" in finding
-    
-    @pytest.mark.asyncio
-    async def test_critic_agent_functionality(self):
-        """Test core critic agent functionality."""
-        with patch.object(CriticAgent, '_emit_lifecycle_event'):
-            with patch.object(CriticAgent, 'emit_event'):
-                # Initialize the critic agent
-                agent = CriticAgent(name="TestCritic")
-                
-                # Test agent creation
-                assert agent.name == "TestCritic"
-                assert isinstance(agent.assigned_tasks, dict)
-                
-                # Test findings critique function
-                findings = [
+        # Mock the code analysis provider
+        with patch('skwaq.agents.data_providers.code_analysis_provider.analyze_repository') as mock_analyze:
+            mock_result = {
+                "repository": "test/repo",
+                "analysis_time": 5.2,
+                "files_analyzed": 45,
+                "findings": [
                     {
                         "file_path": "src/api/auth.js",
                         "line_number": 42,
                         "vulnerability_type": "XSS",
                         "severity": "high",
                         "confidence": 0.85,
-                        "description": "Potential XSS vulnerability",
-                        "cwe_id": "CWE-79"
+                        "description": "XSS vulnerability",
+                        "cwe_id": "CWE-79",
+                        "snippet": "document.write('<p>' + req.query.username + '</p>');"
                     }
-                ]
-                
-                result = await agent._critique_findings({
-                    "findings": findings
-                })
-                
-                # Check result structure
-                assert "evaluation" in result
-                assert isinstance(result["evaluation"], list)
-                assert len(result["evaluation"]) > 0
-                assert "overall_assessment" in result
+                ],
+                "summary": "Found 1 vulnerability"
+            }
+            mock_analyze.return_value = mock_result
+            
+            with patch.object(CodeAnalysisAgent, '_emit_lifecycle_event'):
+                with patch.object(CodeAnalysisAgent, 'emit_event'):
+                    # Initialize the code analysis agent
+                    agent = CodeAnalysisAgent(name="TestCodeAnalysis")
+                    
+                    # Test agent creation
+                    assert agent.name == "TestCodeAnalysis"
+                    assert isinstance(agent.assigned_tasks, dict)
+                    
+                    # Test task processing (with mock)
+                    task_id = str(uuid.uuid4())
+                    task = Task(
+                        task_id=task_id,
+                        task_type="analyze_repository",
+                        task_description="Test repo analysis",
+                        task_parameters={"repository": "test/repo"},
+                        priority=1,
+                        sender_id="test_sender",
+                        receiver_id=agent.agent_id
+                    )
+                    
+                    agent.assigned_tasks[task_id] = task
+                    
+                    # Mock emit_event for result
+                    agent.emit_event = MagicMock()
+                    
+                    # Process task
+                    await agent._process_task(task_id)
+                    
+                    # Verify task was processed
+                    assert agent.assigned_tasks[task_id].status == "completed"
+                    result = agent.assigned_tasks[task_id].result
+                    
+                    # Check result structure
+                    assert "repository" in result
+                    assert "findings" in result
+                    assert isinstance(result["findings"], list)
+                    assert len(result["findings"]) > 0
+                    assert "summary" in result
+                    
+                    # Verify findings structure
+                    finding = result["findings"][0]
+                    assert "file_path" in finding
+                    assert "line_number" in finding
+                    assert "vulnerability_type" in finding
+                    assert "severity" in finding
+                    assert "confidence" in finding
+                    
+                    # Verify event was emitted
+                    agent.emit_event.assert_called_once()
+                    event = agent.emit_event.call_args[0][0]
+                    assert isinstance(event, TaskResultEvent)
+                    assert event.task_id == task_id
+                    assert event.status == "completed"
+    
+    @pytest.mark.asyncio
+    async def test_critic_agent_functionality(self):
+        """Test core critic agent functionality."""
+        # Mock the critic provider
+        with patch('skwaq.agents.data_providers.critic_provider.critique_findings') as mock_critique:
+            mock_result = {
+                "evaluation": [
+                    {
+                        "finding_id": 0,
+                        "assessment": "valid",
+                        "confidence": 0.8,
+                        "notes": "This appears to be a genuine XSS vulnerability."
+                    }
+                ],
+                "overall_assessment": "The finding appears accurate with high confidence."
+            }
+            mock_critique.return_value = mock_result
+            
+            with patch.object(CriticAgent, '_emit_lifecycle_event'):
+                with patch.object(CriticAgent, 'emit_event'):
+                    # Initialize the critic agent
+                    agent = CriticAgent(name="TestCritic")
+                    
+                    # Test agent creation
+                    assert agent.name == "TestCritic"
+                    assert isinstance(agent.assigned_tasks, dict)
+                    
+                    # Test task processing (with mock)
+                    findings = [
+                        {
+                            "file_path": "src/api/auth.js",
+                            "line_number": 42,
+                            "vulnerability_type": "XSS",
+                            "severity": "high",
+                            "confidence": 0.85,
+                            "description": "Potential XSS vulnerability",
+                            "cwe_id": "CWE-79"
+                        }
+                    ]
+                    
+                    task_id = str(uuid.uuid4())
+                    task = Task(
+                        task_id=task_id,
+                        task_type="critique_findings",
+                        task_description="Critique findings",
+                        task_parameters={"findings": findings},
+                        priority=1,
+                        sender_id="test_sender",
+                        receiver_id=agent.agent_id
+                    )
+                    
+                    agent.assigned_tasks[task_id] = task
+                    
+                    # Mock emit_event for result
+                    agent.emit_event = MagicMock()
+                    
+                    # Process task
+                    await agent._process_task(task_id)
+                    
+                    # Verify task was processed
+                    assert agent.assigned_tasks[task_id].status == "completed"
+                    result = agent.assigned_tasks[task_id].result
+                    
+                    # Check result structure
+                    assert "evaluation" in result
+                    assert isinstance(result["evaluation"], list)
+                    assert len(result["evaluation"]) > 0
+                    assert "overall_assessment" in result
+                    
+                    # Verify event was emitted
+                    agent.emit_event.assert_called_once()
+                    event = agent.emit_event.call_args[0][0]
+                    assert isinstance(event, TaskResultEvent)
+                    assert event.task_id == task_id
+                    assert event.status == "completed"
     
     @pytest.mark.asyncio
     async def test_agent_task_workflow(self):

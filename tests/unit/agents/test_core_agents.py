@@ -422,40 +422,78 @@ class TestCriticAgent:
     async def test_critique_findings(self, mock_config, mock_openai_client, mock_agent_registry):
         """Test critiquing findings."""
         # Create critic agent with patched emit method
-        agent = CriticAgent()
-        
-        # Create findings to critique
-        findings = [
-            {
-                "file_path": "src/api/auth.js",
-                "line_number": 42,
-                "vulnerability_type": "XSS",
-                "severity": "high",
-                "confidence": 0.85,
-                "description": "Potential XSS vulnerability with unvalidated user input",
-                "cwe_id": "CWE-79",
-                "snippet": "document.write('<p>' + req.query.username + '</p>');"
-            },
-            {
-                "file_path": "src/database/queries.py",
-                "line_number": 87,
-                "vulnerability_type": "SQL Injection",
-                "severity": "critical",
-                "confidence": 0.92,
-                "description": "SQL injection vulnerability with string concatenation",
-                "cwe_id": "CWE-89",
-                "snippet": "cursor.execute(\"SELECT * FROM users WHERE username = '\" + username + \"'\")"
+        with patch('skwaq.agents.data_providers.critic_provider.critique_findings') as mock_critique:
+            agent = CriticAgent()
+            
+            # Create findings to critique
+            findings = [
+                {
+                    "file_path": "src/api/auth.js",
+                    "line_number": 42,
+                    "vulnerability_type": "XSS",
+                    "severity": "high",
+                    "confidence": 0.85,
+                    "description": "Potential XSS vulnerability with unvalidated user input",
+                    "cwe_id": "CWE-79",
+                    "snippet": "document.write('<p>' + req.query.username + '</p>');"
+                },
+                {
+                    "file_path": "src/database/queries.py",
+                    "line_number": 87,
+                    "vulnerability_type": "SQL Injection",
+                    "severity": "critical",
+                    "confidence": 0.92,
+                    "description": "SQL injection vulnerability with string concatenation",
+                    "cwe_id": "CWE-89",
+                    "snippet": "cursor.execute(\"SELECT * FROM users WHERE username = '\" + username + \"'\")"
+                }
+            ]
+            
+            # Mock the critique_findings function
+            mock_result = {
+                "evaluation": [
+                    {
+                        "finding_id": 0,
+                        "assessment": "valid",
+                        "confidence": 0.8,
+                        "notes": "This appears to be a genuine XSS vulnerability."
+                    },
+                    {
+                        "finding_id": 1,
+                        "assessment": "valid",
+                        "confidence": 0.9,
+                        "notes": "This is a clear SQL injection vulnerability."
+                    }
+                ],
+                "overall_assessment": "The findings appear accurate with high confidence."
             }
-        ]
-        
-        # Critique findings
-        result = await agent._critique_findings({"findings": findings})
-        
-        # Verify result structure
-        assert "evaluation" in result
-        assert isinstance(result["evaluation"], list)
-        assert len(result["evaluation"]) == 2
-        assert "overall_assessment" in result
+            mock_critique.return_value = mock_result
+            
+            # Create a task
+            task_id = str(uuid.uuid4())
+            task = Task(
+                task_id=task_id,
+                task_type="critique_findings",
+                task_description="Critique findings",
+                task_parameters={"findings": findings},
+                priority=1,
+                sender_id="test_sender",
+                receiver_id=agent.agent_id,
+            )
+            agent.assigned_tasks[task_id] = task
+            
+            # Process task
+            await agent._process_task(task_id)
+            
+            # Verify task was processed
+            assert agent.assigned_tasks[task_id].status == "completed"
+            result = agent.assigned_tasks[task_id].result
+            
+            # Verify result structure
+            assert "evaluation" in result
+            assert isinstance(result["evaluation"], list)
+            assert len(result["evaluation"]) == 2
+            assert "overall_assessment" in result
 
 
 class TestAgentCommunication:
