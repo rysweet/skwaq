@@ -8,7 +8,7 @@ usage metrics while respecting user opt-out settings.
 import json
 import uuid
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 
 from skwaq.utils.config import get_config
@@ -32,48 +32,52 @@ class TelemetryEndpoint:
 class Telemetry:
     """Telemetry system for capturing and reporting events."""
 
-    def __init__(self, config=None, enabled=None, testing=False):
+    def __init__(self, config: Any = None, enabled: Optional[bool] = None, testing: bool = False) -> None:
         """Initialize the telemetry system.
-        
+
         Args:
             config: Optional configuration object to use
             enabled: Optional explicit enabled state to override the config
             testing: Whether this is being run in a test environment
         """
         self.testing = testing
-        
+
         if config is None:
             try:
                 config = get_config()
             except Exception as e:
                 if testing:
                     # Use default values for testing
-                    from dataclasses import dataclass
-                    
+                    from dataclasses import dataclass, field
+
                     @dataclass
                     class TestConfig:
                         telemetry_enabled: bool = False
-                        telemetry: Dict[str, Any] = None
-                        
+                        telemetry: Dict[str, Any] = field(default_factory=dict)
+
                     config = TestConfig()
-                    config.telemetry = {}
                 else:
                     # Re-raise if not in testing mode
                     raise e
-            
+
         # Allow explicit override of enabled state
         self.enabled = enabled if enabled is not None else config.telemetry_enabled
         self.session_id = str(uuid.uuid4())
         self.endpoints: Dict[str, TelemetryEndpoint] = {}
-        self.captured_events = [] if testing else None  # Track events for testing
+        # Define captured_events with proper typing
+        self.captured_events: Optional[List[Dict[str, Any]]] = [] if testing else None  # Track events for testing
 
         # Initialize endpoints from config if available
         telemetry_config = getattr(config, "telemetry", {})
         endpoints = telemetry_config.get("endpoints", [])
-        
+
         if endpoints:
             for endpoint in endpoints:
-                if isinstance(endpoint, dict) and "name" in endpoint and "url" in endpoint:
+                if (
+                    isinstance(endpoint, dict)
+                    and "name" in endpoint
+                    and "url" in endpoint
+                ):
                     self.add_endpoint(
                         name=endpoint["name"],
                         url=endpoint["url"],
@@ -86,7 +90,7 @@ class Telemetry:
             self.add_endpoint(
                 name="test_endpoint",
                 url="https://test.example.com/telemetry",
-                enabled=True
+                enabled=True,
             )
 
         if self.enabled:
@@ -112,7 +116,11 @@ class Telemetry:
             timeout_seconds: Request timeout in seconds
         """
         self.endpoints[name] = TelemetryEndpoint(
-            name=name, url=url, enabled=enabled, headers=headers, timeout_seconds=timeout_seconds
+            name=name,
+            url=url,
+            enabled=enabled,
+            headers=headers,
+            timeout_seconds=timeout_seconds,
         )
         logger.debug(f"Added telemetry endpoint: {name} ({url})")
 
@@ -187,15 +195,17 @@ class Telemetry:
 
         if user_id:
             payload["user_id"] = user_id
-            
+
         # Store event for testing if needed
         if self.testing and self.captured_events is not None:
-            self.captured_events.append({
-                "event_name": event_name,
-                "data": data,
-                "user_id": user_id,
-                "payload": payload
-            })
+            self.captured_events.append(
+                {
+                    "event_name": event_name,
+                    "data": data,
+                    "user_id": user_id,
+                    "payload": payload,
+                }
+            )
 
         # In a real implementation, this would send the data to endpoints
         # For now, just log it
@@ -240,13 +250,14 @@ class Telemetry:
 # Global telemetry instance
 telemetry_instance = Telemetry()
 
+
 # Get a telemetry instance for testing
-def get_test_telemetry(enabled=True):
+def get_test_telemetry(enabled: bool = True) -> Telemetry:
     """Get a telemetry instance configured for testing.
-    
+
     Args:
         enabled: Whether telemetry should be enabled in the test instance
-        
+
     Returns:
         A telemetry instance configured for testing
     """

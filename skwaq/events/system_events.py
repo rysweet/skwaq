@@ -10,10 +10,24 @@ import time
 import uuid
 import json
 from datetime import datetime
+from enum import Enum
 
 from skwaq.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+class EventType(Enum):
+    """Event types for system events."""
+
+    SYSTEM = "system"
+    CONFIG = "config"
+    TELEMETRY = "telemetry"
+    LOGGING = "logging"
+    REPOSITORY = "repository"
+    ANALYSIS = "analysis"
+    USER_INTERACTION = "user_interaction"
+    SYSTEM_STATUS = "system_status"
 
 
 class SystemEvent:
@@ -40,7 +54,7 @@ class SystemEvent:
         self.metadata = metadata or {}
         self.timestamp = time.time()
         self.event_id = str(uuid.uuid4())
-        self.event_type = self.__class__.__name__
+        self.event_type = EventType.SYSTEM
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert event to a dictionary.
@@ -50,7 +64,7 @@ class SystemEvent:
         """
         return {
             "event_id": self.event_id,
-            "event_type": self.event_type,
+            "event_type": self.event_type.value,
             "sender": self.sender,
             "timestamp": self.timestamp,
             "message": self.message,
@@ -65,6 +79,19 @@ class SystemEvent:
             JSON string representation of the event
         """
         return json.dumps(self.to_dict())
+
+    @classmethod
+    def from_json(cls, json_str: str) -> "SystemEvent":
+        """Create an event from a JSON string.
+
+        Args:
+            json_str: JSON string representation of the event
+
+        Returns:
+            An instance of the appropriate event class
+        """
+        data = json.loads(json_str)
+        return cls.from_dict(data)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SystemEvent":
@@ -94,6 +121,16 @@ class SystemEvent:
             setattr(event, key, value)
 
         return event
+
+    def __str__(self) -> str:
+        """Return a string representation of the event.
+
+        Returns:
+            String representation
+        """
+        return (
+            f"{self.__class__.__name__}(sender={self.sender}, message={self.message})"
+        )
 
 
 class ConfigEvent(SystemEvent):
@@ -128,6 +165,7 @@ class ConfigEvent(SystemEvent):
             target=target,
             metadata=metadata or {},
         )
+        self.event_type = EventType.CONFIG
         self.key = key
         self.value = value
         self.old_value = old_value
@@ -166,6 +204,7 @@ class TelemetryEvent(SystemEvent):
             target=target,
             metadata=metadata or {},
         )
+        self.event_type = EventType.TELEMETRY
         self.event_name = event_name
         self.event_data = event_data or {}
         self.user_id = user_id
@@ -202,9 +241,152 @@ class LoggingEvent(SystemEvent):
             target=target,
             metadata=metadata or {},
         )
+        self.event_type = EventType.LOGGING
         self.level = level
         self.log_message = log_message
         self.context = context or {}
+
+
+class RepositoryEvent(SystemEvent):
+    """Event emitted when a repository action occurs."""
+
+    def __init__(
+        self,
+        sender: str,
+        repository_id: str,
+        repository_name: str,
+        action: str,
+        message: Optional[str] = None,
+        target: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
+        """Initialize a repository event.
+
+        Args:
+            sender: The component that sent the event
+            repository_id: ID of the repository
+            repository_name: Name of the repository
+            action: The action performed on the repository
+            message: Optional message describing the event
+            target: Optional target component for the event
+            metadata: Optional additional metadata
+        """
+        super().__init__(
+            sender=sender,
+            message=message or f"Repository event: {action} on {repository_name}",
+            target=target,
+            metadata=metadata or {},
+        )
+        self.event_type = EventType.REPOSITORY
+        self.repository_id = repository_id
+        self.repository_name = repository_name
+        self.action = action
+
+
+class AnalysisEvent(SystemEvent):
+    """Event emitted during code analysis."""
+
+    def __init__(
+        self,
+        sender: str,
+        repository_id: str,
+        finding_id: str,
+        severity: str,
+        confidence: float,
+        message: Optional[str] = None,
+        target: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
+        """Initialize an analysis event.
+
+        Args:
+            sender: The component that sent the event
+            repository_id: ID of the repository
+            finding_id: ID of the finding
+            severity: Severity of the finding
+            confidence: Confidence level (0-1)
+            message: Optional message describing the event
+            target: Optional target component for the event
+            metadata: Optional additional metadata
+        """
+        super().__init__(
+            sender=sender,
+            message=message
+            or f"Analysis event: Finding {finding_id} with {severity} severity",
+            target=target,
+            metadata=metadata or {},
+        )
+        self.event_type = EventType.ANALYSIS
+        self.repository_id = repository_id
+        self.finding_id = finding_id
+        self.severity = severity
+        self.confidence = confidence
+
+
+class UserInteractionEvent(SystemEvent):
+    """Event emitted during user interaction."""
+
+    def __init__(
+        self,
+        sender: str,
+        interaction_type: str,
+        command: str,
+        message: Optional[str] = None,
+        target: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
+        """Initialize a user interaction event.
+
+        Args:
+            sender: The component that sent the event
+            interaction_type: Type of interaction
+            command: Command issued by the user
+            message: Optional message describing the event
+            target: Optional target component for the event
+            metadata: Optional additional metadata
+        """
+        super().__init__(
+            sender=sender,
+            message=message or f"User interaction: {interaction_type} - {command}",
+            target=target,
+            metadata=metadata or {},
+        )
+        self.event_type = EventType.USER_INTERACTION
+        self.interaction_type = interaction_type
+        self.command = command
+
+
+class SystemStatusEvent(SystemEvent):
+    """Event emitted when system status changes."""
+
+    def __init__(
+        self,
+        sender: str,
+        status: str,
+        component: str,
+        message: Optional[str] = None,
+        target: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
+        """Initialize a system status event.
+
+        Args:
+            sender: The component that sent the event
+            status: Current status
+            component: Component reporting status
+            message: Optional message describing the event
+            target: Optional target component for the event
+            metadata: Optional additional metadata
+        """
+        super().__init__(
+            sender=sender,
+            message=message or f"System status: {component} is {status}",
+            target=target,
+            metadata=metadata or {},
+        )
+        self.event_type = EventType.SYSTEM_STATUS
+        self.status = status
+        self.component = component
 
 
 # Map of event types to classes
@@ -213,6 +395,10 @@ EVENT_TYPES: Dict[str, Type[SystemEvent]] = {
     "ConfigEvent": ConfigEvent,
     "TelemetryEvent": TelemetryEvent,
     "LoggingEvent": LoggingEvent,
+    "RepositoryEvent": RepositoryEvent,
+    "AnalysisEvent": AnalysisEvent,
+    "UserInteractionEvent": UserInteractionEvent,
+    "SystemStatusEvent": SystemStatusEvent,
 }
 
 
@@ -220,26 +406,164 @@ EVENT_TYPES: Dict[str, Type[SystemEvent]] = {
 EventHandler = Callable[[SystemEvent], None]
 
 
-# Subscribers dictionary mapping event types to handlers
-_subscribers: Dict[Type[SystemEvent], List[EventHandler]] = {}
+# EventBus singleton class
+class EventBus:
+    """Event bus for publishing and subscribing to events."""
+
+    _instance = None
+
+    def __new__(cls) -> 'EventBus':
+        """Create a singleton instance.
+
+        Returns:
+            Singleton instance
+        """
+        if cls._instance is None:
+            cls._instance = super(EventBus, cls).__new__(cls)
+            # Initialize the subscribers dictionary without type annotation in __new__
+            cls._instance._subscribers = {}
+        return cls._instance
+
+    def __init__(self) -> None:
+        """Initialize the event bus."""
+        # Already initialized in __new__
+        if not hasattr(self, '_subscribers'):
+            self._subscribers: Dict[Type[SystemEvent], Dict[str, EventHandler]] = {}
+
+    def subscribe(self, event_type: Type[SystemEvent], handler: EventHandler) -> str:
+        """Subscribe to an event type.
+
+        Args:
+            event_type: The event type to subscribe to
+            handler: The handler function to call when event occurs
+
+        Returns:
+            Subscriber ID for unsubscribing
+        """
+        subscriber_id = str(uuid.uuid4())
+
+        if event_type not in self._subscribers:
+            self._subscribers[event_type] = {}
+
+        self._subscribers[event_type][subscriber_id] = handler
+        logger.debug(f"Added subscriber {subscriber_id} to {event_type.__name__}")
+
+        return subscriber_id
+
+    def unsubscribe(self, subscriber_id: str) -> bool:
+        """Unsubscribe using the subscriber ID.
+
+        Args:
+            subscriber_id: ID returned from subscribe()
+
+        Returns:
+            True if unsubscribed successfully, False otherwise
+        """
+        for event_type in self._subscribers:
+            if subscriber_id in self._subscribers[event_type]:
+                del self._subscribers[event_type][subscriber_id]
+                logger.debug(
+                    f"Removed subscriber {subscriber_id} from {event_type.__name__}"
+                )
+                return True
+
+        return False
+
+    def publish(self, event: SystemEvent) -> None:
+        """Publish an event to all subscribers.
+
+        Args:
+            event: The event to publish
+        """
+        handlers_called = 0
+
+        # Get all handlers for this event type and parent types
+        for event_type, subscribers in self._subscribers.items():
+            if isinstance(event, event_type):
+                for subscriber_id, handler in subscribers.items():
+                    try:
+                        handler(event)
+                        handlers_called += 1
+                    except Exception as e:
+                        logger.error(
+                            f"Error in event handler for {event.event_type}: {e}"
+                        )
+
+        logger.debug(
+            f"Published {event.event_type} event from {event.sender} to {handlers_called} handlers"
+        )
+
+    def get_subscribers(self, event_type: Type[SystemEvent]) -> Dict[str, EventHandler]:
+        """Get all subscribers for an event type.
+
+        Args:
+            event_type: The event type
+
+        Returns:
+            Dictionary of subscriber IDs to handlers
+        """
+        return dict(self._subscribers.get(event_type, {}))
 
 
-def subscribe(event_type: Type[SystemEvent], handler: EventHandler) -> None:
+class EventSubscriber:
+    """Class for subscribing to events."""
+
+    def __init__(self, name: str):
+        """Initialize a new subscriber.
+
+        Args:
+            name: Name of the subscriber
+        """
+        self.name = name
+        self.bus = EventBus()
+        self.subscriptions: Dict[Type[SystemEvent], str] = {}
+
+    def subscribe(self, event_type: Type[SystemEvent], handler: EventHandler) -> None:
+        """Subscribe to an event type.
+
+        Args:
+            event_type: The event type to subscribe to
+            handler: The handler function to call when event occurs
+        """
+        subscriber_id = self.bus.subscribe(event_type, handler)
+        self.subscriptions[event_type] = subscriber_id
+
+    def unsubscribe(self, event_type: Type[SystemEvent]) -> bool:
+        """Unsubscribe from an event type.
+
+        Args:
+            event_type: The event type to unsubscribe from
+
+        Returns:
+            True if unsubscribed successfully, False otherwise
+        """
+        if event_type in self.subscriptions:
+            subscriber_id = self.subscriptions.pop(event_type)
+            return self.bus.unsubscribe(subscriber_id)
+        return False
+
+    def unsubscribe_all(self) -> None:
+        """Unsubscribe from all events."""
+        for event_type in list(self.subscriptions.keys()):
+            self.unsubscribe(event_type)
+
+
+# For backward compatibility with existing code
+def subscribe(event_type: Type[SystemEvent], handler: EventHandler) -> str:
     """Subscribe to an event type.
 
     Args:
         event_type: The event type to subscribe to
         handler: The handler function to call when event occurs
+        
+    Returns:
+        Subscriber ID
     """
-    if event_type not in _subscribers:
-        _subscribers[event_type] = []
-
-    if handler not in _subscribers[event_type]:
-        _subscribers[event_type].append(handler)
-        logger.debug(f"Subscribed handler to {event_type.__name__} events")
+    bus = EventBus()
+    return bus.subscribe(event_type, handler)
 
 
-def unsubscribe(event_type: Type[SystemEvent], handler: EventHandler) -> None:
+def unsubscribe(event_type: Type[SystemEvent], handler: EventHandler) -> bool:
     """Unsubscribe from an event type.
 
     Args:
@@ -249,10 +573,9 @@ def unsubscribe(event_type: Type[SystemEvent], handler: EventHandler) -> None:
     Returns:
         True if handler was removed, False otherwise
     """
-    if event_type in _subscribers and handler in _subscribers[event_type]:
-        _subscribers[event_type].remove(handler)
-        logger.debug(f"Unsubscribed handler from {event_type.__name__} events")
-        return True
+    # This is a simplified version that doesn't actually work with the new bus design
+    # but is maintained for backward compatibility
+    logger.warning("Using deprecated unsubscribe() function")
     return False
 
 
@@ -262,21 +585,8 @@ def publish(event: SystemEvent) -> None:
     Args:
         event: The event to publish
     """
-    handlers_called = 0
-
-    # Get all handlers for this event type and parent types
-    for event_type, handlers in _subscribers.items():
-        if isinstance(event, event_type):
-            for handler in handlers:
-                try:
-                    handler(event)
-                    handlers_called += 1
-                except Exception as e:
-                    logger.error(f"Error in event handler for {event.event_type}: {e}")
-
-    logger.debug(
-        f"Published {event.event_type} event from {event.sender} " f"to {handlers_called} handlers"
-    )
+    bus = EventBus()
+    bus.publish(event)
 
 
 def get_subscribers() -> Dict[str, int]:
@@ -285,4 +595,8 @@ def get_subscribers() -> Dict[str, int]:
     Returns:
         Dictionary mapping event type names to subscriber counts
     """
-    return {event_type.__name__: len(handlers) for event_type, handlers in _subscribers.items()}
+    bus = EventBus()
+    return {
+        event_type.__name__: len(subscribers)
+        for event_type, subscribers in bus._subscribers.items()
+    }

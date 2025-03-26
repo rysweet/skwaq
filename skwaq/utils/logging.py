@@ -10,7 +10,7 @@ import logging
 import os
 import sys
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Type, Union, cast
@@ -25,6 +25,7 @@ except ImportError:
 # Configure logging format
 DEFAULT_FORMAT = "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s"
 STRUCTURED_FORMAT = "%(message)s"
+LOG_FORMAT = DEFAULT_FORMAT  # For backward compatibility
 LOG_DATEFMT = "%Y-%m-%d %H:%M:%S"
 
 # Global logger instances
@@ -52,7 +53,7 @@ class StructuredLogRecord(logging.LogRecord):
         """
         if hasattr(self, "context") and self.context:
             record_data = {
-                "timestamp": datetime.utcfromtimestamp(self.created).isoformat(),
+                "timestamp": datetime.fromtimestamp(self.created, tz=timezone.utc).isoformat(),
                 "level": self.levelname,
                 "logger": self.name,
                 "message": super().getMessage(),
@@ -151,7 +152,9 @@ class SkwaqLogger(logging.Logger):
         Returns:
             Log record
         """
-        record = StructuredLogRecord(name, level, fn, lno, msg, args, exc_info, func, sinfo)
+        record = StructuredLogRecord(
+            name, level, fn, lno, msg, args, exc_info, func, sinfo
+        )
 
         if extra is not None:
             for key, value in extra.items():
@@ -253,7 +256,7 @@ def setup_logging(
         if testing:
             # For testing, use StringIO for both console and file output
             from io import StringIO
-            
+
             # Console output (always enabled in testing)
             console_stream = StringIO()
             console_handler = logging.StreamHandler(console_stream)
@@ -261,7 +264,7 @@ def setup_logging(
             console_handler.setFormatter(formatter)
             console_handler.stream = console_stream  # Make stream accessible
             logger.addHandler(console_handler)
-            
+
             # File output (if requested)
             if log_file:
                 file_stream = StringIO()
@@ -270,22 +273,24 @@ def setup_logging(
                 file_handler.setFormatter(formatter)
                 file_handler.stream = file_stream  # Make stream accessible
                 # Store the path for reference
-                setattr(file_handler, 'log_file_path', log_file)
+                setattr(file_handler, "log_file_path", log_file)
                 logger.addHandler(file_handler)
         else:
             # Normal non-testing mode
-            
+
             # Console output
             if log_to_console:
                 console_handler = logging.StreamHandler(sys.stdout)
                 console_handler.setLevel(level)
                 console_handler.setFormatter(formatter)
                 logger.addHandler(console_handler)
-            
+
             # File output
             if log_file is None:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                log_dir = Path(os.getenv("SKWAQ_LOG_DIR", Path.home() / ".skwaq" / "logs"))
+                log_dir = Path(
+                    os.getenv("SKWAQ_LOG_DIR", Path.home() / ".skwaq" / "logs")
+                )
                 log_dir.mkdir(parents=True, exist_ok=True)
                 log_file = log_dir / f"skwaq_{timestamp}.log"
 
@@ -293,7 +298,9 @@ def setup_logging(
             if rotation is not None:
                 if rotation.rotation_type == "size":
                     file_handler = RotatingFileHandler(
-                        log_file, maxBytes=rotation.max_bytes, backupCount=rotation.backup_count
+                        log_file,
+                        maxBytes=rotation.max_bytes,
+                        backupCount=rotation.backup_count,
                     )
                 else:  # time-based rotation
                     file_handler = TimedRotatingFileHandler(
