@@ -62,15 +62,17 @@ Please follow these guidelines for code design and implementation:
 
 ## Resources
 
-You should also use the following resources to help you implement the software:
-# - [Vulnerability Assessment Copilot.md](../Specifications/VulnerabilityAssessmentCopilot.md)
-# - [ImplementationPlan.md](../Specifications/ImplementationPlan.md)
-# - [AutoGen Core Documentation](https://microsoft.github.io/autogen/stable/user-guide/core-user-guide/index.html)
-# - [AutoGen API Documentation](https://microsoft.github.io/autogen/stable/api/index.html)
-# - [AutoGen Examples](https://microsoft.github.io/autogen/stable/examples/index.html)
-# - [Neo4J Documentation](https://neo4j.com/docs/)
-# - [Rich CLI Documentation](https://rich.readthedocs.io/en/stable/)
-# - [Neo4J Blog on Semantic indexes](https://neo4j.com/blog/developer/knowledge-graph-structured-semantic-search/)
+You should also use the following resources to help you implement the software - If you think that a resource may be useful during a phase of the Implementation (eg Autogen Core Documentation when woring with Agents) please ensure that you add that document to the context during that phase. 
+
+ - [Vulnerability Assessment Copilot.md](../Specifications/VulnerabilityAssessmentCopilot.md)
+ - [ImplementationPlan.md](../Specifications/ImplementationPlan.md)
+ - [AutoGen Core Docuementation and Examples](./autogen-doc.md)
+ - [AutoGen Core Documentation Online](https://microsoft.github.io/autogen/stable/user-guide/core-user-guide/index.html)
+ - [AutoGen API Documentation](https://microsoft.github.io/autogen/stable/api/index.html)
+ - [AutoGen Examples](https://microsoft.github.io/autogen/stable/examples/index.html)
+ - [Neo4J Documentation](https://neo4j.com/docs/)
+ - [Rich CLI Documentation](https://rich.readthedocs.io/en/stable/)
+ - [Neo4J Blog on Semantic indexes](https://neo4j.com/blog/developer/knowledge-graph-structured-semantic-search/)
 
 ## Implementation Notes
 
@@ -80,5 +82,6 @@ Any modules that are using pyautogen should be corrected/rewritten to use autoge
 For the implementation, you will need to use my az credentials to access the Azure OpenAI API using Tenant: Microsoft
 Subscription: adapt-appsci1 (be51a72b-4d76-4627-9a17-7dd26245da7b). You will need to use my Github credentials using the gh cli. You will need to do a commit after each step of the implementation. If a step of the implementation is not clear, please ask me for clarification.
 Do not move on to the next milestone until the current milestone is complete with all tests for all milestones passing.
-Do not move on to the next milestone while there are problems in the workspace. 
+Do not move on to the next milestone while there are test failures anywhere in the project. 
+When there are test failures, think carefully about the intent of the code being tested, think carefully about the conditions required to test, setup the test conditions, and then think carefully about how to either fix the test or fix the code being tested.
 If a step of the implementation fails, try again by attempting to correct the error. If you are unable to correct the error, update the status.md and please ask me for help.
