@@ -1,54 +1,54 @@
 # Skwaq Project Status
 
-## Current Milestone: K1 - Knowledge Ingestion Pipeline
+## Current Milestone: K2 - Code Analysis Pipeline
 
 ### Status: Not Started 🔴
 
-### Previous Milestone: F3 - Database Integration
+### Previous Milestone: K1 - Knowledge Ingestion Pipeline
 
 ### Status: Completed ✅
 
-The database integration components for Milestone F3 have been implemented and all tests are passing:
+The knowledge ingestion pipeline components for Milestone K1 have been successfully implemented and all tests are passing:
 
-- [x] Neo4j connection module
-  - Implemented Neo4jConnector with comprehensive graph operations
-  - Created connection pooling and resilient retry logic
-  - Added singleton access pattern for global connection
-  - Implemented context manager support for safe resource handling
+- [x] Document processing pipeline
+  - Implemented markdown document ingestion with semantic chunking
+  - Created KnowledgeChunker for breaking documents into semantic sections
+  - Added automatic extraction of vulnerability patterns from documents
+  - Implemented document metadata extraction and indexing
+  - Created comprehensive vector embedding for all knowledge entities
 
-- [x] Schema implementation
-  - Created comprehensive schema definition with NodeLabels and RelationshipTypes
-  - Implemented SchemaManager for managing database schema components
-  - Added constraints, indexes, and vector index creation
-  - Designed clear domain model for vulnerability assessment entities
+- [x] CWE database integration
+  - Implemented CWEProcessor for Common Weakness Enumeration processing
+  - Added support for parsing CWE XML structure
+  - Created relationships between weaknesses, categories and examples
+  - Implemented automatic downloading of latest CWE database
+  - Added semantic summarization and vector embedding for CWEs
 
-- [x] Database initialization
-  - Added initialization sequence with appropriate error handling
-  - Implemented schema component validation
-  - Created utility for schema inspection and management
-  - Added safe database clearing functionality with confirmation
-
-- [x] Vector search integration
-  - Implemented vector similarity search for semantic querying
-  - Added support for embedding dimensions and similarity cutoffs
-  - Created vector index management for knowledge retrieval
-  - Optimized for different node types and embedding properties
+- [x] Core knowledge graph structure
+  - Designed comprehensive knowledge graph with multiple node types
+  - Implemented relationship types for connecting knowledge entities
+  - Added vector search capabilities for semantic similarity
+  - Created automatic relationship inference based on similarity
+  - Implemented unified knowledge initialization system
 
 Key Features:
-- Comprehensive graph database operations (create, merge, query, relationships)
-- Strong typing with Enum-based schema definition
-- Vector search capabilities for semantic similarity
-- Robust error handling and connection management
-- Clear separation of concerns between connector and schema components
+- Semantic document chunking for improved knowledge retrieval
+- Comprehensive CWE database integration with full relationship modeling
+- Automatic extraction of vulnerability patterns from security documents
+- Integration with CVE data and linking to CWE weaknesses
+- Vector-based semantic search across all knowledge entities
+- Automatic relationship discovery between related knowledge items
+- Unified knowledge graph initialization system
 
-### Next Milestone: K1 - Knowledge Ingestion Pipeline
+### Next Milestone: K2 - Code Analysis Pipeline
 
-- [ ] Document processing pipeline
-- [ ] CWE database integration
-- [ ] Core knowledge graph structure
+- [ ] Code parsing and representation
+- [ ] Static analysis integration
+- [ ] Vulnerability pattern matching
 
 ### Overall Progress
 - [x] F1: Project Setup and Environment
 - [x] F2: Core Utilities and Infrastructure
 - [x] F3: Database Integration
-- [ ] K1: Knowledge Ingestion Pipeline
+- [x] K1: Knowledge Ingestion Pipeline
+- [ ] K2: Code Analysis Pipeline

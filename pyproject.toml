@@ -82,10 +82,23 @@ python_files = "test_*.py"
 python_functions = "test_*"
 python_classes = "Test*"
 addopts = "--cov=skwaq --cov-report=term-missing"
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+asyncio_default_test_loop_scope = "function"
 
 [tool.coverage.run]
-source = ["skwaq"]
-omit = ["*/__init__.py", "*/tests/*"]
+source = ["skwaq", "tests"]
+omit = ["*/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+    "raise ImportError",
+]
 
 [tool.pydocstyle]
 convention = "google"
