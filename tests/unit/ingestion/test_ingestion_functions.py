@@ -45,7 +45,7 @@ def test_repo_path():
 class TestIngestionFunctions:
     """Tests for high-level ingestion functions."""
 
-    async def test_ingest_repository_local(self, mock_connector, mock_openai_client, test_repo_path):
+    async def test_ingest_repository_local(self, mock_connector, mock_openai_client, test_repo_path, mock_path_exists):
         """Test ingesting a repository from a local path."""
         # Mock the RepositoryIngestor class with our own implementation
         with patch("skwaq.ingestion.code_ingestion.RepositoryIngestor") as mock_ingestor_class:
@@ -85,7 +85,7 @@ class TestIngestionFunctions:
                 None,  # No exclude patterns
             )
 
-    async def test_ingest_repository_github(self, mock_connector, mock_openai_client):
+    async def test_ingest_repository_github(self, mock_connector, mock_openai_client, mock_path_exists):
         """Test ingesting a repository from a GitHub URL."""
         github_url = "https://github.com/user/test-repo"
         
@@ -141,7 +141,7 @@ class TestIngestionFunctions:
                 metadata_only=False
             )
 
-    async def test_ingest_repository_auto_detect_github(self, mock_connector, mock_openai_client):
+    async def test_ingest_repository_auto_detect_github(self, mock_connector, mock_openai_client, mock_path_exists):
         """Test auto-detection of GitHub URLs."""
         github_url = "https://github.com/user/test-repo"
         
@@ -178,7 +178,7 @@ class TestIngestionFunctions:
             # Verify ingest_from_github was called
             mock_ingestor_instance.ingest_from_github.assert_called_once()
 
-    async def test_get_github_repository_info(self, mock_connector, mock_openai_client):
+    async def test_get_github_repository_info(self, mock_connector, mock_openai_client, mock_path_exists):
         """Test getting GitHub repository info without ingesting."""
         github_url = "https://github.com/user/test-repo"
         
