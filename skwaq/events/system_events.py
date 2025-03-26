@@ -28,6 +28,7 @@ class EventType(Enum):
     ANALYSIS = "analysis"
     USER_INTERACTION = "user_interaction"
     SYSTEM_STATUS = "system_status"
+    AGENT_LIFECYCLE = "agent_lifecycle"
 
 
 class SystemEvent:
@@ -389,6 +390,54 @@ class SystemStatusEvent(SystemEvent):
         self.component = component
 
 
+class AgentLifecycleState(Enum):
+    """Lifecycle states for agents."""
+
+    CREATED = "created"
+    STARTING = "starting"
+    STARTED = "started"
+    RUNNING = "running"
+    PAUSED = "paused"
+    RESUMED = "resumed"
+    STOPPING = "stopping"
+    STOPPED = "stopped"
+    ERROR = "error"
+
+
+class AgentLifecycleEvent(SystemEvent):
+    """Event emitted when an agent's lifecycle state changes."""
+
+    def __init__(
+        self,
+        agent_id: str,
+        agent_name: str,
+        state: AgentLifecycleState,
+        message: Optional[str] = None,
+        target: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
+        """Initialize an agent lifecycle event.
+
+        Args:
+            agent_id: The ID of the agent
+            agent_name: The name of the agent
+            state: The new lifecycle state of the agent
+            message: Optional message describing the event
+            target: Optional target component for the event
+            metadata: Optional additional metadata
+        """
+        super().__init__(
+            sender=agent_name,
+            message=message or f"Agent {agent_name} lifecycle state changed to {state.value}",
+            target=target,
+            metadata=metadata or {},
+        )
+        self.event_type = EventType.AGENT_LIFECYCLE
+        self.agent_id = agent_id
+        self.agent_name = agent_name
+        self.state = state.value
+
+
 # Map of event types to classes
 EVENT_TYPES: Dict[str, Type[SystemEvent]] = {
     "SystemEvent": SystemEvent,
@@ -399,6 +448,7 @@ EVENT_TYPES: Dict[str, Type[SystemEvent]] = {
     "AnalysisEvent": AnalysisEvent,
     "UserInteractionEvent": UserInteractionEvent,
     "SystemStatusEvent": SystemStatusEvent,
+    "AgentLifecycleEvent": AgentLifecycleEvent,
 }
 
 
