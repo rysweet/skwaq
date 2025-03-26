@@ -1,53 +1,18 @@
-# Test Fixes Progress Report
+# Prompt Backlog
 
-## Completed Fixes
-- Fixed most GitHub API authentication issues with proper mocking
-- Fixed individual test file runs for:
-  - tests/unit/ingestion/test_ingestion_functions.py
-  - tests/unit/code_analysis/test_analyzer.py
-  - tests/milestones/test_C1.py
-  - tests/milestones/test_C2.py
-  - tests/integration/ingestion/test_local_ingestion.py
-- Implemented a global GitHub API mock to prevent real API calls
-- Fixed cross-test conflicts with improved fixture isolation
-- Refactored broken tests to use self-contained mocking
-- Removed legacy agent code and tests that were no longer necessary
-- Fixed GitHub API integration tests by mocking URLs and responses
+These are prompts that we are writing in advance for future use. They are not currently in use.
 
-## Remaining Issues
-1. GitHub integration tests still fail when running all tests together:
-   - test_ingest_github_repository in test_C1.py
-   - test_github_metadata_only in test_C1.py
-   - test_store_code_structure in test_C2.py
+Commit everything, update the status, and then we will move to the next step in the ImplementationPlan.md.  
 
-2. Repository ingestor tests fail with import/mock issues:
-   - test_initialization in test_code_ingestion.py
-   - test_ingest_from_github_metadata_only in test_code_ingestion.py
-   - test_high_level_ingest in test_code_ingestion.py
-   - test_high_level_ingest_auto_detection in test_code_ingestion.py
+Please ensure that all the new code has thorough unit tests and that all the existing tests (unit, integration, milestone) pass. The tests need to pass when they are run in isolation as well as when they are run in the full test suite.
 
-3. Ingestion function tests still have issues:
-   - test_ingest_repository_github
-   - test_ingest_repository_auto_detect_github
-   - test_list_repositories
+How many steps remain in the ImplementationPlan.md?
 
-## Root Causes
-1. Module-level imports causing side effects between tests
-2. Inconsistent mocking of GitHub API and authentication
-3. Global state and caching in repository ingestor
-4. Neo4j connector isolation issues between tests
-5. Path manipulation conflicts between test fixtures
+Please provide the current status of the ImplementationPlan.md and the number of steps remaining.
 
-## Next Steps
-1. Complete isolation of GitHub API tests with function-level patching
-2. Create complete mock implementations for all remaining failing tests
-3. Add more granular fixture scopes to prevent cross-contamination
-4. Improve reset_registries fixture to clean up more global state
-5. Fix remaining repository ingestor initialization issues
+We are going to add a new feature to the codebase. The feature is described in the GraphicalUserInterface.md file. Ask any questions necessary to clarify the requirements and then update the file with the answers to the questions.  Then we need to update the ImplemenationPlan.md to include the new feature.  The new feature is a graphical user interface (GUI) for the Vulnerability Assessment Copilot. The GUI will provide a user-friendly way to interact with the copilot, allowing users to easily start investigations, visualize graphs, view results, and manage their vulnerability assessments. Once we have the new feature in the ImplementationPlan.md, we will move on to the next step in the plan.
 
-## Overall Progress
-- ~97% of tests now pass (291 of 301)
-- 10 tests still failing (3.3% failure rate)
-- Test coverage increased from 9% to 40%
-- All individual test files can be run independently
-- Only integration between test files still causing issues
+We need to review the entire project for unused code and remove it. After each removal run the test suite to ensure that everything is stil working. 
+
+We need to review every code file for comments that are not necessary or no longer relevant and remove them. We also need to ensure that all files have throough and accurate docstrings.  Where complicated code is present, we need to think carefully ensure that there are comments that explain the code in concise but accurate terms.  
+
