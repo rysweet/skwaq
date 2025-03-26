@@ -7,6 +7,7 @@ import sys
 import os
 import pytest
 from unittest.mock import MagicMock, patch
+import importlib
 
 # List of modules to mock
 MOCK_MODULES = [
@@ -45,6 +46,36 @@ def pytest_sessionstart(session):
     # Set up autogen.core
     if "autogen.core" in sys.modules:
         sys.modules["autogen.core"].chat_complete_tokens = MagicMock()
+
+
+@pytest.fixture(autouse=True)
+def reset_singletons():
+    """Reset all singleton instances before each test.
+    
+    This fixture ensures that tests don't interfere with each other by
+    resetting all singleton instances between tests.
+    """
+    # Store original module values
+    neo4j_connector_module = importlib.import_module("skwaq.db.neo4j_connector")
+    openai_client_module = importlib.import_module("skwaq.core.openai_client")
+    
+    # Store original values
+    original_neo4j_connector = getattr(neo4j_connector_module, "_connector", None)
+    original_openai_sync_client = getattr(openai_client_module, "_sync_client", None)
+    original_openai_async_client = getattr(openai_client_module, "_async_client", None)
+    
+    # Reset singleton instances
+    neo4j_connector_module._connector = None
+    openai_client_module._sync_client = None
+    openai_client_module._async_client = None
+    
+    # Run the test
+    yield
+    
+    # Restore original values after test
+    neo4j_connector_module._connector = original_neo4j_connector
+    openai_client_module._sync_client = original_openai_sync_client
+    openai_client_module._async_client = original_openai_async_client
 
 
 @pytest.fixture
