@@ -1,6 +1,25 @@
 # Skwaq Project Status
 
-## Current Milestone: C4 - Code Understanding and Summarization
+## Current Milestone: A3 - Advanced Agent Capabilities
+
+### Status: In Progress 🔄
+
+The advanced agent capabilities for Milestone A3 are currently being implemented. Before starting implementation, we've fixed test isolation issues to ensure a stable foundation:
+
+- [x] Fixed test isolation issues
+  - Added better module import isolation with sys.modules manipulation
+  - Implemented isolated fixtures for testing
+  - Added proper singleton pattern reset mechanisms
+  - Created appropriate test markers for isolated tests
+  - Improved conftest.py with autouse fixtures
+  - Enhanced mock objects to be more reliable
+
+- [ ] Agent communication patterns
+- [ ] Specialized workflow agents
+- [ ] Critic and verification agents
+- [ ] Advanced orchestration
+
+## Previous Milestone: C4 - Code Understanding and Summarization
 
 ### Status: Completed ✅
 
@@ -266,12 +285,6 @@ Key Features:
 - Automatic relationship discovery between related knowledge items
 - Unified knowledge graph initialization system
 
-### Next Milestone: A3 - Advanced Agent Capabilities 
-
-- [ ] Agent communication patterns
-- [ ] Specialized workflow agents
-- [ ] Critic and verification agents
-- [ ] Advanced orchestration
 
 ### Agent Milestones
 
@@ -366,12 +379,6 @@ Key Features:
 - Parallel task processing
 - Graceful error handling and recovery
 
-### Next Milestone: A3 - Advanced Agent Capabilities
-
-- [ ] Agent communication patterns
-- [ ] Specialized workflow agents
-- [ ] Critic and verification agents
-- [ ] Advanced orchestration
 
 ### Overall Progress
 - [x] F1: Project Setup and Environment
