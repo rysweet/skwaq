@@ -225,6 +225,106 @@ Key Features:
 - [ ] Architecture reconstruction
 - [ ] Cross-reference linking
 
+### Agent Milestones
+
+#### Milestone A1: Agent Foundation
+
+### Status: Completed ✅
+
+The agent foundation components for Milestone A1 have been successfully implemented, providing a robust framework for multi-agent communication:
+
+- [x] AutoGen Core integration
+  - Implemented base agent classes with AutoGen Core integration
+  - Created AutogenChatAgent for LLM-based interactions
+  - Added AutogenEventBridge for event translation
+  - Implemented adapter classes for AutoGen agents
+  - Created comprehensive lifecycle management with events
+
+- [x] Base agent classes
+  - Implemented BaseAgent abstract class with core functionality
+  - Created AgentState enum for lifecycle tracking
+  - Added AgentContext class for maintaining agent state
+  - Implemented comprehensive event handling
+  - Created proper lifecycle hooks for agent implementations
+
+- [x] Agent lifecycle management
+  - Implemented start, stop, pause, and resume operations
+  - Created lifecycle event emission
+  - Added proper resource management
+  - Implemented graceful shutdown mechanisms
+  - Added comprehensive error handling
+  - Created state transition validation
+
+- [x] Agent registry
+  - Implemented AgentRegistry for centralized management
+  - Added registration and lookup mechanisms
+  - Created agent type classification
+  - Implemented name-based and ID-based lookups
+  - Added proper cleanup on application exit
+
+Key Features:
+- Comprehensive AutoGen Core integration
+- Robust agent lifecycle management
+- Flexible event handling system
+- Centralized agent registry for discovery
+- Strong typing with comprehensive type hints
+- Integration with system-wide event bus
+- Proper resource management and cleanup
+
+#### Milestone A2: Core Agents Implementation
+
+### Status: Completed ✅
+
+The core agents for Milestone A2 have been successfully implemented, providing the essential components for the vulnerability assessment system:
+
+- [x] Orchestrator agent
+  - Implemented OrchestratorAgent for workflow orchestration
+  - Added task assignment and tracking
+  - Created workflow definition and execution
+  - Implemented agent discovery and capability management
+  - Added communication handling for agent coordination
+  - Created task result processing and aggregation
+
+- [x] Knowledge agents
+  - Implemented KnowledgeAgent for knowledge retrieval
+  - Added integration with knowledge graph
+  - Created capability-based task handling
+  - Implemented vulnerability pattern retrieval
+  - Added CWE lookup functionality
+  - Created structured knowledge responses
+
+- [x] Code analysis agents
+  - Implemented CodeAnalysisAgent for vulnerability detection
+  - Added repository analysis capabilities
+  - Created file-level analysis functions
+  - Implemented vulnerability pattern matching
+  - Added integration with analysis tools
+  - Created structured finding model
+
+- [x] Critic agents
+  - Implemented CriticAgent for result validation
+  - Added finding evaluation capabilities
+  - Created false positive detection
+  - Implemented finding prioritization
+  - Added detailed critique generation
+  - Created improvement suggestions
+
+Key Features:
+- Task-based agent coordination system
+- Workflow management for orchestration
+- Capability-based agent discovery
+- Event-driven inter-agent communication
+- Structured task assignment and result model
+- Parallel task processing
+- Graceful error handling and recovery
+
+### Next Milestone: A3 - Advanced Agent Capabilities
+
+- [ ] Agent communication patterns
+- [ ] Specialized workflow agents
+- [ ] Critic and verification agents
+- [ ] Advanced orchestration
+
 ### Overall Progress
 - [x] F1: Project Setup and Environment
 - [x] F2: Core Utilities and Infrastructure
@@ -235,3 +335,6 @@ Key Features:
 - [x] C2: Basic Code Analysis
 - [x] C3: Advanced Code Analysis
 - [ ] C4: Code Understanding and Summarization
+- [x] A1: Agent Foundation
+- [x] A2: Core Agents Implementation
+- [ ] A3: Advanced Agent Capabilities

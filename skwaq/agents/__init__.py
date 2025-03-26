@@ -21,15 +21,26 @@ from .autogen_integration import (
     AutogenGroupChatAdapter,
 )
 
+# Core agent implementations
+from .core_agents import (
+    # Communication events
+    AgentCommunicationEvent,
+    TaskAssignmentEvent,
+    TaskResultEvent,
+    Task,
+    
+    # Core agents
+    OrchestratorAgent,
+    KnowledgeAgent,
+    CodeAnalysisAgent,
+    CriticAgent,
+)
+
 # Legacy import to maintain compatibility
 from .vulnerability_agents import (
     BaseVulnerabilityAgent,
-    CodeAnalysisAgent,
-    KnowledgeRetrievalAgent,
     PatternMatchingAgent,
     SemanticAnalysisAgent,
-    CriticAgent,
-    OrchestrationAgent,
     SkwaqAgent,
 )
 
@@ -46,13 +57,21 @@ __all__ = [
     "AutogenAgentAdapter",
     "AutogenGroupChatAdapter",
     
+    # Agent communication
+    "AgentCommunicationEvent",
+    "TaskAssignmentEvent",
+    "TaskResultEvent",
+    "Task",
+    
+    # Core agents
+    "OrchestratorAgent",
+    "KnowledgeAgent",
+    "CodeAnalysisAgent",
+    "CriticAgent",
+    
     # Legacy agents
     "BaseVulnerabilityAgent",
-    "CodeAnalysisAgent",
-    "KnowledgeRetrievalAgent",
     "PatternMatchingAgent",
     "SemanticAnalysisAgent",
-    "CriticAgent",
-    "OrchestrationAgent",
     "SkwaqAgent",
 ]
