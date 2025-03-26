@@ -19,6 +19,7 @@ MOCK_MODULES = [
     "autogen_core.event",
     "autogen_core.code_utils",
     "autogen_core.memory",
+    "git",  # Mock the GitPython library for all tests
 ]
 
 
@@ -48,6 +49,27 @@ def pytest_sessionstart(session):
     if "autogen.core" in sys.modules:
         sys.modules["autogen.core"].chat_complete_tokens = MagicMock()
 
+    # We'll set up GitHub mocks during test setup instead via fixtures
+        
+    # Set up Git mocks
+    if "git" in sys.modules:
+        git_repo_mock = MagicMock()
+        git_repo_mock.active_branch.name = "main"
+        
+        # Mock commit properties
+        commit_mock = MagicMock()
+        commit_mock.hexsha = "abc123def456"
+        commit_mock.author.name = "Test User"
+        commit_mock.author.email = "test@example.com"
+        commit_mock.committed_date = 1616161616  # Unix timestamp
+        commit_mock.message = "Test commit message"
+        
+        # Link commit to repo
+        git_repo_mock.head.commit = commit_mock
+        
+        sys.modules["git"].Repo = MagicMock(return_value=git_repo_mock)
+        sys.modules["git"].Repo.clone_from = MagicMock(return_value=git_repo_mock)
+
 
 @pytest.fixture(autouse=True)
 def reset_registries(monkeypatch):
@@ -62,6 +84,21 @@ def reset_registries(monkeypatch):
     openai_client_module = importlib.import_module("skwaq.core.openai_client")
     code_ingestion_module = importlib.import_module("skwaq.ingestion.code_ingestion")
     patterns_registry_module = importlib.import_module("skwaq.code_analysis.patterns.registry")
+    
+    # Create a safe replacement for the GitHub client initialization
+    def safe_init_github_client(self):
+        """Mock implementation that doesn't try to validate GitHub credentials."""
+        if not hasattr(self, "github_client") or self.github_client is None:
+            # Create a mock client that won't try to validate credentials
+            self.github_client = MagicMock()
+            self.github_client.get_rate_limit = MagicMock(return_value=MagicMock())
+            self.github_client.get_repo = MagicMock(return_value=MagicMock())
+            
+        return self.github_client
+    
+    # Patch the GitHub client initialization method in RepositoryIngestor
+    if hasattr(code_ingestion_module, "RepositoryIngestor"):
+        monkeypatch.setattr(code_ingestion_module.RepositoryIngestor, "_init_github_client", safe_init_github_client)
     
     # Keep track of any global instances of CodeAnalyzer
     try:
@@ -189,3 +226,47 @@ def mock_config():
 
     with patch("skwaq.utils.config.get_config", return_value=config):
         yield config
+
+
+@pytest.fixture
+def mock_github():
+    """Mock GitHub client."""
+    github_instance = MagicMock()
+    github_instance.get_rate_limit = MagicMock(return_value=MagicMock())
+    github_instance.get_repo = MagicMock(return_value=MagicMock())
+    
+    # Set up repo attributes
+    repo_mock = github_instance.get_repo.return_value
+    repo_mock.name = "test-repo"
+    repo_mock.full_name = "test-user/test-repo"
+    repo_mock.description = "Test repository for unit tests"
+    repo_mock.stargazers_count = 10
+    repo_mock.forks_count = 5
+    repo_mock.default_branch = "main"
+    repo_mock.get_languages.return_value = {"Python": 1000, "JavaScript": 500}
+    repo_mock.html_url = "https://github.com/test-user/test-repo"
+    
+    with patch("github.Github", return_value=github_instance):
+        yield github_instance
+
+
+@pytest.fixture
+def mock_git_repo():
+    """Mock Git repository."""
+    git_repo_mock = MagicMock()
+    git_repo_mock.active_branch.name = "main"
+    
+    # Mock commit properties
+    commit_mock = MagicMock()
+    commit_mock.hexsha = "abc123def456"
+    commit_mock.author.name = "Test User"
+    commit_mock.author.email = "test@example.com"
+    commit_mock.committed_date = 1616161616  # Unix timestamp
+    commit_mock.message = "Test commit message"
+    
+    # Link commit to repo
+    git_repo_mock.head.commit = commit_mock
+    
+    with patch("git.Repo", return_value=git_repo_mock):
+        with patch("git.Repo.clone_from", return_value=git_repo_mock):
+            yield git_repo_mock

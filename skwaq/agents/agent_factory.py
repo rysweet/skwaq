@@ -4,13 +4,11 @@ This module provides factory functions for creating various types of agents
 for the vulnerability assessment system.
 """
 
-from typing import Any, Union
-
-from .skwaq_agent import HAS_AUTOGEN, SkwaqAgent
-from .orchestration_agent import OrchestrationAgent
+from typing import Any
+from .orchestrator_agent import OrchestratorAgent
 
 
-def create_orchestrator_agent(**kwargs: Any) -> Union[SkwaqAgent, OrchestrationAgent]:
+def create_orchestrator_agent(**kwargs: Any) -> OrchestratorAgent:
     """Create an orchestrator agent instance.
 
     Args:
@@ -19,15 +17,10 @@ def create_orchestrator_agent(**kwargs: Any) -> Union[SkwaqAgent, OrchestrationA
     Returns:
         Orchestrator agent
     """
-    if HAS_AUTOGEN:
-        # Use SkwaqAgent version if autogen is available
-        return SkwaqAgent(
-            name="Orchestrator",
-            system_message="""You are the orchestrator agent for a vulnerability assessment system.
+    return OrchestratorAgent(
+        name="Orchestrator",
+        system_message="""You are the orchestrator agent for a vulnerability assessment system.
 Your role is to coordinate the activities of all specialized agents and ensure the
 assessment process runs smoothly.""",
-            **kwargs,
-        )
-    else:
-        # Use simplified version
-        return OrchestrationAgent()
+        **kwargs
+    )
