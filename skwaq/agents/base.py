@@ -95,22 +95,22 @@ class BaseAgent:
         self._event_handlers: Dict[Type[BaseEvent], List[Callable[[BaseEvent], Awaitable[None]]]] = {}
         
         # Register with AgentRegistry
+        self._register_with_registry()
+        
+    def _register_with_registry(self):
+        """Register this agent with the AgentRegistry.
+        
+        This method exists as a separate function to make it easier to mock in tests.
+        """
         # Import registry only when needed to avoid circular dependency
         import skwaq.agents.registry
         skwaq.agents.registry.AgentRegistry.register(self)
         
         # Emit agent creation event
-        Event.add(
-            AgentLifecycleEvent(
-                agent_id=self.agent_id,
-                agent_name=self.name,
-                state=AgentLifecycleState.CREATED,
-                metadata={
-                    "description": self.description,
-                    "config_key": self.config_key,
-                },
-            )
-        )
+        self._emit_lifecycle_event(AgentLifecycleState.CREATED, {
+            "description": self.description,
+            "config_key": self.config_key,
+        })
         
         logger.info(f"Agent {self.name} (ID: {self.agent_id}) initialized")
 
@@ -132,13 +132,7 @@ class BaseAgent:
             self.context.start_time = time.time()
             
             # Emit agent starting event
-            Event.add(
-                AgentLifecycleEvent(
-                    agent_id=self.agent_id,
-                    agent_name=self.name,
-                    state=AgentLifecycleState.STARTING,
-                )
-            )
+            self._emit_lifecycle_event(AgentLifecycleState.STARTING)
             
             # Call agent-specific startup logic
             await self._start()
@@ -146,13 +140,7 @@ class BaseAgent:
             self.context.state = AgentState.RUNNING
             
             # Emit agent started event
-            Event.add(
-                AgentLifecycleEvent(
-                    agent_id=self.agent_id,
-                    agent_name=self.name,
-                    state=AgentLifecycleState.STARTED,
-                )
-            )
+            self._emit_lifecycle_event(AgentLifecycleState.STARTED)
             
             logger.info(f"Agent {self.name} (ID: {self.agent_id}) started")
         except Exception as e:
@@ -160,14 +148,7 @@ class BaseAgent:
             self.context.error = e
             
             # Emit agent error event
-            Event.add(
-                AgentLifecycleEvent(
-                    agent_id=self.agent_id,
-                    agent_name=self.name,
-                    state=AgentLifecycleState.ERROR,
-                    metadata={"error": str(e)},
-                )
-            )
+            self._emit_lifecycle_event(AgentLifecycleState.ERROR, {"error": str(e)})
             
             logger.error(f"Error starting agent {self.name} (ID: {self.agent_id}): {e}")
             raise
@@ -196,13 +177,7 @@ class BaseAgent:
             self.context.state = AgentState.STOPPING
             
             # Emit agent stopping event
-            Event.add(
-                AgentLifecycleEvent(
-                    agent_id=self.agent_id,
-                    agent_name=self.name,
-                    state=AgentLifecycleState.STOPPING,
-                )
-            )
+            self._emit_lifecycle_event(AgentLifecycleState.STOPPING)
             
             # Call agent-specific shutdown logic
             await self._stop()
@@ -211,13 +186,7 @@ class BaseAgent:
             self.context.stop_time = time.time()
             
             # Emit agent stopped event
-            Event.add(
-                AgentLifecycleEvent(
-                    agent_id=self.agent_id,
-                    agent_name=self.name,
-                    state=AgentLifecycleState.STOPPED,
-                )
-            )
+            self._emit_lifecycle_event(AgentLifecycleState.STOPPED)
             
             logger.info(f"Agent {self.name} (ID: {self.agent_id}) stopped")
         except Exception as e:
@@ -225,14 +194,7 @@ class BaseAgent:
             self.context.error = e
             
             # Emit agent error event
-            Event.add(
-                AgentLifecycleEvent(
-                    agent_id=self.agent_id,
-                    agent_name=self.name,
-                    state=AgentLifecycleState.ERROR,
-                    metadata={"error": str(e)},
-                )
-            )
+            self._emit_lifecycle_event(AgentLifecycleState.ERROR, {"error": str(e)})
             
             logger.error(f"Error stopping agent {self.name} (ID: {self.agent_id}): {e}")
             raise
@@ -264,13 +226,7 @@ class BaseAgent:
             self.context.state = AgentState.PAUSED
             
             # Emit agent paused event
-            Event.add(
-                AgentLifecycleEvent(
-                    agent_id=self.agent_id,
-                    agent_name=self.name,
-                    state=AgentLifecycleState.PAUSED,
-                )
-            )
+            self._emit_lifecycle_event(AgentLifecycleState.PAUSED)
             
             logger.info(f"Agent {self.name} (ID: {self.agent_id}) paused")
         except Exception as e:
@@ -278,14 +234,7 @@ class BaseAgent:
             self.context.error = e
             
             # Emit agent error event
-            Event.add(
-                AgentLifecycleEvent(
-                    agent_id=self.agent_id,
-                    agent_name=self.name,
-                    state=AgentLifecycleState.ERROR,
-                    metadata={"error": str(e)},
-                )
-            )
+            self._emit_lifecycle_event(AgentLifecycleState.ERROR, {"error": str(e)})
             
             logger.error(f"Error pausing agent {self.name} (ID: {self.agent_id}): {e}")
             raise
@@ -317,13 +266,7 @@ class BaseAgent:
             self.context.state = AgentState.RUNNING
             
             # Emit agent resumed event
-            Event.add(
-                AgentLifecycleEvent(
-                    agent_id=self.agent_id,
-                    agent_name=self.name,
-                    state=AgentLifecycleState.RESUMED,
-                )
-            )
+            self._emit_lifecycle_event(AgentLifecycleState.RESUMED)
             
             logger.info(f"Agent {self.name} (ID: {self.agent_id}) resumed")
         except Exception as e:
@@ -331,14 +274,7 @@ class BaseAgent:
             self.context.error = e
             
             # Emit agent error event
-            Event.add(
-                AgentLifecycleEvent(
-                    agent_id=self.agent_id,
-                    agent_name=self.name,
-                    state=AgentLifecycleState.ERROR,
-                    metadata={"error": str(e)},
-                )
-            )
+            self._emit_lifecycle_event(AgentLifecycleState.ERROR, {"error": str(e)})
             
             logger.error(f"Error resuming agent {self.name} (ID: {self.agent_id}): {e}")
             raise
@@ -398,6 +334,23 @@ class BaseAgent:
             f"Registered handler for {event_type.__name__} events in agent {self.name}"
         )
 
+    def _emit_lifecycle_event(self, state: AgentLifecycleState, metadata: Optional[Dict[str, Any]] = None) -> None:
+        """Emit a lifecycle event.
+        
+        This is a helper method to emit standardized lifecycle events.
+        
+        Args:
+            state: The lifecycle state to emit
+            metadata: Optional metadata to include in the event
+        """
+        event = AgentLifecycleEvent(
+            agent_id=self.agent_id,
+            agent_name=self.name,
+            state=state,
+            metadata=metadata or {},
+        )
+        self.emit_event(event)
+    
     def emit_event(self, event: BaseEvent) -> None:
         """Emit an event.
 

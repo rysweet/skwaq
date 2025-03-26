@@ -6,16 +6,42 @@ from unittest.mock import MagicMock, AsyncMock, patch
 import uuid
 import json
 
-# Mock autogen_core modules
+# Set up mocks for autogen_core modules
 import sys
-autogen_event = MagicMock()
-autogen_agent = MagicMock()
-autogen_hooks = MagicMock()
-sys.modules["autogen_core"] = MagicMock()
-sys.modules["autogen_core.event"] = autogen_event
-sys.modules["autogen_core.agent"] = autogen_agent
-sys.modules["autogen_core.code_utils"] = MagicMock()
-sys.modules["autogen_core.memory"] = MagicMock()
+
+# Create our mock objects
+autogen_mock = MagicMock()
+autogen_agent_mock = MagicMock()
+autogen_event_mock = MagicMock()
+autogen_code_utils_mock = MagicMock()
+autogen_memory_mock = MagicMock()
+
+# Create a MockBaseEvent class for tests
+class MockBaseEvent:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+# Set up our mocks properly
+autogen_event_mock.BaseEvent = MockBaseEvent
+autogen_event_mock.Event = MagicMock()
+autogen_event_mock.Event.add = MagicMock()
+autogen_event_mock.EventHook = MagicMock()
+autogen_event_mock.register_hook = MagicMock()
+
+# Create mock for agents
+autogen_chat_agent_mock = MagicMock()
+autogen_agent_mock.Agent = MagicMock()
+autogen_agent_mock.ChatAgent = autogen_chat_agent_mock
+
+# Assign the mocks to the sys.modules
+sys.modules["autogen_core"] = autogen_mock
+sys.modules["autogen_core.event"] = autogen_event_mock
+sys.modules["autogen_core.agent"] = autogen_agent_mock
+sys.modules["autogen_core.code_utils"] = autogen_code_utils_mock
+sys.modules["autogen_core.memory"] = autogen_memory_mock
+
+# Set up GroupChat mock
+autogen_mock.GroupChat = MagicMock()
 
 # Import the classes to test
 from skwaq.agents.autogen_integration import (
@@ -57,6 +83,21 @@ def mock_config():
         }
         mock_get_config.return_value = mock_config
         yield mock_config
+
+
+@pytest.fixture(autouse=True)
+def mock_registry():
+    """Mock the registry module to avoid shared state issues."""
+    # Import registry module
+    import skwaq.agents.registry
+    
+    # Create a mock AgentRegistry
+    mock_registry = MagicMock()
+    mock_registry.register = MagicMock()
+    
+    # Patch the registry
+    with patch.object(skwaq.agents.registry, "AgentRegistry", mock_registry):
+        yield mock_registry
 
 
 @pytest.fixture
@@ -172,20 +213,19 @@ class TestAutogenAgentAdapter:
             system_message="You are a test agent",
         )
         
-        # Mock the ChatAgent constructor
+        # Mock the ChatAgent constructor directly
         mock_chat_agent = MagicMock()
+        autogen_agent_mock.ChatAgent.return_value = mock_chat_agent
         
-        with patch("autogen_core.agent.ChatAgent", return_value=mock_chat_agent) as mock_constructor:
-            # Act
-            agent = await adapter.create_agent()
-            
-            # Assert - just verify an agent was created and that properties are as expected
-            assert agent is not None
-            assert adapter.agent is not None
-            
-            # Verify ChatAgent was constructed (don't require exactly one call since we can't control
-            # test execution order and other tests might have already created agents)
-            mock_constructor.assert_called()
+        # Act
+        agent = await adapter.create_agent()
+        
+        # Assert - just verify an agent was created and that properties are as expected
+        assert agent is not None
+        assert adapter.agent is not None
+        
+        # Since we're directly mocking the module, we should verify it was called
+        assert autogen_agent_mock.ChatAgent.called
     
     @pytest.mark.asyncio
     async def test_close_agent(self, mock_config, mock_openai_client):
@@ -237,20 +277,19 @@ class TestAutogenGroupChatAdapter:
             agents=mock_agents,
         )
         
-        # Mock the GroupChat constructor
+        # Mock the GroupChat constructor directly
         mock_group_chat = MagicMock()
+        autogen_mock.GroupChat.return_value = mock_group_chat
         
-        with patch("autogen_core.GroupChat", return_value=mock_group_chat) as mock_constructor:
-            # Act
-            group_chat = await adapter.create_group_chat()
-            
-            # Assert - just verify a group chat was created
-            assert group_chat is not None
-            assert adapter.group_chat is not None
-            
-            # Verify GroupChat was constructed (don't require exactly one call since we can't control
-            # test execution order and other tests might have already created agents)
-            mock_constructor.assert_called()
+        # Act
+        group_chat = await adapter.create_group_chat()
+        
+        # Assert - just verify a group chat was created
+        assert group_chat is not None
+        assert adapter.group_chat is not None
+        
+        # Since we're directly mocking the module, we should verify it was called
+        assert autogen_mock.GroupChat.called
     
     @pytest.mark.asyncio
     async def test_close_group_chat(self):
