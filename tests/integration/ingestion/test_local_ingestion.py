@@ -86,13 +86,57 @@ class TestLocalRepoIntegration:
         # Verify OpenAI was used for summary (multiple times for code files and repo summary)
         assert mock_openai_client.get_completion.call_count > 0
 
-    @pytest.mark.skip(reason="Test requires complex mocking of async functions")
     @pytest.mark.asyncio
     async def test_high_level_ingest(self, test_repo):
         """Test the high-level ingest_repository function."""
-        # This test is skipped due to complex async mocking requirements
-        # The functionality is already tested in test_ingest_from_path
-        pass
+        # Create mock dependencies with proper async method as AsyncMock
+        mock_connector = MagicMock()
+        mock_connector.create_node.return_value = 1
+        mock_connector.create_relationship.return_value = True
+        mock_connector.run_query.return_value = []
+
+        mock_openai_client = MagicMock()
+        mock_openai_client.get_completion = AsyncMock(return_value="Mock repository summary")
+        
+        # Mock the RepositoryIngestor class with our own implementation to avoid global state
+        with patch("skwaq.ingestion.code_ingestion.RepositoryIngestor") as mock_ingestor_class:
+            # Create mock result
+            mock_result = {
+                "repository_id": 1,
+                "repository_name": Path(test_repo).name,
+                "file_count": 4,
+                "directory_count": 3,
+                "code_files_processed": 3,
+                "processing_time_seconds": 0.1,
+                "summary": "Test repository summary"
+            }
+            
+            # Create mock ingestor instance with async method
+            mock_ingestor = MagicMock()
+            mock_ingestor.ingest_from_path = AsyncMock(return_value=mock_result)
+            mock_ingestor_class.return_value = mock_ingestor
+            
+            # Call the high-level function
+            from skwaq.ingestion.code_ingestion import ingest_repository
+            result = await ingest_repository(
+                repo_path_or_url=test_repo,
+                connector=mock_connector,
+                openai_client=mock_openai_client
+            )
+            
+            # Verify result
+            assert result == mock_result
+            
+            # Verify ingestor was created
+            mock_ingestor_class.assert_called_once()
+            
+            # Verify ingest_from_path was called
+            mock_ingestor.ingest_from_path.assert_called_once_with(
+                test_repo,
+                None,  # repo_name uses directory name
+                None,  # No include patterns
+                None,  # No exclude patterns
+            )
 
     @pytest.mark.asyncio
     async def test_list_repositories(self):
