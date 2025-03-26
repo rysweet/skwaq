@@ -161,6 +161,9 @@ class TestMilestoneA1:
             mock_openai_client = MagicMock()
             mock_get_openai_client.return_value = mock_openai_client
             
+            # Mock the registry too to avoid shared state issues
+            mock_registry.register = MagicMock()
+            
             # Create a test agent
             agent = BaseAgent(
                 name="test_agent",
@@ -267,6 +270,9 @@ class TestMilestoneA1:
             mock_openai_client.api_type = "azure"
             mock_openai_client.api_version = "2023-05-15"
             mock_get_openai_client.return_value = mock_openai_client
+            
+            # Mock the registry too to avoid shared state issues
+            mock_registry.register = MagicMock()
             
             # Mock the ChatAgent
             mock_chat_agent = MagicMock()
