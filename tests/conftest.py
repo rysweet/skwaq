@@ -49,33 +49,48 @@ def pytest_sessionstart(session):
 
 
 @pytest.fixture(autouse=True)
-def reset_singletons():
-    """Reset all singleton instances before each test.
+def reset_singletons(monkeypatch):
+    """Reset all singleton instances before each test and enhance mocking.
     
     This fixture ensures that tests don't interfere with each other by
-    resetting all singleton instances between tests.
+    resetting all singleton instances between tests and enforcing proper mocking.
     """
     # Store original module values
     neo4j_connector_module = importlib.import_module("skwaq.db.neo4j_connector")
     openai_client_module = importlib.import_module("skwaq.core.openai_client")
-    
-    # Store original values
-    original_neo4j_connector = getattr(neo4j_connector_module, "_connector", None)
-    original_openai_sync_client = getattr(openai_client_module, "_sync_client", None)
-    original_openai_async_client = getattr(openai_client_module, "_async_client", None)
     
     # Reset singleton instances
     neo4j_connector_module._connector = None
     openai_client_module._sync_client = None
     openai_client_module._async_client = None
     
+    # Create mock objects
+    mock_neo4j_connector = MagicMock()
+    mock_neo4j_connector.create_node.return_value = 1
+    mock_neo4j_connector.create_relationship.return_value = True
+    mock_neo4j_connector.run_query.return_value = []
+    
+    mock_openai_client = MagicMock()
+    mock_openai_client.get_completion.return_value = "Mock response"
+    
+    # Patch the get_* functions to ensure consistent mocking
+    def mock_get_connector():
+        return mock_neo4j_connector
+    
+    def mock_get_openai_client(async_mode=False):
+        return mock_openai_client
+    
+    # Patch the module functions
+    monkeypatch.setattr("skwaq.db.neo4j_connector.get_connector", mock_get_connector)
+    monkeypatch.setattr("skwaq.core.openai_client.get_openai_client", mock_get_openai_client)
+    
     # Run the test
     yield
     
-    # Restore original values after test
-    neo4j_connector_module._connector = original_neo4j_connector
-    openai_client_module._sync_client = original_openai_sync_client
-    openai_client_module._async_client = original_openai_async_client
+    # Reset singletons again to prevent test interference
+    neo4j_connector_module._connector = None
+    openai_client_module._sync_client = None
+    openai_client_module._async_client = None
 
 
 @pytest.fixture
