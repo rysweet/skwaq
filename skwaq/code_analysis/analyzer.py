@@ -5,6 +5,8 @@ of source code files to identify potential security vulnerabilities.
 """
 
 import asyncio
+import os
+import tempfile
 from typing import Dict, List, Optional, Any, Type
 
 from ..db.neo4j_connector import get_connector
@@ -21,6 +23,10 @@ from .languages.python import PythonAnalyzer
 from .languages.javascript import JavaScriptAnalyzer
 from .languages.csharp import CSharpAnalyzer
 from .blarify_integration import BlarifyIntegration, BLARIFY_AVAILABLE
+from .parallel_orchestrator import ParallelOrchestrator
+from .codeql_integration import CodeQLIntegration
+from .metrics_collector import MetricsCollector
+from .tool_integration import ToolIntegrationFramework
 
 logger = get_logger(__name__)
 
@@ -65,6 +71,14 @@ class CodeAnalyzer:
         # Initialize language analyzers
         self.language_analyzers: Dict[str, LanguageAnalyzer] = {}
         self._register_default_language_analyzers()
+        
+        # Initialize advanced analysis components
+        self.parallel_orchestrator = ParallelOrchestrator()
+        self.codeql_integration = CodeQLIntegration()
+        self.metrics_collector = MetricsCollector()
+        self.tool_integration = ToolIntegrationFramework()
+        
+        logger.info("CodeAnalyzer initialized with advanced components")
         
         # Mark as initialized
         self._initialized = True
@@ -304,13 +318,95 @@ class CodeAnalyzer:
                 )
             )
 
-        # Run strategies in parallel
+        # Run strategies in parallel using parallel orchestrator
         if tasks:
-            findings_lists = await asyncio.gather(*tasks)
+            findings_lists = await self.parallel_orchestrator.execute_parallel_tasks(tasks)
 
             # Add findings from all strategies
             for findings in findings_lists:
                 result.add_findings(findings)
+        
+        # Run advanced analysis if enabled
+        if analysis_options.get("advanced_analysis", False):
+            # Collect code metrics if enabled
+            if analysis_options.get("metrics_collection", True):
+                try:
+                    # Create temporary file for metrics collection
+                    with tempfile.NamedTemporaryFile(mode='w', suffix=f'.{language.lower()}', delete=False) as tmp:
+                        tmp.write(content)
+                        metrics_file_path = tmp.name
+                    
+                    # Collect metrics
+                    metrics = self.metrics_collector.collect_metrics(metrics_file_path)
+                    
+                    # Store metrics in the database
+                    self.metrics_collector.store_metrics(file_id, metrics)
+                    
+                    # Add metrics info to result
+                    result.metrics = metrics
+                    
+                    # Clean up temp file
+                    os.unlink(metrics_file_path)
+                    
+                    logger.info(f"Collected {len(metrics)} metrics for file ID {file_id}")
+                except Exception as e:
+                    logger.error(f"Error collecting metrics for file ID {file_id}: {e}")
+            
+            # Run external tools if enabled
+            if analysis_options.get("external_tools", True):
+                try:
+                    # Create a temporary file for tool analysis
+                    with tempfile.NamedTemporaryFile(mode='w', suffix=f'.{language.lower()}', delete=False) as tmp:
+                        tmp.write(content)
+                        tool_file_path = tmp.name
+                    
+                    # Run all applicable tools
+                    tool_results = self.tool_integration.execute_all_tools(
+                        language, [tool_file_path]
+                    )
+                    
+                    # Convert tool results to findings
+                    if tool_results:
+                        file_id_map = {tool_file_path: file_id}
+                        tool_findings = self.tool_integration.convert_to_findings(
+                            tool_results, file_id_map
+                        )
+                        result.add_findings(tool_findings)
+                        
+                        logger.info(f"Added {len(tool_findings)} findings from external tools for file ID {file_id}")
+                    
+                    # Clean up temp file
+                    os.unlink(tool_file_path)
+                except Exception as e:
+                    logger.error(f"Error running external tools for file ID {file_id}: {e}")
+            
+            # Run CodeQL analysis if enabled
+            if analysis_options.get("codeql_analysis", True) and self.codeql_integration.is_available:
+                try:
+                    repo_path = analysis_options.get("repo_path")
+                    if repo_path:
+                        # Create CodeQL database (this is usually done once per repository)
+                        database_path = analysis_options.get("codeql_database")
+                        
+                        if not database_path:
+                            # Create temporary database
+                            database_path = tempfile.mkdtemp(prefix="skwaq_codeql_")
+                            self.codeql_integration.create_codeql_database(repo_path, language, database_path)
+                        
+                        # Run default queries
+                        codeql_results = self.codeql_integration.run_default_queries(database_path, language)
+                        
+                        # Convert results to findings
+                        if codeql_results:
+                            file_id_map = {file_path: file_id}
+                            codeql_findings = self.codeql_integration.convert_to_findings(
+                                codeql_results, file_id_map
+                            )
+                            result.add_findings(codeql_findings)
+                            
+                            logger.info(f"Added {len(codeql_findings)} findings from CodeQL for file ID {file_id}")
+                except Exception as e:
+                    logger.error(f"Error running CodeQL analysis for file ID {file_id}: {e}")
 
         return result
         

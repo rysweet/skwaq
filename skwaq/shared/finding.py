@@ -27,6 +27,7 @@ class Finding:
     pattern_id: Optional[int] = None  # ID of the pattern that matched
     pattern_name: Optional[str] = None  # Name of the pattern that matched
     suggestion: Optional[str] = None  # Suggestion for fixing the vulnerability
+    tool_name: Optional[str] = None  # Name of the external tool that found the issue
     metadata: Dict[str, Any] = field(default_factory=dict)  # Additional metadata
 
     def to_dict(self) -> Dict[str, Any]:
@@ -56,6 +57,9 @@ class Finding:
 
         if self.suggestion:
             result["suggestion"] = self.suggestion
+            
+        if self.tool_name:
+            result["tool_name"] = self.tool_name
 
         if self.metadata:
             result["metadata"] = self.metadata
@@ -101,6 +105,9 @@ class Finding:
 
         if "suggestion" in data:
             optional_args["suggestion"] = data["suggestion"]
+            
+        if "tool_name" in data:
+            optional_args["tool_name"] = data["tool_name"]
 
         # Extract metadata (all other fields)
         metadata = {}
@@ -131,6 +138,8 @@ class AnalysisResult:
     file_id: int  # ID of the file in the database
     findings: List[Finding] = field(default_factory=list)  # List of findings
     metadata: Dict[str, Any] = field(default_factory=dict)  # Analysis metadata
+    metrics: Optional[Dict[str, Any]] = None  # Code metrics if collected
+    advanced_analysis_results: Dict[str, Any] = field(default_factory=dict)  # Results from advanced analysis
 
     @property
     def vulnerabilities_found(self) -> int:
@@ -162,13 +171,23 @@ class AnalysisResult:
         Returns:
             Dictionary representation of the analysis result
         """
-        return {
+        result = {
             "vulnerabilities_found": self.vulnerabilities_found,
             "patterns_matched": self.patterns_matched,
             "findings": [f.to_dict() for f in self.findings],
             "file_id": self.file_id,
             "metadata": self.metadata,
         }
+        
+        # Add metrics if available
+        if self.metrics:
+            result["metrics"] = self.metrics
+            
+        # Add advanced analysis results if available
+        if self.advanced_analysis_results:
+            result["advanced_analysis_results"] = self.advanced_analysis_results
+            
+        return result
 
     def add_finding(self, finding: Finding) -> None:
         """Add a finding to the results.
