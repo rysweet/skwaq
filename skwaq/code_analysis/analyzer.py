@@ -78,7 +78,18 @@ class CodeAnalyzer:
         self.metrics_collector = MetricsCollector()
         self.tool_integration = ToolIntegrationFramework()
         
-        logger.info("CodeAnalyzer initialized with advanced components")
+        # Initialize C4 code understanding components
+        from .summarization.code_summarizer import CodeSummarizer
+        from .summarization.intent_inference import IntentInferenceEngine
+        from .summarization.architecture_reconstruction import ArchitectureReconstructor
+        from .summarization.cross_referencer import CrossReferencer
+        
+        self._summarizer = CodeSummarizer()
+        self._intent_engine = IntentInferenceEngine()
+        self._architecture_reconstructor = ArchitectureReconstructor()
+        self._cross_referencer = CrossReferencer()
+        
+        logger.info("CodeAnalyzer initialized with advanced components and code understanding capabilities")
         
         # Mark as initialized
         self._initialized = True
@@ -490,6 +501,45 @@ class CodeAnalyzer:
         from datetime import datetime, UTC
         return datetime.now(UTC).isoformat()
         
+    def _detect_language(self, code: str) -> str:
+        """Detect the programming language of a code snippet.
+        
+        Args:
+            code: Code snippet to analyze
+            
+        Returns:
+            Detected language name (python, javascript, etc.)
+        """
+        # Simple heuristic detection based on common language patterns
+        code = code.lower()
+        
+        # Check for Python
+        if "def " in code and ":" in code or "import " in code and "as " in code:
+            return "python"
+            
+        # Check for JavaScript/TypeScript
+        if "function" in code or "const " in code or "let " in code or "class" in code and "{" in code:
+            if "interface " in code or "type " in code and ":" in code:
+                return "typescript"
+            return "javascript"
+            
+        # Check for Java
+        if "public class" in code or "private " in code and ";" in code:
+            return "java"
+            
+        # Check for C#
+        if "namespace " in code or "using " in code and ";" in code:
+            return "csharp"
+            
+        # Check for C/C++
+        if "#include" in code or "int main" in code:
+            if "class " in code and "::" in code:
+                return "cpp"
+            return "c"
+            
+        # Default to Python if unable to detect
+        return "python"
+        
     async def summarize_code(self, code: str, level: str = "function") -> CodeSummary:
         """Summarize code at the specified level.
         
@@ -500,18 +550,57 @@ class CodeAnalyzer:
         Returns:
             CodeSummary object
         """
-        # This is a placeholder method for the C4 milestone
-        # It will be implemented in the next development phase
-        return CodeSummary(
-            name="placeholder",
-            summary="Code summary placeholder",
-            complexity=0,
-            component_type=level,
-            responsible_for=[],
-            input_types=[],
-            output_types=[],
-            security_considerations=[]
-        )
+        logger.info(f"Summarizing code at {level} level")
+        
+        if not self._summarizer:
+            logger.warning("CodeSummarizer not initialized, using placeholder summary")
+            return CodeSummary(
+                name="placeholder",
+                summary="Code summary placeholder",
+                complexity=0,
+                component_type=level,
+                responsible_for=[],
+                input_types=[],
+                output_types=[],
+                security_considerations=[]
+            )
+            
+        context = {
+            "language": self._detect_language(code),
+            "model": self.config.get("summarization.model", "gpt-4"),
+            "level": level
+        }
+            
+        try:
+            if level == "function":
+                return self._summarizer.summarize_function(code, context)
+            elif level == "class":
+                return self._summarizer.summarize_class(code, context)
+            elif level == "module":
+                return self._summarizer.summarize_module(code, context)
+            elif level == "system":
+                # For system summarization, code should be a dictionary of file paths to code content
+                if isinstance(code, str):
+                    logger.warning("System summarization requires a dictionary of files, using placeholders")
+                    system_code = {"placeholder.py": code}
+                else:
+                    system_code = code
+                return self._summarizer.summarize_system(system_code, context)
+            else:
+                logger.warning(f"Unknown summarization level: {level}, using function level")
+                return self._summarizer.summarize_function(code, context)
+        except Exception as e:
+            logger.error(f"Error during code summarization: {e}")
+            return CodeSummary(
+                name="error",
+                summary=f"Error during summarization: {str(e)}",
+                complexity=0,
+                component_type=level,
+                responsible_for=[],
+                input_types=[],
+                output_types=[],
+                security_considerations=[]
+            )
     
     async def infer_intent(self, code: str, level: str = "function") -> Dict[str, Any]:
         """Infer developer intent from code.
@@ -523,13 +612,39 @@ class CodeAnalyzer:
         Returns:
             Dictionary with intent information
         """
-        # This is a placeholder method for the C4 milestone
-        # It will be implemented in the next development phase
-        return {
-            "intent": "Placeholder intent",
-            "purpose": "Placeholder purpose",
-            "confidence": 0.5
+        logger.info(f"Inferring intent for code at {level} level")
+        
+        if not self._intent_engine:
+            logger.warning("IntentInferenceEngine not initialized, using placeholder intent")
+            return {
+                "intent": "Placeholder intent",
+                "purpose": "Placeholder purpose",
+                "confidence": 0.5
+            }
+            
+        context = {
+            "language": self._detect_language(code),
+            "model": self.config.get("intent_inference.model", "gpt-4"),
+            "level": level
         }
+            
+        try:
+            if level == "function":
+                return self._intent_engine.infer_function_intent(code, context)
+            elif level == "class":
+                return self._intent_engine.infer_class_intent(code, context)
+            elif level == "module":
+                return self._intent_engine.infer_module_intent(code, context)
+            else:
+                logger.warning(f"Unknown intent inference level: {level}, using function level")
+                return self._intent_engine.infer_function_intent(code, context)
+        except Exception as e:
+            logger.error(f"Error during intent inference: {e}")
+            return {
+                "intent": f"Error: {str(e)}",
+                "purpose": "Could not determine due to error",
+                "confidence": 0.0
+            }
     
     async def reconstruct_architecture(self, repo_path: str) -> ArchitectureModel:
         """Reconstruct the architecture of a repository.
@@ -540,17 +655,40 @@ class CodeAnalyzer:
         Returns:
             ArchitectureModel representing the system architecture
         """
-        # This is a placeholder method for the C4 milestone
-        # It will be implemented in the next development phase
-        return ArchitectureModel(
-            name="Placeholder Architecture",
-            components=[
-                {"name": "component1", "type": "module"}
-            ],
-            relationships=[
-                {"source": "component1", "target": "component2", "type": "uses"}
-            ]
-        )
+        logger.info(f"Reconstructing architecture for repository: {repo_path}")
+        
+        if not self._architecture_reconstructor:
+            logger.warning("ArchitectureReconstructor not initialized, using placeholder architecture")
+            return ArchitectureModel(
+                name="Placeholder Architecture",
+                components=[
+                    {"name": "component1", "type": "module"}
+                ],
+                relationships=[
+                    {"source": "component1", "target": "component2", "type": "uses"}
+                ]
+            )
+        
+        try:
+            # Use the architecture reconstructor to analyze the repository
+            architecture_model = self._architecture_reconstructor.reconstruct_architecture(repo_path)
+            
+            # Optionally, we could generate a visual representation of the architecture
+            # diagram = self._architecture_reconstructor.generate_diagram(architecture_model)
+            
+            logger.info(f"Architecture reconstruction complete with {len(architecture_model.components)} components" + 
+                       f" and {len(architecture_model.relationships)} relationships")
+            
+            return architecture_model
+        except Exception as e:
+            logger.error(f"Error during architecture reconstruction: {e}")
+            return ArchitectureModel(
+                name=f"Error: {str(e)}",
+                components=[
+                    {"name": "error", "type": "error", "details": str(e)}
+                ],
+                relationships=[]
+            )
     
     async def find_cross_references(self, symbol: Dict[str, Any]) -> Dict[str, Any]:
         """Find cross-references for a symbol.
@@ -561,9 +699,30 @@ class CodeAnalyzer:
         Returns:
             Dictionary with cross-reference information
         """
-        # This is a placeholder method for the C4 milestone
-        # It will be implemented in the next development phase
-        return {
-            "symbol": symbol.get("name", ""),
-            "references": []
-        }
+        logger.info(f"Finding cross-references for symbol: {symbol.get('name', 'unknown')}")
+        
+        if not self._cross_referencer:
+            logger.warning("CrossReferencer not initialized, using placeholder references")
+            return {
+                "symbol": symbol.get("name", ""),
+                "references": []
+            }
+        
+        try:
+            # Use the cross referencer to find references to the symbol
+            reference_info = self._cross_referencer.find_references(symbol)
+            
+            # Optionally generate a reference graph
+            # reference_graph = self._cross_referencer.generate_reference_graph(repo_path)
+            
+            reference_count = len(reference_info.get("references", []))
+            logger.info(f"Found {reference_count} references to symbol {symbol.get('name', 'unknown')}")
+            
+            return reference_info
+        except Exception as e:
+            logger.error(f"Error during cross-reference search: {e}")
+            return {
+                "symbol": symbol.get("name", ""),
+                "error": str(e),
+                "references": []
+            }
