@@ -215,18 +215,182 @@ class TestCLIParser:
         assert args.url == "https://github.com/user/test-repo"
 
 
+class TestHelperFunctions:
+    """Tests for helper functions."""
+    
+    def test_create_progress_bar(self):
+        """Test progress bar creation function."""
+        from skwaq.cli.main import create_progress_bar
+        
+        # Testing that the function returns a Progress instance
+        progress = create_progress_bar()
+        assert hasattr(progress, "add_task")
+        assert hasattr(progress, "update")
+        
+    @patch("skwaq.cli.main.Panel")
+    def test_print_banner(self, mock_panel):
+        """Test banner printing function."""
+        from skwaq.cli.main import print_banner
+        
+        # Capture stdout
+        captured_output = StringIO()
+        sys.stdout = captured_output
+        
+        # Call the function
+        print_banner()
+        
+        # Reset stdout
+        sys.stdout = sys.__stdout__
+        
+        # Verify panel was created
+        mock_panel.assert_called_once()
+        
+        # Check for expected content in output
+        output = captured_output.getvalue()
+        assert "Vulnerability Assessment Copilot" in output or "Raven" in output
+
+
 class TestCommandHandlers:
     """Tests for command handlers."""
+    
+    @pytest.mark.asyncio
+    @patch("skwaq.cli.main.Status")
+    @patch("skwaq.cli.main.Table")
+    @patch("skwaq.cli.main.asyncio.sleep")
+    async def test_handle_investigations_command_list(self, mock_sleep, mock_table, mock_status):
+        """Test investigations list command handler."""
+        from skwaq.cli.main import handle_investigations_command
+        
+        # Setup mocks
+        mock_status_instance = MagicMock()
+        mock_status.return_value.__enter__.return_value = mock_status_instance
+        mock_table_instance = MagicMock()
+        mock_table.return_value = mock_table_instance
+        
+        # Mock the console.print method to avoid rich output issues
+        with patch("skwaq.cli.main.console.print") as mock_print:
+            # Create args
+            args = MagicMock()
+            args.investigation_command = "list"
+            
+            # Run the handler
+            await handle_investigations_command(args)
+            
+            # Verify the table was created
+            mock_table.assert_called_once()
+            
+            # Verify the console print was called with expected arguments containing "Active Investigations"
+            mock_print.assert_any_call(mock_table_instance)
+        
+    @pytest.mark.asyncio
+    @patch("skwaq.cli.main.Status")
+    @patch("skwaq.cli.main.Panel")
+    @patch("skwaq.cli.main.asyncio.sleep")
+    async def test_handle_investigations_command_export(self, mock_sleep, mock_panel, mock_status):
+        """Test investigations export command handler."""
+        from skwaq.cli.main import handle_investigations_command
+        
+        # Setup mocks
+        mock_status_instance = MagicMock()
+        mock_status.return_value.__enter__.return_value = mock_status_instance
+        
+        # Set up panel to include a string representation with "Export Complete"
+        mock_panel.return_value = MagicMock(side_effect=lambda *args, **kwargs: "Export Complete Panel")
+        
+        # Create args
+        args = MagicMock()
+        args.investigation_command = "export"
+        args.id = "test-id"
+        args.format = "markdown"
+        args.output = None  # Test default output path
+        
+        # Capture stdout
+        captured_output = StringIO()
+        sys.stdout = captured_output
+        
+        # Run the handler
+        await handle_investigations_command(args)
+        
+        # Reset stdout
+        sys.stdout = sys.__stdout__
+        
+        # Verify Status was used
+        mock_status.assert_called_once()
+        
+        # Verify the Panel was created
+        mock_panel.assert_called_once()
+        
+        # No need to check the output text since we're mocking the Panel output
+        
+    @pytest.mark.asyncio
+    @patch("skwaq.cli.main.Status")
+    @patch("skwaq.cli.main.Confirm.ask", return_value=True)
+    @patch("skwaq.cli.main.asyncio.sleep")
+    async def test_handle_investigations_command_delete(self, mock_sleep, mock_confirm, mock_status):
+        """Test investigations delete command handler."""
+        from skwaq.cli.main import handle_investigations_command
+        
+        # Setup mocks
+        mock_status_instance = MagicMock()
+        mock_status.return_value.__enter__.return_value = mock_status_instance
+        
+        # Mock the console.print method to avoid rich output issues
+        with patch("skwaq.cli.main.console.print") as mock_print:
+            # Create args
+            args = MagicMock()
+            args.investigation_command = "delete"
+            args.id = "test-id"
+            args.force = False  # Test with confirmation prompt
+            
+            # Run the handler
+            await handle_investigations_command(args)
+            
+            # Verify the confirmation was called
+            mock_confirm.assert_called_once()
+            
+            # Verify the status was used
+            mock_status.assert_called_once()
+            
+            # Verify the print method was called with the success message
+            mock_print.assert_any_call(f"[bold green]Investigation test-id deleted successfully.[/bold green]")
+        
+    @pytest.mark.asyncio
+    async def test_handle_investigations_command_missing(self):
+        """Test investigations command with missing subcommand."""
+        from skwaq.cli.main import handle_investigations_command
+        
+        # Create args
+        args = MagicMock()
+        args.investigation_command = None
+        
+        # Capture stdout
+        captured_output = StringIO()
+        sys.stdout = captured_output
+        
+        # Run the handler
+        await handle_investigations_command(args)
+        
+        # Reset stdout
+        sys.stdout = sys.__stdout__
+        
+        # Check output
+        output = captured_output.getvalue()
+        assert "specify an investigation command" in output
 
     @pytest.mark.asyncio
-    @patch("skwaq.cli.main.get_connector")
-    @patch("skwaq.cli.main.Status")
-    async def test_handle_analyze_command(self, mock_status, mock_get_connector):
+    @patch("skwaq.cli.main.CodeAnalyzer")
+    @patch("skwaq.cli.main.console")
+    async def test_handle_analyze_command(self, mock_console, mock_analyzer_class):
         """Test analyze command handler."""
-        # Setup mocks
-        mock_connector = MagicMock()
-        mock_get_connector.return_value = mock_connector
-
+        # Setup mock analyzer class
+        mock_analyzer_instance = MagicMock()
+        mock_analyzer_class.return_value = mock_analyzer_instance
+        
+        # Setup mock analyze_file method
+        mock_result = MagicMock()
+        mock_result.findings = []
+        mock_analyzer_instance.analyze_file = AsyncMock(return_value=mock_result)
+        
         # Create args
         args = MagicMock()
         args.file = "test.py"
@@ -234,27 +398,19 @@ class TestCommandHandlers:
         args.output = "text"
         args.interactive = False
         
-        # Setup Status mock
-        mock_status_instance = MagicMock()
-        mock_status.return_value.__enter__.return_value = mock_status_instance
-
-        # Capture stdout
-        captured_output = StringIO()
-        sys.stdout = captured_output
-
+        # Import inside test to avoid module import issues
+        from skwaq.cli.main import handle_analyze_command
+        
         # Run the handler
         await handle_analyze_command(args)
-
-        # Reset stdout
-        sys.stdout = sys.__stdout__
-
-        # Verify analyzer was called (using our globally mocked analyzer)
-        mock_analyzer.analyze_file.assert_called_once()
-
-        # Verify output contains expected content
-        output = captured_output.getvalue()
-        assert "test.py" in output
-        assert "pattern_matching" in output
+        
+        # Verify analyzer was called
+        mock_analyzer_class.assert_called_once()
+        mock_analyzer_instance.analyze_file.assert_called_once_with(
+            file_path="test.py",
+            repository_id=None,
+            strategy_names=["pattern_matching"]
+        )
 
     @pytest.mark.asyncio
     @patch("skwaq.cli.main.get_connector")

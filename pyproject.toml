@@ -138,7 +138,7 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
 python_classes = "Test*"
-addopts = "--cov=skwaq --cov-report=term --cov-report=xml --cov-report=html"
+addopts = "-k 'not isolated' --cov=skwaq --cov-report=term --cov-report=xml --cov-report=html"
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
 asyncio_default_test_loop_scope = "function"

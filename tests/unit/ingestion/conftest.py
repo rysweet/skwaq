@@ -83,3 +83,58 @@ def mock_github_repo():
     repo.html_url = "https://github.com/user/test-repo"
     repo.get_languages.return_value = {"Python": 1000, "JavaScript": 500}
     return repo
+
+
+@pytest.fixture
+def isolated_test_environment(mock_connector, mock_openai_client, mock_github_client):
+    """Create a completely isolated test environment.
+    
+    This fixture returns a dictionary with mocked dependencies for isolated tests.
+    It's designed to create a completely independent test environment where each
+    test run is completely isolated from others.
+    """
+    # Store mocked dependencies in a single dictionary
+    env = {
+        "connector": mock_connector,
+        "openai_client": mock_openai_client,
+        "github_client": mock_github_client,
+    }
+    
+    # Mock github module
+    github_mock = MagicMock()
+    github_instance = MagicMock()
+    github_instance.get_rate_limit = MagicMock(return_value=MagicMock())
+    github_instance.get_repo = MagicMock(return_value=MagicMock())
+    
+    # Set up repo mock
+    repo_mock = github_instance.get_repo.return_value
+    repo_mock.name = "test-repo"
+    repo_mock.full_name = "test-user/test-repo"
+    repo_mock.description = "Test repository for unit tests"
+    repo_mock.stargazers_count = 10
+    repo_mock.forks_count = 5
+    repo_mock.default_branch = "main"
+    repo_mock.get_languages.return_value = {"Python": 1000, "JavaScript": 500}
+    repo_mock.html_url = "https://github.com/test-user/test-repo"
+    repo_mock.clone_url = "https://github.com/test-user/test-repo.git"
+    repo_mock.ssh_url = "git@github.com:test-user/test-repo.git"
+    
+    # Set up GitHub class in the module
+    github_mock.Github = MagicMock(return_value=github_instance)
+    github_mock.Auth = MagicMock()
+    github_mock.Auth.Token = MagicMock()
+    github_mock.GithubException = type("GithubException", (Exception,), {})
+    
+    # Store the original modules
+    original_github = sys.modules.get("github", None)
+    
+    # Replace with mocks
+    sys.modules["github"] = github_mock
+    
+    yield env
+    
+    # Restore original modules if they existed
+    if original_github:
+        sys.modules["github"] = original_github
+    elif "github" in sys.modules:
+        del sys.modules["github"]
