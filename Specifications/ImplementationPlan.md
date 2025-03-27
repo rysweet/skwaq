@@ -1108,6 +1108,33 @@ The implementation will proceed through a series of incremental milestones, each
 - Export format validation
 - End-to-end testing of critical user journeys
 
+### CLI Refactoring Milestone
+
+#### Milestone R1: CLI Refactoring and Modularization
+**Deliverables:**
+- Refactored CLI structure with proper separation of concerns
+- UI component modules for console, progress, formatting, and prompts
+- Parser module for command-line argument handling
+- Command handler modules for each command group
+- Visualization module for graph visualization
+- Test suite updates for new structure
+
+**Validation Criteria:**
+- All CLI functionality works identically to pre-refactoring
+- Code is properly organized with clear responsibility boundaries
+- Shared code is moved to appropriate modules
+- Command handlers follow consistent patterns
+- Tests pass with refactored code
+- Documentation is updated to reflect new structure
+
+**Testing Requirements:**
+- Command execution tests verify identical behavior
+- New component unit tests
+- Integration tests for command execution
+- Regression testing for all command types
+- Error handling verification
+- Documentation completeness checks
+
 ### Milestone Validation and Testing Process
 
 For each milestone, the following validation and testing process will be followed:
@@ -1379,29 +1406,5 @@ The implementation will proceed in the following phases, with each phase buildin
 ### Phase 8: Enhanced Cloud Integration
 - **Milestone E1**: Azure AI Configuration Enhancement
 
-#### Milestone E1: Azure AI Configuration Enhancement
-**Deliverables:**
-- Enhanced Azure OpenAI configuration with Entra ID support
-- Environment variable and .env file configuration support
-- Interactive configuration prompting in CLI and GUI
-- Template .env file for easy setup
-- Comprehensive configuration documentation
-- Unit tests for all configuration methods
-
-**Validation Criteria:**
-- Configuration works with both API Key and Entra ID authentication
-- Environment variables are correctly read and applied
-- .env file is properly parsed and configurations applied
-- CLI and GUI gracefully handle missing configurations with interactive prompts
-- Configuration documentation is clear and comprehensive
-- All authentication methods pass unit tests
-- .env file is properly .gitignored for security
-
-**Testing Requirements:**
-- Mock Azure OpenAI service tests
-- Environment variable configuration tests
-- .env file parsing tests
-- CLI interactive configuration prompt tests
-- GUI configuration prompt tests
-- Authentication method switching tests
-- Configuration error handling tests
+### Phase 9: Code Quality and Maintainability
+- **Milestone R1**: CLI Refactoring and Modularization
