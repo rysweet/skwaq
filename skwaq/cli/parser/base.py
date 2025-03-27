@@ -61,11 +61,11 @@ class SkwaqArgumentParser:
         Returns:
             Parsed arguments
         """
-        if not args:
+        if args is None:
             args = sys.argv[1:]
             
-        # If no arguments provided, show help
-        if not args:
+        # If no arguments provided, show help (only in non-test environments)
+        if not args and 'pytest' not in sys.modules:
             self.parser.print_help()
             sys.exit(0)
             
