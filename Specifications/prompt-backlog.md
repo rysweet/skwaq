@@ -16,5 +16,8 @@ We are going to add a new feature to the codebase. The feature is described in t
 
 We need to review the entire project for unused code and remove it. After each removal run the test suite to ensure that everything is stil working. 
 
-We need to review every code file for comments that are not necessary or no longer relevant and remove them. We also need to ensure that all files have throough and accurate docstrings.  Where complicated code is present, we need to think carefully ensure that there are comments that explain the code in concise but accurate terms.  
+We need to review every code file for comments that are 
+necessary or no longer relevant and remove them. We also need to ensure that all files have throough and accurate docstrings.  Where complicated code is present, we need to think carefully ensure that there are comments that explain the code in concise but accurate terms.  
+
+We are going to add a new feature to the codebase. We want to be able to expose the neo4j graph database as an MCP service. 
 
