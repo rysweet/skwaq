@@ -232,11 +232,21 @@ class ASTAnalysisStrategy(AnalysisStrategy):
         Returns:
             Normalized language name
         """
-        # Handle common language variants
-        if language in ("JavaScript", "TypeScript", "JS", "TS"):
+        # First handle case variations of standard names
+        if language.lower() == "python":
+            return "Python"
+        elif language.lower() in ("javascript", "js"):
             return "JavaScript"
-        elif language in ("C#", "CSharp", "C Sharp"):
+        elif language.lower() in ("typescript", "ts"):
+            return "JavaScript"  # TypeScript is handled as JavaScript
+        elif language.lower() in ("c#", "csharp", "c sharp"):
             return "C#"
+        elif language.lower() == "java":
+            return "Java"
+        elif language.lower() == "php":
+            return "PHP"
+            
+        # Then handle more complex matches
         elif "Python" in language:
             return "Python"
         elif "Java" in language and "Script" not in language:
@@ -244,4 +254,5 @@ class ASTAnalysisStrategy(AnalysisStrategy):
         elif "PHP" in language:
             return "PHP"
 
+        # If no matches, return the original
         return language
