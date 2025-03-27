@@ -20,15 +20,15 @@ from skwaq.ingestion.code_ingestion import RepositoryIngestor, ingest_repository
 class TestIsolatedRepositoryIngestor:
     """Tests for the RepositoryIngestor class with isolation."""
 
-    def test_initialization(self, mock_connector, mock_openai_client):
+    def test_initialization(self, isolated_test_environment):
         """Test RepositoryIngestor initialization directly."""
         # Test the initialization using direct dependency injection
         ingestor = RepositoryIngestor(
             github_token="test_token", 
             max_workers=8, 
             progress_bar=False,
-            connector=mock_connector,
-            openai_client=mock_openai_client,
+            connector=isolated_test_environment["connector"],
+            openai_client=isolated_test_environment["openai_client"],
         )
         
         # Verify initialization
@@ -41,18 +41,17 @@ class TestIsolatedRepositoryIngestor:
         assert "node_modules" in ingestor.excluded_dirs
         
         # Verify dependency injection worked correctly
-        assert ingestor.connector is mock_connector
-        assert ingestor.openai_client is mock_openai_client
+        assert ingestor.connector is isolated_test_environment["connector"]
+        assert ingestor.openai_client is isolated_test_environment["openai_client"]
         assert ingestor.github_client is None  # Should be initialized later
 
-    def test_github_client_initialization_base(self, mock_connector, mock_openai_client):
+    def test_github_client_initialization_base(self, isolated_test_environment):
         """Test RepositoryIngestor github_client initialization and caching."""
-        # Create a simple version of the test without trying to mock all GitHub dependencies
         # Create ingestor with explicit dependencies
         ingestor = RepositoryIngestor(
             github_token="test_token",
-            connector=mock_connector,
-            openai_client=mock_openai_client,
+            connector=isolated_test_environment["connector"],
+            openai_client=isolated_test_environment["openai_client"],
         )
         
         # Initially the github_client should be None
@@ -74,24 +73,27 @@ class TestIsolatedRepositoryIngestor:
 class TestIsolatedGitHubIntegration:
     """Tests for GitHub integration functionality with isolation."""
 
-    def test_repository_simple(self, mock_connector, mock_openai_client):
+    def test_repository_simple(self, isolated_test_environment):
         """Test basic RepositoryIngestor functionality."""
         # Create ingestor with mocked dependencies
         ingestor = RepositoryIngestor(
             github_token="test_token",
-            connector=mock_connector,
-            openai_client=mock_openai_client
+            connector=isolated_test_environment["connector"],
+            openai_client=isolated_test_environment["openai_client"]
         )
         
         # Verify initialization
         assert ingestor.github_token == "test_token"
-        assert mock_connector == ingestor.connector
-        assert mock_openai_client == ingestor.openai_client
+        assert isolated_test_environment["connector"] == ingestor.connector
+        assert isolated_test_environment["openai_client"] == ingestor.openai_client
     
-    def test_parse_github_url(self):
+    def test_parse_github_url(self, isolated_test_environment):
         """Test URL parsing functionality directly."""
-        # Create an ingestor instance
-        ingestor = RepositoryIngestor()
+        # Create an ingestor instance with isolated dependencies
+        ingestor = RepositoryIngestor(
+            connector=isolated_test_environment["connector"],
+            openai_client=isolated_test_environment["openai_client"]
+        )
         
         # Directly test the URL parsing method
         result = ingestor._parse_github_url("https://github.com/user/test-repo")

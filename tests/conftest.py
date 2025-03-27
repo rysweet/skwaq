@@ -521,3 +521,54 @@ def mock_git_repo():
     """Mock Git repository for tests that need direct access to the mock."""
     # Use the global mock from mock_git_everywhere
     yield sys.modules["git"].Repo()
+
+    
+@pytest.fixture
+def isolated_test_environment(monkeypatch):
+    """Set up an isolated test environment for specific tests that need stronger isolation.
+    
+    This fixture prevents interference from other tests and globally applied mocks.
+    Use this fixture for tests marked with pytest.mark.isolated.
+    """
+    # Create isolated mocks for GitHub
+    github_instance = MagicMock()
+    github_instance.get_rate_limit = MagicMock(return_value=MagicMock())
+    github_instance.get_repo = MagicMock(return_value=MagicMock())
+    
+    # Setup mock repo
+    repo_mock = github_instance.get_repo.return_value
+    repo_mock.name = "isolated-test-repo"
+    repo_mock.full_name = "test-user/isolated-test-repo"
+    
+    # Create mock Auth classes
+    auth_mock = MagicMock()
+    auth_token_mock = MagicMock()
+    auth_mock.Token = MagicMock(return_value=auth_token_mock)
+    
+    # Create a clean GitHub module mock
+    github_module_mock = MagicMock()
+    github_module_mock.Github = MagicMock(return_value=github_instance)
+    github_module_mock.Auth = auth_mock
+    github_module_mock.GithubException = type("IsolatedGithubException", (Exception,), {})
+    github_repository_mock = MagicMock()
+    github_repository_mock.Repository = MagicMock()
+    
+    # Apply the mocks
+    monkeypatch.setitem(sys.modules, "github", github_module_mock)
+    monkeypatch.setitem(sys.modules, "github.Repository", github_repository_mock)
+    monkeypatch.setitem(sys.modules, "github.Auth", auth_mock)
+    
+    # Create clean connector and client mocks
+    mock_connector = MagicMock()
+    mock_connector.create_node.return_value = 1
+    mock_connector.run_query.return_value = []
+    
+    mock_openai_client = MagicMock()
+    mock_openai_client.create_completion = AsyncMock(return_value={"choices": [{"text": "Isolated test summary"}]})
+    
+    # Yield our isolated environment setup
+    yield {
+        "github": github_instance,
+        "connector": mock_connector,
+        "openai_client": mock_openai_client
+    }

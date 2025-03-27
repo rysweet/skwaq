@@ -12,14 +12,14 @@ import sys
 
 
 @pytest.fixture
-def mock_repository_ingestor(mock_connector, mock_openai_client):
+def mock_repository_ingestor(isolated_test_environment):
     """Create a repository ingestor with mocked dependencies."""
     ingestor = RepositoryIngestor(
         github_token="test_token",
         max_workers=2,
         progress_bar=False,
-        connector=mock_connector,
-        openai_client=mock_openai_client,
+        connector=isolated_test_environment["connector"],
+        openai_client=isolated_test_environment["openai_client"],
     )
     return ingestor
 
