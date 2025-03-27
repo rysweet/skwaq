@@ -50,7 +50,11 @@ class CodeAnalyzer:
         return cls._instance
     
     def __init__(self) -> None:
-        """Initialize the code analyzer."""
+        """Initialize the code analyzer.
+        
+        Args:
+            None
+        """
         # Skip initialization if already done (singleton pattern)
         if getattr(self, '_initialized', False):
             return

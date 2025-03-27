@@ -76,14 +76,11 @@ class TestMilestoneW1:
 
     def test_ui_elements(self):
         """Test that the interactive UI elements are implemented."""
-        # Test banner
-        captured_output = StringIO()
-        sys.stdout = captured_output
-        print_banner()
-        sys.stdout = sys.__stdout__
-
-        # Check that the banner has meaningful content
-        mock_console.print.assert_called()
+        # Test banner using proper patching
+        with patch("skwaq.cli.main.console") as patched_console:
+            print_banner()
+            # Check that the console print was called
+            patched_console.print.assert_called()
 
         # Test that rich components are used
         with patch("skwaq.cli.main.Progress") as mock_progress:

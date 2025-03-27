@@ -312,13 +312,25 @@ class TestCommandHandlers:
     @patch("skwaq.cli.main.Status")
     @patch("skwaq.cli.main.Confirm.ask", return_value=True)
     @patch("skwaq.cli.main.asyncio.sleep")
-    async def test_handle_investigations_command_delete(self, mock_sleep, mock_confirm, mock_status):
+    @patch("skwaq.cli.main._get_mock_investigations")
+    async def test_handle_investigations_command_delete(self, mock_get_investigations, mock_sleep, mock_confirm, mock_status):
         """Test investigations delete command handler."""
         from skwaq.cli.main import handle_investigations_command
         
         # Setup mocks
         mock_status_instance = MagicMock()
         mock_status.return_value.__enter__.return_value = mock_status_instance
+        
+        # Mock the investigations list to include our test ID
+        mock_get_investigations.return_value = [
+            {
+                "id": "test-id",
+                "repository": "test/repo",
+                "created": "2023-01-01 12:00:00",
+                "status": "Complete",
+                "findings": 5
+            }
+        ]
         
         # Mock the console.print method to avoid rich output issues
         with patch("skwaq.cli.main.console.print") as mock_print:
@@ -338,7 +350,7 @@ class TestCommandHandlers:
             mock_status.assert_called_once()
             
             # Verify the print method was called with the success message
-            mock_print.assert_any_call(f"[bold green]Investigation test-id deleted successfully.[/bold green]")
+            mock_print.assert_any_call("[bold green]Investigation test-id deleted successfully.[/bold green]")
         
     @pytest.mark.asyncio
     async def test_handle_investigations_command_missing(self):
