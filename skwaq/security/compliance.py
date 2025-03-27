@@ -125,7 +125,7 @@ class ComplianceViolation:
     severity: ComplianceViolationSeverity
     evidence: str
     recommendation: str
-    violation_id: str = field(default_factory=lambda: import uuid; return str(uuid.uuid4()))
+    violation_id: str = field(default_factory=lambda: str(__import__('uuid').uuid4()))
     timestamp: datetime.datetime = field(default_factory=datetime.datetime.utcnow)
     
     def to_dict(self) -> Dict[str, Any]:
@@ -162,7 +162,7 @@ class ComplianceViolation:
             severity=ComplianceViolationSeverity(data["severity"]),
             evidence=data["evidence"],
             recommendation=data["recommendation"],
-            violation_id=data.get("violation_id", str(import uuid; uuid.uuid4())),
+            violation_id=data.get("violation_id", str(__import__('uuid').uuid4())),
             timestamp=datetime.datetime.fromisoformat(data["timestamp"]) if "timestamp" in data else datetime.datetime.utcnow(),
         )
 

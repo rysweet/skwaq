@@ -496,7 +496,7 @@ class EventBus:
             self._subscribers[event_type] = {}
 
         self._subscribers[event_type][subscriber_id] = handler
-        logger.debug(f"Added subscriber {subscriber_id} to {event_type.__name__}")
+        logger.debug(f"Added subscriber {subscriber_id} to {event_type.name if hasattr(event_type, 'name') else str(event_type)}")
 
         return subscriber_id
 
