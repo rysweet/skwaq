@@ -129,6 +129,50 @@ def test_azure_entra_id_auth():
         assert "azure_ad_token_provider" in client.config_list[0]
 
 
+@pytest.mark.skipif(
+    not hasattr(OpenAIClient, "HAS_AZURE_IDENTITY") or not OpenAIClient.HAS_AZURE_IDENTITY,
+    reason="Azure Identity package not installed"
+)
+def test_azure_bearer_token_auth():
+    """Test initialization with Azure bearer token authentication."""
+    # Mock functionality needed for bearer token
+    with patch("azure.identity.DefaultAzureCredential") as mock_credential, \
+         patch("azure.identity.get_bearer_token_provider") as mock_get_token_provider:
+        # Mock credential and token provider instances
+        mock_credential.return_value = MagicMock()
+        mock_token_provider = MagicMock()
+        mock_get_token_provider.return_value = mock_token_provider
+
+        # Create a mock config with bearer token settings
+        config = Config(
+            openai_api_key="",  # Empty API key
+            openai_org_id="test-org-id",
+            openai={
+                "api_type": "azure", 
+                "endpoint": "https://test.openai.azure.com/", 
+                "api_version": "2023-05-15",
+                "use_entra_id": True,
+                "auth_method": "bearer_token",
+                "token_scope": "https://cognitiveservices.azure.com/.default"
+            }
+        )
+
+        # Initialize client
+        client = OpenAIClient(config)
+
+        # Verify configuration
+        assert "api_key" not in client.config_list[0]
+        assert client.config_list[0]["api_type"] == "azure"
+        assert client.config_list[0]["base_url"] == "https://test.openai.azure.com/"
+        assert "azure_ad_token_provider" in client.config_list[0]
+        
+        # Verify the token provider was created with the correct scope
+        mock_get_token_provider.assert_called_once_with(
+            mock_credential.return_value, 
+            "https://cognitiveservices.azure.com/.default"
+        )
+
+
 def test_client_registry():
     """Test the OpenAI client registry."""
     # Reset registry to start with a clean state

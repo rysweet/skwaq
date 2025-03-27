@@ -198,14 +198,21 @@ class EnvConfigSource(BaseConfigSource):
             config["openai"]["use_entra_id"] = use_entra_id
             
             if use_entra_id:
-                if "AZURE_TENANT_ID" in os.environ:
-                    config["openai"]["tenant_id"] = os.environ["AZURE_TENANT_ID"]
-                
-                if "AZURE_CLIENT_ID" in os.environ:
-                    config["openai"]["client_id"] = os.environ["AZURE_CLIENT_ID"]
-                
-                if "AZURE_CLIENT_SECRET" in os.environ:
-                    config["openai"]["client_secret"] = os.environ["AZURE_CLIENT_SECRET"]
+                # Check if we're using bearer token authentication
+                if "AZURE_OPENAI_AUTH_METHOD" in os.environ and os.environ["AZURE_OPENAI_AUTH_METHOD"] == "bearer_token":
+                    config["openai"]["auth_method"] = "bearer_token"
+                    if "AZURE_OPENAI_TOKEN_SCOPE" in os.environ:
+                        config["openai"]["token_scope"] = os.environ["AZURE_OPENAI_TOKEN_SCOPE"]
+                else:
+                    # Standard Entra ID authentication with client credentials
+                    if "AZURE_TENANT_ID" in os.environ:
+                        config["openai"]["tenant_id"] = os.environ["AZURE_TENANT_ID"]
+                    
+                    if "AZURE_CLIENT_ID" in os.environ:
+                        config["openai"]["client_id"] = os.environ["AZURE_CLIENT_ID"]
+                    
+                    if "AZURE_CLIENT_SECRET" in os.environ:
+                        config["openai"]["client_secret"] = os.environ["AZURE_CLIENT_SECRET"]
 
         # Model deployments
         if "AZURE_OPENAI_MODEL_DEPLOYMENTS" in os.environ:

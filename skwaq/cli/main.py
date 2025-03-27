@@ -98,7 +98,7 @@ def prompt_for_openai_config() -> Dict[str, Any]:
     # First, choose authentication method
     auth_method = Prompt.ask(
         "Select authentication method",
-        choices=["api-key", "entra-id"],
+        choices=["api-key", "entra-id", "bearer-token"],
         default="api-key"
     )
     
@@ -119,6 +119,23 @@ def prompt_for_openai_config() -> Dict[str, Any]:
         api_key = Prompt.ask("Enter your Azure OpenAI API key", 
                             password=True)
         config["openai_api_key"] = api_key
+    elif auth_method == "bearer-token":
+        if not has_azure_identity:
+            console.print("[bold yellow]Warning:[/bold yellow] The azure-identity package is not installed. "
+                         "Please install it with 'pip install azure-identity>=1.15.0' for bearer token authentication.")
+            return {}
+            
+        config["openai"]["use_entra_id"] = True
+        config["openai"]["auth_method"] = "bearer_token"
+        
+        token_scope = Prompt.ask(
+            "Enter token scope", 
+            default="https://cognitiveservices.azure.com/.default"
+        )
+        config["openai"]["token_scope"] = token_scope
+        
+        console.print("[dim]Bearer token authentication will use DefaultAzureCredential for authentication.[/dim]")
+        console.print("[dim]This includes environment variables, managed identities, Visual Studio Code credentials, Azure CLI credentials, and more.[/dim]")
     else:  # entra-id
         if not has_azure_identity:
             console.print("[bold yellow]Warning:[/bold yellow] The azure-identity package is not installed. "
@@ -165,6 +182,12 @@ def prompt_for_openai_config() -> Dict[str, Any]:
         if auth_method == "api-key":
             env_content.append("AZURE_OPENAI_USE_ENTRA_ID=false")
             env_content.append(f"AZURE_OPENAI_API_KEY={api_key}")
+        elif auth_method == "bearer-token":
+            env_content.append("AZURE_OPENAI_USE_ENTRA_ID=true")
+            env_content.append("AZURE_OPENAI_AUTH_METHOD=bearer_token")
+            env_content.append(f"AZURE_OPENAI_TOKEN_SCOPE={token_scope}")
+            env_content.append("# Note: Bearer token auth uses DefaultAzureCredential, which will use environment variables or other methods")
+            env_content.append("# like Azure CLI credentials, managed identities, Visual Studio Code credentials, etc.")
         else:
             env_content.append("AZURE_OPENAI_USE_ENTRA_ID=true")
             env_content.append(f"AZURE_TENANT_ID={tenant_id}")

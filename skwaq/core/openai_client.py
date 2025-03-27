@@ -73,7 +73,25 @@ class OpenAIClient:
             logger.info("Using Microsoft Entra ID (Azure AD) authentication for Azure OpenAI")
             
             # Create credentials for authentication
-            if "client_id" in openai_config and "tenant_id" in openai_config:
+            if "auth_method" in openai_config and openai_config["auth_method"] == "bearer_token":
+                try:
+                    from azure.identity import get_bearer_token_provider
+                    
+                    credential = DefaultAzureCredential()
+                    scope = openai_config.get("token_scope", "https://cognitiveservices.azure.com/.default")
+                    
+                    base_config["azure_ad_token_provider"] = get_bearer_token_provider(
+                        credential, 
+                        scope
+                    )
+                    logger.info(f"Using bearer token authentication with scope: {scope}")
+                except (ImportError, AttributeError) as e:
+                    logger.error(f"Bearer token authentication requires newer azure-identity version: {e}")
+                    raise ImportError(
+                        "Bearer token authentication requires azure-identity>=1.15.0. "
+                        "Please upgrade with 'pip install azure-identity>=1.15.0'."
+                    )
+            elif "client_id" in openai_config and "tenant_id" in openai_config:
                 tenant_id = openai_config["tenant_id"]
                 client_id = openai_config["client_id"]
                 

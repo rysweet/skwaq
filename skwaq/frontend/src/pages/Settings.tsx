@@ -13,7 +13,7 @@ const Settings: React.FC = () => {
   });
   
   const [apiSettings, setApiSettings] = useState({
-    authMethod: 'api-key', // 'api-key' or 'entra-id'
+    authMethod: 'api-key', // 'api-key', 'entra-id', or 'bearer-token'
     apiKey: '••••••••••••••••',
     apiEndpoint: 'https://api.openai.azure.com/',
     apiVersion: '2023-05-15',
@@ -23,6 +23,7 @@ const Settings: React.FC = () => {
     tenantId: '',
     clientId: '',
     clientSecret: '••••••••••••••••',
+    tokenScope: 'https://cognitiveservices.azure.com/.default',
     modelDeployments: {
       chat: 'gpt4o',
       code: 'o3',
@@ -191,7 +192,8 @@ const Settings: React.FC = () => {
                     className="form-select"
                   >
                     <option value="api-key">API Key</option>
-                    <option value="entra-id">Microsoft Entra ID</option>
+                    <option value="entra-id">Microsoft Entra ID (Client Credentials)</option>
+                    <option value="bearer-token">Microsoft Entra ID (Bearer Token)</option>
                   </select>
                   <p className="setting-description">
                     Select the authentication method for Azure OpenAI.
@@ -246,6 +248,36 @@ const Settings: React.FC = () => {
                       Your Azure OpenAI API key.
                     </p>
                   </div>
+                )}
+                
+                {apiSettings.authMethod === 'bearer-token' && (
+                  <>
+                    <div className="form-group">
+                      <label htmlFor="tokenScope">Token Scope</label>
+                      <input 
+                        type="text" 
+                        id="tokenScope" 
+                        name="tokenScope"
+                        value={apiSettings.tokenScope}
+                        onChange={handleApiSettingsChange}
+                        className="form-input"
+                      />
+                      <p className="setting-description">
+                        The scope for the bearer token, typically "https://cognitiveservices.azure.com/.default".
+                      </p>
+                    </div>
+                    
+                    <div className="info-panel">
+                      <p className="info-text">
+                        Bearer token authentication uses the DefaultAzureCredential from the azure-identity package.
+                        This will automatically use available credentials from environment variables, managed identities,
+                        Visual Studio Code credentials, Azure CLI credentials, and more.
+                      </p>
+                      <p className="info-text">
+                        No additional credentials need to be provided here as they will be obtained from the system.
+                      </p>
+                    </div>
+                  </>
                 )}
                 
                 {apiSettings.authMethod === 'entra-id' && (
@@ -426,6 +458,12 @@ const Settings: React.FC = () => {
                       if (authMethod === 'api-key') {
                         envContent += "AZURE_OPENAI_USE_ENTRA_ID=false\n";
                         envContent += `AZURE_OPENAI_API_KEY=${apiSettings.apiKey}\n`;
+                      } else if (authMethod === 'bearer-token') {
+                        envContent += "AZURE_OPENAI_USE_ENTRA_ID=true\n";
+                        envContent += "AZURE_OPENAI_AUTH_METHOD=bearer_token\n";
+                        envContent += `AZURE_OPENAI_TOKEN_SCOPE=${apiSettings.tokenScope}\n`;
+                        envContent += "# Note: Bearer token auth uses DefaultAzureCredential, which will use environment variables or other methods\n";
+                        envContent += "# like Azure CLI credentials, managed identities, Visual Studio Code credentials, etc.\n";
                       } else {
                         envContent += "AZURE_OPENAI_USE_ENTRA_ID=true\n";
                         envContent += `AZURE_TENANT_ID=${apiSettings.tenantId}\n`;

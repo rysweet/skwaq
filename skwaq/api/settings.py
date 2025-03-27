@@ -13,7 +13,7 @@ SETTINGS = {
         'defaultRepository': '',
     },
     'api': {
-        'authMethod': 'api-key', # 'api-key' or 'entra-id'
+        'authMethod': 'api-key', # 'api-key', 'entra-id', or 'bearer-token'
         'apiKey': '••••••••••••••••',
         'apiEndpoint': 'https://api.openai.azure.com/',
         'apiVersion': '2023-05-15',
@@ -23,6 +23,7 @@ SETTINGS = {
         'tenantId': '',
         'clientId': '',
         'clientSecret': '••••••••••••••••',
+        'tokenScope': 'https://cognitiveservices.azure.com/.default',
         'modelDeployments': {
             'chat': 'gpt4o',
             'code': 'o3',
