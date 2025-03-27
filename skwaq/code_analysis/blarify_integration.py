@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 # Check if we're in CLI mode (to determine log level)
 import os
 import sys
-in_cli_mode = 'skwaq_cli.py' in sys.argv[0] if len(sys.argv) > 0 else False
+in_cli_mode = 'skwaq' in sys.argv[0] if len(sys.argv) > 0 else False
 log_level = logger.error if in_cli_mode else logger.warning
 
 # Try to import Blarify, which will fail gracefully if not installed or properly configured

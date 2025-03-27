@@ -62,4 +62,4 @@ COPY . .
 
 RUN poetry install --no-dev
 
-CMD ["poetry", "run", "python", "-m", "skwaq_cli"]
+CMD ["poetry", "run", "python", "-m", "skwaq"]

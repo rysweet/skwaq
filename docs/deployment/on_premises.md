@@ -44,7 +44,7 @@ cd skwaq
 nano ~/.skwaq/config.json
 
 # Start the application
-skwaq init
+skwaq check-config
 ```
 
 ### 2. Containerized Deployment
@@ -152,7 +152,7 @@ After=network.target
 [Service]
 User=skwaq
 WorkingDirectory=/opt/skwaq
-ExecStart=/opt/skwaq/.venv/bin/python -m skwaq_cli
+ExecStart=/opt/skwaq/.venv/bin/python -m skwaq
 Restart=on-failure
 Environment=PYTHONUNBUFFERED=1
 

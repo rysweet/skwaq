@@ -35,3 +35,10 @@ We are going to add a new feature to the codebase. We want to be able to expose 
 Before you are finished make sure that you have added unit tests for all new funcitonality. Make sure you remove any deprecated functionality. If new code is replacing previous placeholders remove the old placeholders. document all new functionality. When you are finished, update the end to end CLI demo / tests in order to make sure that all new functionality is included. Ensure that all dependencies get installed. 
 
 We are going to add a new feature: as a user of the CLI, I want to be able to export a visualization of the Investigation graph in a format that can be easily shared with others, so that I can communicate my findings effectively.
+
+We want to add a command to the CLI that will start the GUI using the existing scripts. Please updat the help, documentation, tests, and examples to include this new command. 
+
+We want to add a demo mode to the CLI which walks through the CLI commands and demonstrates their using with the eShop Repository (https://github.com/dotnet/eShop). Update the documentation to include the demo mode and provide examples of how to use it. The demo mode should include the following features:
+- A guided tour of the CLI commands
+- Examples of how to use each command
+- Runs the commands against the eShop repository

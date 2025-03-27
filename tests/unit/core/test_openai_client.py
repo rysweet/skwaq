@@ -51,7 +51,8 @@ async def test_get_completion():
     # Rather than trying to mock the autogen core directly, which is complex,
     # we'll patch the method on our client
 
-    with patch.object(OpenAIClient, "get_completion") as mock_get_completion:
+    with patch.object(OpenAIClient, "__init__", return_value=None) as mock_init, \
+         patch.object(OpenAIClient, "get_completion") as mock_get_completion:
         # Make our mocked method return a simple response
         mock_get_completion.return_value = "Test completion"
 
@@ -60,6 +61,11 @@ async def test_get_completion():
             openai_api_key="test-key",
             openai_org_id="test-org",
             openai_model="gpt-4-turbo-preview",
+            # Add necessary Azure OpenAI config to prevent ValueError
+            openai={
+                "endpoint": "https://test.openai.azure.com/",
+                "api_version": "2023-05-15"
+            }
         )
 
         # Create a client instance that will use our mocked method
