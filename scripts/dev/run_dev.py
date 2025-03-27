@@ -18,8 +18,14 @@ processes = []
 
 def run_api(host, port, debug):
     """Run the API server."""
+    # Run the API server using project's venv
+    venv_python = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        ".venv", "bin", "python"
+    )
+    
     api_cmd = [
-        sys.executable,
+        venv_python,
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_api.py"),
         "--host", host,
         "--port", str(port)

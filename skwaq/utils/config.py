@@ -11,6 +11,13 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Set, TypeVar, Union, cast
 import threading
+import json
+
+try:
+    from dotenv import load_dotenv, find_dotenv
+    HAS_DOTENV = True
+except ImportError:
+    HAS_DOTENV = False
 
 from skwaq.utils.logging import get_logger
 
@@ -169,6 +176,48 @@ class EnvConfigSource(BaseConfigSource):
         if "OPENAI_API_KEY" in os.environ:
             config["openai_api_key"] = os.environ["OPENAI_API_KEY"]
 
+        if "AZURE_OPENAI_API_KEY" in os.environ:
+            config["openai_api_key"] = os.environ["AZURE_OPENAI_API_KEY"]
+            config["openai"] = config.get("openai", {})
+            config["openai"]["api_type"] = "azure"
+
+        if "AZURE_OPENAI_ENDPOINT" in os.environ:
+            config["openai"] = config.get("openai", {})
+            config["openai"]["endpoint"] = os.environ["AZURE_OPENAI_ENDPOINT"]
+
+        if "AZURE_OPENAI_API_VERSION" in os.environ:
+            config["openai"] = config.get("openai", {})
+            config["openai"]["api_version"] = os.environ["AZURE_OPENAI_API_VERSION"]
+
+        # Azure Entra ID (Azure AD) authentication
+        if "AZURE_OPENAI_USE_ENTRA_ID" in os.environ:
+            use_entra_id = os.environ["AZURE_OPENAI_USE_ENTRA_ID"].lower() in (
+                "true", "1", "yes", "y"
+            )
+            config["openai"] = config.get("openai", {})
+            config["openai"]["use_entra_id"] = use_entra_id
+            
+            if use_entra_id:
+                if "AZURE_TENANT_ID" in os.environ:
+                    config["openai"]["tenant_id"] = os.environ["AZURE_TENANT_ID"]
+                
+                if "AZURE_CLIENT_ID" in os.environ:
+                    config["openai"]["client_id"] = os.environ["AZURE_CLIENT_ID"]
+                
+                if "AZURE_CLIENT_SECRET" in os.environ:
+                    config["openai"]["client_secret"] = os.environ["AZURE_CLIENT_SECRET"]
+
+        # Model deployments
+        if "AZURE_OPENAI_MODEL_DEPLOYMENTS" in os.environ:
+            try:
+                deployments = json.loads(os.environ["AZURE_OPENAI_MODEL_DEPLOYMENTS"])
+                config["openai"] = config.get("openai", {})
+                config["openai"]["model_deployments"] = deployments
+            except json.JSONDecodeError:
+                logger.warning(
+                    f"Failed to parse AZURE_OPENAI_MODEL_DEPLOYMENTS as JSON: {os.environ['AZURE_OPENAI_MODEL_DEPLOYMENTS']}"
+                )
+
         if "OPENAI_ORG_ID" in os.environ:
             config["openai_org_id"] = os.environ["OPENAI_ORG_ID"]
 
@@ -210,6 +259,63 @@ class EnvConfigSource(BaseConfigSource):
                     config[config_key] = value
 
         return config
+
+
+class DotEnvConfigSource(BaseConfigSource):
+    """Configuration source that loads from a .env file."""
+
+    def __init__(
+        self, 
+        file_path: Optional[Union[str, Path]] = None,
+        name: str = "dotenv",
+        priority: int = 75
+    ):
+        """Initialize a dotenv-based configuration source.
+
+        Args:
+            file_path: Path to the .env file (optional, will search if not provided)
+            name: Name of the configuration source
+            priority: Priority of the source (higher values take precedence)
+        """
+        if not HAS_DOTENV:
+            raise ImportError(
+                "The 'python-dotenv' package is required for DotEnvConfigSource. "
+                "Install it with 'pip install python-dotenv'."
+            )
+        
+        super().__init__(name=name, priority=priority)
+        
+        if file_path:
+            self.file_path = Path(file_path)
+        else:
+            # Try to find a .env file
+            dotenv_path = find_dotenv(usecwd=True)
+            self.file_path = Path(dotenv_path) if dotenv_path else None
+            
+        self.loaded = False
+        
+    def get_config(self) -> Dict[str, Any]:
+        """Get configuration from .env file.
+
+        Returns:
+            Dictionary with configuration values
+        """
+        config = {}
+        
+        if not self.file_path or not self.file_path.exists():
+            logger.debug("No .env file found for configuration")
+            return config
+        
+        # Load the .env file into environment variables if not already loaded
+        if not self.loaded:
+            load_dotenv(self.file_path)
+            self.loaded = True
+            logger.info(f"Loaded configuration from .env file: {self.file_path}")
+        
+        # Create an environment config source to parse the environment variables
+        # that were just loaded from the .env file
+        env_source = EnvConfigSource(name=f"dotenv:{self.file_path}")
+        return env_source.get_config()
 
 
 @dataclass
@@ -698,7 +804,7 @@ def get_config() -> Config:
     """Get the global configuration instance.
 
     If no configuration has been loaded yet, attempts to load from registered
-    sources, environment variables, and finally falls back to default configuration.
+    sources, environment variables, .env file, and finally falls back to default configuration.
 
     Returns:
         The global Config instance
@@ -711,11 +817,19 @@ def get_config() -> Config:
                 if _config_sources:
                     _config = Config.from_sources(_config_sources)
                 else:
-                    # Otherwise, try environment variables
-                    _config = Config.from_env()
-
-                    # Register the environment source
+                    # First try to load from .env file if available
+                    if HAS_DOTENV:
+                        try:
+                            dotenv_source = DotEnvConfigSource()
+                            register_config_source(dotenv_source)
+                        except Exception as e:
+                            logger.debug(f"Error setting up dotenv config source: {e}")
+                    
+                    # Register the environment source (higher priority than dotenv)
                     register_config_source(EnvConfigSource())
+                    
+                    # Create configuration from registered sources
+                    _config = Config.from_sources(_config_sources)
 
                     # Look for default config file
                     default_config = Path.home() / ".skwaq" / "config.json"

@@ -1,6 +1,94 @@
 # Skwaq Project Status
 
-## Current Milestone: G2 - GUI Backend Integration
+## Current Milestone: E1 - Azure AI Configuration Enhancement
+
+### Status: In Progress 🔄
+
+The Azure AI Configuration Enhancement milestone (E1) focuses on improving the flexibility and usability of the Azure OpenAI integration:
+
+- [ ] Enhanced Azure OpenAI configuration
+  - Add support for Microsoft Entra ID authentication
+  - Maintain compatibility with API Key authentication
+  - Create flexible authentication method switching
+  - Implement secure credential storage
+
+- [ ] Configuration source hierarchy
+  - Add environment variable configuration support
+  - Implement .env file configuration parsing
+  - Create graceful fallback between configuration sources
+  - Add configuration validation logic
+
+- [ ] Interactive configuration
+  - Implement CLI configuration prompting
+  - Add GUI configuration dialog
+  - Create secure configuration storage
+  - Add configuration testing functionality
+
+- [ ] Documentation and templates
+  - Create comprehensive configuration documentation
+  - Implement .env.template file
+  - Add configuration examples for different scenarios
+  - Create troubleshooting guide for configuration issues
+
+Key Features to Implement:
+- Dual authentication methods (API Key and Entra ID)
+- Multi-source configuration with fallbacks
+- Interactive configuration prompting
+- Secure credential storage
+- Comprehensive documentation and examples
+
+## Previous Milestone: G3 - Advanced Visualization and Interactivity
+
+### Status: Completed ✅
+
+The Advanced Visualization and Interactivity milestone (G3) has been successfully implemented, providing comprehensive enhancements to the GUI with advanced visualization and interactive features:
+
+- [x] 3D force-graph visualization of Neo4j data
+  - Implemented advanced graph rendering with customizable physics
+  - Added physics simulation controls for gravity, link strength, and charge
+  - Created node and edge styling based on types and properties
+  - Implemented performance optimizations for large datasets
+  - Added node sizing based on connectivity and importance
+
+- [x] Interactive graph manipulation
+  - Added node editing capabilities with inline property editing
+  - Implemented edge creation and deletion with intuitive controls
+  - Created comprehensive property editing interface
+  - Added drag-and-drop functionality for node positioning
+  - Implemented node pinning for custom graph layouts
+
+- [x] Advanced filtering and search capabilities
+  - Implemented complex graph filtering with multiple criteria
+  - Created advanced search interface with saved query support
+  - Added saved filter functionality with localStorage persistence
+  - Implemented visualization adjustments based on filter results
+  - Created export functionality for filtered data in multiple formats
+
+- [x] Chat interface for copilot interaction
+  - Created modern chat UI component with thread support
+  - Implemented message history with local storage persistence
+  - Added rich markdown and code syntax highlighting
+  - Created message threading for organized conversations
+  - Implemented real-time updates with SSE integration
+
+- [x] Workflow invocation and management
+  - Implemented UI for all CLI workflows with WorkflowLauncher component
+  - Created workflow status tracking with real-time updates
+  - Added comprehensive result visualization with filtering and exporting
+  - Implemented workflow configuration with parameter input validation
+  - Created interactive tool invocation interface for security tools
+
+Key Features Implemented:
+- Advanced 3D visualization with interactive physics controls
+- Interactive graph editing and manipulation with intuitive interface
+- Powerful search and filtering with save/load functionality
+- Rich chat interface with markdown and code formatting
+- Comprehensive workflow management with real-time status updates
+- File export in multiple formats (JSON, CSV, Markdown)
+- Dark mode support throughout all components
+- Responsive design for all screen sizes
+
+## Previous Milestone: G2 - GUI Backend Integration
 
 ### Status: Completed ✅
 
@@ -835,34 +923,6 @@ Key Features:
 - Parallel task processing
 - Graceful error handling and recovery
 
-### Upcoming Milestone: G3 - Advanced Visualization and Interactivity
-
-After completing G2, we will focus on the final GUI milestone:
-
-#### G3: Advanced Visualization and Interactivity
-- [ ] 3D force-graph visualization of Neo4j data
-  - Implement advanced graph rendering
-  - Add physics simulation controls
-  - Create node and edge styling
-  - Implement performance optimizations
-
-- [ ] Interactive graph manipulation
-  - Add node editing capabilities
-  - Implement edge creation and deletion
-  - Create property editing interface
-  - Add drag-and-drop functionality
-
-- [ ] Advanced filtering and search capabilities
-  - Implement complex graph filtering
-  - Create advanced search interface
-  - Add saved searches functionality
-  - Implement visualization of search results
-
-- [ ] Chat interface for copilot interaction
-  - Create chat UI component
-  - Implement message history
-  - Add support for markdown and code formatting
-  - Create message threading
 
 - [ ] Workflow invocation and management
   - Implement UI for all CLI workflows
@@ -891,5 +951,5 @@ After completing G2, we will focus on the final GUI milestone:
 - [x] I2: Security and Compliance
 - [x] I3: Final Release Preparation
 - [x] G1: GUI Frontend Foundation
-- [ ] G2: GUI Backend Integration
-- [ ] G3: Advanced Visualization and Interactivity
+- [x] G2: GUI Backend Integration
+- [x] G3: Advanced Visualization and Interactivity

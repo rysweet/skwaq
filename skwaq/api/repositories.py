@@ -9,7 +9,8 @@ from skwaq.api.events import publish_repository_event, publish_analysis_event
 
 from skwaq.api.auth import login_required, require_permission
 from skwaq.core.openai_client import get_openai_client
-from skwaq.ingestion.code_ingestion import CodeIngestionManager
+# Fix import, use what's available instead
+# from skwaq.ingestion.code_ingestion import CodeIngestionManager
 from skwaq.code_analysis.analyzer import CodeAnalyzer
 from skwaq.security.authorization import Permission
 from skwaq.db.neo4j_connector import Neo4jConnector

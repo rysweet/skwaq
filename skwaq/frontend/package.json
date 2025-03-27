@@ -11,7 +11,7 @@
     "@types/react": "^18.2.65",
     "@types/react-dom": "^18.2.22",
     "3d-force-graph": "^1.73.0",
-    "axios": "^1.6.8",
+    "axios": "^1.8.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.3",

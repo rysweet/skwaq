@@ -1375,3 +1375,33 @@ The implementation will proceed in the following phases, with each phase buildin
 - **Milestone G1**: GUI Frontend Foundation
 - **Milestone G2**: GUI Backend Integration
 - **Milestone G3**: Advanced Visualization and Interactivity
+
+### Phase 8: Enhanced Cloud Integration
+- **Milestone E1**: Azure AI Configuration Enhancement
+
+#### Milestone E1: Azure AI Configuration Enhancement
+**Deliverables:**
+- Enhanced Azure OpenAI configuration with Entra ID support
+- Environment variable and .env file configuration support
+- Interactive configuration prompting in CLI and GUI
+- Template .env file for easy setup
+- Comprehensive configuration documentation
+- Unit tests for all configuration methods
+
+**Validation Criteria:**
+- Configuration works with both API Key and Entra ID authentication
+- Environment variables are correctly read and applied
+- .env file is properly parsed and configurations applied
+- CLI and GUI gracefully handle missing configurations with interactive prompts
+- Configuration documentation is clear and comprehensive
+- All authentication methods pass unit tests
+- .env file is properly .gitignored for security
+
+**Testing Requirements:**
+- Mock Azure OpenAI service tests
+- Environment variable configuration tests
+- .env file parsing tests
+- CLI interactive configuration prompt tests
+- GUI configuration prompt tests
+- Authentication method switching tests
+- Configuration error handling tests

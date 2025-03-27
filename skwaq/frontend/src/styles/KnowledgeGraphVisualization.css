@@ -51,3 +51,106 @@
   font-size: var(--font-size-lg);
   max-width: 500px;
 }
+
+/* Graph Controls Panel */
+.graph-controls {
+  position: absolute;
+  top: 20px;
+  right: 0;
+  background-color: var(--card-background);
+  border-radius: 8px 0 0 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  transition: transform 0.3s ease;
+  overflow: hidden;
+  max-width: 300px;
+}
+
+.graph-controls.collapsed {
+  transform: translateX(calc(100% - 40px));
+}
+
+.controls-toggle {
+  width: 40px;
+  height: 40px;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  text-align: center;
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px 0 0 8px;
+}
+
+.controls-toggle:hover {
+  background-color: var(--primary-color-dark);
+}
+
+.controls-content {
+  padding: 20px;
+  padding-left: 50px;
+  width: 250px;
+}
+
+.controls-content h3 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.control-group {
+  margin-bottom: 16px;
+}
+
+.control-group label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.control-group input[type="range"] {
+  width: 100%;
+  margin: 6px 0;
+}
+
+.controls-help {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 12px;
+}
+
+.controls-help li {
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+}
+
+.controls-help strong {
+  color: var(--text-primary);
+}
+
+.reset-button {
+  background-color: var(--card-background-highlight);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  width: 100%;
+  margin-top: 16px;
+  transition: background-color 0.2s;
+}
+
+.reset-button:hover {
+  background-color: var(--card-background-active);
+}

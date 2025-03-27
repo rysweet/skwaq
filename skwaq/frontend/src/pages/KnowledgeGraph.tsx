@@ -1,93 +1,258 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import KnowledgeGraphVisualization from '../components/KnowledgeGraphVisualization';
+import GraphFilter, { SavedFilter } from '../components/GraphFilter';
+import useKnowledgeGraph, { GraphNode, GraphFilter as FilterConfig } from '../hooks/useKnowledgeGraph';
 import '../styles/KnowledgeGraph.css';
 
-// This is a placeholder implementation since we'll integrate the actual 3d-force-graph later
-const KnowledgeGraph: React.FC = () => {
-  const graphContainerRef = useRef<HTMLDivElement>(null);
-  const [isLoading, setIsLoading] = useState(true);
+interface KnowledgeGraphProps {
+  darkMode?: boolean;
+}
 
-  // Mock data for demonstration purposes
-  const mockGraphData = {
-    nodes: [
-      { id: 'n1', name: 'SQL Injection', type: 'vulnerability', group: 1 },
-      { id: 'n2', name: 'Cross-Site Scripting', type: 'vulnerability', group: 1 },
-      { id: 'n3', name: 'CWE-89', type: 'cwe', group: 2 },
-      { id: 'n4', name: 'CWE-79', type: 'cwe', group: 2 },
-      { id: 'n5', name: 'Input Validation', type: 'concept', group: 3 },
-      { id: 'n6', name: 'Database Security', type: 'concept', group: 3 },
-    ],
-    links: [
-      { source: 'n1', target: 'n3', type: 'is_a' },
-      { source: 'n2', target: 'n4', type: 'is_a' },
-      { source: 'n1', target: 'n5', type: 'related_to' },
-      { source: 'n1', target: 'n6', type: 'related_to' },
-      { source: 'n2', target: 'n5', type: 'related_to' },
-    ]
-  };
+const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ darkMode = false }) => {
+  const { 
+    graphData, 
+    loading, 
+    error, 
+    selectedNode, 
+    fetchGraphData, 
+    setSelectedNode 
+  } = useKnowledgeGraph();
+  
+  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
+  const [showFilterPanel, setShowFilterPanel] = useState<boolean>(true);
+  const [exportFormat, setExportFormat] = useState<string>('json');
+  const [showExportOptions, setShowExportOptions] = useState<boolean>(false);
 
+  // Available node and relationship types (in a real implementation, these would come from the API)
+  const availableNodeTypes = ['vulnerability', 'cwe', 'concept', 'repository', 'file', 'function', 'class'];
+  const availableRelationshipTypes = ['is_a', 'contains', 'related_to', 'implements', 'extends', 'calls', 'references'];
+
+  // Fetch graph data on component mount
   useEffect(() => {
-    // Simulate loading the graph data
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1500);
+    fetchGraphData();
+    
+    // Load saved filters from localStorage
+    const storedFilters = localStorage.getItem('knowledgeGraphFilters');
+    if (storedFilters) {
+      try {
+        setSavedFilters(JSON.parse(storedFilters));
+      } catch (err) {
+        console.error('Error loading saved filters:', err);
+      }
+    }
+  }, [fetchGraphData]);
 
-    return () => clearTimeout(timer);
+  // Handle filter changes
+  const handleFilterChange = useCallback((filters: FilterConfig) => {
+    fetchGraphData(filters);
+  }, [fetchGraphData]);
+
+  // Save filter to localStorage
+  const handleSaveFilter = useCallback((filter: SavedFilter) => {
+    setSavedFilters(prev => {
+      const newFilters = [...prev, filter];
+      // Save to localStorage
+      localStorage.setItem('knowledgeGraphFilters', JSON.stringify(newFilters));
+      return newFilters;
+    });
   }, []);
 
-  return (
-    <div className="knowledge-graph-container">
-      <div className="graph-header">
-        <h1 className="page-title">Knowledge Graph</h1>
-        <div className="graph-controls">
-          <button className="control-button">
-            <span className="button-icon">🔍</span>
-            <span>Zoom</span>
+  // Export graph data
+  const handleExport = useCallback(() => {
+    if (exportFormat === 'json') {
+      // Export as JSON
+      const dataStr = JSON.stringify(graphData, null, 2);
+      const dataUri = `data:application/json;charset=utf-8,${encodeURIComponent(dataStr)}`;
+      const filename = `knowledge-graph-export-${new Date().toISOString().slice(0, 10)}.json`;
+      
+      // Create a download link and trigger it
+      const link = document.createElement('a');
+      link.setAttribute('href', dataUri);
+      link.setAttribute('download', filename);
+      link.click();
+    } else if (exportFormat === 'csv') {
+      // Export nodes as CSV
+      const nodesHeader = 'id,name,type,group\n';
+      const nodesData = graphData.nodes.map(node => 
+        `${node.id},${node.name},${node.type},${node.group}`
+      ).join('\n');
+      
+      // Export links as CSV
+      const linksHeader = 'source,target,type\n';
+      const linksData = graphData.links.map(link => 
+        `${typeof link.source === 'object' ? link.source.id : link.source},` +
+        `${typeof link.target === 'object' ? link.target.id : link.target},` +
+        `${link.type}`
+      ).join('\n');
+      
+      // Create node CSV file
+      const nodesUri = `data:text/csv;charset=utf-8,${encodeURIComponent(nodesHeader + nodesData)}`;
+      const nodesFilename = `knowledge-graph-nodes-${new Date().toISOString().slice(0, 10)}.csv`;
+      
+      // Create links CSV file
+      const linksUri = `data:text/csv;charset=utf-8,${encodeURIComponent(linksHeader + linksData)}`;
+      const linksFilename = `knowledge-graph-links-${new Date().toISOString().slice(0, 10)}.csv`;
+      
+      // Download both files
+      const nodesLink = document.createElement('a');
+      nodesLink.setAttribute('href', nodesUri);
+      nodesLink.setAttribute('download', nodesFilename);
+      nodesLink.click();
+      
+      setTimeout(() => {
+        const linksLink = document.createElement('a');
+        linksLink.setAttribute('href', linksUri);
+        linksLink.setAttribute('download', linksFilename);
+        linksLink.click();
+      }, 100);
+    }
+    
+    setShowExportOptions(false);
+  }, [graphData, exportFormat]);
+
+  // Render node details panel
+  const renderNodeDetails = () => {
+    if (!selectedNode) {
+      return (
+        <div className="empty-details">
+          <p>Click on a graph node to see details here.</p>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="node-details">
+        <h3>{selectedNode.name}</h3>
+        <div className="detail-row">
+          <span className="detail-label">Type:</span>
+          <span className={`detail-value node-type-${selectedNode.type}`}>{selectedNode.type}</span>
+        </div>
+        <div className="detail-row">
+          <span className="detail-label">ID:</span>
+          <span className="detail-value">{selectedNode.id}</span>
+        </div>
+        {selectedNode.properties && Object.entries(selectedNode.properties).map(([key, value]) => (
+          <div key={key} className="detail-row">
+            <span className="detail-label">{key}:</span>
+            <span className="detail-value">
+              {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+            </span>
+          </div>
+        ))}
+        
+        <div className="detail-actions">
+          <button className="detail-action" onClick={() => window.open(`/knowledge/${selectedNode.id}`, '_blank')}>
+            View Full Details
           </button>
-          <button className="control-button">
-            <span className="button-icon">🔄</span>
-            <span>Reset</span>
+          <button className="detail-action secondary" onClick={() => setSelectedNode(null)}>
+            Close
           </button>
-          <button className="control-button">
-            <span className="button-icon">⬇️</span>
-            <span>Export</span>
-          </button>
-          <select className="filter-select">
-            <option value="all">All Node Types</option>
-            <option value="vulnerability">Vulnerabilities</option>
-            <option value="cwe">CWEs</option>
-            <option value="concept">Concepts</option>
-          </select>
         </div>
       </div>
+    );
+  };
 
-      <div className="graph-container" ref={graphContainerRef}>
-        {isLoading ? (
-          <div className="loading-state">
-            <div className="loading-spinner"></div>
-            <p>Loading Knowledge Graph...</p>
-          </div>
-        ) : (
-          <div className="graph-placeholder">
-            <p className="placeholder-text">3D Force Graph will be integrated here</p>
-            <div className="graph-stats">
-              <p>Nodes: {mockGraphData.nodes.length}</p>
-              <p>Links: {mockGraphData.links.length}</p>
-            </div>
-            <div className="nodes-preview">
-              {mockGraphData.nodes.map(node => (
-                <div key={node.id} className={`node-preview node-${node.type}`}>
-                  <span className="node-name">{node.name}</span>
-                  <span className="node-type">{node.type}</span>
+  return (
+    <div className={`knowledge-graph-page ${darkMode ? 'dark' : ''}`}>
+      <div className="knowledge-graph-header">
+        <h1 className="page-title">Knowledge Graph</h1>
+        <div className="header-actions">
+          <button 
+            className="action-button"
+            onClick={() => setShowFilterPanel(!showFilterPanel)}
+            aria-label={showFilterPanel ? 'Hide filters' : 'Show filters'}
+          >
+            {showFilterPanel ? 'Hide Filters' : 'Show Filters'}
+          </button>
+          
+          <div className="export-dropdown">
+            <button 
+              className="action-button"
+              onClick={() => setShowExportOptions(!showExportOptions)}
+              aria-label="Export graph"
+            >
+              Export
+            </button>
+            
+            {showExportOptions && (
+              <div className="export-options">
+                <h4>Export Format</h4>
+                <div className="export-format-options">
+                  <label>
+                    <input 
+                      type="radio" 
+                      name="exportFormat" 
+                      value="json" 
+                      checked={exportFormat === 'json'} 
+                      onChange={() => setExportFormat('json')}
+                    />
+                    JSON
+                  </label>
+                  <label>
+                    <input 
+                      type="radio" 
+                      name="exportFormat" 
+                      value="csv" 
+                      checked={exportFormat === 'csv'} 
+                      onChange={() => setExportFormat('csv')}
+                    />
+                    CSV
+                  </label>
                 </div>
-              ))}
-            </div>
+                <div className="export-actions">
+                  <button 
+                    className="export-button"
+                    onClick={handleExport}
+                    disabled={graphData.nodes.length === 0}
+                  >
+                    Download
+                  </button>
+                  <button 
+                    className="cancel-button"
+                    onClick={() => setShowExportOptions(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      
+      <div className="knowledge-graph-content">
+        {showFilterPanel && (
+          <div className="filter-panel">
+            <GraphFilter
+              onFilterChange={handleFilterChange}
+              availableNodeTypes={availableNodeTypes}
+              availableRelationshipTypes={availableRelationshipTypes}
+              savedFilters={savedFilters}
+              onSaveFilter={handleSaveFilter}
+              darkMode={darkMode}
+            />
           </div>
         )}
-      </div>
-
-      <div className="graph-details-panel">
-        <h3>Node Details</h3>
-        <p className="details-help">Click on a graph node to see details here.</p>
+        
+        <div className="graph-visualization-container">
+          <KnowledgeGraphVisualization
+            graphData={graphData}
+            onNodeSelected={setSelectedNode}
+            isLoading={loading}
+            darkMode={darkMode}
+          />
+          
+          {error && (
+            <div className="error-message">
+              <p>Error loading graph data: {error}</p>
+              <button onClick={() => fetchGraphData()}>Retry</button>
+            </div>
+          )}
+        </div>
+        
+        <div className="details-panel">
+          {renderNodeDetails()}
+        </div>
       </div>
     </div>
   );

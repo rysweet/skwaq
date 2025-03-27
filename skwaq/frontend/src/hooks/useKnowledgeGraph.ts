@@ -25,6 +25,8 @@ export interface GraphFilter {
   nodeTypes?: string[];
   relationshipTypes?: string[];
   searchTerm?: string;
+  minConnections?: number;
+  maxResults?: number;
 }
 
 /**

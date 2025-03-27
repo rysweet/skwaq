@@ -44,6 +44,12 @@ const Sidebar: React.FC = () => {
               <span className="nav-text">Vulnerability Assessment</span>
             </NavLink>
           </li>
+          <li className="nav-item">
+            <NavLink to="/workflows" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+              <span className="nav-icon">🔄</span>
+              <span className="nav-text">Workflows</span>
+            </NavLink>
+          </li>
           <li className="nav-divider"></li>
           <li className="nav-item">
             <NavLink to="/settings" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
