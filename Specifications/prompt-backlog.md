@@ -32,6 +32,4 @@ necessary or no longer relevant and remove them. We also need to ensure that all
 
 We are going to add a new feature to the codebase. We want to be able to expose the neo4j graph database as an MCP service. 
 
-Before you are finished make sure that you have added unit tests for all new funcitonality. Make sure you remove any 
-  deprecated functionality. If new code is replacing previous placeholders remove the old placeholders. document all new functionality. When you are finished, 
-  update the end to end CLI demo / tests in order to make sure that all new functionality is included. Ensure that all dependencies get installed. 
+Before you are finished make sure that you have added unit tests for all new funcitonality. Make sure you remove any deprecated functionality. If new code is replacing previous placeholders remove the old placeholders. document all new functionality. When you are finished, update the end to end CLI demo / tests in order to make sure that all new functionality is included. Ensure that all dependencies get installed. 
