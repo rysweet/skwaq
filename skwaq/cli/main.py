@@ -996,6 +996,232 @@ async def handle_tool_command(args: argparse.Namespace) -> None:
                     console.print(f"[red]Error: {update['message']}[/red]")
 
 
+async def handle_vulnerability_research_command(args: argparse.Namespace) -> None:
+    """Handle vulnerability research workflow commands.
+    
+    Args:
+        args: Command line arguments
+    """
+    from ..workflows.vulnerability_research import VulnerabilityResearchWorkflow, MarkdownReportGenerator
+    
+    # Verify repository ID
+    if not hasattr(args, 'repository_id') or not args.repository_id:
+        console.print("[yellow]Repository ID is required for vulnerability research workflow[/yellow]")
+        return
+    
+    # Initialize the workflow
+    focus_areas = args.focus if hasattr(args, 'focus') and args.focus else None
+    investigation_id = args.id if hasattr(args, 'id') and args.id else None
+    
+    workflow = VulnerabilityResearchWorkflow(
+        repository_id=args.repository_id,
+        focus_areas=focus_areas,
+        workflow_id=investigation_id,
+        enable_persistence=not args.no_persistence if hasattr(args, 'no_persistence') else True
+    )
+    
+    # Get repository info for display
+    from ..db.neo4j_connector import get_connector
+    connector = get_connector()
+    repo_info = connector.run_query(
+        "MATCH (r:Repository) WHERE id(r) = $id RETURN r.name as name",
+        {"id": args.repository_id}
+    )
+    repo_name = repo_info[0]["name"] if repo_info else f"Repository {args.repository_id}"
+    
+    # Display startup info
+    console.print(f"[bold]Starting comprehensive vulnerability research for [cyan]{repo_name}[/cyan][/bold]")
+    console.print()
+    
+    # Initialize workflow
+    await workflow.setup()
+    
+    # Show planned focus areas
+    table = Table(title="[bold]Security Focus Areas[/bold]")
+    table.add_column("Area", style="cyan")
+    table.add_column("Status", style="yellow")
+    
+    for i, area in enumerate(workflow.focus_areas):
+        status = "Pending"
+        table.add_row(area, status)
+    
+    console.print(table)
+    console.print()
+    
+    # Progress tracking variables
+    current_phase = 0
+    current_focus_area = ""
+    findings = []
+    started_phase_2 = False
+    
+    # Create progress tracking
+    progress = Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeRemainingColumn(),
+        console=console,
+    )
+    
+    # Run the workflow with progress updates
+    try:
+        with progress:
+            # Create initial tasks
+            phase1_task = progress.add_task("Initial assessment...", total=100, start=False)
+            phase2_task = progress.add_task("Analyzing security focus areas...", total=100, start=False)
+            phase3_task = progress.add_task("Generating report...", total=100, start=False)
+            
+            # Process updates
+            async for update in workflow.run():
+                # Handle phase transitions and progress updates
+                if update["phase"] != current_phase:
+                    # Complete previous phase
+                    if current_phase == 1:
+                        progress.update(phase1_task, completed=100)
+                    elif current_phase == 2:
+                        progress.update(phase2_task, completed=100)
+                    
+                    # Start new phase
+                    current_phase = update["phase"]
+                    if current_phase == 1:
+                        progress.start_task(phase1_task)
+                        progress.update(phase1_task, completed=10)
+                    elif current_phase == 2:
+                        progress.start_task(phase2_task)
+                        progress.update(phase2_task, completed=10)
+                        started_phase_2 = True
+                    elif current_phase == 3:
+                        progress.start_task(phase3_task)
+                        progress.update(phase3_task, completed=10)
+                
+                # Handle specific update types
+                if update["status"] == "starting":
+                    if update["phase"] == 1:
+                        progress.update(phase1_task, completed=50, description="Analyzing repository structure...")
+                    elif update["phase"] == 3:
+                        progress.update(phase3_task, completed=30, description="Generating comprehensive report...")
+                
+                elif update["status"] == "complete":
+                    if update["phase"] == 1:
+                        progress.update(phase1_task, completed=100, description="Initial assessment complete")
+                        repo_data = update.get("data", {})
+                        console.print(
+                            Panel(
+                                f"Repository: [cyan]{repo_data.get('name', 'Unknown')}[/cyan]\n"
+                                f"Files: {repo_data.get('file_count', 0)}\n"
+                                f"Languages: {', '.join(repo_data.get('languages', []))}",
+                                title="[bold]Repository Assessment[/bold]",
+                                border_style="blue"
+                            )
+                        )
+                    
+                    elif update["phase"] == 3:
+                        progress.update(phase3_task, completed=100, description="Research complete!")
+                        
+                        # Show summary
+                        report = update.get("report", {})
+                        findings_count = len(update.get("findings", []))
+                        findings.extend(update.get("findings", []))
+                        
+                        console.print()
+                        console.print("[bold green]Vulnerability Research Complete![/bold green]")
+                        
+                        # Show summary panel with key metrics
+                        summary = report.get("summary", {})
+                        console.print(
+                            Panel(
+                                f"[bold]Findings:[/bold] {findings_count}\n"
+                                f"[bold]Risk Score:[/bold] {summary.get('risk_score', 'N/A')}/100\n"
+                                f"[bold]Critical:[/bold] {summary.get('severity_distribution', {}).get('Critical', 0)} | "
+                                f"[bold]High:[/bold] {summary.get('severity_distribution', {}).get('High', 0)} | "
+                                f"[bold]Medium:[/bold] {summary.get('severity_distribution', {}).get('Medium', 0)} | "
+                                f"[bold]Low:[/bold] {summary.get('severity_distribution', {}).get('Low', 0)}",
+                                title="[bold]Vulnerability Assessment Results[/bold]",
+                                border_style="green"
+                            )
+                        )
+                        
+                        # Display markdown report location
+                        markdown_path = update.get("markdown_path")
+                        if markdown_path:
+                            console.print(f"[bold]Report generated:[/bold] [green]{markdown_path}[/green]")
+                        
+                        # Check if GitHub issues were prepared
+                        github_issues = update.get("github_issues", [])
+                        if github_issues:
+                            console.print(f"[bold]GitHub issues prepared:[/bold] {len(github_issues)}")
+                            
+                            # Ask if user wants to create the issues
+                            if Confirm.ask("Would you like to create GitHub issues for these vulnerabilities?"):
+                                repo_url = report.get("repository", {}).get("url")
+                                if repo_url:
+                                    # Get GitHub token if needed
+                                    token = Prompt.ask("Enter GitHub token (leave blank if not required)", password=True, default="")
+                                    token = token if token else None
+                                    
+                                    with Status("[bold blue]Creating GitHub issues...", spinner="dots") as status:
+                                        # Create issues
+                                        from ..workflows.vulnerability_research import GitHubIssueGenerator
+                                        issue_generator = GitHubIssueGenerator()
+                                        created_issues = await issue_generator.create_issues(
+                                            issues=github_issues,
+                                            repository_url=repo_url,
+                                            github_token=token
+                                        )
+                                        
+                                        # Print command to execute
+                                        for issue in created_issues:
+                                            console.print(f"[dim]To create issue '[bold]{issue['title']}[/bold]', run:[/dim]")
+                                            console.print(f"[dim]{issue['command']}[/dim]")
+                                            console.print()
+                                            
+                                        status.update("[bold green]GitHub issue commands generated!")
+                                else:
+                                    console.print("[yellow]Repository URL not available for GitHub issue creation[/yellow]")
+                
+                elif update["status"] == "in_progress" and started_phase_2:
+                    # Phase 2 updates with focus area progress
+                    if update["phase"] == 2:
+                        focus_area = update.get("focus_area", "")
+                        if focus_area != current_focus_area:
+                            current_focus_area = focus_area
+                            progress.update(
+                                phase2_task, 
+                                description=f"Analyzing {focus_area}...",
+                                completed=int(20 + (70 * update.get("progress", 0)))
+                            )
+                
+                elif update["status"] == "focus_area_complete" and started_phase_2:
+                    # Complete a focus area
+                    focus_findings = update.get("findings", [])
+                    findings.extend(focus_findings)
+                    
+                    if focus_findings:
+                        console.print(
+                            f"[bold green]✓[/bold green] {current_focus_area}: Found {len(focus_findings)} potential vulnerabilities"
+                        )
+                    else:
+                        console.print(
+                            f"[bold blue]✓[/bold blue] {current_focus_area}: No vulnerabilities found"
+                        )
+                    
+                    # Update progress based on focus area index
+                    progress.update(
+                        phase2_task,
+                        completed=int(20 + (70 * (workflow._current_focus_area_index / len(workflow.focus_areas)))),
+                    )
+                
+                elif update["status"] == "error":
+                    console.print(f"[bold red]Error:[/bold red] {update.get('message', 'Unknown error')}")
+                    console.print(f"[dim]{update.get('error', '')}[/dim]")
+    
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Vulnerability research workflow paused. You can resume it later.[/yellow]")
+        workflow.pause()
+        return
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create the command-line argument parser.
 
@@ -1232,6 +1458,29 @@ def create_parser() -> argparse.ArgumentParser:
     
     tool_parser.set_defaults(
         func=lambda args: asyncio.run(handle_tool_command(args))
+    )
+    
+    # Vulnerability research workflow command
+    vuln_research_parser = subparsers.add_parser(
+        "vulnerability-research", help="Run comprehensive vulnerability research workflow"
+    )
+    vuln_research_parser.add_argument(
+        "--repository-id", type=int, required=True, help="Repository ID to research"
+    )
+    vuln_research_parser.add_argument(
+        "--focus", nargs="+", help="Security focus areas to analyze"
+    )
+    vuln_research_parser.add_argument(
+        "--id", help="Investigation ID for persistence/resuming"
+    )
+    vuln_research_parser.add_argument(
+        "--no-persistence", action="store_true", help="Disable investigation persistence"
+    )
+    vuln_research_parser.add_argument(
+        "--output-dir", help="Directory for output files"
+    )
+    vuln_research_parser.set_defaults(
+        func=lambda args: asyncio.run(handle_vulnerability_research_command(args))
     )
 
     return parser
