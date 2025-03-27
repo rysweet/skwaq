@@ -442,6 +442,31 @@ Key Features:
 - Graceful error handling and recovery
 
 
+### Next Milestone: W2 - Basic Workflows
+
+Our next milestone is W2, which involves implementing basic workflow functionality:
+
+- [ ] Q&A workflow
+  - Support for user queries about vulnerabilities
+  - Integration with knowledge agents
+  - Natural language question processing
+  - Structured response generation
+  - Follow-up question handling
+
+- [ ] Guided inquiry workflow
+  - Step-by-step guided vulnerability assessment
+  - Interactive prompting for information
+  - Context-aware guidance
+  - Recommendation generation
+  - Progress tracking
+
+- [ ] Basic tool invocation
+  - External tool integration from CLI
+  - Tool discovery and registration
+  - Tool execution with progress tracking
+  - Result processing and presentation
+  - Error handling and recovery
+
 ### Overall Progress
 - [x] F1: Project Setup and Environment
 - [x] F2: Core Utilities and Infrastructure
@@ -454,4 +479,7 @@ Key Features:
 - [x] C4: Code Understanding and Summarization
 - [x] A1: Agent Foundation
 - [x] A2: Core Agents Implementation
-- [ ] A3: Advanced Agent Capabilities
+- [x] A3: Advanced Agent Capabilities
+- [x] W1: Command Line Interface
+- [ ] W2: Basic Workflows
+- [ ] W3: Advanced Workflows

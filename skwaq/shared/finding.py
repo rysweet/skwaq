@@ -172,6 +172,7 @@ class AnalysisResult:
     metrics: Optional[Dict[str, Any]] = None  # Code metrics if collected
     advanced_analysis_results: Dict[str, Any] = field(default_factory=dict)  # Results from advanced analysis
     summary: Optional[CodeSummary] = None  # Code summary if generated
+    file_path: Optional[str] = None  # Original file path (for CLI analysis)
 
     @property
     def vulnerabilities_found(self) -> int:
@@ -210,6 +211,10 @@ class AnalysisResult:
             "file_id": self.file_id,
             "metadata": self.metadata,
         }
+        
+        # Include file path if available
+        if self.file_path:
+            result["file_path"] = self.file_path
         
         # Add metrics if available
         if self.metrics:

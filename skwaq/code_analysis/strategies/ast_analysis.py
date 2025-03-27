@@ -11,11 +11,8 @@ from ...utils.logging import get_logger
 from ..languages.base import LanguageAnalyzer
 from .base import AnalysisStrategy
 
-# Try to import Blarify integration
-try:
-    from ..blarify_integration import BlarifyIntegration, BLARIFY_AVAILABLE
-except ImportError:
-    BLARIFY_AVAILABLE = False
+# Import Blarify integration - the module handles its own availability check
+from ..blarify_integration import BlarifyIntegration, BLARIFY_AVAILABLE
 
 logger = get_logger(__name__)
 
@@ -33,8 +30,18 @@ class ASTAnalysisStrategy(AnalysisStrategy):
         super().__init__()
         self.language_analyzers: Dict[str, LanguageAnalyzer] = {}
         
-        # Initialize Blarify integration if available
-        self.blarify_integration = BlarifyIntegration() if BLARIFY_AVAILABLE else None
+        # Initialize Blarify integration - the BlarifyIntegration class handles 
+        # checking availability internally, so we can always create the instance
+        self.blarify_integration = BlarifyIntegration()
+        
+        # Log the AST analysis capabilities
+        if self.blarify_integration.is_available():
+            logger.info("AST analysis initialized with Blarify integration")
+        else:
+            logger.info("AST analysis initialized with limited capabilities (no Blarify)")
+            # Only log this warning in non-test environments
+            if not "PYTEST_CURRENT_TEST" in __import__("os").environ:
+                logger.debug("Some advanced AST analysis features will be limited")
 
     def register_language_analyzer(self, analyzer: LanguageAnalyzer) -> None:
         """Register a language-specific analyzer.
@@ -116,29 +123,31 @@ class ASTAnalysisStrategy(AnalysisStrategy):
         findings = []
         
         # Try to use Blarify for advanced AST analysis if available
-        if (
-            self.blarify_integration 
-            and self.blarify_integration.is_available()
-            and options.get("use_blarify", True)
-        ):
-            try:
-                # Analyze with Blarify
-                blarify_findings = self.blarify_integration.analyze_security_patterns(
-                    content, normalized_language, file_id
-                )
-                findings.extend(blarify_findings)
-                
-                logger.info(f"Performed Blarify AST analysis for file ID {file_id}")
-                
-                # Use code structure information if available from options
-                if "code_structure" in options:
-                    code_structure = options["code_structure"]
-                    findings.extend(self._analyze_code_structure(file_id, code_structure, content))
-                
-            except Exception as e:
-                logger.error(f"Error in Blarify AST analysis: {e}")
-                # Fall back to language analyzer
-                logger.info(f"Falling back to language analyzer for {normalized_language}")
+        blarify_used = False
+        if options.get("use_blarify", True):
+            if self.blarify_integration and self.blarify_integration.is_available():
+                try:
+                    # Analyze with Blarify
+                    blarify_findings = self.blarify_integration.analyze_security_patterns(
+                        content, normalized_language, file_id
+                    )
+                    findings.extend(blarify_findings)
+                    
+                    logger.debug(f"Performed Blarify AST analysis for file ID {file_id}")
+                    blarify_used = True
+                    
+                    # Use code structure information if available from options
+                    if "code_structure" in options:
+                        code_structure = options["code_structure"]
+                        findings.extend(self._analyze_code_structure(file_id, code_structure, content))
+                    
+                except Exception as e:
+                    logger.error(f"Error in Blarify AST analysis: {e}")
+                    # Continue to use language analyzer
+                    logger.debug(f"Will use standard language analyzer for {normalized_language}")
+            else:
+                # Only log in debug mode to avoid spamming warnings - more detailed warning happened in __init__
+                logger.debug("Blarify not available for AST analysis, using standard analysis")
 
         # Get appropriate language analyzer for regular analysis
         analyzer = self.get_language_analyzer(normalized_language)

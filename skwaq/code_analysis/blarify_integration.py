@@ -16,16 +16,35 @@ from ..utils.config import get_config
 
 logger = get_logger(__name__)
 
-# Try to import Blarify, which will fail gracefully if not installed
+# Check if we're in CLI mode (to determine log level)
+import os
+import sys
+in_cli_mode = 'skwaq_cli.py' in sys.argv[0] if len(sys.argv) > 0 else False
+log_level = logger.error if in_cli_mode else logger.warning
+
+# Try to import Blarify, which will fail gracefully if not installed or properly configured
 try:
     import blarify
     from blarify.code_hierarchy.tree_sitter_helper import TreeSitterHelper
     from blarify.project_graph_creator import ProjectGraphCreator
     from blarify.graph.graph_environment import GraphEnvironment
     from blarify.code_references import LspQueryHelper
-    BLARIFY_AVAILABLE = True
-except ImportError:
-    logger.warning("Blarify library not found. Advanced AST analysis will be limited.")
+    
+    # Verify we can actually create a TreeSitterHelper instance
+    try:
+        test_helper = TreeSitterHelper()
+        BLARIFY_AVAILABLE = True
+        logger.debug("Blarify library successfully initialized.")
+    except Exception as e:
+        log_level(f"Blarify library found but couldn't be initialized: {e}. Using fallback analysis.")
+        BLARIFY_AVAILABLE = False
+except ImportError as e:
+    # Only log at warning level in non-CLI mode
+    msg = f"Blarify library or dependencies not found: {e}. Advanced AST analysis will be limited."
+    if not in_cli_mode:
+        logger.warning(msg)
+    else:
+        logger.debug(msg)
     BLARIFY_AVAILABLE = False
 
 
@@ -50,6 +69,12 @@ class BlarifyIntegration:
             except Exception as e:
                 logger.error(f"Failed to initialize Blarify TreeSitterHelper: {e}")
                 self.blarify_available = False
+                # Provide more helpful message about fallback behavior
+                logger.info("Falling back to standard AST analysis methods without Blarify")
+        else:
+            # Only log this if we're not in a test environment to reduce noise
+            if not os.environ.get("PYTEST_CURRENT_TEST"):
+                logger.info("Blarify not available. Using standard AST analysis methods instead.")
     
     def is_available(self) -> bool:
         """Check if Blarify is available.

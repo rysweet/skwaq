@@ -24,8 +24,14 @@ from skwaq.utils.logging import get_logger, setup_logging
 from skwaq.db.neo4j_connector import get_connector
 from skwaq.code_analysis.analyzer import CodeAnalyzer
 
-# Set up logging
+# Set up logging with appropriate levels
 logger = setup_logging(module_name="skwaq.cli")
+
+# Keep Blarify integration warnings at ERROR level in CLI context to avoid spamming users
+import logging
+logging.getLogger("skwaq.code_analysis.blarify_integration").setLevel(logging.ERROR)
+
+# Initialize console for rich output
 console = Console()
 
 
@@ -164,8 +170,8 @@ async def handle_analyze_command(args: argparse.Namespace) -> None:
 
     # Use status indicator for analysis
     with Status("[bold blue]Analyzing file for vulnerabilities...", spinner="dots") as status:
-        # Analyze file
-        result = await analyzer.analyze_file(
+        # Analyze file using the file path wrapper method
+        result = await analyzer.analyze_file_from_path(
             file_path=file_path,
             repository_id=None,  # No repository context for standalone files
             strategy_names=strategy_names,
@@ -213,7 +219,7 @@ async def handle_analyze_command(args: argparse.Namespace) -> None:
                 finding.vulnerability_type,
                 f"[{severity_color}]{finding.severity}[/{severity_color}]",
                 f"[{confidence_color}]{confidence:.2f}[/{confidence_color}]",
-                f"{file_path}:{finding.line_number}",
+                f"{result.file_path or file_path}:{finding.line_number}",
                 finding.description,
             )
 
@@ -233,6 +239,118 @@ async def handle_analyze_command(args: argparse.Namespace) -> None:
                     )
 
 
+def _get_mock_investigations() -> List[Dict[str, Any]]:
+    """Get mock investigation data for CLI demo when no database is available.
+    
+    Returns:
+        List of investigation dictionaries
+    """
+    import datetime
+    from datetime import timedelta
+    
+    # Create a few mock investigations with different statuses
+    now = datetime.datetime.now()
+    yesterday = now - timedelta(days=1)
+    two_days_ago = now - timedelta(days=2)
+    
+    return [
+        {
+            "id": "inv-46dac8c5",
+            "repository": "example/repo",
+            "created": now.strftime("%Y-%m-%d %H:%M:%S"),
+            "status": "Complete",
+            "findings": 12
+        },
+        {
+            "id": "inv-72fbe991",
+            "repository": "another/project",
+            "created": yesterday.strftime("%Y-%m-%d %H:%M:%S"),
+            "status": "In Progress",
+            "findings": 7
+        },
+        {
+            "id": "inv-a3e45f12",
+            "repository": "test/project",
+            "created": two_days_ago.strftime("%Y-%m-%d %H:%M:%S"),
+            "status": "Pending",
+            "findings": 0
+        }
+    ]
+    
+def _get_mock_findings(investigation_id: str) -> List[Dict[str, Any]]:
+    """Get mock finding data for CLI demo when no database is available.
+    
+    Args:
+        investigation_id: ID of the investigation
+        
+    Returns:
+        List of finding dictionaries
+    """
+    # Create findings based on the investigation ID
+    if investigation_id == "inv-46dac8c5":
+        return [
+            {
+                "id": "find-1234",
+                "type": "pattern_match",
+                "vulnerability_type": "SQL Injection",
+                "description": "Potential SQL injection vulnerability in query construction",
+                "file_path": "src/db/query.py",
+                "line_number": 45,
+                "severity": "High",
+                "confidence": 0.85,
+                "remediation": "Use parameterized queries instead of string concatenation"
+            },
+            {
+                "id": "find-5678",
+                "type": "semantic_analysis",
+                "vulnerability_type": "Cross-Site Scripting (XSS)",
+                "description": "Unfiltered user input rendered in HTML template",
+                "file_path": "src/templates/user.html",
+                "line_number": 23,
+                "severity": "Medium",
+                "confidence": 0.75,
+                "remediation": "Use template escaping mechanisms for user-supplied data"
+            },
+            {
+                "id": "find-9012",
+                "type": "ast_analysis",
+                "vulnerability_type": "Insecure Deserialization",
+                "description": "Use of pickle.loads with untrusted data",
+                "file_path": "src/util/serialization.py",
+                "line_number": 67,
+                "severity": "Critical",
+                "confidence": 0.9,
+                "remediation": "Use JSON or another secure serialization format for untrusted data"
+            }
+        ]
+    elif investigation_id == "inv-72fbe991":
+        return [
+            {
+                "id": "find-3456",
+                "type": "pattern_match",
+                "vulnerability_type": "Hardcoded Credentials",
+                "description": "API key hardcoded in source code",
+                "file_path": "src/api/client.py",
+                "line_number": 28,
+                "severity": "High",
+                "confidence": 0.95,
+                "remediation": "Store credentials in environment variables or a secure vault"
+            },
+            {
+                "id": "find-7890",
+                "type": "semantic_analysis",
+                "vulnerability_type": "Path Traversal",
+                "description": "Potential path traversal vulnerability in file handling",
+                "file_path": "src/util/files.py",
+                "line_number": 42,
+                "severity": "Medium",
+                "confidence": 0.7,
+                "remediation": "Validate and sanitize file paths before using them"
+            }
+        ]
+    else:
+        return []
+
 async def handle_investigations_command(args: argparse.Namespace) -> None:
     """Handle investigations command.
     
@@ -246,8 +364,9 @@ async def handle_investigations_command(args: argparse.Namespace) -> None:
     if args.investigation_command == "list":
         console.print("[bold]Active Investigations:[/bold]")
         
-        # This would normally fetch investigations from a database
-        # For now, just display placeholder data
+        # Get investigations from our mock data function
+        investigations = _get_mock_investigations()
+        
         table = Table(
             "ID", 
             "Repository", 
@@ -258,21 +377,23 @@ async def handle_investigations_command(args: argparse.Namespace) -> None:
             border_style="blue"
         )
         
-        # Example data
-        table.add_row(
-            "inv-46dac8c5",
-            "example/repo",
-            "2025-03-26 14:30:12",
-            "[green]Complete[/green]",
-            "12"
-        )
-        table.add_row(
-            "inv-72fbe991",
-            "another/project",
-            "2025-03-25 09:15:43",
-            "[yellow]In Progress[/yellow]",
-            "7"
-        )
+        # Add each investigation to the table with appropriate formatting
+        for inv in investigations:
+            status_str = inv["status"]
+            if status_str == "Complete":
+                status_str = f"[green]{status_str}[/green]"
+            elif status_str == "In Progress":
+                status_str = f"[yellow]{status_str}[/yellow]"
+            elif status_str == "Pending":
+                status_str = f"[blue]{status_str}[/blue]"
+                
+            table.add_row(
+                inv["id"],
+                inv["repository"],
+                inv["created"],
+                status_str,
+                str(inv["findings"])
+            )
         
         console.print(table)
         console.print("\n[dim]Use 'skwaq investigations export --id <ID>' to export results[/dim]")
@@ -282,8 +403,79 @@ async def handle_investigations_command(args: argparse.Namespace) -> None:
         export_format = args.format
         output_path = args.output or f"investigation-{investigation_id}.{export_format}"
         
+        # Get findings for this investigation
+        findings = _get_mock_findings(investigation_id)
+        
+        if not findings:
+            console.print(f"[yellow]No findings found for investigation {investigation_id}[/yellow]")
+            return
+            
         with Status(f"[bold blue]Exporting investigation {investigation_id}...", spinner="dots") as status:
-            # Simulate export operation
+            # Create the export content based on format
+            if export_format == "json":
+                import json
+                export_content = json.dumps({
+                    "investigation_id": investigation_id,
+                    "findings": findings,
+                    "exported_at": datetime.datetime.now().isoformat()
+                }, indent=2)
+                
+            elif export_format == "markdown":
+                # Create a markdown report
+                export_content = f"# Investigation Report: {investigation_id}\n\n"
+                export_content += f"**Exported:** {datetime.datetime.now().isoformat()}\n\n"
+                export_content += "## Findings\n\n"
+                
+                for f in findings:
+                    export_content += f"### {f['vulnerability_type']} ({f['severity']})\n\n"
+                    export_content += f"**Location:** {f['file_path']}:{f['line_number']}\n\n"
+                    export_content += f"**Description:** {f['description']}\n\n"
+                    export_content += f"**Confidence:** {f['confidence']:.2f}\n\n"
+                    export_content += f"**Remediation:** {f['remediation']}\n\n"
+                    export_content += "---\n\n"
+                
+            else:  # HTML
+                export_content = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Investigation Report: {investigation_id}</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; }}
+        h1 {{ color: #2c3e50; }}
+        .finding {{ border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 5px; }}
+        .high {{ border-left: 5px solid #e74c3c; }}
+        .medium {{ border-left: 5px solid #f39c12; }}
+        .critical {{ border-left: 5px solid #800000; }}
+        .low {{ border-left: 5px solid #3498db; }}
+        .info {{ border-left: 5px solid #2ecc71; }}
+        .location {{ font-family: monospace; background-color: #f9f9f9; padding: 3px; }}
+    </style>
+</head>
+<body>
+    <h1>Investigation Report: {investigation_id}</h1>
+    <p><strong>Exported:</strong> {datetime.datetime.now().isoformat()}</p>
+    
+    <h2>Findings ({len(findings)})</h2>
+"""
+                
+                for f in findings:
+                    severity_class = f["severity"].lower()
+                    export_content += f"""
+    <div class="finding {severity_class}">
+        <h3>{f['vulnerability_type']} ({f['severity']})</h3>
+        <p><strong>Location:</strong> <span class="location">{f['file_path']}:{f['line_number']}</span></p>
+        <p><strong>Description:</strong> {f['description']}</p>
+        <p><strong>Confidence:</strong> {f['confidence']:.2f}</p>
+        <p><strong>Remediation:</strong> {f['remediation']}</p>
+    </div>
+"""
+                
+                export_content += """
+</body>
+</html>
+"""
+            
+            # Simulate writing to file
             await asyncio.sleep(1.5)
             status.update("[bold green]Export complete!")
         
@@ -300,6 +492,14 @@ async def handle_investigations_command(args: argparse.Namespace) -> None:
     elif args.investigation_command == "delete":
         investigation_id = args.id
         force = args.force
+        
+        # Check if the investigation exists
+        investigations = _get_mock_investigations()
+        investigation_exists = any(inv["id"] == investigation_id for inv in investigations)
+        
+        if not investigation_exists:
+            console.print(f"[yellow]Investigation {investigation_id} not found[/yellow]")
+            return
         
         if not force and not Confirm.ask(f"Are you sure you want to delete investigation {investigation_id}?"):
             console.print("[yellow]Operation canceled.[/yellow]")

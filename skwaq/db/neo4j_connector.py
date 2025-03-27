@@ -118,6 +118,28 @@ class Neo4jConnector:
             self._connected = False
             logger.info("Neo4j database connection closed")
 
+    def is_connected(self) -> bool:
+        """Check if the connector is connected to the database.
+
+        Returns:
+            True if connected, False otherwise
+        """
+        if not self._connected:
+            # Try connecting once if not already connected
+            try:
+                return self.connect(max_retries=1, retry_delay=0.5)
+            except Exception:
+                return False
+                
+        # Even if connected flag is True, verify with a quick test query
+        try:
+            with self._driver.session(database=self._database) as session:
+                result = session.run("RETURN 1 AS test")
+                return result.single()["test"] == 1
+        except Exception:
+            self._connected = False
+            return False
+        
     def get_server_info(self) -> Optional[Dict[str, str]]:
         """Get information about the Neo4j server.
 
