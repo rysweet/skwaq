@@ -77,22 +77,26 @@ class TestMilestoneC2Requirements:
         """Test that CodeAnalyzer has Blarify integration."""
         # The analyzer should have blarify_integration attribute
         assert hasattr(analyzer, "blarify_integration")
-        # The attribute should be a BlarifyIntegration instance or None if not available
-        if BLARIFY_AVAILABLE:
-            assert isinstance(analyzer.blarify_integration, BlarifyIntegration)
-        else:
-            assert analyzer.blarify_integration is None
+        
+        # Regardless of whether Blarify is available, the attribute should be an instance
+        # of BlarifyIntegration (which handles availability internally)
+        assert isinstance(analyzer.blarify_integration, BlarifyIntegration)
+        
+        # The is_available method should return the same value as the global BLARIFY_AVAILABLE
+        assert analyzer.blarify_integration.is_available() == BLARIFY_AVAILABLE
             
     def test_ast_analysis_strategy_has_blarify_integration(self):
         """Test that ASTAnalysisStrategy has Blarify integration."""
         from skwaq.code_analysis.strategies.ast_analysis import ASTAnalysisStrategy
         strategy = ASTAnalysisStrategy()
         assert hasattr(strategy, "blarify_integration")
-        # The attribute should be a BlarifyIntegration instance or None if not available
-        if BLARIFY_AVAILABLE:
-            assert isinstance(strategy.blarify_integration, BlarifyIntegration)
-        else:
-            assert strategy.blarify_integration is None
+        
+        # Regardless of whether Blarify is available, the attribute should be an instance
+        # of BlarifyIntegration (which handles availability internally)
+        assert isinstance(strategy.blarify_integration, BlarifyIntegration)
+        
+        # The is_available method should return the same value as the global BLARIFY_AVAILABLE
+        assert strategy.blarify_integration.is_available() == BLARIFY_AVAILABLE
 
 
 class TestCSharpAnalyzer:
@@ -183,21 +187,23 @@ class TestCodeAnalyzerWithBlarify:
             if hasattr(strategy, "analyze"):
                 strategy.analyze = AsyncMock(return_value=[finding])
         
-        # Mock BlarifyIntegration if available
-        if analyzer.blarify_integration:
-            # Mock Blarify methods
-            analyzer.blarify_integration.extract_code_structure = MagicMock(return_value={
-                "functions": [
-                    {
-                        "name": "vulnerable_function",
-                        "line_start": 1,
-                        "line_end": 2,
-                        "complexity": 1
-                    }
-                ],
-                "classes": []
-            })
-            analyzer.blarify_integration.analyze_security_patterns = MagicMock(return_value=[])
+        # Mock BlarifyIntegration methods regardless of availability
+        # BlarifyIntegration is always instantiated but may not be available
+        analyzer.blarify_integration.extract_code_structure = MagicMock(return_value={
+            "functions": [
+                {
+                    "name": "vulnerable_function",
+                    "line_start": 1,
+                    "line_end": 2,
+                    "complexity": 1
+                }
+            ],
+            "classes": []
+        })
+        analyzer.blarify_integration.analyze_security_patterns = MagicMock(return_value=[])
+        
+        # Mock is_available method to match the global BLARIFY_AVAILABLE
+        analyzer.blarify_integration.is_available = MagicMock(return_value=BLARIFY_AVAILABLE)
         
         # Mock finding storage
         with patch("skwaq.code_analysis.strategies.base.AnalysisStrategy._create_finding_node"):
@@ -211,10 +217,14 @@ class TestCodeAnalyzerWithBlarify:
             # Verify the result
             assert hasattr(result, "vulnerabilities_found")
             
-            # Verify Blarify methods were called if available
-            if analyzer.blarify_integration:
+            # If Blarify is available, verify the methods were called
+            if BLARIFY_AVAILABLE:
                 analyzer.blarify_integration.extract_code_structure.assert_called_once()
                 analyzer.blarify_integration.analyze_security_patterns.assert_called_once()
+            else:
+                # If Blarify is not available, the methods should not be called
+                assert not analyzer.blarify_integration.extract_code_structure.called
+                assert not analyzer.blarify_integration.analyze_security_patterns.called
 
 
 class TestCodeStructureMapping:
