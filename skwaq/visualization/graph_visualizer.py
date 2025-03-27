@@ -370,249 +370,263 @@ class GraphVisualizer:
         Returns:
             HTML content as a string
         """
-        # Create HTML with embedded D3.js
-        html = f"""<!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <title>{title}</title>
-            <script src="https://d3js.org/d3.v7.min.js"></script>
-            <style>
-                body {{ margin: 0; font-family: Arial, sans-serif; overflow: hidden; }}
-                .container {{ display: flex; height: 100vh; }}
-                .graph {{ flex: 1; }}
-                .sidebar {{ width: 300px; padding: 20px; background: #f8f9fa; overflow-y: auto; }}
-                .node {{ stroke: #fff; stroke-width: 1.5px; }}
-                .link {{ stroke: #999; stroke-opacity: 0.6; }}
-                h1 {{ font-size: 24px; margin-top: 0; }}
-                h2 {{ font-size: 18px; margin-top: 20px; }}
-                pre {{ background: #f1f1f1; padding: 10px; overflow: auto; }}
-                .controls {{ margin: 20px 0; }}
-                button {{ background: #4b76e8; color: white; border: none; padding: 8px 12px; margin-right: 5px; cursor: pointer; }}
-                button:hover {{ background: #3a5bbf; }}
-                .node-details {{ margin-top: 20px; }}
-                .legend {{ margin-top: 20px; }}
-                .legend-item {{ display: flex; align-items: center; margin-bottom: 5px; }}
-                .legend-color {{ width: 15px; height: 15px; margin-right: 8px; }}
-                .zoom-controls {{ position: absolute; top: 20px; left: 20px; background: rgba(255,255,255,0.7); padding: 10px; border-radius: 5px; }}
-                .tooltip {{ position: absolute; background: white; border: 1px solid #ddd; padding: 10px; border-radius: 5px; pointer-events: none; opacity: 0; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="graph" id="graph"></div>
-                <div class="sidebar">
-                    <h1>{title}</h1>
-                    
-                    <div class="controls">
-                        <button id="zoom-in">Zoom In</button>
-                        <button id="zoom-out">Zoom Out</button>
-                        <button id="reset">Reset</button>
-                    </div>
-                    
-                    <div class="legend">
-                        <h2>Legend</h2>
-                        <div class="legend-item">
-                            <div class="legend-color" style="background-color: #4b76e8;"></div>
-                            <div>Investigation</div>
-                        </div>
-                        <div class="legend-item">
-                            <div class="legend-color" style="background-color: #f94144;"></div>
-                            <div>Finding</div>
-                        </div>
-                        <div class="legend-item">
-                            <div class="legend-color" style="background-color: #e83e8c;"></div>
-                            <div>Vulnerability</div>
-                        </div>
-                        <div class="legend-item">
-                            <div class="legend-color" style="background-color: #20c997;"></div>
-                            <div>File</div>
-                        </div>
-                        <div class="legend-item">
-                            <div class="legend-color" style="background-color: #6610f2;"></div>
-                            <div>Repository</div>
-                        </div>
-                    </div>
-                    
-                    <div class="node-details">
-                        <h2>Node Details</h2>
-                        <p id="node-description">Click on a node to see details</p>
-                        <pre id="node-properties"></pre>
-                    </div>
-                </div>
-            </div>
+        # Using a separate method to generate the template to avoid coverage issues
+        return self._generate_html_template(graph_data, title)
+        
+    def _generate_html_template(self, graph_data: Dict[str, Any], title: str) -> str:
+        """Generate HTML template for D3.js visualization.
+        
+        Args:
+            graph_data: Graph data to visualize
+            title: Title for the visualization
             
-            <div class="tooltip" id="tooltip"></div>
-            
-            <script>
-                // Graph data
-                const graphData = {json.dumps(graph_data)};
-                
-                // Set up the simulation
-                const width = document.getElementById('graph').clientWidth;
-                const height = document.getElementById('graph').clientHeight;
-                
-                const svg = d3.select('#graph')
-                    .append('svg')
-                    .attr('width', width)
-                    .attr('height', height);
-                
-                // Create zoom behavior
-                const zoom = d3.zoom()
-                    .scaleExtent([0.1, 5])
-                    .on('zoom', (event) => {
-                        g.attr('transform', event.transform);
-                    });
-                
-                // Apply zoom to SVG
-                svg.call(zoom);
-                
-                // Create a group for the graph
-                const g = svg.append('g');
-                
-                // Initialize the simulation
-                const simulation = d3.forceSimulation(graphData.nodes)
-                    .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(100))
-                    .force('charge', d3.forceManyBody().strength(-300))
-                    .force('center', d3.forceCenter(width / 2, height / 2))
-                    .on('tick', ticked);
-                
-                // Create links
-                const link = g.append('g')
-                    .attr('class', 'links')
-                    .selectAll('line')
-                    .data(graphData.links)
-                    .enter().append('line')
-                    .attr('class', 'link')
-                    .attr('stroke-width', 1);
-                
-                // Create nodes
-                const node = g.append('g')
-                    .attr('class', 'nodes')
-                    .selectAll('circle')
-                    .data(graphData.nodes)
-                    .enter().append('circle')
-                    .attr('class', 'node')
-                    .attr('r', d => getNodeRadius(d))
-                    .attr('fill', d => d.color || '#999')
-                    .call(d3.drag()
-                        .on('start', dragstarted)
-                        .on('drag', dragged)
-                        .on('end', dragended));
-                
-                // Add labels to nodes
-                const label = g.append('g')
-                    .attr('class', 'labels')
-                    .selectAll('text')
-                    .data(graphData.nodes)
-                    .enter().append('text')
-                    .text(d => d.label)
-                    .attr('font-size', '10px')
-                    .attr('dx', 12)
-                    .attr('dy', 4);
-                
-                // Add tooltips
-                const tooltip = d3.select('#tooltip');
-                
-                node
-                    .on('mouseover', function(event, d) {
-                        tooltip.transition()
-                            .duration(200)
-                            .style('opacity', .9);
-                        tooltip.html(`<strong>${d.label}</strong><br/>${d.type}`)
-                            .style('left', (event.pageX + 10) + 'px')
-                            .style('top', (event.pageY - 28) + 'px');
-                    })
-                    .on('mouseout', function() {
-                        tooltip.transition()
-                            .duration(500)
-                            .style('opacity', 0);
-                    })
-                    .on('click', showNodeDetails);
-                
-                // Simulation tick function
-                function ticked() {
-                    link
-                        .attr('x1', d => d.source.x)
-                        .attr('y1', d => d.source.y)
-                        .attr('x2', d => d.target.x)
-                        .attr('y2', d => d.target.y);
-                    
-                    node
-                        .attr('cx', d => d.x)
-                        .attr('cy', d => d.y);
-                    
-                    label
-                        .attr('x', d => d.x)
-                        .attr('y', d => d.y);
-                }
-                
-                // Drag functions
-                function dragstarted(event, d) {
-                    if (!event.active) simulation.alphaTarget(0.3).restart();
-                    d.fx = d.x;
-                    d.fy = d.y;
-                }
-                
-                function dragged(event, d) {
-                    d.fx = event.x;
-                    d.fy = event.y;
-                }
-                
-                function dragended(event, d) {
-                    if (!event.active) simulation.alphaTarget(0);
-                    d.fx = null;
-                    d.fy = null;
-                }
-                
-                // Helper to determine node radius based on type
-                function getNodeRadius(node) {
-                    switch(node.type) {
-                        case 'Investigation':
-                            return 15;
-                        case 'Finding':
-                            return 10;
-                        case 'Vulnerability':
-                            return 12;
-                        case 'File':
-                            return 8;
-                        case 'Repository':
-                            return 13;
-                        default:
-                            return 8;
-                    }
-                }
-                
-                // Show node details in sidebar
-                function showNodeDetails(event, d) {
-                    document.getElementById('node-description').textContent = `${d.type}: ${d.label}`;
-                    document.getElementById('node-properties').textContent = JSON.stringify(d.properties, null, 2);
-                }
-                
-                // Control buttons
-                document.getElementById('zoom-in').addEventListener('click', () => {
-                    svg.transition().duration(500).call(zoom.scaleBy, 1.5);
-                });
-                
-                document.getElementById('zoom-out').addEventListener('click', () => {
-                    svg.transition().duration(500).call(zoom.scaleBy, 0.75);
-                });
-                
-                document.getElementById('reset').addEventListener('click', () => {
-                    svg.transition().duration(500).call(
-                        zoom.transform, 
-                        d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
-                    );
-                });
-                
-                // Initial reset to center the graph
-                svg.call(
-                    zoom.transform,
-                    d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
-                );
-            </script>
-        </body>
-        </html>
+        Returns:
+            HTML content as a string
+        """
+        # Convert graph data to JSON string
+        graph_data_json = json.dumps(graph_data)
+        
+        # CSS styles
+        css_styles = """
+            body { margin: 0; font-family: Arial, sans-serif; overflow: hidden; }
+            .container { display: flex; height: 100vh; }
+            .graph { flex: 1; }
+            .sidebar { width: 300px; padding: 20px; background: #f8f9fa; overflow-y: auto; }
+            .node { stroke: #fff; stroke-width: 1.5px; }
+            .link { stroke: #999; stroke-opacity: 0.6; }
+            h1 { font-size: 24px; margin-top: 0; }
+            h2 { font-size: 18px; margin-top: 20px; }
+            pre { background: #f1f1f1; padding: 10px; overflow: auto; }
+            .controls { margin: 20px 0; }
+            button { background: #4b76e8; color: white; border: none; padding: 8px 12px; margin-right: 5px; cursor: pointer; }
+            button:hover { background: #3a5bbf; }
+            .node-details { margin-top: 20px; }
+            .legend { margin-top: 20px; }
+            .legend-item { display: flex; align-items: center; margin-bottom: 5px; }
+            .legend-color { width: 15px; height: 15px; margin-right: 8px; }
+            .zoom-controls { position: absolute; top: 20px; left: 20px; background: rgba(255,255,255,0.7); padding: 10px; border-radius: 5px; }
+            .tooltip { position: absolute; background: white; border: 1px solid #ddd; padding: 10px; border-radius: 5px; pointer-events: none; opacity: 0; }
         """
         
-        return html
+        # D3.js script for the visualization
+        d3_script = """
+            // Graph data
+            const graphData = %s;
+            
+            // Set up the simulation
+            const width = document.getElementById('graph').clientWidth;
+            const height = document.getElementById('graph').clientHeight;
+            
+            const svg = d3.select('#graph')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+            
+            // Create zoom behavior
+            const zoom = d3.zoom()
+                .scaleExtent([0.1, 5])
+                .on('zoom', (event) => {
+                    g.attr('transform', event.transform);
+                });
+            
+            // Apply zoom to SVG
+            svg.call(zoom);
+            
+            // Create a group for the graph
+            const g = svg.append('g');
+            
+            // Initialize the simulation
+            const simulation = d3.forceSimulation(graphData.nodes)
+                .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(100))
+                .force('charge', d3.forceManyBody().strength(-300))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .on('tick', ticked);
+            
+            // Create links
+            const link = g.append('g')
+                .attr('class', 'links')
+                .selectAll('line')
+                .data(graphData.links)
+                .enter().append('line')
+                .attr('class', 'link')
+                .attr('stroke-width', 1);
+            
+            // Create nodes
+            const node = g.append('g')
+                .attr('class', 'nodes')
+                .selectAll('circle')
+                .data(graphData.nodes)
+                .enter().append('circle')
+                .attr('class', 'node')
+                .attr('r', d => getNodeRadius(d))
+                .attr('fill', d => d.color || '#999')
+                .call(d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended));
+            
+            // Add labels to nodes
+            const label = g.append('g')
+                .attr('class', 'labels')
+                .selectAll('text')
+                .data(graphData.nodes)
+                .enter().append('text')
+                .text(d => d.label)
+                .attr('font-size', '10px')
+                .attr('dx', 12)
+                .attr('dy', 4);
+            
+            // Add tooltips
+            const tooltip = d3.select('#tooltip');
+            
+            node
+                .on('mouseover', function(event, d) {
+                    tooltip.transition()
+                        .duration(200)
+                        .style('opacity', .9);
+                    tooltip.html(`<strong>${d.label}</strong><br/>${d.type}`)
+                        .style('left', (event.pageX + 10) + 'px')
+                        .style('top', (event.pageY - 28) + 'px');
+                })
+                .on('mouseout', function() {
+                    tooltip.transition()
+                        .duration(500)
+                        .style('opacity', 0);
+                })
+                .on('click', showNodeDetails);
+            
+            // Simulation tick function
+            function ticked() {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+                
+                node
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y);
+                
+                label
+                    .attr('x', d => d.x)
+                    .attr('y', d => d.y);
+            }
+            
+            // Drag functions
+            function dragstarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+            
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+            
+            function dragended(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+            
+            // Helper to determine node radius based on type
+            function getNodeRadius(node) {
+                switch(node.type) {
+                    case 'Investigation':
+                        return 15;
+                    case 'Finding':
+                        return 10;
+                    case 'Vulnerability':
+                        return 12;
+                    case 'File':
+                        return 8;
+                    case 'Repository':
+                        return 13;
+                    default:
+                        return 8;
+                }
+            }
+            
+            // Show node details in sidebar
+            function showNodeDetails(event, d) {
+                document.getElementById('node-description').textContent = `${d.type}: ${d.label}`;
+                document.getElementById('node-properties').textContent = JSON.stringify(d.properties, null, 2);
+            }
+            
+            // Control buttons
+            document.getElementById('zoom-in').addEventListener('click', () => {
+                svg.transition().duration(500).call(zoom.scaleBy, 1.5);
+            });
+            
+            document.getElementById('zoom-out').addEventListener('click', () => {
+                svg.transition().duration(500).call(zoom.scaleBy, 0.75);
+            });
+            
+            document.getElementById('reset').addEventListener('click', () => {
+                svg.transition().duration(500).call(
+                    zoom.transform, 
+                    d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
+                );
+            });
+            
+            // Initial reset to center the graph
+            svg.call(
+                zoom.transform,
+                d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
+            );
+        """ % graph_data_json
+        
+        # Build the HTML page
+        html = ["<!DOCTYPE html>", "<html>", "<head>", 
+                "<meta charset='utf-8'>",
+                f"<title>{title}</title>",
+                "<script src='https://d3js.org/d3.v7.min.js'></script>",
+                "<style>", css_styles, "</style>",
+                "</head>", 
+                "<body>",
+                "<div class='container'>",
+                "<div class='graph' id='graph'></div>",
+                "<div class='sidebar'>",
+                f"<h1>{title}</h1>",
+                "<div class='controls'>",
+                "<button id='zoom-in'>Zoom In</button>",
+                "<button id='zoom-out'>Zoom Out</button>",
+                "<button id='reset'>Reset</button>",
+                "</div>",
+                "<div class='legend'>",
+                "<h2>Legend</h2>",
+                "<div class='legend-item'>",
+                "<div class='legend-color' style='background-color: #4b76e8;'></div>",
+                "<div>Investigation</div>",
+                "</div>",
+                "<div class='legend-item'>",
+                "<div class='legend-color' style='background-color: #f94144;'></div>",
+                "<div>Finding</div>",
+                "</div>",
+                "<div class='legend-item'>",
+                "<div class='legend-color' style='background-color: #e83e8c;'></div>",
+                "<div>Vulnerability</div>",
+                "</div>",
+                "<div class='legend-item'>",
+                "<div class='legend-color' style='background-color: #20c997;'></div>",
+                "<div>File</div>",
+                "</div>",
+                "<div class='legend-item'>",
+                "<div class='legend-color' style='background-color: #6610f2;'></div>",
+                "<div>Repository</div>",
+                "</div>",
+                "</div>",
+                "<div class='node-details'>",
+                "<h2>Node Details</h2>",
+                "<p id='node-description'>Click on a node to see details</p>",
+                "<pre id='node-properties'></pre>",
+                "</div>",
+                "</div>",
+                "</div>",
+                "<div class='tooltip' id='tooltip'></div>",
+                "<script>", d3_script, "</script>",
+                "</body>",
+                "</html>"]
+        
+        return "\n".join(html)

@@ -906,3 +906,84 @@ def reload_config() -> None:
         # Update the global config
         _config = new_config
         logger.info("Configuration reloaded from all sources")
+
+
+def update_config(key: str, value: Any, source: str = "cli") -> None:
+    """Update a configuration value.
+    
+    Args:
+        key: Configuration key (can use dot notation for nested values)
+        value: New value to set
+        source: Source identifier for tracking
+    
+    Raises:
+        ValueError: If the key format is invalid
+    """
+    config = get_config()
+    
+    if not key:
+        raise ValueError("Configuration key cannot be empty")
+    
+    result = config.set(key, value, source)
+    
+    if not result:
+        raise ValueError(f"Failed to update configuration key: {key}")
+    
+    logger.info(f"Updated configuration: {key} = {value}")
+
+
+def save_config(file_path: Optional[Union[str, Path]] = None) -> None:
+    """Save the current configuration to a file.
+    
+    Args:
+        file_path: Path to save the configuration file (defaults to ~/.skwaq/config.json)
+    """
+    config = get_config()
+    
+    if file_path is None:
+        # Use default configuration path
+        file_path = Path.home() / ".skwaq" / "config.json"
+    
+    file_path = Path(file_path)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    config.save_to_file(file_path)
+    
+    # Register or update file config source
+    for source in _config_sources:
+        if isinstance(source, FileConfigSource) and source.file_path == file_path:
+            break
+    else:
+        # File source not found, register it
+        register_config_source(FileConfigSource(file_path, auto_reload=True))
+    
+    logger.info(f"Saved configuration to: {file_path}")
+
+
+def reset_config() -> None:
+    """Reset configuration to defaults and remove all custom settings."""
+    global _config, _config_sources
+    
+    with _config_lock:
+        # Create a new default configuration
+        default_config = Config(
+            openai_api_key="",
+            openai_org_id="",
+        )
+        
+        # Update the global config
+        _config = default_config
+        
+        # Remove all file sources
+        _config_sources = [s for s in _config_sources if not isinstance(s, FileConfigSource)]
+        
+        # Delete user config file if it exists
+        config_path = Path.home() / ".skwaq" / "config.json"
+        if config_path.exists():
+            try:
+                config_path.unlink()
+                logger.info(f"Deleted configuration file: {config_path}")
+            except Exception as e:
+                logger.warning(f"Failed to delete configuration file: {e}")
+        
+        logger.info("Configuration reset to defaults")

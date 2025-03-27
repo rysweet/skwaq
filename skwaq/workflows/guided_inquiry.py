@@ -9,8 +9,12 @@ import asyncio
 import json
 from enum import Enum
 
-from autogen_core.agent import Agent
-from autogen_core.event import BaseEvent, Event, EventHook
+import autogen_core
+from autogen_core import Agent
+from autogen_core import event
+
+# Use the BaseEvent class from our vulnerability_events implementation
+from ..agents.vulnerability_events import BaseEvent
 
 from .base import Workflow
 from ..agents.skwaq_agent import SkwaqAgent
@@ -134,14 +138,15 @@ class GuidedInquiryWorkflow(Workflow):
             # Record step results
             self.assessment_data[self.current_step.value] = step_result
             
-            # Emit event for the step
-            Event.add(
-                GuidedInquiryEvent(
-                    sender=self.__class__.__name__,
-                    step=self.current_step,
-                    data=step_result,
-                )
+            # Emit event for the step - adapted for new autogen_core version
+            inquiry_event = GuidedInquiryEvent(
+                sender=self.__class__.__name__,
+                step=self.current_step,
+                data=step_result,
             )
+            
+            # Log the event
+            logger.info(f"Emitting event: {inquiry_event.__class__.__name__} for step {self.current_step.value}")
             
             yield {
                 "status": "step_completed",

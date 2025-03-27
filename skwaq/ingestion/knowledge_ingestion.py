@@ -597,6 +597,60 @@ async def ingest_cve_data(
         raise
 
 
+@LogEvent("knowledge_ingestion")
+async def ingest_knowledge_source(
+    source_path: str,
+    recursive: bool = True,
+    file_extensions: List[str] = [".md", ".txt"],
+    extract_vulnerability_patterns: bool = True,
+) -> Dict[str, Any]:
+    """Ingest a knowledge source into the knowledge graph.
+    
+    This function serves as a wrapper that detects whether the source is a directory
+    or a single file and calls the appropriate ingestion function.
+
+    Args:
+        source_path: Path to the knowledge source (file or directory)
+        recursive: Whether to recursively process subdirectories (if source is a directory)
+        file_extensions: List of file extensions to process
+        extract_vulnerability_patterns: Whether to extract vulnerability patterns
+
+    Returns:
+        Dictionary with ingestion statistics
+    """
+    path = Path(source_path)
+    
+    if not path.exists():
+        raise FileNotFoundError(f"Source not found: {source_path}")
+    
+    # Check if source is a file or directory
+    if path.is_file():
+        # Process a single file
+        document_info = await ingest_markdown_document(
+            str(path),
+            document_type="general",
+            tags=[path.parent.name.lower()],
+            extract_vulnerability_patterns=extract_vulnerability_patterns,
+        )
+        
+        return {
+            "source_name": path.name,
+            "document_count": 1,
+            "successful": 1,
+            "failed": 0,
+            "sections": document_info.get("sections", 0),
+            "documents": [document_info],
+        }
+    
+    # Process directory
+    return await ingest_knowledge_directory(
+        source_path,
+        recursive=recursive,
+        file_extensions=file_extensions,
+        extract_vulnerability_patterns=extract_vulnerability_patterns,
+    )
+
+
 @LogEvent("directory_ingestion")
 async def ingest_knowledge_directory(
     directory_path: str,

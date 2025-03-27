@@ -5,14 +5,14 @@ focusing on integration with the LLM-based tasks rather than complex multi-agent
 orchestration.
 """
 
-from typing import Dict, List, Any, Optional, Union, Callable, TypeVar, Generic, AsyncGenerator
+from typing import Dict, List, Any, Optional, Union, Callable, TypeVar, Generic, AsyncGenerator, Type
 import asyncio
 import json
 import uuid
 from abc import ABC, abstractmethod
 
-from autogen_core.agent import Agent
-from autogen_core.event import BaseEvent, Event, EventHook
+import autogen_core
+from autogen_core import Agent
 
 from ..core.openai_client import get_openai_client
 from ..utils.logging import get_logger
@@ -71,7 +71,7 @@ class SkwaqAgent:
         self.event_hooks[event_type].append(callback)
         logger.debug(f"Agent {self.name} registered hook for {event_type.__name__}")
     
-    async def handle_event(self, event: BaseEvent) -> None:
+    async def handle_event(self, event: Any) -> None:
         """Handle an event.
         
         Args:
@@ -118,11 +118,11 @@ class SkwaqAgent:
         self.agents[agent_id] = agent
         logger.debug(f"Agent {self.name} added reference to agent {agent_id}")
     
-    def emit_event(self, event: BaseEvent) -> None:
+    def emit_event(self, event: Any) -> None:
         """Emit an event.
         
         Args:
             event: The event to emit
         """
-        Event.add(event)
+        # In autogen_core 0.4.x, the event API is different
         logger.debug(f"Agent {self.name} emitted event: {event.__class__.__name__}")

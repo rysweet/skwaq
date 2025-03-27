@@ -5,7 +5,8 @@ specific to the Skwaq vulnerability assessment copilot.
 
 from typing import Dict, List, Optional, Union
 import json
-import autogen_core as autogen
+# Import autogen_core directly
+import autogen_core
 from ..utils.config import Config, get_config
 from ..utils.logging import get_logger
 
@@ -176,7 +177,7 @@ class OpenAIClient:
             The generated completion text
         """
         messages = [{"role": "user", "content": prompt}]
-        chat_client = autogen.core.ChatCompletionClient(
+        chat_client = autogen_core.ChatCompletionClient(
             config_list=self.config_list, is_async=True
         )
         response = await chat_client.generate(
@@ -206,7 +207,7 @@ class OpenAIClient:
 
         results = []
         for text in texts:
-            response = await autogen.core.embeddings(
+            response = await autogen_core.embeddings(
                 input=[text], is_async=True, config_list=[embeddings_config]
             )
             if response and response.get("data"):
@@ -293,3 +294,32 @@ def reset_client_registry() -> None:
     """
     global _client_registry
     _client_registry.clear()
+    
+    
+async def test_openai_connection() -> bool:
+    """Test the connection to the OpenAI API.
+    
+    This function attempts to make a simple API call to test if the
+    OpenAI configuration is correct and the connection works.
+    
+    Returns:
+        True if connection is successful, False otherwise
+    """
+    try:
+        client = get_openai_client(async_mode=True)
+        
+        # Make a minimal API call to test connection
+        test_prompt = "Return only the word 'OK' if you can see this message."
+        response = await client.get_completion(test_prompt, temperature=0.0)
+        
+        # Check if we got a reasonable response
+        if response and "OK" in response:
+            logger.info("OpenAI API connection test successful")
+            return True
+        else:
+            logger.warning(f"OpenAI API responded but with unexpected content: {response[:100]}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"OpenAI API connection test failed: {e}")
+        return False

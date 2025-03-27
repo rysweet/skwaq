@@ -8,7 +8,7 @@ import sys
 # This will suppress warnings from blarify_integration during CLI startup
 logging.getLogger("skwaq.code_analysis.blarify_integration").setLevel(logging.ERROR)
 
-from skwaq.cli.main import main
+from skwaq.cli.main import run
 from skwaq.utils.logging import setup_logging
 
 if __name__ == "__main__":
@@ -18,5 +18,5 @@ if __name__ == "__main__":
     # Keep blarify integration warnings at ERROR level to avoid spamming users
     logging.getLogger("skwaq.code_analysis.blarify_integration").setLevel(logging.ERROR)
     
-    # Run the main CLI function
-    sys.exit(main())
+    # Run the main CLI function (run() handles the async execution)
+    run()

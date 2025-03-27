@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Investigation Graph: inv-46dac8c5</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        .links line {
+            stroke: #999;
+            stroke-opacity: 0.6;
+        }
+        .nodes circle {
+            stroke: #fff;
+            stroke-width: 1.5px;
+        }
+        .node-labels {
+            font-size: 10px;
+        }
+        .investigation { fill: #3498db; }
+        .repository { fill: #2ecc71; }
+        .finding { fill: #e74c3c; }
+        .vulnerability { fill: #9b59b6; }
+        .file { fill: #f39c12; }
+        
+        .tooltip {
+            position: absolute;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 10px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            max-width: 300px;
+            overflow-wrap: break-word;
+        }
+        .controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        .title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .legend {
+            display: flex;
+            flex-direction: column;
+            margin-top: 10px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 3px;
+        }
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <div class="title">Investigation Graph: inv-46dac8c5</div>
+        <div>
+            <label for="zoom-slider">Zoom: </label>
+            <input type="range" id="zoom-slider" min="0.1" max="2" step="0.1" value="1">
+        </div>
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color investigation"></div>
+                <div>Investigation</div>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color repository"></div>
+                <div>Repository</div>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color finding"></div>
+                <div>Finding</div>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color vulnerability"></div>
+                <div>Vulnerability</div>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color file"></div>
+                <div>File</div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="tooltip" class="tooltip"></div>
+    
+    <script>
+        // Example graph data
+        const graphData = {
+            "nodes": [
+                {
+                    "id": "i-123",
+                    "label": "Investigation",
+                    "type": "investigation",
+                    "properties": {
+                        "id": "inv-46dac8c5",
+                        "workflow_id": "vr-87d9a012",
+                        "created_at": "2023-01-01T12:00:00Z",
+                        "updated_at": "2023-01-02T15:30:00Z"
+                    }
+                },
+                {
+                    "id": "r-456",
+                    "label": "Repository",
+                    "type": "repository",
+                    "properties": {
+                        "name": "example/repo",
+                        "url": "https://github.com/example/repo",
+                        "description": "Example repository for visualization"
+                    }
+                },
+                {
+                    "id": "f-1",
+                    "label": "Finding",
+                    "type": "finding",
+                    "properties": {
+                        "type": "SQL Injection",
+                        "severity": "High",
+                        "confidence": 0.85,
+                        "description": "Potential SQL injection vulnerability in query construction",
+                        "file_path": "src/db/query.py"
+                    }
+                },
+                {
+                    "id": "f-2",
+                    "label": "Finding",
+                    "type": "finding",
+                    "properties": {
+                        "type": "Cross-Site Scripting (XSS)",
+                        "severity": "Medium",
+                        "confidence": 0.75,
+                        "description": "Unfiltered user input rendered in HTML template",
+                        "file_path": "src/templates/user.html"
+                    }
+                },
+                {
+                    "id": "f-3",
+                    "label": "Finding",
+                    "type": "finding",
+                    "properties": {
+                        "type": "Insecure Deserialization",
+                        "severity": "Critical",
+                        "confidence": 0.9,
+                        "description": "Use of pickle.loads with untrusted data",
+                        "file_path": "src/util/serialization.py"
+                    }
+                },
+                {
+                    "id": "v-1",
+                    "label": "Vulnerability",
+                    "type": "vulnerability",
+                    "properties": {
+                        "type": "SQL Injection",
+                        "severity": "High",
+                        "cwe_id": "CWE-89",
+                        "description": "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+                    }
+                },
+                {
+                    "id": "v-2",
+                    "label": "Vulnerability",
+                    "type": "vulnerability",
+                    "properties": {
+                        "type": "Cross-Site Scripting",
+                        "severity": "Medium",
+                        "cwe_id": "CWE-79",
+                        "description": "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+                    }
+                },
+                {
+                    "id": "v-3",
+                    "label": "Vulnerability",
+                    "type": "vulnerability",
+                    "properties": {
+                        "type": "Insecure Deserialization",
+                        "severity": "Critical",
+                        "cwe_id": "CWE-502",
+                        "description": "Deserialization of Untrusted Data"
+                    }
+                },
+                {
+                    "id": "file-1",
+                    "label": "File",
+                    "type": "file",
+                    "properties": {
+                        "path": "src/db/query.py",
+                        "name": "query.py",
+                        "language": "python"
+                    }
+                },
+                {
+                    "id": "file-2",
+                    "label": "File",
+                    "type": "file",
+                    "properties": {
+                        "path": "src/templates/user.html",
+                        "name": "user.html",
+                        "language": "html"
+                    }
+                },
+                {
+                    "id": "file-3",
+                    "label": "File",
+                    "type": "file",
+                    "properties": {
+                        "path": "src/util/serialization.py",
+                        "name": "serialization.py",
+                        "language": "python"
+                    }
+                }
+            ],
+            "links": [
+                {
+                    "source": "i-123",
+                    "target": "r-456",
+                    "type": "ANALYZES"
+                },
+                {
+                    "source": "i-123",
+                    "target": "f-1",
+                    "type": "HAS_FINDING"
+                },
+                {
+                    "source": "i-123",
+                    "target": "f-2",
+                    "type": "HAS_FINDING"
+                },
+                {
+                    "source": "i-123",
+                    "target": "f-3",
+                    "type": "HAS_FINDING"
+                },
+                {
+                    "source": "f-1",
+                    "target": "v-1",
+                    "type": "IDENTIFIES"
+                },
+                {
+                    "source": "f-2",
+                    "target": "v-2",
+                    "type": "IDENTIFIES"
+                },
+                {
+                    "source": "f-3",
+                    "target": "v-3",
+                    "type": "IDENTIFIES"
+                },
+                {
+                    "source": "f-1",
+                    "target": "file-1",
+                    "type": "FOUND_IN"
+                },
+                {
+                    "source": "f-2",
+                    "target": "file-2",
+                    "type": "FOUND_IN"
+                },
+                {
+                    "source": "f-3",
+                    "target": "file-3",
+                    "type": "FOUND_IN"
+                }
+            ]
+        };
+        
+        // Set up the SVG
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        
+        const svg = d3.select("body")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
+            
+        // Create a zoom behavior
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 10])
+            .on("zoom", (event) => {
+                container.attr("transform", event.transform);
+            });
+            
+        // Apply zoom to SVG
+        svg.call(zoom);
+        
+        // Container for the graph that will be zoomed
+        const container = svg.append("g");
+        
+        // Tooltip element
+        const tooltip = d3.select("#tooltip");
+        
+        // Create a force simulation
+        const simulation = d3.forceSimulation(graphData.nodes)
+            .force("link", d3.forceLink(graphData.links)
+                .id(d => d.id)
+                .distance(100))
+            .force("charge", d3.forceManyBody().strength(-300))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collide", d3.forceCollide(30));
+        
+        // Create links
+        const link = container.append("g")
+            .attr("class", "links")
+            .selectAll("line")
+            .data(graphData.links)
+            .enter()
+            .append("line")
+            .attr("stroke-width", 1);
+        
+        // Create nodes
+        const node = container.append("g")
+            .attr("class", "nodes")
+            .selectAll("circle")
+            .data(graphData.nodes)
+            .enter()
+            .append("circle")
+            .attr("r", d => getNodeSize(d))
+            .attr("class", d => d.type)
+            .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended));
+        
+        // Node labels
+        const label = container.append("g")
+            .attr("class", "node-labels")
+            .selectAll("text")
+            .data(graphData.nodes)
+            .enter()
+            .append("text")
+            .text(d => getNodeLabel(d))
+            .attr("dx", 12)
+            .attr("dy", ".35em");
+        
+        // Node hover interactions
+        node.on("mouseover", function(event, d) {
+            const tooltip_html = formatTooltip(d);
+            tooltip.html(tooltip_html)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 10) + "px")
+                .style("opacity", 1);
+        })
+        .on("mouseout", function() {
+            tooltip.style("opacity", 0);
+        });
+        
+        // Handle zoom slider
+        d3.select("#zoom-slider").on("input", function() {
+            const scale = +this.value;
+            svg.call(zoom.transform, d3.zoomIdentity.scale(scale));
+        });
+        
+        // Update positions on each simulation tick
+        simulation.on("tick", () => {
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+            
+            node
+                .attr("cx", d => d.x)
+                .attr("cy", d => d.y);
+            
+            label
+                .attr("x", d => d.x)
+                .attr("y", d => d.y);
+        });
+        
+        // Helper functions
+        function getNodeSize(node) {
+            switch(node.type) {
+                case 'investigation': return 15;
+                case 'repository': return 12;
+                case 'finding': 
+                    // Size based on severity
+                    if (node.properties && node.properties.severity) {
+                        if (node.properties.severity.toLowerCase() === 'critical') return 10;
+                        if (node.properties.severity.toLowerCase() === 'high') return 8;
+                        if (node.properties.severity.toLowerCase() === 'medium') return 6;
+                        if (node.properties.severity.toLowerCase() === 'low') return 5;
+                    }
+                    return 6;
+                case 'vulnerability': return 7;
+                case 'file': return 5;
+                default: return 5;
+            }
+        }
+        
+        function getNodeLabel(node) {
+            switch(node.type) {
+                case 'investigation': return 'Investigation';
+                case 'repository': 
+                    return node.properties && node.properties.name ? node.properties.name : 'Repository';
+                case 'finding': 
+                    return node.properties && node.properties.type ? node.properties.type : 'Finding';
+                case 'vulnerability': 
+                    return node.properties && node.properties.cwe_id ? node.properties.cwe_id : 'Vulnerability';
+                case 'file': 
+                    return node.properties && node.properties.name ? node.properties.name : 'File';
+                default: return node.label || 'Node';
+            }
+        }
+        
+        function formatTooltip(node) {
+            let html = `<strong>${node.label || 'Node'}</strong><br>`;
+            
+            if (node.properties) {
+                for (const [key, value] of Object.entries(node.properties)) {
+                    if (value && key !== 'description' && key !== 'remediation') {
+                        html += `<strong>${key}:</strong> ${value}<br>`;
+                    }
+                }
+                
+                if (node.properties.description) {
+                    html += `<br><strong>Description:</strong><br>${node.properties.description.substring(0, 200)}`;
+                    if (node.properties.description.length > 200) html += '...';
+                }
+            }
+            
+            return html;
+        }
+        
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+        
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+        
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+    </script>
+</body>
+</html>

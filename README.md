@@ -58,6 +58,12 @@ skwaq gui
 
 # Start the GUI with a custom port for the backend
 skwaq gui --port 8000
+
+# Export investigation findings
+skwaq investigations export --id inv-12345 --format markdown
+
+# Visualize investigation graph
+skwaq investigations visualize --id inv-12345 --format html
 ```
 
 ## Architecture

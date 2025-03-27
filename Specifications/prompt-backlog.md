@@ -12,16 +12,7 @@ How many steps remain in the ImplementationPlan.md?
 
 Please provide the current status of the ImplementationPlan.md and the number of steps remaining.
 
-Let's create a comprehensive demonstration of all the CLI features implemented for the W1 milestone. The demonstration should include:
-1. The version command
-2. The repository commands
-3. The analyze command with various options (including interactive mode)
-4. The investigations commands (list, export, delete)
-5. Examples of error handling and validation
-6. Examples of progress visualization
-7. Examples of interactive prompts
-
-Please run each command with detailed explanation of what it does, what options are available, and how the output should be interpreted. This will serve as documentation for our CLI implementation.
+Let's create a comprehensive demonstration of all the CLI features implemented. The demonstration should include all the commands available in the CLI, including their options and expected outputs. It should be structured in a way that allows users to easily understand how to use each command and what the expected results are. The demonstration can be considered a tutorial for users to learn how to use the CLI effectively. after running the demonstration, create a doc file that includes the demonstration and the expected outputs. 
 
 We are going to add a new feature to the codebase. The feature is described in the GraphicalUserInterface.md file. Ask any questions necessary to clarify the requirements and then update the file with the answers to the questions.  Then we need to update the ImplemenationPlan.md to include the new feature.  The new feature is a graphical user interface (GUI) for the Vulnerability Assessment Copilot. The GUI will provide a user-friendly way to interact with the copilot, allowing users to easily start investigations, visualize graphs, view results, and manage their vulnerability assessments. Once we have the new feature in the ImplementationPlan.md, we will move on to the next step in the plan.
 
@@ -32,7 +23,7 @@ necessary or no longer relevant and remove them. We also need to ensure that all
 
 We are going to add a new feature to the codebase. We want to be able to expose the neo4j graph database as an MCP service. 
 
-Before you are finished make sure that you have added unit tests for all new funcitonality. Make sure you remove any deprecated functionality. If new code is replacing previous placeholders remove the old placeholders. document all new functionality. When you are finished, update the end to end CLI demo / tests in order to make sure that all new functionality is included. Ensure that all dependencies get installed. 
+Before you are finished make sure that you have added unit tests for all new functionality. Make sure you remove any deprecated functionality. If new code is replacing previous placeholders remove the old placeholders. document all new functionality. When you are finished, update the end to end CLI demo / tests in order to make sure that all new functionality is included. Ensure that all dependencies get installed. 
 
 We are going to add a new feature: as a user of the CLI, I want to be able to export a visualization of the Investigation graph in a format that can be easily shared with others, so that I can communicate my findings effectively.
 
@@ -42,3 +33,5 @@ We want to add a demo mode to the CLI which walks through the CLI commands and d
 - A guided tour of the CLI commands
 - Examples of how to use each command
 - Runs the commands against the eShop repository
+
+We want to analyze files across the project to see which are too large/too big for your token window These are good candidates for refactoring into smaller modules. I'd like to be strict about separation of concerns and single responsibility principle. Analyze the project and identify files that are too large or have too many functions. Think careully about how to refactor the code to make it more modular and easier to understand and test. then refactor the code accordingly. Make sure that you then also refactor the related tests and ensure that all tests are still passing. 

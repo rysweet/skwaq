@@ -486,6 +486,60 @@ async def ingest_cwe_database(xml_file_path: str) -> Dict[str, Any]:
     return await processor.ingest_cwe_xml(xml_file_path)
 
 
+@LogEvent("cve_source_ingestion")
+async def ingest_cve_source(source_path: str) -> Dict[str, Any]:
+    """Ingest a CVE/CWE source into the knowledge graph.
+    
+    This function serves as a wrapper that detects the file type (XML for CWE, JSON for CVE)
+    and calls the appropriate ingestion function.
+
+    Args:
+        source_path: Path to the CVE/CWE source file
+
+    Returns:
+        Dictionary with ingestion statistics
+    """
+    path = Path(source_path)
+    
+    if not path.exists() or not path.is_file():
+        raise FileNotFoundError(f"Source file not found: {source_path}")
+    
+    # Determine file type based on extension
+    file_extension = path.suffix.lower()
+    
+    try:
+        # Process based on file type
+        if file_extension == ".xml":
+            # Assume this is a CWE XML file
+            result = await ingest_cwe_database(str(path))
+            return {
+                "source_name": path.name,
+                "entry_count": result.get("processed_cwes", 0),
+                "type": "CWE",
+                "categories": result.get("categories", 0),
+                "relationships": result.get("relationships", 0),
+            }
+        
+        elif file_extension == ".json":
+            # Assume this is a CVE JSON file
+            from ..ingestion.knowledge_ingestion import ingest_cve_data
+            result = await ingest_cve_data(str(path))
+            return {
+                "source_name": path.name,
+                "entry_count": result.get("processed_count", 0),
+                "type": "CVE",
+                "failed_count": result.get("failed_count", 0),
+                "cwe_links": result.get("cwe_links", 0),
+            }
+        
+        else:
+            raise ValueError(f"Unsupported file type: {file_extension}. Expected .xml (CWE) or .json (CVE).")
+    
+    except Exception as e:
+        logger.error(f"Error ingesting {path.name}: {e}")
+        raise
+
+
 async def download_cwe_database(output_path: str) -> str:
     """Download the latest CWE database XML file.
 
