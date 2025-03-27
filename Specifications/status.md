@@ -9,6 +9,7 @@ The Azure AI Configuration Enhancement milestone (E1) focuses on improving the f
 - [x] Enhanced Azure OpenAI configuration
   - Added support for Microsoft Entra ID authentication
   - Maintained compatibility with API Key authentication
+  - Implemented bearer token authentication with DefaultAzureCredential
   - Created flexible authentication method switching
   - Implemented secure credential storage
 
@@ -20,9 +21,16 @@ The Azure AI Configuration Enhancement milestone (E1) focuses on improving the f
 
 - [x] Interactive configuration
   - Implemented CLI configuration prompting
-  - Added GUI configuration dialog with both API Key and Entra ID authentication options
+  - Added GUI configuration dialog with multiple authentication options
   - Created secure configuration storage with .env file support
   - Added configuration testing functionality for both CLI and GUI
+  - Added automatic configuration checking before command execution
+
+- [x] CLI Improvements
+  - Renamed CLI entry point from skwaq_cli.py to just "skwaq"
+  - Created proper Python module entry point with __main__.py
+  - Updated all deployment documentation references
+  - Updated Dockerfile to use new module entry point
 
 - [x] Documentation and templates
   - Created comprehensive configuration documentation
@@ -31,11 +39,13 @@ The Azure AI Configuration Enhancement milestone (E1) focuses on improving the f
   - Created troubleshooting guide for configuration issues
 
 Key Features Implemented:
-- Dual authentication methods (API Key and Entra ID)
+- Triple authentication methods (API Key, Entra ID with client credentials, and Bearer Token)
 - Multi-source configuration with fallbacks (environment variables, .env files, config files)
 - Interactive configuration prompting in both CLI and GUI
 - Secure credential storage with options for hiding sensitive values
-- Comprehensive documentation and examples with .env.template
+- Simplified CLI command with proper Python module entry point
+- Automatic configuration checking before command execution
+- Comprehensive documentation and examples
 
 ## Previous Milestone: G3 - Advanced Visualization and Interactivity
 
