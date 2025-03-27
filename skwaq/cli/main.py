@@ -50,7 +50,7 @@ def print_banner() -> None:
         Panel(banner, border_style="blue", title="[bold cyan]Skwaq[/bold cyan]")
     )
     console.print(
-        "[dim]'Raven' - A clever digital assistant for uncovering security vulnerabilities[/dim]"
+        "[dim]'skwaq (Lushootseed for Raven)' - A clever digital assistant for uncovering security vulnerabilities[/dim]"
     )
     console.print()
     
@@ -111,7 +111,7 @@ def prompt_for_openai_config() -> Dict[str, Any]:
     config["openai"]["endpoint"] = endpoint
     
     api_version = Prompt.ask("Enter the Azure OpenAI API version", 
-                            default="2023-05-15")
+                            default="2025-03-01-preview")
     config["openai"]["api_version"] = api_version
     
     # Authentication-specific configuration
@@ -292,9 +292,9 @@ def cmd_config(args: argparse.Namespace) -> None:
         console.print("[yellow]Full configuration editing not implemented yet. Use --configure-openai to update Azure OpenAI settings.[/yellow]")
 
 
-def cmd_init(args: argparse.Namespace) -> None:
-    """Initialize the Skwaq environment."""
-    console.print("[bold]Initializing Skwaq environment...[/bold]")
+def cmd_check_config(args: argparse.Namespace) -> None:
+    """Check and configure the Skwaq environment."""
+    console.print("[bold]Checking Skwaq configuration...[/bold]")
     config = get_config()
     
     # Check Neo4j connection
@@ -361,18 +361,18 @@ def cmd_init(args: argparse.Namespace) -> None:
                 except Exception as e:
                     console.print(f"[red]Azure OpenAI connection still failed with new configuration: {e}[/red]")
                     console.print("Please check your Azure OpenAI settings and try again.")
-                    if not Confirm.ask("Continue with initialization anyway?", default=False):
+                    if not Confirm.ask("Continue without Azure OpenAI configuration?", default=False):
                         return
             else:
                 console.print("[yellow]OpenAI configuration process was cancelled or failed.[/yellow]")
-                if not Confirm.ask("Continue with initialization anyway?", default=False):
+                if not Confirm.ask("Continue without Azure OpenAI configuration?", default=False):
                     return
         else:
             console.print("[yellow]Skipping Azure OpenAI configuration.[/yellow]")
-            if not Confirm.ask("Continue with initialization anyway?", default=False):
+            if not Confirm.ask("Continue without Azure OpenAI configuration?", default=False):
                 return
 
-    console.print("\n[bold green]Initialization complete![/bold green]")
+    console.print("\n[bold green]Configuration check complete![/bold green]")
 
 
 def cmd_ingest(args: argparse.Namespace) -> None:
@@ -1522,9 +1522,9 @@ def create_parser() -> argparse.ArgumentParser:
     )
     config_parser.set_defaults(func=cmd_config)
 
-    # Init command
-    init_parser = subparsers.add_parser("init", help="Initialize the Skwaq environment")
-    init_parser.set_defaults(func=cmd_init)
+    # Check config command 
+    check_config_parser = subparsers.add_parser("check-config", help="Check and configure the Skwaq environment")
+    check_config_parser.set_defaults(func=cmd_check_config)
 
     # Analyze command
     analyze_parser = subparsers.add_parser(
@@ -1765,75 +1765,11 @@ def main() -> int:
         parser.print_help()
         return 0
         
-    # Special handling: if this is not the config or version command, check OpenAI configuration
-    if args.command not in ["config", "version", "init"] and not args.debug:
-        try:
-            # Check if OpenAI client can be initialized
-            from skwaq.core.openai_client import get_openai_client
-            config = get_config()
-            
-            # Check if configuration is complete
-            is_config_incomplete = False
-            
-            # For Azure OpenAI, we need endpoint
-            if "openai" not in config.to_dict() or "endpoint" not in config.openai:
-                is_config_incomplete = True
-                console.print("[yellow]Azure OpenAI endpoint is not configured.[/yellow]")
-            
-            # Check if we have authentication configured
-            if config.get("openai", {}).get("use_entra_id", False):
-                # Entra ID authentication
-                # For bearer token, we just need auth_method
-                if config.get("openai", {}).get("auth_method") != "bearer_token":
-                    # For client credentials, we need tenant_id and client_id
-                    if "tenant_id" not in config.openai or "client_id" not in config.openai:
-                        is_config_incomplete = True
-                        console.print("[yellow]Azure OpenAI Entra ID credentials are incomplete.[/yellow]")
-            elif not config.openai_api_key:
-                # API Key authentication requires an API key
-                is_config_incomplete = True
-                console.print("[yellow]Azure OpenAI API key is not configured.[/yellow]")
-
-            # Prompt for configuration if incomplete
-            if is_config_incomplete:
-                raise ValueError("Incomplete Azure OpenAI configuration")
-            
-            # If we get here, try to initialize the client
-            get_openai_client(config)
-        except Exception as e:
-            # If not, prompt for configuration but only if it's an interactive terminal
-            if sys.stdout.isatty():
-                console.print(f"[yellow]OpenAI configuration issue detected: {e}[/yellow]")
-                if Confirm.ask("Would you like to configure Azure OpenAI settings now?", default=True):
-                    new_config = prompt_for_openai_config()
-                    if new_config:
-                        # Register the new config source
-                        from skwaq.utils.config import register_config_source, EnvConfigSource
-                        register_config_source(EnvConfigSource(name="cli-prompted"))
-                        
-                        # Try initializing the client again with the new configuration
-                        try:
-                            config = get_config()
-                            get_openai_client(config)
-                            console.print("[green]Azure OpenAI configuration updated and connection verified.[/green]")
-                        except Exception as e2:
-                            console.print(f"[red]Error connecting to Azure OpenAI with new configuration: {e2}[/red]")
-                            console.print(
-                                "[yellow]Configuration was saved but couldn't connect. "
-                                "Please check your settings and try again.[/yellow]"
-                            )
-                            return 1
-                    else:
-                        console.print(
-                            "[yellow]OpenAI configuration process was cancelled or failed. "
-                            "Some commands may not work correctly without proper configuration.[/yellow]"
-                        )
-                        return 1
-                else:
-                    console.print(
-                        "[yellow]Continuing without configuring OpenAI. "
-                        "Some commands may not work correctly.[/yellow]"
-                    )
+    # Run check-config automatically before any other command except for a few special cases
+    if args.command not in ["config", "version", "check-config"] and not args.debug:
+        # First run the configuration check
+        check_config_args = argparse.Namespace()
+        cmd_check_config(check_config_args)
     
     # Run the command
     return args.func(args) or 0
