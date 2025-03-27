@@ -7,8 +7,8 @@
   },
   "openai": {
     "api_type": "azure",
-    "api_version": "2023-05-15",
-    "chat_model": "gpt4o",
+    "api_version": "025-03-01-preview",
+    "chat_model": "o1",
     "embedding_model": "text-embedding-ada-002"
   },
   "telemetry": {
