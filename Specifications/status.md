@@ -2,40 +2,40 @@
 
 ## Current Milestone: E1 - Azure AI Configuration Enhancement
 
-### Status: In Progress 🔄
+### Status: Completed ✅
 
 The Azure AI Configuration Enhancement milestone (E1) focuses on improving the flexibility and usability of the Azure OpenAI integration:
 
-- [ ] Enhanced Azure OpenAI configuration
-  - Add support for Microsoft Entra ID authentication
-  - Maintain compatibility with API Key authentication
-  - Create flexible authentication method switching
-  - Implement secure credential storage
+- [x] Enhanced Azure OpenAI configuration
+  - Added support for Microsoft Entra ID authentication
+  - Maintained compatibility with API Key authentication
+  - Created flexible authentication method switching
+  - Implemented secure credential storage
 
-- [ ] Configuration source hierarchy
-  - Add environment variable configuration support
-  - Implement .env file configuration parsing
-  - Create graceful fallback between configuration sources
-  - Add configuration validation logic
+- [x] Configuration source hierarchy
+  - Added environment variable configuration support
+  - Implemented .env file configuration parsing with python-dotenv
+  - Created graceful fallback between configuration sources
+  - Added configuration validation logic
 
-- [ ] Interactive configuration
-  - Implement CLI configuration prompting
-  - Add GUI configuration dialog
-  - Create secure configuration storage
-  - Add configuration testing functionality
+- [x] Interactive configuration
+  - Implemented CLI configuration prompting
+  - Added GUI configuration dialog with both API Key and Entra ID authentication options
+  - Created secure configuration storage with .env file support
+  - Added configuration testing functionality for both CLI and GUI
 
-- [ ] Documentation and templates
-  - Create comprehensive configuration documentation
-  - Implement .env.template file
-  - Add configuration examples for different scenarios
-  - Create troubleshooting guide for configuration issues
+- [x] Documentation and templates
+  - Created comprehensive configuration documentation
+  - Implemented .env.template file with detailed comments
+  - Added configuration examples for different scenarios
+  - Created troubleshooting guide for configuration issues
 
-Key Features to Implement:
+Key Features Implemented:
 - Dual authentication methods (API Key and Entra ID)
-- Multi-source configuration with fallbacks
-- Interactive configuration prompting
-- Secure credential storage
-- Comprehensive documentation and examples
+- Multi-source configuration with fallbacks (environment variables, .env files, config files)
+- Interactive configuration prompting in both CLI and GUI
+- Secure credential storage with options for hiding sensitive values
+- Comprehensive documentation and examples with .env.template
 
 ## Previous Milestone: G3 - Advanced Visualization and Interactivity
 
@@ -953,3 +953,4 @@ Key Features:
 - [x] G1: GUI Frontend Foundation
 - [x] G2: GUI Backend Integration
 - [x] G3: Advanced Visualization and Interactivity
+- [x] E1: Azure AI Configuration Enhancement

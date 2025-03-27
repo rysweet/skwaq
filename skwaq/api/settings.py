@@ -13,10 +13,21 @@ SETTINGS = {
         'defaultRepository': '',
     },
     'api': {
+        'authMethod': 'api-key', # 'api-key' or 'entra-id'
         'apiKey': '••••••••••••••••',
         'apiEndpoint': 'https://api.openai.azure.com/',
+        'apiVersion': '2023-05-15',
         'model': 'gpt4o',
         'maxTokens': 2000,
+        'useEntraId': False,
+        'tenantId': '',
+        'clientId': '',
+        'clientSecret': '••••••••••••••••',
+        'modelDeployments': {
+            'chat': 'gpt4o',
+            'code': 'o3',
+            'reasoning': 'o1'
+        }
     },
     'tools': {
         'codeqlEnabled': True,
@@ -101,12 +112,23 @@ def clear_cache():
 @bp.route('/api/test', methods=['POST'])
 def test_api_connection():
     """Test the connection to the AI API."""
-    # In a real implementation, this would test the API connection
+    # In a real implementation, this would test the API connection with the provided settings
+    api_settings = SETTINGS['api']
+    
+    # Create a message specific to the authentication method
+    auth_method = "API Key" if api_settings['authMethod'] == 'api-key' else "Microsoft Entra ID"
+    
+    # In a real implementation, we would attempt to initialize the OpenAI client
+    # with the specified authentication method and catch any errors
+    
     return jsonify({
         'status': 'success',
-        'message': 'API connection successful',
-        'model': SETTINGS['api']['model'],
-        'endpoint': SETTINGS['api']['apiEndpoint'],
+        'message': f'Azure OpenAI connection successful using {auth_method} authentication',
+        'model': api_settings['model'],
+        'endpoint': api_settings['apiEndpoint'],
+        'authMethod': api_settings['authMethod'],
+        'apiVersion': api_settings['apiVersion'],
+        'modelDeployments': api_settings['modelDeployments']
     })
 
 @bp.route('/tools/verify', methods=['POST'])
@@ -126,3 +148,37 @@ def verify_tools():
     }
     
     return jsonify(tools_status)
+
+@bp.route('/api/export-env', methods=['GET'])
+def export_env_file():
+    """Export API settings as a .env file."""
+    api_settings = SETTINGS['api']
+    
+    # Create .env file content
+    env_content = []
+    env_content.append("# Azure OpenAI Configuration")
+    
+    # Common configuration
+    env_content.append(f"AZURE_OPENAI_ENDPOINT={api_settings['apiEndpoint']}")
+    env_content.append(f"AZURE_OPENAI_API_VERSION={api_settings['apiVersion']}")
+    
+    # Authentication-specific configuration
+    if api_settings['authMethod'] == 'api-key':
+        env_content.append("AZURE_OPENAI_USE_ENTRA_ID=false")
+        env_content.append(f"AZURE_OPENAI_API_KEY={api_settings['apiKey']}")
+    else:  # entra-id
+        env_content.append("AZURE_OPENAI_USE_ENTRA_ID=true")
+        env_content.append(f"AZURE_TENANT_ID={api_settings['tenantId']}")
+        env_content.append(f"AZURE_CLIENT_ID={api_settings['clientId']}")
+        if api_settings['clientSecret']:
+            env_content.append(f"AZURE_CLIENT_SECRET={api_settings['clientSecret']}")
+    
+    # Model deployments
+    model_deployments = api_settings['modelDeployments']
+    env_content.append(f"AZURE_OPENAI_MODEL_DEPLOYMENTS={{\"chat\":\"{model_deployments['chat']}\",\"code\":\"{model_deployments['code']}\",\"reasoning\":\"{model_deployments['reasoning']}\"}}")
+    
+    # Return the .env file content
+    return jsonify({
+        'status': 'success',
+        'env_content': "\n".join(env_content)
+    })

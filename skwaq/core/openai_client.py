@@ -9,6 +9,12 @@ import autogen_core as autogen
 from ..utils.config import Config, get_config
 from ..utils.logging import get_logger
 
+try:
+    from azure.identity import DefaultAzureCredential, ClientSecretCredential
+    HAS_AZURE_IDENTITY = True
+except ImportError:
+    HAS_AZURE_IDENTITY = False
+
 logger = get_logger(__name__)
 
 
@@ -35,33 +41,98 @@ class OpenAIClient:
             async_mode: Whether to use async client. Defaults to False.
         """
         api_type = config.get("openai", {}).get("api_type", "azure").lower()
+        openai_config = config.get("openai", {})
+        use_entra_id = openai_config.get("use_entra_id", False)
+        
+        # Get model configuration
+        model_deployments = openai_config.get("model_deployments", {})
+        default_chat_model = model_deployments.get("chat", "gpt4o")
 
-        # Set up autogen config based on API type
+        # Set up base configuration
+        base_config = {
+            "api_type": api_type,
+            "api_version": openai_config.get("api_version", "2023-05-15"),
+        }
+        
+        # Add API endpoint
         if api_type == "azure":
+            endpoint = openai_config.get("endpoint")
+            if not endpoint:
+                raise ValueError("Azure OpenAI endpoint is required but not provided in configuration")
+            base_config["base_url"] = endpoint
+        
+        # Configure authentication based on method
+        if api_type == "azure" and use_entra_id:
+            if not HAS_AZURE_IDENTITY:
+                raise ImportError(
+                    "The 'azure-identity' package is required for Entra ID authentication. "
+                    "Install it with 'pip install azure-identity'."
+                )
+                
+            # Set up Azure AD authentication
+            logger.info("Using Microsoft Entra ID (Azure AD) authentication for Azure OpenAI")
+            
+            # Create credentials for authentication
+            if "client_id" in openai_config and "tenant_id" in openai_config:
+                tenant_id = openai_config["tenant_id"]
+                client_id = openai_config["client_id"]
+                
+                if "client_secret" in openai_config:
+                    # Use service principal authentication
+                    client_secret = openai_config["client_secret"]
+                    base_config["azure_ad_token_provider"] = ClientSecretCredential(
+                        tenant_id=tenant_id,
+                        client_id=client_id,
+                        client_secret=client_secret
+                    )
+                    logger.info("Using service principal authentication with tenant, client ID and secret")
+                else:
+                    # Use managed identity or default authentication
+                    base_config["azure_ad_token_provider"] = DefaultAzureCredential()
+                    logger.info("Using DefaultAzureCredential (managed identity or environment)")
+            else:
+                # Use default authentication methods
+                base_config["azure_ad_token_provider"] = DefaultAzureCredential()
+                logger.info("Using DefaultAzureCredential (managed identity or environment)")
+            
+            # For Azure AD auth, we don't set api_key
             self.config_list = [
                 {
-                    "model": config.get("openai", {}).get("chat_model", "gpt4o"),
-                    "api_type": "azure",
-                    "api_key": config.openai_api_key,
-                    "api_version": config.get("openai", {}).get(
-                        "api_version", "2023-05-15"
-                    ),
-                    "base_url": config.get("openai", {}).get(
-                        "endpoint", "https://skwaq-openai.openai.azure.com/"
-                    ),
+                    "model": openai_config.get("chat_model", default_chat_model),
+                    **base_config
                 }
             ]
-            self.model = config.get("openai", {}).get("chat_model", "gpt4o")
         else:
-            self.config_list = [
-                {
-                    "model": config.openai_model or "gpt-4-turbo-preview",
-                    "api_key": config.openai_api_key,
-                    "api_type": "openai",
-                }
-            ]
+            # Use API key authentication
+            if not config.openai_api_key:
+                raise ValueError("OpenAI API key is required but not provided in configuration")
+                
+            logger.info("Using API key authentication for OpenAI")
+            
+            if api_type == "azure":
+                self.config_list = [
+                    {
+                        "model": openai_config.get("chat_model", default_chat_model),
+                        "api_key": config.openai_api_key,
+                        **base_config
+                    }
+                ]
+            else:
+                self.config_list = [
+                    {
+                        "model": config.openai_model or "gpt-4-turbo-preview",
+                        "api_key": config.openai_api_key,
+                        "api_type": "openai",
+                    }
+                ]
+        
+        # Set the model based on configuration
+        if api_type == "azure":
+            self.model = openai_config.get("chat_model", default_chat_model)
+        else:
             self.model = config.openai_model or "gpt-4-turbo-preview"
 
+        # Add organization ID if available
         if config.openai_org_id:
             self.config_list[0]["organization"] = config.openai_org_id
 

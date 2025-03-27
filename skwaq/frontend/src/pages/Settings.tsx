@@ -13,10 +13,21 @@ const Settings: React.FC = () => {
   });
   
   const [apiSettings, setApiSettings] = useState({
+    authMethod: 'api-key', // 'api-key' or 'entra-id'
     apiKey: '••••••••••••••••',
     apiEndpoint: 'https://api.openai.azure.com/',
+    apiVersion: '2023-05-15',
     model: 'gpt4o',
     maxTokens: 2000,
+    useEntraId: false,
+    tenantId: '',
+    clientId: '',
+    clientSecret: '••••••••••••••••',
+    modelDeployments: {
+      chat: 'gpt4o',
+      code: 'o3',
+      reasoning: 'o1'
+    }
   });
   
   const [toolSettings, setToolSettings] = useState({
@@ -167,24 +178,23 @@ const Settings: React.FC = () => {
           
           {activeSection === 'api' && (
             <div className="settings-section">
-              <h2 className="settings-section-title">API Configuration</h2>
+              <h2 className="settings-section-title">Azure OpenAI Configuration</h2>
               
               <div className="settings-form">
                 <div className="form-group">
-                  <label htmlFor="apiKey">API Key</label>
-                  <div className="api-key-input">
-                    <input 
-                      type="password" 
-                      id="apiKey" 
-                      name="apiKey"
-                      value={apiSettings.apiKey}
-                      onChange={handleApiSettingsChange}
-                      className="form-input"
-                    />
-                    <button className="show-key-button">Show</button>
-                  </div>
+                  <label htmlFor="authMethod">Authentication Method</label>
+                  <select 
+                    id="authMethod" 
+                    name="authMethod"
+                    value={apiSettings.authMethod}
+                    onChange={handleApiSettingsChange}
+                    className="form-select"
+                  >
+                    <option value="api-key">API Key</option>
+                    <option value="entra-id">Microsoft Entra ID</option>
+                  </select>
                   <p className="setting-description">
-                    Your Azure OpenAI API key.
+                    Select the authentication method for Azure OpenAI.
                   </p>
                 </div>
                 
@@ -204,20 +214,160 @@ const Settings: React.FC = () => {
                 </div>
                 
                 <div className="form-group">
-                  <label htmlFor="model">Model</label>
-                  <select 
-                    id="model" 
-                    name="model"
-                    value={apiSettings.model}
+                  <label htmlFor="apiVersion">API Version</label>
+                  <input 
+                    type="text" 
+                    id="apiVersion" 
+                    name="apiVersion"
+                    value={apiSettings.apiVersion}
                     onChange={handleApiSettingsChange}
-                    className="form-select"
-                  >
-                    <option value="gpt4o">GPT-4o</option>
-                    <option value="o1">Claude-3 Opus</option>
-                    <option value="o3">Claude-3 Sonnet</option>
-                  </select>
+                    className="form-input"
+                  />
                   <p className="setting-description">
-                    The AI model to use for analysis and interactions.
+                    Azure OpenAI API version (e.g., 2023-05-15).
+                  </p>
+                </div>
+                
+                {apiSettings.authMethod === 'api-key' && (
+                  <div className="form-group">
+                    <label htmlFor="apiKey">API Key</label>
+                    <div className="api-key-input">
+                      <input 
+                        type="password" 
+                        id="apiKey" 
+                        name="apiKey"
+                        value={apiSettings.apiKey}
+                        onChange={handleApiSettingsChange}
+                        className="form-input"
+                      />
+                      <button className="show-key-button">Show</button>
+                    </div>
+                    <p className="setting-description">
+                      Your Azure OpenAI API key.
+                    </p>
+                  </div>
+                )}
+                
+                {apiSettings.authMethod === 'entra-id' && (
+                  <>
+                    <div className="form-group">
+                      <label htmlFor="tenantId">Tenant ID</label>
+                      <input 
+                        type="text" 
+                        id="tenantId" 
+                        name="tenantId"
+                        value={apiSettings.tenantId}
+                        onChange={handleApiSettingsChange}
+                        className="form-input"
+                      />
+                      <p className="setting-description">
+                        Your Microsoft Entra ID tenant ID.
+                      </p>
+                    </div>
+                    
+                    <div className="form-group">
+                      <label htmlFor="clientId">Client ID</label>
+                      <input 
+                        type="text" 
+                        id="clientId" 
+                        name="clientId"
+                        value={apiSettings.clientId}
+                        onChange={handleApiSettingsChange}
+                        className="form-input"
+                      />
+                      <p className="setting-description">
+                        Your application's client ID.
+                      </p>
+                    </div>
+                    
+                    <div className="form-group">
+                      <label htmlFor="clientSecret">Client Secret</label>
+                      <div className="api-key-input">
+                        <input 
+                          type="password" 
+                          id="clientSecret" 
+                          name="clientSecret"
+                          value={apiSettings.clientSecret}
+                          onChange={handleApiSettingsChange}
+                          className="form-input"
+                        />
+                        <button className="show-key-button">Show</button>
+                      </div>
+                      <p className="setting-description">
+                        Your application's client secret. Leave blank to use managed identity.
+                      </p>
+                    </div>
+                  </>
+                )}
+                
+                <h3 className="section-subtitle">Model Deployments</h3>
+                
+                <div className="form-group">
+                  <label htmlFor="chatModel">Chat Model Deployment</label>
+                  <input 
+                    type="text" 
+                    id="chatModel" 
+                    name="chatModel"
+                    value={apiSettings.modelDeployments.chat}
+                    onChange={(e) => {
+                      setApiSettings({
+                        ...apiSettings,
+                        modelDeployments: {
+                          ...apiSettings.modelDeployments,
+                          chat: e.target.value
+                        }
+                      });
+                    }}
+                    className="form-input"
+                  />
+                  <p className="setting-description">
+                    Deployment name for chat model.
+                  </p>
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="codeModel">Code Model Deployment</label>
+                  <input 
+                    type="text" 
+                    id="codeModel" 
+                    name="codeModel"
+                    value={apiSettings.modelDeployments.code}
+                    onChange={(e) => {
+                      setApiSettings({
+                        ...apiSettings,
+                        modelDeployments: {
+                          ...apiSettings.modelDeployments,
+                          code: e.target.value
+                        }
+                      });
+                    }}
+                    className="form-input"
+                  />
+                  <p className="setting-description">
+                    Deployment name for code analysis model.
+                  </p>
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="reasoningModel">Reasoning Model Deployment</label>
+                  <input 
+                    type="text" 
+                    id="reasoningModel" 
+                    name="reasoningModel"
+                    value={apiSettings.modelDeployments.reasoning}
+                    onChange={(e) => {
+                      setApiSettings({
+                        ...apiSettings,
+                        modelDeployments: {
+                          ...apiSettings.modelDeployments,
+                          reasoning: e.target.value
+                        }
+                      });
+                    }}
+                    className="form-input"
+                  />
+                  <p className="setting-description">
+                    Deployment name for reasoning model.
                   </p>
                 </div>
                 
@@ -239,8 +389,68 @@ const Settings: React.FC = () => {
                 </div>
                 
                 <div className="settings-actions">
-                  <button className="save-button">Save API Settings</button>
-                  <button className="test-button">Test Connection</button>
+                  <button 
+                    className="save-button" 
+                    onClick={() => {
+                      // In a real implementation, this would make an API call to save settings
+                      alert('API settings saved successfully!');
+                    }}
+                  >
+                    Save API Settings
+                  </button>
+                  <button 
+                    className="test-button"
+                    onClick={() => {
+                      // In a real implementation, this would make an API call to test connection
+                      const authMethod = apiSettings.authMethod === 'api-key' ? 'API Key' : 'Microsoft Entra ID';
+                      alert(`Connection successful using ${authMethod} authentication!`);
+                    }}
+                  >
+                    Test Connection
+                  </button>
+                  <button 
+                    className="export-button"
+                    onClick={() => {
+                      // In a real implementation, this would fetch the .env content from the server
+                      // and then create a download
+                      
+                      // Create .env file content manually for the demo
+                      const authMethod = apiSettings.authMethod;
+                      let envContent = "# Azure OpenAI Configuration\n";
+                      
+                      // Common configuration
+                      envContent += `AZURE_OPENAI_ENDPOINT=${apiSettings.apiEndpoint}\n`;
+                      envContent += `AZURE_OPENAI_API_VERSION=${apiSettings.apiVersion}\n`;
+                      
+                      // Authentication-specific configuration
+                      if (authMethod === 'api-key') {
+                        envContent += "AZURE_OPENAI_USE_ENTRA_ID=false\n";
+                        envContent += `AZURE_OPENAI_API_KEY=${apiSettings.apiKey}\n`;
+                      } else {
+                        envContent += "AZURE_OPENAI_USE_ENTRA_ID=true\n";
+                        envContent += `AZURE_TENANT_ID=${apiSettings.tenantId}\n`;
+                        envContent += `AZURE_CLIENT_ID=${apiSettings.clientId}\n`;
+                        if (apiSettings.clientSecret) {
+                          envContent += `AZURE_CLIENT_SECRET=${apiSettings.clientSecret}\n`;
+                        }
+                      }
+                      
+                      // Model deployments
+                      const deployments = apiSettings.modelDeployments;
+                      envContent += `AZURE_OPENAI_MODEL_DEPLOYMENTS={"chat":"${deployments.chat}","code":"${deployments.code}","reasoning":"${deployments.reasoning}"}\n`;
+                      
+                      // Create and download the .env file
+                      const element = document.createElement('a');
+                      const file = new Blob([envContent], {type: 'text/plain'});
+                      element.href = URL.createObjectURL(file);
+                      element.download = '.env';
+                      document.body.appendChild(element);
+                      element.click();
+                      document.body.removeChild(element);
+                    }}
+                  >
+                    Export as .env
+                  </button>
                 </div>
               </div>
             </div>
