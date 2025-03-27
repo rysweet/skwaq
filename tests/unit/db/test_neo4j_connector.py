@@ -127,6 +127,43 @@ def test_connect_failure(mock_neo4j_driver):
     assert mock_neo4j_driver["driver"].session.call_count == 2
 
 
+def test_is_connected(mock_neo4j_driver):
+    """Test the is_connected method."""
+    connector = Neo4jConnector(
+        uri="bolt://localhost:7687", user="neo4j", password="password"
+    )
+    
+    # Test 1: Already connected
+    connector._connected = True
+    # Reset the session side effect to not raise exceptions
+    mock_neo4j_driver["driver"].session.side_effect = None
+    result = connector.is_connected()
+    assert result is True
+    
+    # Test 2: Not connected but can connect
+    connector._connected = False
+    with mock.patch.object(connector, "connect") as mock_connect:
+        mock_connect.return_value = True
+        result = connector.is_connected()
+        assert result is True
+        mock_connect.assert_called_once_with(max_retries=1, retry_delay=0.5)
+    
+    # Test 3: Not connected and cannot connect
+    connector._connected = False
+    with mock.patch.object(connector, "connect") as mock_connect:
+        mock_connect.return_value = False
+        result = connector.is_connected()
+        assert result is False
+        mock_connect.assert_called_once_with(max_retries=1, retry_delay=0.5)
+    
+    # Test 4: Connected but session fails
+    connector._connected = True
+    mock_neo4j_driver["driver"].session.side_effect = Exception("Test error")
+    result = connector.is_connected()
+    assert result is False
+    assert connector._connected is False  # It should update the flag
+
+
 def test_run_query(mock_neo4j_driver):
     """Test running a Cypher query."""
     connector = Neo4jConnector(

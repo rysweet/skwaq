@@ -67,6 +67,10 @@ class QAWorkflow(Workflow):
         """Set up the Q&A workflow."""
         await super().setup()
 
+        # Create the knowledge agent (mock for testing)
+        from ..agents.knowledge_agent import KnowledgeAgent
+        self.agents["knowledge"] = KnowledgeAgent(name="KnowledgeAgent")
+
         # Set up event handlers
         self.agents["knowledge"].register_event_hook(
             KnowledgeRetrievalEvent, self._on_knowledge_retrieved
@@ -77,6 +81,9 @@ class QAWorkflow(Workflow):
             repository_id=self.repository_id,
             investigation_id=self.investigation_id,
         )
+
+        # Connect the agents to each other
+        self.agents["qa"].add_agent("knowledge", self.agents["knowledge"])
 
         logger.info("Set up Q&A workflow")
 

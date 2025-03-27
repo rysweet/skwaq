@@ -670,6 +670,332 @@ async def handle_repository_command(args: argparse.Namespace) -> None:
         )
 
 
+async def handle_qa_command(args: argparse.Namespace) -> None:
+    """Handle Q&A workflow commands.
+    
+    Args:
+        args: Command line arguments
+    """
+    from ..workflows.qa_workflow import QAWorkflow
+    
+    # Get repository ID if provided
+    repository_id = None
+    if hasattr(args, 'repository_id') and args.repository_id:
+        repository_id = args.repository_id
+    
+    # Initialize the workflow
+    workflow = QAWorkflow(repository_id=repository_id)
+    await workflow.setup()
+    
+    if args.qa_command == "ask":
+        # Single question mode
+        question = args.question
+        
+        with Status("[bold blue]Processing your question...", spinner="dots") as status:
+            async for update in workflow.run(question):
+                if update["status"] == "processing":
+                    status.update(f"[bold blue]{update['message']}")
+                elif update["status"] == "completed":
+                    status.update("[bold green]Answer ready!")
+        
+        # Display the answer in a nice panel
+        console.print(
+            Panel(
+                update["answer"],
+                title=f"[bold cyan]Answer to: {question}[/bold cyan]",
+                border_style="cyan",
+                expand=False,
+            )
+        )
+        
+    elif args.qa_command == "conversation":
+        # Start interactive conversation mode
+        console.print("[bold]Enter your security-related questions below. Type 'exit' to quit.[/bold]")
+        
+        questions = []
+        answers = []
+        
+        while True:
+            # Get question from user
+            question = Prompt.ask("\n[bold cyan]Your question[/bold cyan]")
+            
+            if question.lower() in ["exit", "quit"]:
+                break
+            
+            questions.append(question)
+            
+            # Process question
+            with Status("[bold blue]Processing your question...", spinner="dots") as status:
+                async for update in workflow.run(question):
+                    if update["status"] == "processing":
+                        status.update(f"[bold blue]{update['message']}")
+                    elif update["status"] == "completed":
+                        status.update("[bold green]Answer ready!")
+                        answer = update["answer"]
+                        answers.append(answer)
+            
+            # Display the answer
+            console.print(
+                Panel(
+                    answer,
+                    title=f"[bold cyan]Answer[/bold cyan]",
+                    border_style="cyan",
+                    expand=False,
+                )
+            )
+        
+        if questions:
+            # Save the conversation if requested
+            if Confirm.ask("Would you like to save this conversation?"):
+                filename = Prompt.ask("Enter filename", default="skwaq_conversation.md")
+                
+                # Write conversation to file
+                with open(filename, "w") as f:
+                    f.write(f"# Skwaq Q&A Conversation - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
+                    
+                    for q, a in zip(questions, answers):
+                        f.write(f"## Q: {q}\n\n{a}\n\n---\n\n")
+                
+                console.print(f"[green]Conversation saved to {filename}[/green]")
+
+
+async def handle_guided_inquiry_command(args: argparse.Namespace) -> None:
+    """Handle guided inquiry workflow commands.
+    
+    Args:
+        args: Command line arguments
+    """
+    from ..workflows.guided_inquiry import GuidedInquiryWorkflow, GuidedInquiryStep
+    
+    if not hasattr(args, 'repository_id') or not args.repository_id:
+        console.print("[yellow]Repository ID is required for guided inquiry workflow[/yellow]")
+        return
+    
+    # Initialize the workflow
+    workflow = GuidedInquiryWorkflow(repository_id=args.repository_id)
+    await workflow.setup()
+    
+    # Get repository info
+    from ..db.neo4j_connector import get_connector
+    connector = get_connector()
+    repo_info = connector.run_query(
+        "MATCH (r:Repository) WHERE id(r) = $id RETURN r.name as name",
+        {"id": args.repository_id}
+    )
+    repo_name = repo_info[0]["name"] if repo_info else f"Repository {args.repository_id}"
+    
+    # Start guided inquiry
+    console.print(f"[bold]Starting guided vulnerability assessment for [cyan]{repo_name}[/cyan][/bold]")
+    
+    # Create a progress grid
+    step_names = [step.value for step in GuidedInquiryStep]
+    current_step_idx = 0
+    
+    # Display workflow steps
+    table = Table(title="[bold]Guided Assessment Workflow[/bold]")
+    table.add_column("Step", style="cyan")
+    table.add_column("Status", style="yellow")
+    
+    for i, step in enumerate(step_names):
+        status = "[bold cyan]Current[/bold cyan]" if i == current_step_idx else "Pending"
+        table.add_row(step.replace("_", " ").title(), status)
+    
+    console.print(table)
+    console.print()
+    
+    # Run the workflow
+    try:
+        async for update in workflow.run():
+            if update["status"] == "step_completed":
+                # Update step progress
+                current_step_idx += 1
+                
+                # Display completed step info
+                step_name = update["step"].replace("_", " ").title()
+                console.print(f"[bold green]✓ Completed: {step_name}[/bold green]")
+                
+                # Show step data summary based on step type
+                if "data" in update:
+                    if update["step"] == GuidedInquiryStep.INITIAL_ASSESSMENT.value:
+                        console.print(
+                            Panel(
+                                update["data"]["assessment"]["general_assessment"],
+                                title="[bold]Initial Assessment[/bold]",
+                                border_style="blue"
+                            )
+                        )
+                    elif update["step"] == GuidedInquiryStep.VULNERABILITY_DISCOVERY.value:
+                        console.print(
+                            Panel(
+                                f"Found {update['data']['findings_count']} potential vulnerabilities",
+                                title="[bold]Vulnerability Discovery[/bold]",
+                                border_style="blue"
+                            )
+                        )
+                    elif update["step"] == GuidedInquiryStep.FINAL_REPORT.value:
+                        console.print(
+                            Panel(
+                                update["data"]["report"]["executive_summary"],
+                                title="[bold]Final Report Summary[/bold]",
+                                border_style="blue"
+                            )
+                        )
+                
+                # Ask user if they want to continue
+                if current_step_idx < len(step_names) - 1:  # Not the last step
+                    if not Confirm.ask("Continue to next step?"):
+                        workflow.pause()
+                        console.print("[yellow]Workflow paused. Run the command again to resume.[/yellow]")
+                        break
+            
+            elif update["status"] == "completed":
+                console.print("[bold green]✓ Guided assessment completed successfully![/bold green]")
+                
+                # Ask if user wants to export the report
+                if Confirm.ask("Would you like to export the full report?"):
+                    filename = Prompt.ask("Enter filename", default="vulnerability_assessment_report.json")
+                    
+                    # Export the report as JSON
+                    with open(filename, "w") as f:
+                        json.dump(update["data"], f, indent=2)
+                    
+                    console.print(f"[green]Report exported to {filename}[/green]")
+    
+    except KeyboardInterrupt:
+        console.print("[yellow]Workflow interrupted. You can resume it later.[/yellow]")
+        workflow.pause()
+
+
+async def handle_tool_command(args: argparse.Namespace) -> None:
+    """Handle tool invocation workflow commands.
+    
+    Args:
+        args: Command line arguments
+    """
+    from ..workflows.tool_invocation import ToolInvocationWorkflow
+    
+    # Initialize the workflow
+    workflow = ToolInvocationWorkflow(
+        repository_id=args.repository_id if hasattr(args, 'repository_id') else None,
+        repository_path=args.path if hasattr(args, 'path') else None,
+    )
+    await workflow.setup()
+    
+    if args.tool_command == "list":
+        # Get available tools
+        available_tools = workflow.get_available_tools()
+        
+        # Display tools
+        table = Table(title="[bold]Available Security Tools[/bold]")
+        table.add_column("ID", style="cyan")
+        table.add_column("Name", style="green")
+        table.add_column("Description")
+        table.add_column("Language", style="blue")
+        table.add_column("Status")
+        
+        for tool in available_tools:
+            status = "[green]Available[/green]" if tool["available"] else "[red]Not Installed[/red]"
+            table.add_row(
+                tool["id"],
+                tool["name"],
+                tool["description"],
+                tool["language"],
+                status
+            )
+        
+        console.print(table)
+        
+        # Show instruction if no tools available
+        if not any(tool["available"] for tool in available_tools):
+            console.print(
+                Panel(
+                    "No security tools are currently installed. You can install tools like Bandit, Semgrep, or TruffleHog to enable vulnerability scanning.",
+                    title="[bold yellow]Tool Installation Required[/bold yellow]",
+                    border_style="yellow"
+                )
+            )
+    
+    elif args.tool_command == "run":
+        tool_id = args.tool
+        
+        # Validate repository path
+        if not hasattr(args, 'path') or not args.path:
+            console.print("[yellow]Repository path is required[/yellow]")
+            return
+        
+        # Run the tool
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeRemainingColumn(),
+        ) as progress:
+            task = progress.add_task(f"Running {tool_id}...", total=100)
+            progress.update(task, completed=10)
+            
+            # Build tool arguments
+            tool_args = {}
+            if hasattr(args, 'args') and args.args:
+                for arg_pair in args.args:
+                    if "=" in arg_pair:
+                        key, value = arg_pair.split("=", 1)
+                        tool_args[key] = value
+            
+            # Run the tool with progress updates
+            async for update in workflow.invoke_tool(tool_id, tool_args):
+                if update["status"] == "running":
+                    progress.update(task, completed=30, description=update["message"])
+                
+                elif update["status"] == "completed":
+                    progress.update(task, completed=100, description="Tool execution complete")
+                    
+                    # Display findings
+                    if "findings" in update and update["findings"]:
+                        findings_count = len(update["findings"])
+                        console.print(f"[bold]Found {findings_count} potential vulnerabilities[/bold]")
+                        
+                        # Create findings table
+                        table = Table(
+                            "Type",
+                            "Severity",
+                            "Confidence",
+                            "Location",
+                            "Description",
+                            title=f"[bold]{tool_id.capitalize()} Findings[/bold]"
+                        )
+                        
+                        for finding in update["findings"]:
+                            # Color-code severity
+                            severity_color = {
+                                "critical": "bright_red",
+                                "high": "red",
+                                "medium": "yellow",
+                                "low": "green",
+                                "info": "blue"
+                            }.get(finding["severity"].lower(), "white")
+                            
+                            # Color-code confidence
+                            confidence = float(finding["confidence"])
+                            confidence_color = "green" if confidence > 0.8 else "yellow" if confidence > 0.5 else "red"
+                            
+                            table.add_row(
+                                finding["vulnerability_type"],
+                                f"[{severity_color}]{finding['severity']}[/{severity_color}]",
+                                f"[{confidence_color}]{confidence:.2f}[/{confidence_color}]",
+                                f"{finding['file_path']}:{finding['line_number']}",
+                                finding["description"],
+                            )
+                        
+                        console.print(table)
+                    else:
+                        console.print("[green]No vulnerabilities found[/green]")
+                
+                elif update["status"] == "error":
+                    progress.update(task, completed=100, description="Tool execution failed")
+                    console.print(f"[red]Error: {update['message']}[/red]")
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create the command-line argument parser.
 
@@ -848,6 +1174,64 @@ def create_parser() -> argparse.ArgumentParser:
     
     investigations_parser.set_defaults(
         func=lambda args: asyncio.run(handle_investigations_command(args))
+    )
+    
+    # Q&A workflow commands
+    qa_parser = subparsers.add_parser("qa", help="Run Q&A workflow for security questions")
+    qa_subparsers = qa_parser.add_subparsers(
+        title="Q&A commands",
+        dest="qa_command",
+        help="Q&A command to run",
+    )
+    
+    # Q&A ask command
+    qa_ask_parser = qa_subparsers.add_parser("ask", help="Ask a single security question")
+    qa_ask_parser.add_argument("question", help="The security question to ask")
+    qa_ask_parser.add_argument("--repository-id", type=int, help="Repository ID for context")
+    
+    # Q&A conversation command
+    qa_conversation_parser = qa_subparsers.add_parser(
+        "conversation", help="Start an interactive Q&A conversation"
+    )
+    qa_conversation_parser.add_argument("--repository-id", type=int, help="Repository ID for context")
+    
+    qa_parser.set_defaults(
+        func=lambda args: asyncio.run(handle_qa_command(args))
+    )
+    
+    # Guided inquiry workflow commands
+    guided_parser = subparsers.add_parser(
+        "guided", help="Run guided vulnerability assessment workflow"
+    )
+    guided_parser.add_argument(
+        "--repository-id", type=int, required=True, help="Repository ID to assess"
+    )
+    guided_parser.set_defaults(
+        func=lambda args: asyncio.run(handle_guided_inquiry_command(args))
+    )
+    
+    # Tool invocation workflow commands
+    tool_parser = subparsers.add_parser("tool", help="Run external security tools")
+    tool_subparsers = tool_parser.add_subparsers(
+        title="tool commands",
+        dest="tool_command",
+        help="Tool command to run",
+    )
+    
+    # Tool list command
+    tool_list_parser = tool_subparsers.add_parser("list", help="List available security tools")
+    
+    # Tool run command
+    tool_run_parser = tool_subparsers.add_parser("run", help="Run a security tool")
+    tool_run_parser.add_argument("tool", help="Tool ID to run")
+    tool_run_parser.add_argument("--path", required=True, help="Path to the repository or file")
+    tool_run_parser.add_argument("--repository-id", type=int, help="Repository ID for context")
+    tool_run_parser.add_argument(
+        "--args", nargs="+", help="Additional arguments for the tool in key=value format"
+    )
+    
+    tool_parser.set_defaults(
+        func=lambda args: asyncio.run(handle_tool_command(args))
     )
 
     return parser

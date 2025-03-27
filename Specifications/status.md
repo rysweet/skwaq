@@ -1,6 +1,49 @@
 # Skwaq Project Status
 
-## Current Milestone: W1 - Command Line Interface
+## Current Milestone: W2 - Basic Workflows
+
+### Status: Completed ✅
+
+The basic workflow components for Milestone W2 have been successfully implemented, providing interactive workflows for security analysis and vulnerability assessment:
+
+- [x] Q&A workflow
+  - Implemented QAWorkflow for handling security-related questions
+  - Created interactive conversational interface
+  - Added integration with knowledge agents
+  - Implemented natural language question processing
+  - Created structured response generation
+  - Added follow-up question handling
+  - Implemented conversation saving and exporting
+
+- [x] Guided inquiry workflow
+  - Implemented GuidedInquiryWorkflow for step-by-step vulnerability assessment
+  - Created structured workflow steps (assessment, threat modeling, discovery, remediation)
+  - Added interactive prompting for information at each step
+  - Implemented contextual assessment guidance
+  - Created comprehensive report generation
+  - Added workflow pause/resume functionality
+  - Implemented progress tracking and visualization
+
+- [x] Basic tool invocation
+  - Implemented ToolInvocationWorkflow for external security tool integration
+  - Added tool discovery and registration mechanism
+  - Created standardized result parsing from various tools
+  - Implemented progress tracking for tool execution
+  - Added result processing and visualization
+  - Created comprehensive error handling and recovery
+  - Implemented workflow integration with CLI
+
+Key Features:
+- Interactive Q&A capability for security knowledge
+- Step-by-step guided vulnerability assessment
+- External security tool integration
+- Consistent workflow event system
+- Progress tracking and visualization
+- Context-aware recommendations
+- Rich output formatting for all workflows
+- Comprehensive CLI integration
+
+## Previous Milestone: W1 - Command Line Interface
 
 ### Status: Completed ✅
 
@@ -442,30 +485,37 @@ Key Features:
 - Graceful error handling and recovery
 
 
-### Next Milestone: W2 - Basic Workflows
+### Next Milestone: W3 - Advanced Workflows
 
-Our next milestone is W2, which involves implementing basic workflow functionality:
+Our next milestone is W3, which involves implementing advanced workflow functionality:
 
-- [ ] Q&A workflow
-  - Support for user queries about vulnerabilities
-  - Integration with knowledge agents
-  - Natural language question processing
-  - Structured response generation
-  - Follow-up question handling
+- [ ] Vulnerability research workflow
+  - Comprehensive vulnerability assessment workflow
+  - Integration with code analysis, knowledge retrieval, and tool invocation
+  - Context-aware vulnerability detection
+  - Detailed finding analysis and prioritization
+  - Evidence collection and verification
 
-- [ ] Guided inquiry workflow
-  - Step-by-step guided vulnerability assessment
-  - Interactive prompting for information
-  - Context-aware guidance
-  - Recommendation generation
-  - Progress tracking
+- [ ] Investigation persistence
+  - Save and resume investigations across sessions
+  - Investigation state serialization
+  - Incremental progress tracking
+  - Multi-user collaboration support
+  - Real-time synchronization
 
-- [ ] Basic tool invocation
-  - External tool integration from CLI
-  - Tool discovery and registration
-  - Tool execution with progress tracking
-  - Result processing and presentation
-  - Error handling and recovery
+- [ ] Markdown reporting
+  - Comprehensive vulnerability report generation
+  - Standardized, customizable report templates
+  - Evidence inclusion with code snippets
+  - Mitigation recommendations
+  - Exportable to various formats
+
+- [ ] GitHub issue integration
+  - Automatic GitHub issue creation
+  - Standardized issue templates
+  - Vulnerability metadata inclusion
+  - PR creation for suggested fixes
+  - Integration with existing GitHub workflows
 
 ### Overall Progress
 - [x] F1: Project Setup and Environment
@@ -481,5 +531,6 @@ Our next milestone is W2, which involves implementing basic workflow functionali
 - [x] A2: Core Agents Implementation
 - [x] A3: Advanced Agent Capabilities
 - [x] W1: Command Line Interface
-- [ ] W2: Basic Workflows
+- [x] W2: Basic Workflows
 - [ ] W3: Advanced Workflows
+- [ ] W4: Workflow Refinement and Integration
