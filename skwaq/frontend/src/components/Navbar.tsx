@@ -2,11 +2,16 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import '../styles/Navbar.css';
 
+interface NavbarProps {
+  darkMode?: boolean;
+  toggleDarkMode?: () => void;
+}
+
 /**
  * Navigation bar component for the top of the application
  * Contains logo, search functionality, and user settings
  */
-const Navbar: React.FC = () => {
+const Navbar: React.FC<NavbarProps> = ({ darkMode = false, toggleDarkMode }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -38,6 +43,15 @@ const Navbar: React.FC = () => {
       </form>
       
       <div className="navbar-actions">
+        {toggleDarkMode && (
+          <button 
+            className="theme-toggle-btn" 
+            onClick={toggleDarkMode}
+            aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            <span>{darkMode ? '☀️' : '🌙'}</span>
+          </button>
+        )}
         <button className="notification-btn" aria-label="Notifications">
           <span className="notification-icon">🔔</span>
         </button>

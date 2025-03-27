@@ -35,11 +35,12 @@ const KnowledgeGraphVisualization: React.FC<KnowledgeGraphVisualizationProps> = 
       }
       
       // Initialize new graph
-      const Graph = ForceGraph3D.default;
-      const graph = Graph()(graphContainerRef.current as HTMLElement)
+      const ForceGraph = ForceGraph3D.default;
+      // Create the ForceGraph3D instance
+      const graph = ForceGraph()(graphContainerRef.current as HTMLElement)
         .graphData(graphData)
         .nodeLabel('name')
-        .nodeColor((node: any) => {
+        .nodeColor((node: GraphNode) => {
           // Color nodes based on type
           switch (node.type) {
             case 'vulnerability': return 'rgba(244, 67, 54, 0.8)';
@@ -52,7 +53,7 @@ const KnowledgeGraphVisualization: React.FC<KnowledgeGraphVisualizationProps> = 
         .linkDirectionalParticles(2)
         .linkDirectionalParticleWidth(2)
         .linkLabel('type')
-        .onNodeClick((node: any) => {
+        .onNodeClick((node: GraphNode) => {
           // When a node is clicked, call the callback
           onNodeSelected(node as GraphNode);
           

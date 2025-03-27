@@ -74,10 +74,11 @@ const useKnowledgeGraph = () => {
     if (!containerElement) return;
     
     // Initialize the graph
-    const graph = ForceGraph3D()(containerElement)
+    const ForceGraph = ForceGraph3D.default;
+    const graph = ForceGraph()(containerElement)
       .graphData(graphData)
       .nodeLabel('name')
-      .nodeColor(node => {
+      .nodeColor((node: GraphNode) => {
         // Color nodes based on type
         switch (node.type) {
           case 'vulnerability': return 'rgba(244, 67, 54, 0.8)';
@@ -88,7 +89,7 @@ const useKnowledgeGraph = () => {
       })
       .linkDirectionalParticles(2)
       .linkDirectionalParticleWidth(2)
-      .onNodeClick(node => {
+      .onNodeClick((node: GraphNode) => {
         // When a node is clicked, set it as selected
         setSelectedNode(node as GraphNode);
       });
