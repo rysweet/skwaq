@@ -78,6 +78,63 @@ def cmd_version(args: argparse.Namespace) -> None:
     console.print(f"[bold]Skwaq[/bold] version: [cyan]{__version__}[/cyan]")
 
 
+def cmd_gui(args: argparse.Namespace) -> None:
+    """Launch the graphical user interface.
+    
+    This command starts both the React frontend and Flask backend for the GUI.
+    
+    Args:
+        args: Command line arguments
+    """
+    import os
+    import signal
+    import subprocess
+    import sys
+    from pathlib import Path
+    
+    # Get the path to the run-dev.sh script
+    script_dir = Path(__file__).parent.parent.parent / "scripts" / "dev"
+    script_path = script_dir / "run-dev.sh"
+    
+    console.print("[bold]Starting Skwaq GUI...[/bold]")
+    
+    # Verify the script exists
+    if not script_path.exists():
+        console.print(f"[red]Error: Could not find GUI startup script at {script_path}[/red]")
+        return 1
+    
+    try:
+        # Make sure the script is executable
+        try:
+            os.chmod(script_path, 0o755)  # rwxr-xr-x
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not set executable permissions: {e}[/yellow]")
+        
+        console.print("[bold blue]Launching GUI components...[/bold blue]")
+        console.print("[dim]This will start both the backend API server and React frontend.[/dim]")
+        console.print("[dim]Press Ctrl+C to stop both servers when finished.[/dim]")
+        
+        # Forward arguments if provided
+        args_list = []
+        if hasattr(args, 'port') and args.port:
+            args_list.extend(['--port', str(args.port)])
+        
+        # Execute the script directly
+        process = subprocess.Popen([str(script_path)] + args_list)
+        
+        # Wait for completion or interruption
+        process.wait()
+        
+    except KeyboardInterrupt:
+        console.print("\n[yellow]GUI servers stopping...[/yellow]")
+        # The script handles its own cleanup with trap EXIT
+    except Exception as e:
+        console.print(f"[red]Error starting GUI: {e}[/red]")
+        return 1
+    
+    return 0
+
+
 def prompt_for_openai_config() -> Dict[str, Any]:
     """Prompt the user for Azure OpenAI configuration.
     
@@ -1507,6 +1564,15 @@ def create_parser() -> argparse.ArgumentParser:
         "version", help="Display version information"
     )
     version_parser.set_defaults(func=cmd_version)
+    
+    # GUI command
+    gui_parser = subparsers.add_parser(
+        "gui", help="Launch the graphical user interface"
+    )
+    gui_parser.add_argument(
+        "--port", type=int, help="Port for the backend API server (default: 5000)"
+    )
+    gui_parser.set_defaults(func=cmd_gui)
 
     # Config command
     config_parser = subparsers.add_parser(

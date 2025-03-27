@@ -38,27 +38,34 @@ pip install -e .
 ## Usage
 
 ```bash
-# Initialize the system and set up configuration
-skwaq init
+# Check configuration and set up if needed
+skwaq check-config
 
 # Ingest a repository for analysis
-skwaq ingest --repo https://github.com/example/repo.git
+skwaq repo github --url https://github.com/example/repo.git
 
 # Start an interactive Q&A session about the codebase
-skwaq qa
+skwaq qa conversation
 
 # Run a guided vulnerability assessment
-skwaq assess
+skwaq guided --repository-id 1
 
-# Generate a vulnerability report
-skwaq report
+# Run a comprehensive vulnerability assessment
+skwaq vulnerability-research --repository-id 1
+
+# Launch the graphical user interface
+skwaq gui
+
+# Start the GUI with a custom port for the backend
+skwaq gui --port 8000
 ```
 
 ## Architecture
 
 The system uses a modular architecture with the following components:
 
-- CLI interface using Rich
+- CLI interface using Rich for interactive terminal experience
+- Web-based GUI with React frontend and Flask API backend
 - Neo4J graph databases for code and knowledge representation
 - AutoGen Core framework for the multiagent system
 - Azure OpenAI models for AI inference
@@ -75,6 +82,9 @@ The system uses a modular architecture with the following components:
   - **patterns**: Vulnerability pattern management
 - **skwaq.shared**: Common utilities and data models
 - **skwaq.workflows**: Workflow implementations for different user interactions
+- **skwaq.cli**: Command line interface and rich terminal UI
+- **skwaq.api**: REST API for the web interface
+- **skwaq.frontend**: React web application for graphical interface
 
 ## Development
 

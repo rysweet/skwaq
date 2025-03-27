@@ -142,6 +142,7 @@ class TestCLIParser:
         # Check that we have the expected commands
         assert "analyze" in subparsers.choices
         assert "repo" in subparsers.choices
+        assert "gui" in subparsers.choices
         # The 'knowledge' command doesn't exist in implementation, using 'ingest' instead
         assert "ingest" in subparsers.choices
 
@@ -213,6 +214,19 @@ class TestCLIParser:
         assert args.command == "repo"
         assert args.repo_command == "github"
         assert args.url == "https://github.com/user/test-repo"
+        
+    def test_gui_command(self):
+        """Test GUI command parser."""
+        parser = create_parser()
+        
+        # Parse basic gui command
+        args = parser.parse_args(["gui"])
+        assert args.command == "gui"
+        
+        # Parse gui command with port
+        args = parser.parse_args(["gui", "--port", "8000"])
+        assert args.command == "gui"
+        assert args.port == 8000
 
 
 class TestHelperFunctions:
@@ -252,6 +266,38 @@ class TestHelperFunctions:
 
 class TestCommandHandlers:
     """Tests for command handlers."""
+    
+    # Note: We skip these tests that require more complex mocking for now
+    @pytest.mark.skip(reason="Requires more complex mocking of subprocess and Path")
+    def test_cmd_gui(self):
+        """Test GUI command handler."""
+        pass
+
+    @pytest.mark.skip(reason="Requires more complex mocking of subprocess and Path")
+    def test_cmd_gui_with_port(self):
+        """Test GUI command handler with port argument."""
+        pass
+    
+    def test_cmd_gui_script_not_found(self):
+        """Test GUI command handler when script is not found."""
+        from skwaq.cli.main import cmd_gui
+        
+        # Create args
+        args = argparse.Namespace()
+        
+        # Run the command with mocks
+        with patch("skwaq.cli.main.console.print") as mock_print, \
+             patch("skwaq.cli.main.Path.exists", return_value=False) as mock_exists:
+            
+            result = cmd_gui(args)
+            
+            # Check for error message (should contain 'Error' and script path)
+            error_message = mock_print.call_args_list[1][0][0]
+            assert "Error" in error_message
+            assert "script" in error_message
+            
+            # Check return code indicates error
+            assert result == 1
     
     @pytest.mark.asyncio
     @patch("skwaq.cli.main.Status")
