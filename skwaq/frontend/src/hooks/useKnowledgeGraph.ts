@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import apiService from '../services/api';
-import ForceGraph3D from '3d-force-graph';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { createForceGraph } from '../utils/forceGraphUtils';
 
 export interface GraphData {
   nodes: GraphNode[];
@@ -13,12 +14,22 @@ export interface GraphNode {
   type: string;
   group: number;
   properties?: Record<string, any>;
+  // Force Graph specific fields
+  x?: number;
+  y?: number;
+  z?: number;
+  fx?: number | null;
+  fy?: number | null;
+  fz?: number | null;
+  // Add the position fields to avoid type issues
+  __force?: any;
 }
 
 export interface GraphLink {
-  source: string;
-  target: string;
+  source: string | GraphNode;
+  target: string | GraphNode;
   type: string;
+  value?: number; // For link width
 }
 
 export interface GraphFilter {
@@ -76,8 +87,8 @@ const useKnowledgeGraph = () => {
     if (!containerElement) return;
     
     // Initialize the graph
-    const ForceGraph = ForceGraph3D.default;
-    const graph = ForceGraph()(containerElement)
+    // Create the ForceGraph3D instance
+    const graph = createForceGraph(containerElement)
       .graphData(graphData)
       .nodeLabel('name')
       .nodeColor((node: GraphNode) => {

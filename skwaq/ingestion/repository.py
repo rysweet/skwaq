@@ -56,6 +56,14 @@ class RepositoryHandler:
         Raises:
             RepositoryError: If repository URL is invalid or if cloning fails
         """
+        # Normalize URL to ensure proper format
+        if "://" not in repo_url:
+            # Fix URLs like "https:/github.com" to "https://github.com"
+            for prefix in ["http:/", "https:/"]:
+                if repo_url.startswith(prefix) and not repo_url.startswith(prefix + "/"):
+                    repo_url = prefix + "/" + repo_url[len(prefix):]
+                    logger.info(f"Normalized repository URL to: {repo_url}")
+                    break
         try:
             # Create a temporary directory and save the object (not just the name)
             # to prevent premature garbage collection

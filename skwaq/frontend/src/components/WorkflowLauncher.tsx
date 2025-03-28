@@ -69,7 +69,7 @@ const WorkflowParameterInput: React.FC<WorkflowParameterInputProps> = ({ paramet
 interface WorkflowLauncherProps {
   availableWorkflows: AvailableWorkflow[];
   isLoading: boolean;
-  onLaunchWorkflow: (workflowId: string, parameters: WorkflowParameters) => Promise<void>;
+  onLaunchWorkflow: (workflowId: string, parameters: WorkflowParameters) => Promise<string | void>;
 }
 
 const WorkflowLauncher: React.FC<WorkflowLauncherProps> = ({

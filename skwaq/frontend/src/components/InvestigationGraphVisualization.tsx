@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { GraphData, GraphNode, GraphLink } from '../hooks/useKnowledgeGraph';
+import { createForceGraph } from '../utils/forceGraphUtils';
 import '../styles/KnowledgeGraphVisualization.css';
 
 interface InvestigationGraphVisualizationProps {
@@ -49,9 +50,19 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
     
     // Fetch graph data from the investigation endpoint
     fetch(`/api/knowledge-graph/investigation/${investigationId}`)
-      .then(response => {
+      .then(async response => {
         if (!response.ok) {
-          throw new Error(`Error: ${response.status} ${response.statusText}`);
+          // Try to get detailed error message from response
+          let errorMessage = `Error ${response.status}: ${response.statusText}`;
+          try {
+            const errorData = await response.json();
+            if (errorData && errorData.description) {
+              errorMessage = errorData.description;
+            }
+          } catch (e) {
+            // If parsing JSON fails, use the default error message
+          }
+          throw new Error(errorMessage);
         }
         return response.json();
       })
@@ -119,9 +130,8 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
       });
       
       // Initialize new graph
-      const ForceGraph = ForceGraph3D.default;
       // Create the ForceGraph3D instance
-      const graph = ForceGraph()(graphContainerRef.current as HTMLElement)
+      const graph = createForceGraph(graphContainerRef.current as HTMLElement)
         .graphData(graphData)
         .backgroundColor(darkMode ? '#1a1a1a' : '#ffffff')
         .nodeLabel((node: GraphNode) => `${node.name} (${node.type})`)
@@ -239,7 +249,7 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
         graph._destructor();
       };
     });
-  }, [graphData, onNodeSelected, isLoading, darkMode, physicsSettings]);
+  }, [graphData, onNodeSelected, isLoading, isDataLoading, darkMode, physicsSettings]);
   
   return (
     <div className="knowledge-graph-visualization" ref={graphContainerRef}>
@@ -247,6 +257,22 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
         <div className="loading-overlay">
           <div className="loading-spinner"></div>
           <p>Loading Investigation Graph...</p>
+        </div>
+      )}
+      
+      {!isLoading && error && (
+        <div className="error-overlay">
+          <div className="error-message">
+            <h3>Error Loading Graph</h3>
+            <p>{error}</p>
+            {error.includes("UUID") && (
+              <p className="error-hint">
+                The investigation ID format is invalid. Investigation IDs should be in UUID format.
+                <br/>
+                Example: 123e4567-e89b-12d3-a456-426614174000
+              </p>
+            )}
+          </div>
         </div>
       )}
       {!isLoading && graphData.nodes.length === 0 && (

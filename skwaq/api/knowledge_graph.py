@@ -192,6 +192,12 @@ def get_investigation_graph(investigation_id):
     Returns:
         A JSON object with nodes and links arrays for visualization
     """
+    # Validate investigation ID format (should be a UUID)
+    import re
+    uuid_pattern = re.compile(r'^[a-f0-9]{8}-?[a-f0-9]{4}-?[a-f0-9]{4}-?[a-f0-9]{4}-?[a-f0-9]{12}$', re.IGNORECASE)
+    if not uuid_pattern.match(investigation_id):
+        abort(400, description="Invalid investigation ID format. Expected a UUID.")
+    
     # Extract query parameters
     include_findings = request.args.get("include_findings", "true").lower() == "true"
     include_vulnerabilities = request.args.get("include_vulnerabilities", "true").lower() == "true"
@@ -208,6 +214,10 @@ def get_investigation_graph(investigation_id):
             include_files=include_files,
             max_nodes=max_nodes
         )
+        
+        # If no nodes were returned, return an empty graph rather than an error
+        if not graph_data["nodes"]:
+            return jsonify({"nodes": [], "links": []})
         
         # Transform the data format to be compatible with 3d-force-graph
         # GraphVisualizer returns nodes with "id" and "label", but we need "id" and "name"

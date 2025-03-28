@@ -221,12 +221,32 @@
   z-index: 10;
 }
 
-.error-overlay p {
-  color: var(--danger-color);
+.error-message {
   background-color: var(--card-background);
-  padding: 16px 24px;
+  border: 1px solid var(--danger-color);
   border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: 20px;
   max-width: 80%;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   text-align: center;
+}
+
+.error-message h3 {
+  color: var(--danger-color);
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.error-message p {
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+.error-hint {
+  margin-top: 15px;
+  padding: 10px;
+  background-color: var(--card-background-highlight);
+  border-radius: 4px;
+  font-size: 0.9em;
+  color: var(--text-secondary);
 }

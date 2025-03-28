@@ -8,6 +8,8 @@ import VulnerabilityAssessment from './pages/VulnerabilityAssessment';
 import Workflows from './pages/Workflows';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
+import Investigations from './pages/Investigations';
+import Repositories from './pages/Repositories';
 import InvestigationVisualization from './pages/InvestigationVisualization';
 import HelpOverlay from './components/HelpOverlay';
 import './styles/App.css';
@@ -99,6 +101,8 @@ function App() {
           <Route path="/assessment" element={<VulnerabilityAssessment />} />
           <Route path="/workflows" element={<Workflows />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/investigations" element={<Investigations />} />
+          <Route path="/repositories" element={<Repositories />} />
           <Route path="/investigations/:investigationId/visualization" element={<InvestigationVisualization darkMode={darkMode} />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

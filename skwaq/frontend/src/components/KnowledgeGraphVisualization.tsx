@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { GraphData, GraphNode, GraphLink } from '../hooks/useKnowledgeGraph';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { createForceGraph } from '../utils/forceGraphUtils';
 import '../styles/KnowledgeGraphVisualization.css';
 
 interface KnowledgeGraphVisualizationProps {
@@ -88,9 +90,8 @@ const KnowledgeGraphVisualization: React.FC<KnowledgeGraphVisualizationProps> = 
       });
       
       // Initialize new graph
-      const ForceGraph = ForceGraph3D.default;
       // Create the ForceGraph3D instance
-      const graph = ForceGraph()(graphContainerRef.current as HTMLElement)
+      const graph = createForceGraph(graphContainerRef.current as HTMLElement)
         .graphData(graphData)
         .backgroundColor(darkMode ? '#1a1a1a' : '#ffffff')
         .nodeLabel((node: GraphNode) => `${node.name} (${node.type})`)

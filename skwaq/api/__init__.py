@@ -44,20 +44,22 @@ def create_app(test_config=None):
 
     # Register blueprints for API routes
     from . import repositories
-
     app.register_blueprint(repositories.bp)
 
-    from . import knowledge_graph
+    from . import investigations
+    app.register_blueprint(investigations.bp)
 
+    from . import knowledge_graph
     app.register_blueprint(knowledge_graph.bp)
 
     from . import chat
-
     app.register_blueprint(chat.bp)
 
     from . import settings
-
     app.register_blueprint(settings.bp)
+    
+    from . import workflows
+    app.register_blueprint(workflows.bp)
 
     # Add a simple route for testing
     @app.route("/api/healthcheck")

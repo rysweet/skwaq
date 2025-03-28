@@ -8,15 +8,15 @@ import '../styles/ChatInterface.css';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
-  onSendMessage: (message: string, parentId?: string) => void;
+  onSendMessage: (message: string, parentId?: number) => void;
   isLoading: boolean;
   darkMode?: boolean;
 }
 
 interface ThreadInfo {
-  [key: string]: {
+  [key: number]: {
     isOpen: boolean;
-    replies: string[];
+    replies: number[];
   }
 }
 
@@ -30,7 +30,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   darkMode = false
 }) => {
   const [message, setMessage] = useState<string>('');
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<number | null>(null);
   const [threads, setThreads] = useState<ThreadInfo>({});
   const [showFormatting, setShowFormatting] = useState<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -101,7 +101,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }, 0);
   };
   
-  const toggleThread = (parentId: string) => {
+  const toggleThread = (parentId: number) => {
     setThreads(prev => ({
       ...prev,
       [parentId]: {
@@ -111,7 +111,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }));
   };
   
-  const startReply = (parentId: string) => {
+  const startReply = (parentId: number) => {
     setReplyingTo(parentId);
     textareaRef.current?.focus();
   };
@@ -134,13 +134,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           <div className="message-body">
             <div className="message-header">
               <span className="message-sender">{msg.role === 'user' ? 'You' : 'Assistant'}</span>
-              <span className="message-time">{new Date(msg.timestamp).toLocaleTimeString()}</span>
+              <span className="message-time">{msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()}</span>
             </div>
             <div className="message-content">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
-                  code({node, inline, className, children, ...props}) {
+                  code({node, inline, className, children, ...props}: any) {
                     const match = /language-(\w+)/.exec(className || '');
                     return !inline ? (
                       <SyntaxHighlighter

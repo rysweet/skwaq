@@ -5,6 +5,8 @@ export interface ChatMessage {
   role: 'user' | 'system';
   content: string;
   timestamp?: string;
+  parentId?: number;  // For threaded conversations
+  threadId?: number;  // The thread this message belongs to
 }
 
 export interface ChatSession {

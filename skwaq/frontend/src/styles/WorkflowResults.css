@@ -261,6 +261,76 @@
   padding-left: 1.5rem;
 }
 
+/* Sources and Sinks Results Styles */
+.sources-sinks-result {
+  margin: 10px 0;
+  padding: 15px;
+  background-color: var(--bg-color-element);
+  border-radius: 6px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.sources-sinks-header {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 15px;
+}
+
+.sources-sinks-header h3 {
+  margin: 0 0 10px 0;
+  color: var(--text-color-primary);
+  font-size: 1.4em;
+}
+
+.sources-sinks-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.summary-item {
+  background-color: var(--bg-color-secondary);
+  padding: 10px 15px;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-label {
+  font-weight: bold;
+  color: var(--text-color-secondary);
+}
+
+.summary-value {
+  font-size: 1.2em;
+  color: var(--text-color-primary);
+  font-weight: bold;
+}
+
+.sources-sinks-summary-text {
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: var(--bg-color-secondary);
+  border-radius: 4px;
+  border-left: 3px solid var(--primary-color);
+}
+
+.sources-sinks-summary-text h4 {
+  margin-top: 0;
+  color: var(--text-color-primary);
+}
+
+.sources-sinks-output {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: var(--bg-color-secondary);
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
 .progress-container.small {
   width: 100px;
   margin-left: 1rem;

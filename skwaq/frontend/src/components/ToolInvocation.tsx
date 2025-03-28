@@ -5,7 +5,7 @@ import '../styles/ToolInvocation.css';
 interface ToolInvocationProps {
   availableTools: AvailableTool[];
   isLoading: boolean;
-  onInvokeTool: (toolId: string, parameters: Record<string, any>) => Promise<void>;
+  onInvokeTool: (toolId: string, parameters: Record<string, any>) => Promise<string | void>;
 }
 
 const ToolInvocation: React.FC<ToolInvocationProps> = ({

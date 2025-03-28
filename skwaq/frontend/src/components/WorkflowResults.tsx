@@ -49,8 +49,23 @@ const WorkflowResults: React.FC<WorkflowResultsProps> = ({
     if (typeof data === 'string') {
       // Check if it's a markdown content
       if (data.includes('# ') || data.includes('\n## ') || data.includes('```')) {
+        // Use React Markdown here if available. For now, let's use a simplified approach
+        // that just formats headers and code blocks
+        const formattedMarkdown = data
+          .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+          .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+          .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+          .replace(/^#### (.*$)/gm, '<h4>$1</h4>')
+          .replace(/^##### (.*$)/gm, '<h5>$1</h5>')
+          .replace(/^###### (.*$)/gm, '<h6>$1</h6>')
+          .replace(/^- (.*$)/gm, '<li>$1</li>')
+          .replace(/\n\n/g, '<br/><br/>')
+          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*(.*?)\*/g, '<em>$1</em>')
+          .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+        
         return (
-          <div className="markdown-content" dangerouslySetInnerHTML={{ __html: data }} />
+          <div className="markdown-content" dangerouslySetInnerHTML={{ __html: formattedMarkdown }} />
         );
       }
       return <span className="result-string">{data}</span>;
@@ -182,9 +197,54 @@ const WorkflowResults: React.FC<WorkflowResultsProps> = ({
                     )}
                   </div>
                   
-                  <div className="result-data">
-                    {renderResultData(result.data)}
-                  </div>
+                  {/* Special rendering for Sources and Sinks workflow results */}
+                  {result.data && result.data.sources_count !== undefined ? (
+                    <div className="sources-sinks-result">
+                      <div className="sources-sinks-header">
+                        <h3>Sources and Sinks Analysis Results</h3>
+                        <div className="sources-sinks-summary">
+                          <div className="summary-item">
+                            <span className="summary-label">Sources:</span>
+                            <span className="summary-value">{result.data.sources_count}</span>
+                          </div>
+                          <div className="summary-item">
+                            <span className="summary-label">Sinks:</span>
+                            <span className="summary-value">{result.data.sinks_count}</span>
+                          </div>
+                          <div className="summary-item">
+                            <span className="summary-label">Data Flow Paths:</span>
+                            <span className="summary-value">{result.data.paths_count}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {result.data.summary && (
+                        <div className="sources-sinks-summary-text">
+                          <h4>Analysis Summary</h4>
+                          <p>{result.data.summary}</p>
+                        </div>
+                      )}
+                      
+                      {/* If there's markdown output, show it */}
+                      {result.data.output_format === 'markdown' && result.data.output && (
+                        <div className="sources-sinks-output markdown-container">
+                          {renderResultData(result.data.output)}
+                        </div>
+                      )}
+                      
+                      {/* If there's JSON output, show it */}
+                      {result.data.output_format === 'json' && result.data.output && (
+                        <div className="sources-sinks-output json-container">
+                          <h4>Detailed Analysis Results</h4>
+                          {renderResultData(result.data.output)}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="result-data">
+                      {renderResultData(result.data)}
+                    </div>
+                  )}
                   
                   {result.errors && result.errors.length > 0 && (
                     <div className="result-errors">

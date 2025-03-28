@@ -45,6 +45,12 @@ const Sidebar: React.FC = () => {
             </NavLink>
           </li>
           <li className="nav-item">
+            <NavLink to="/investigations" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+              <span className="nav-icon">🔎</span>
+              <span className="nav-text">Investigations</span>
+            </NavLink>
+          </li>
+          <li className="nav-item">
             <NavLink to="/workflows" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
               <span className="nav-icon">🔄</span>
               <span className="nav-text">Workflows</span>
