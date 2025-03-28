@@ -203,7 +203,7 @@ ENTRYPOINT ["python", "/run_blarify.py"]
             # Write the Python script that will run inside the container
             script_path = os.path.join(docker_dir, "run_blarify.py")
             with open(script_path, 'w') as f:
-                f.write('''
+                f.write(r'''
 import os
 import sys
 import json

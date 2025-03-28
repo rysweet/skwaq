@@ -14,7 +14,6 @@ import os
 from pathlib import Path
 
 from ..agents.registry import AgentRegistry
-from ..code_analysis.analyzer import CodeAnalyzer
 from ..db.neo4j_connector import get_connector
 from ..core.openai_client import OpenAIClient
 from ..utils.config import get_config
@@ -98,10 +97,8 @@ class SystemIntegrationManager:
             self._components["agent_registry"] = agent_registry
             logger.info("Agent registry initialized")
             
-            # 6. Initialize code analyzer
-            code_analyzer = CodeAnalyzer()
-            self._components["code_analyzer"] = code_analyzer
-            logger.info("Code analyzer initialized")
+            # 6. Code analyzer initialization removed
+            logger.info("Code analyzer initialization skipped - module removed")
             
             # 7. Initialize integration managers
             context_manager = get_context_manager()
@@ -220,10 +217,8 @@ class SystemIntegrationManager:
             context_manager = self._components["context_manager"]
             # Save any active contexts
             
-        # 2. Shutdown code analyzer
-        if "code_analyzer" in self._components:
-            logger.info("Shutting down code analyzer")
-            # No explicit cleanup needed
+        # 2. Code analyzer shutdown removed
+        logger.info("Code analyzer shutdown skipped - module removed")
             
         # 3. Shutdown agent registry
         if "agent_registry" in self._components:

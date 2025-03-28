@@ -32,7 +32,7 @@ def print_banner(include_version: bool = True, version: Optional[str] = None) ->
         include_version: Whether to include the version
         version: Version string to include (if None, will use default)
     """
-    banner_text = """
+    banner_text = r"""
      _                          
  ___| | ___      ____ _  __ _   
 / __| |/ \ \ /\ / / _|  |/ _  |  

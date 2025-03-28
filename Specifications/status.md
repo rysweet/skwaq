@@ -1,6 +1,26 @@
 # Skwaq Project Status
 
-## Current Milestone: Ingestion Module Refinement - Completed ✅
+## Current Milestone: Codebase Cleanup and Bug Fixes - In Progress 🔄
+
+The Codebase Cleanup and Bug Fixes milestone is focused on addressing various technical debt items and resolving outstanding issues with the codebase:
+
+- [x] Fixed SyntaxWarnings in console.py and blarify_parser.py
+  - Added raw string prefixes (r) to multi-line strings to fix invalid escape sequences
+  - Fixed escape sequence '\s' in blarify_parser.py Docker script
+  - Fixed escape sequence '\ ' in console.py banner text
+
+- [x] Removed references to deleted code_analysis module
+  - Updated system_integration.py to remove missing import and initialization
+  - Modified e2e_testing.py to handle removed CodeAnalyzer class
+  - Updated imports in integration module  
+  - Added appropriate logging for removed functionality
+
+- [ ] Fix remaining test failures
+  - Neo4j connector tests failing due to authentication issues
+  - Repository tests failing due to mocking issues
+  - Documentation processing test failures
+
+## Previous Milestone: Ingestion Module Refinement - Completed ✅
 
 The Ingestion Module refinement has been completed, significantly improving Neo4j compatibility, relationship validation, and CLI integration:
 

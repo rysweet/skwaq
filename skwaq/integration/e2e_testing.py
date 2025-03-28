@@ -15,7 +15,7 @@ from pathlib import Path
 
 from ..utils.logging import get_logger
 from ..utils.config import get_config
-from ..code_analysis.analyzer import CodeAnalyzer
+# CodeAnalyzer import removed
 from ..workflows.vulnerability_research import VulnerabilityResearchWorkflow
 from ..workflows.qa_workflow import QAWorkflow
 from ..db.neo4j_connector import get_connector
@@ -621,7 +621,8 @@ class PredefinedScenarios:
         
         # Define steps to test code analysis
         def analyze_file(file_path: str):
-            analyzer = CodeAnalyzer()
+            # CodeAnalyzer removed
+            logger.warning("CodeAnalyzer has been removed from the codebase")
             
             # For testing, use a simple vulnerability
             code = """
