@@ -109,7 +109,7 @@ Options:
 ### Add GitHub Repository
 
 ```bash
-skwaq repo github --url https://github.com/username/repo [--token your-token] [--branch main] [--include "**/*.py"] [--exclude "tests/**"]
+skwaq repo github --url https://github.com/username/repo [--token your-token] [--branch main] [--include "**/*.py"] [--exclude "tests/**"] [--parse-only] [--threads 3]
 ```
 
 Options:
@@ -118,6 +118,21 @@ Options:
 - `--branch`: Branch to clone (default: main)
 - `--include`: Glob patterns for files to include
 - `--exclude`: Glob patterns for files to exclude
+- `--parse-only`: Only parse the codebase without LLM summarization
+- `--threads`: Number of parallel threads for processing (default: 3)
+
+### Ingest Repository
+
+```bash
+skwaq ingest repo /path/to/repo [--parse-only] [--threads 3] [--branch main]
+```
+
+Options:
+- `repo`: Specifies repository ingestion
+- `/path/to/repo`: Path to local repository or repository URL
+- `--parse-only`: Only parse the codebase without LLM summarization
+- `--threads`: Number of parallel threads for processing (default: 3)
+- `--branch`: Git branch to clone (for repository URLs)
 
 ## Vulnerability Analysis
 

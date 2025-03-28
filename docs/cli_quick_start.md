@@ -61,6 +61,9 @@ This will:
 # Add a GitHub repository
 skwaq repo github --url https://github.com/example/repo
 
+# For faster processing without LLM code summarization
+skwaq repo github --url https://github.com/example/repo --parse-only
+
 # List repositories to get the ID
 skwaq repo list
 
@@ -136,3 +139,5 @@ skwaq investigations show --id inv-12345 --format text
 - Use the research workflow for comprehensive vulnerability assessment
 - Use interactive mode for guidance on fixing vulnerabilities
 - Start with guided inquiry if you're new to security assessment
+- Use the `--parse-only` flag for faster repository ingestion without LLM summarization
+- Use `skwaq ingest repo` as a direct way to ingest repositories: `skwaq ingest repo /path/to/repo`

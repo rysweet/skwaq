@@ -25,7 +25,7 @@ This document provides a quick reference of all available commands in the Skwaq 
 
 | Command | Description | Options |
 |---------|-------------|---------|
-| `skwaq ingest` | Ingest a repository or knowledge source | `type` (repo, kb, cve), `source` (required) |
+| `skwaq ingest` | Ingest a repository or knowledge source | `type` (repo, kb, cve), `source` (required), `--parse-only`, `--threads`, `--branch` |
 
 ## Workflow Commands
 
@@ -58,6 +58,9 @@ This document provides a quick reference of all available commands in the Skwaq 
 | `--output`, `-o` | Output file path | `--output report.html` |
 | `--format`, `-f` | Format for output | `--format json` |
 | `--force` | Bypass confirmation | `--force` |
+| `--parse-only` | Only parse without LLM summarization | `--parse-only` |
+| `--threads` | Number of parallel threads | `--threads 5` |
+| `--branch` | Git branch to clone | `--branch develop` |
 
 ## Option Value Types
 
