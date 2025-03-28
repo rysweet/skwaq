@@ -8,8 +8,8 @@ from typing import Dict, List, Any, Optional, AsyncGenerator
 import asyncio
 import json
 
-from autogen_core.agent import Agent
-from autogen_core.event import BaseEvent, Event, EventHook
+from autogen.agent import Agent
+from autogen.event import BaseEvent, Event, EventHook
 
 from .base import Workflow
 from ..agents.skwaq_agent import SkwaqAgent
