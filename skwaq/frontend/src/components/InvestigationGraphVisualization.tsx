@@ -37,11 +37,14 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
     chargeStrength: -60
   });
   
+  // Track data loading state separately from prop 
+  const [isDataLoading, setIsDataLoading] = useState<boolean>(false);
+  
   // Fetch investigation graph data
   useEffect(() => {
     if (!investigationId) return;
     
-    setIsLoading(true);
+    setIsDataLoading(true);
     setError(null);
     
     // Fetch graph data from the investigation endpoint
@@ -54,17 +57,14 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
       })
       .then(data => {
         setGraphData(data);
-        setIsLoading(false);
+        setIsDataLoading(false);
       })
       .catch(err => {
         console.error('Error fetching investigation graph:', err);
         setError(`Failed to load investigation graph: ${err.message}`);
-        setIsLoading(false);
+        setIsDataLoading(false);
       });
   }, [investigationId]);
-  
-  // Track loading state separately from prop
-  const [isLoading, setIsLoading] = useState<boolean>(true);
   
   // Function to handle physics settings changes
   const handlePhysicsChange = (setting: keyof PhysicsSettings, value: number) => {
@@ -95,7 +95,7 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
   
   // Function to initialize the 3D force graph
   useEffect(() => {
-    if (!graphContainerRef.current || isLoading) return;
+    if (!graphContainerRef.current || isLoading || isDataLoading) return;
     
     // Dynamic import to ensure 3d-force-graph only loads in browser environment
     import('3d-force-graph').then((ForceGraph3D) => {

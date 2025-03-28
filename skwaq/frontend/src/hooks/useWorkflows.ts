@@ -6,7 +6,7 @@ import workflowService, {
   WorkflowParameters,
   AvailableTool
 } from '../services/workflowService';
-import useRealTimeEvents from './useRealTimeEvents';
+import { useRealTimeEvents } from './useRealTimeEvents';
 
 export default function useWorkflows() {
   const [availableWorkflows, setAvailableWorkflows] = useState<AvailableWorkflow[]>([]);
@@ -16,8 +16,22 @@ export default function useWorkflows() {
   const [workflowResults, setWorkflowResults] = useState<Record<string, WorkflowResult[]>>({});
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-
-  const { subscribe } = useRealTimeEvents();
+  
+  // Create subscription/unsubscription functions for real-time events
+  const subscribeToEvent = useCallback((eventType: string, callback: any) => {
+    // Using the useRealTimeEvents hook to subscribe to events
+    const { reconnect } = useRealTimeEvents('workflows', eventType, callback);
+    return {
+      unsubscribe: () => {
+        // No direct unsubscribe method needed since the hook handles cleanup in its useEffect
+      }
+    };
+  }, []);
+  
+  // Function to subscribe to workflow events
+  const subscribe = useCallback((channel: string, callback: any) => {
+    return subscribeToEvent(channel, callback);
+  }, [subscribeToEvent]);
 
   // Fetch available workflows
   const fetchAvailableWorkflows = useCallback(async () => {
