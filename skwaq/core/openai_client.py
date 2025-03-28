@@ -234,7 +234,7 @@ class OpenAIClient:
         Returns:
             The response message as a dictionary with role and content
         """
-        chat_client = autogen.core.ChatCompletionClient(
+        chat_client = autogen_core.ChatCompletionClient(
             config_list=self.config_list, is_async=True
         )
         response = await chat_client.generate(
