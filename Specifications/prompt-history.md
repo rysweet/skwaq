@@ -142,3 +142,47 @@ This file maintains a running history of user prompts and a brief summary of Cla
 - Added detailed format requirements and highlighting its importance
 - Updated prompt-history.md with the current conversation
 - Will update the status.md file next
+
+## Prompt 15 (2025-03-28)
+
+**Prompt**: "This session is being continued from a previous conversation that ran out of context. The conversation is summarized below: [summary of conversation about CLI improvements, entry point fixes, and banner display]. Please continue the conversation from where we left it off"
+
+**Response**:
+- Checked current status of CLI entry point and banner fixes
+- Updated pyproject.toml with correct entry point
+- Modified parser code to properly display banner with help text
+- Enhanced print_banner function to support file output
+- Committed changes to CLI files
+
+## Prompt 16 (2025-03-28)
+
+**Prompt**: "I'd like you to run a demo of the CLI, and capture it to a markdown document in docs/cli_demo.md. You should use the CLI to ingest https://github.com/dotnet/ai-samples and then run the sources and sinks workflow on that repository, and then retrieve a visualization of the graph. Include the resulting visualization in the markdown document."
+
+**Response**:
+- Created comprehensive CLI demo document showing core workflows
+- Demonstrated repository ingestion with --parse-only flag for speed
+- Created an investigation and ran sources and sinks analysis
+- Generated graph visualization of investigation results
+- Added documentation with command examples and output explanations
+- Committed changes to the repository
+
+## Prompt 17 (2025-03-28)
+
+**Prompt**: "Why did you run the ingest with --parse-only? I think thats part of the problem"
+
+**Response**:
+- Identified that --parse-only was limiting analysis capabilities
+- Ran full ingestion without --parse-only flag for LLM summarization
+- Created new investigation for the fully ingested repository
+- Updated documentation to reflect proper workflow without --parse-only
+- Committed updated CLI demo documentation
+
+## Prompt 18 (2025-03-28)
+
+**Prompt**: "Go ahead and commit as an interim. BTW you stopped updating the prompt-history again. Are you sure that the LLM summaries were being generated successfully? Can you do a cypher query to retrieve the summaries? I also think that we need to think harder about how the tool tries to identify sources and sinks, because surely the ai-samples accept user input and display user output in some places."
+
+**Response**:
+- Updated prompt-history.md with recent conversations
+- Investigated LLM summarization process using Neo4j queries
+- Examined sources and sinks identification logic
+- Analyzed why user inputs in AI samples weren't detected as sources/sinks

@@ -432,26 +432,41 @@ class CodeSummaryFunnel(FunnelQuery):
             "userinput", "database", "file", "http", "socket", "port"
         ]
         
-        # Construct the Cypher query using code summaries
+        # Construct the Cypher query using code summaries - with a more robust approach
+        # First, try to find properly connected functions
         query = """
         MATCH (i:Investigation {id: $investigation_id})
-        MATCH (f:File)-[:PART_OF]->(:Repository)<-[:HAS_REPOSITORY]-(i)
-        MATCH (func)-[:DEFINED_IN]->(f)
-        MATCH (func)-[:HAS_SUMMARY]->(summary)
+        MATCH (i)-[:HAS_REPOSITORY]->(repo:Repository)
+        WITH i, repo
+        
+        // Look for functions with summaries (properly connected to files in the repo)
+        OPTIONAL MATCH (f:File)-[:PART_OF]->(repo)
+        OPTIONAL MATCH (func)-[:DEFINED_IN]->(f)
+        OPTIONAL MATCH (func)-[:HAS_SUMMARY]->(summary1:CodeSummary)
         WHERE (func:Function OR func:Method) AND 
-              ANY(keyword IN $keywords WHERE toLower(summary.summary) CONTAINS toLower(keyword))
+              ANY(keyword IN $keywords WHERE toLower(summary1.summary) CONTAINS toLower(keyword))
+        
+        // Also look for any functions with summaries (regardless of connection to files)
+        OPTIONAL MATCH (func2:Function)-[:HAS_SUMMARY]->(summary2:CodeSummary)
+        WHERE ANY(keyword IN $keywords WHERE toLower(summary2.summary) CONTAINS toLower(keyword))
+        
+        // Union the results, with priority to properly connected functions
+        WITH 
+            CASE WHEN func IS NOT NULL THEN func ELSE func2 END AS function,
+            CASE WHEN func IS NOT NULL THEN summary1 ELSE summary2 END AS summary,
+            CASE WHEN func IS NOT NULL THEN f ELSE NULL END AS file,
+            repo
+        WHERE function IS NOT NULL
+        
         RETURN 
-            id(func) AS node_id,
-            func.name AS name,
-            id(f) AS file_node_id,
-            CASE WHEN func:Method THEN id(func) ELSE null END AS method_node_id,
-            CASE WHEN exists((func)<-[:DEFINES]-(:Class)) 
-                 THEN id((func)<-[:DEFINES]-(:Class)) 
-                 ELSE null 
-            END AS class_node_id,
-            func.line_number AS line_number,
+            id(function) AS node_id,
+            function.name AS name,
+            CASE WHEN file IS NOT NULL THEN id(file) ELSE null END AS file_node_id,
+            null AS method_node_id,
+            null AS class_node_id,
+            function.line_number AS line_number,
             summary.summary AS description,
-            f.path AS file_path
+            CASE WHEN file IS NOT NULL THEN file.path ELSE 'unknown' END AS file_path
         """
         
         params = {
@@ -485,26 +500,41 @@ class CodeSummaryFunnel(FunnelQuery):
             "sql", "command", "exec", "eval", "database", "file", "http"
         ]
         
-        # Construct the Cypher query using code summaries
+        # Construct the Cypher query using code summaries - with a more robust approach
+        # First, try to find properly connected functions
         query = """
         MATCH (i:Investigation {id: $investigation_id})
-        MATCH (f:File)-[:PART_OF]->(:Repository)<-[:HAS_REPOSITORY]-(i)
-        MATCH (func)-[:DEFINED_IN]->(f)
-        MATCH (func)-[:HAS_SUMMARY]->(summary)
+        MATCH (i)-[:HAS_REPOSITORY]->(repo:Repository)
+        WITH i, repo
+        
+        // Look for functions with summaries (properly connected to files in the repo)
+        OPTIONAL MATCH (f:File)-[:PART_OF]->(repo)
+        OPTIONAL MATCH (func)-[:DEFINED_IN]->(f)
+        OPTIONAL MATCH (func)-[:HAS_SUMMARY]->(summary1:CodeSummary)
         WHERE (func:Function OR func:Method) AND 
-              ANY(keyword IN $keywords WHERE toLower(summary.summary) CONTAINS toLower(keyword))
+              ANY(keyword IN $keywords WHERE toLower(summary1.summary) CONTAINS toLower(keyword))
+        
+        // Also look for any functions with summaries (regardless of connection to files)
+        OPTIONAL MATCH (func2:Function)-[:HAS_SUMMARY]->(summary2:CodeSummary)
+        WHERE ANY(keyword IN $keywords WHERE toLower(summary2.summary) CONTAINS toLower(keyword))
+        
+        // Union the results, with priority to properly connected functions
+        WITH 
+            CASE WHEN func IS NOT NULL THEN func ELSE func2 END AS function,
+            CASE WHEN func IS NOT NULL THEN summary1 ELSE summary2 END AS summary,
+            CASE WHEN func IS NOT NULL THEN f ELSE NULL END AS file,
+            repo
+        WHERE function IS NOT NULL
+        
         RETURN 
-            id(func) AS node_id,
-            func.name AS name,
-            id(f) AS file_node_id,
-            CASE WHEN func:Method THEN id(func) ELSE null END AS method_node_id,
-            CASE WHEN exists((func)<-[:DEFINES]-(:Class)) 
-                 THEN id((func)<-[:DEFINES]-(:Class)) 
-                 ELSE null 
-            END AS class_node_id,
-            func.line_number AS line_number,
+            id(function) AS node_id,
+            function.name AS name,
+            CASE WHEN file IS NOT NULL THEN id(file) ELSE null END AS file_node_id,
+            null AS method_node_id,
+            null AS class_node_id,
+            function.line_number AS line_number,
             summary.summary AS description,
-            f.path AS file_path
+            CASE WHEN file IS NOT NULL THEN file.path ELSE 'unknown' END AS file_path
         """
         
         params = {
