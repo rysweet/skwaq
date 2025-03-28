@@ -3,11 +3,14 @@
 import argparse
 import json
 import os
+import asyncio
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
-from ...ingestion.code_ingestion import ingest_repository, list_repositories
+from ...ingestion import Ingestion
 from ...db.neo4j_connector import get_connector
+from ...db.schema import NodeLabels
+from ...core.openai_client import get_openai_client
 from ..ui.console import console, success, error, info
 from ..ui.progress import create_status_indicator, create_progress_bar
 from ..ui.formatters import format_repository_table, format_panel
@@ -49,8 +52,40 @@ class RepositoryCommandHandler(CommandHandler):
         """
         output_format = getattr(self.args, "format", "table")
         
+        # Query Neo4j for repositories
         with create_status_indicator("[bold blue]Fetching repository list...", spinner="dots") as status:
-            repos = await list_repositories()
+            # Get database connector
+            db = get_connector()
+            
+            # Query repositories
+            query = f"""
+            MATCH (r:{NodeLabels.REPOSITORY})
+            RETURN r.name as name, 
+                   r.url as url,
+                   r.ingestion_id as id,
+                   r.state as state,
+                   r.files_processed as file_count,
+                   r.start_time as created,
+                   r.end_time as completed
+            """
+            
+            # Execute the query
+            results = db.run_query(query)
+            
+            # Format repositories
+            repos = []
+            for repo in results:
+                # Convert to standard format
+                repos.append({
+                    "name": repo.get("name", "Unknown"),
+                    "url": repo.get("url", ""),
+                    "id": repo.get("id", ""),
+                    "status": repo.get("state", "Unknown"),
+                    "file_count": repo.get("file_count", 0),
+                    "created": repo.get("created"),
+                    "completed": repo.get("completed")
+                })
+                
             status.update("[bold green]Repositories retrieved!")
         
         if not repos:
@@ -71,8 +106,6 @@ class RepositoryCommandHandler(CommandHandler):
             Exit code (0 for success, non-zero for errors)
         """
         path = self.args.path
-        include_patterns = self.args.include
-        exclude_patterns = self.args.exclude
         
         # Verify path exists
         if not os.path.exists(path):
@@ -81,34 +114,93 @@ class RepositoryCommandHandler(CommandHandler):
             
         info(f"Ingesting repository from path: {path}")
         
-        # Use progress bar when ingesting
-        with create_progress_bar(
-            description=f"Ingesting {Path(path).name}",
-            unit="files",
-            total=100  # Will be updated by the ingest_repository function
-        ) as progress:
-            task_id = progress.add_task("Ingesting", total=100)
-            
-            # Define progress callback
-            def update_progress(current: int, total: int) -> None:
-                progress.update(task_id, completed=current, total=total)
-            
-            # Ingest repository
-            result = await ingest_repository(
-                repo_path_or_url=path,
-                is_github_url=False,
-                include_patterns=include_patterns,
-                exclude_patterns=exclude_patterns,
-                show_progress=True,
-                progress_callback=update_progress
-            )
+        # Get OpenAI client for LLM processing if needed
+        parse_only = getattr(self.args, 'parse_only', False)
         
-        # Display result
-        success(f"Repository ingested successfully: {result['repository_name']}")
-        info(f"Repository ID: {result['repository_id']}")
-        info(f"Files processed: {result['file_count']} ({result['code_files_processed']} code files)")
+        model_client = None
+        if not parse_only:
+            try:
+                model_client = get_openai_client(async_mode=True)
+                info("Using LLM for code summarization")
+            except Exception as e:
+                error(f"Failed to initialize OpenAI client: {str(e)}")
+                error("Defaulting to parse-only mode (no code summarization)")
+                parse_only = True
+                
+        # Create ingestion instance
+        ingestion = Ingestion(
+            local_path=path,
+            model_client=model_client,
+            parse_only=parse_only,
+            max_parallel=getattr(self.args, 'threads', 3)
+        )
         
-        return 0
+        # Start ingestion and track progress
+        with create_status_indicator(f"[bold blue]Preparing repository: {Path(path).name}...", spinner="dots") as status:
+            try:
+                # Start the ingestion process
+                ingestion_id = await ingestion.ingest()
+                status.update(f"[bold blue]Ingestion started with ID: {ingestion_id}")
+                
+                # Create progress tracking
+                with create_progress_bar(
+                    description=f"Ingesting {Path(path).name}",
+                    unit="files"
+                ) as progress:
+                    task = progress.add_task("Ingesting", total=100)
+                    
+                    # Poll for status updates
+                    completed = False
+                    while not completed:
+                        # Get current status
+                        status_obj = await ingestion.get_status(ingestion_id)
+                        
+                        # Update progress bar
+                        if status_obj.total_files > 0:
+                            progress.update(
+                                task, 
+                                completed=status_obj.files_processed,
+                                total=status_obj.total_files,
+                                description=f"[cyan]{status_obj.message}"
+                            )
+                        else:
+                            progress.update(
+                                task,
+                                completed=status_obj.progress,
+                                total=100,
+                                description=f"[cyan]{status_obj.message}"
+                            )
+                            
+                        # Check if completed or failed
+                        if status_obj.state in ["completed", "failed"]:
+                            completed = True
+                            if status_obj.state == "completed":
+                                progress.update(task, completed=100, total=100, description="[green]Completed")
+                            else:
+                                progress.update(task, description=f"[red]Failed: {status_obj.error}")
+                        else:
+                            # Wait before polling again
+                            await asyncio.sleep(1)
+                
+                # Get final status
+                final_status = await ingestion.get_status(ingestion_id)
+                
+                # Show results
+                if final_status.state == "completed":
+                    status.update("[bold green]Repository ingestion completed successfully!")
+                    success(f"Repository ingestion completed (ID: {ingestion_id})")
+                    info(f"Files processed: {final_status.files_processed}")
+                    info(f"Time elapsed: {final_status.time_elapsed:.2f} seconds")
+                    return 0
+                else:
+                    status.update("[bold red]Repository ingestion failed!")
+                    error(f"Ingestion failed: {final_status.error}")
+                    return 1
+                    
+            except Exception as e:
+                status.update(f"[bold red]Repository ingestion failed: {str(e)}")
+                error(f"Failed to ingest repository: {str(e)}")
+                return 1
     
     async def _handle_github(self) -> int:
         """Handle the github command.
@@ -117,47 +209,98 @@ class RepositoryCommandHandler(CommandHandler):
             Exit code (0 for success, non-zero for errors)
         """
         url = self.args.url
-        token = self.args.token or os.environ.get("GITHUB_TOKEN")
         branch = self.args.branch
-        include_patterns = self.args.include
-        exclude_patterns = self.args.exclude
-        
-        if not token:
-            info("No GitHub token provided. Using unauthenticated GitHub API (rate limits apply).")
-            info("Set GITHUB_TOKEN environment variable or use --token for authenticated access.")
         
         info(f"Ingesting repository from GitHub: {url}")
         
-        # Use progress bar when ingesting
-        with create_progress_bar(
-            description=f"Ingesting {url}",
-            unit="files",
-            total=100  # Will be updated by the ingest_repository function
-        ) as progress:
-            task_id = progress.add_task("Ingesting", total=100)
-            
-            # Define progress callback
-            def update_progress(current: int, total: int) -> None:
-                progress.update(task_id, completed=current, total=total)
-            
-            # Ingest repository
-            result = await ingest_repository(
-                repo_path_or_url=url,
-                is_github_url=True,
-                include_patterns=include_patterns,
-                exclude_patterns=exclude_patterns,
-                github_token=token,
-                branch=branch,
-                show_progress=True,
-                progress_callback=update_progress
-            )
+        # Get OpenAI client for LLM processing if needed
+        parse_only = getattr(self.args, 'parse_only', False)
         
-        # Display result
-        success(f"Repository ingested successfully: {result['repository_name']}")
-        info(f"Repository ID: {result['repository_id']}")
-        info(f"Files processed: {result['file_count']} ({result['code_files_processed']} code files)")
+        model_client = None
+        if not parse_only:
+            try:
+                model_client = get_openai_client(async_mode=True)
+                info("Using LLM for code summarization")
+            except Exception as e:
+                error(f"Failed to initialize OpenAI client: {str(e)}")
+                error("Defaulting to parse-only mode (no code summarization)")
+                parse_only = True
         
-        return 0
+        # Create ingestion instance
+        ingestion = Ingestion(
+            repo=url,
+            branch=branch,
+            model_client=model_client,
+            parse_only=parse_only,
+            max_parallel=getattr(self.args, 'threads', 3)
+        )
+        
+        # Start ingestion and track progress
+        with create_status_indicator(f"[bold blue]Cloning repository: {url}...", spinner="dots") as status:
+            try:
+                # Start the ingestion process
+                ingestion_id = await ingestion.ingest()
+                status.update(f"[bold blue]Ingestion started with ID: {ingestion_id}")
+                
+                # Create progress tracking
+                with create_progress_bar(
+                    description=f"Ingesting {url}",
+                    unit="files"
+                ) as progress:
+                    task = progress.add_task("Ingesting", total=100)
+                    
+                    # Poll for status updates
+                    completed = False
+                    while not completed:
+                        # Get current status
+                        status_obj = await ingestion.get_status(ingestion_id)
+                        
+                        # Update progress bar
+                        if status_obj.total_files > 0:
+                            progress.update(
+                                task, 
+                                completed=status_obj.files_processed,
+                                total=status_obj.total_files,
+                                description=f"[cyan]{status_obj.message}"
+                            )
+                        else:
+                            progress.update(
+                                task,
+                                completed=status_obj.progress,
+                                total=100,
+                                description=f"[cyan]{status_obj.message}"
+                            )
+                            
+                        # Check if completed or failed
+                        if status_obj.state in ["completed", "failed"]:
+                            completed = True
+                            if status_obj.state == "completed":
+                                progress.update(task, completed=100, total=100, description="[green]Completed")
+                            else:
+                                progress.update(task, description=f"[red]Failed: {status_obj.error}")
+                        else:
+                            # Wait before polling again
+                            await asyncio.sleep(1)
+                
+                # Get final status
+                final_status = await ingestion.get_status(ingestion_id)
+                
+                # Show results
+                if final_status.state == "completed":
+                    status.update("[bold green]Repository ingestion completed successfully!")
+                    success(f"Repository ingestion completed (ID: {ingestion_id})")
+                    info(f"Files processed: {final_status.files_processed}")
+                    info(f"Time elapsed: {final_status.time_elapsed:.2f} seconds")
+                    return 0
+                else:
+                    status.update("[bold red]Repository ingestion failed!")
+                    error(f"Ingestion failed: {final_status.error}")
+                    return 1
+                    
+            except Exception as e:
+                status.update(f"[bold red]Repository ingestion failed: {str(e)}")
+                error(f"Failed to ingest repository: {str(e)}")
+                return 1
     
     async def _handle_delete(self) -> int:
         """Handle the delete command.
@@ -170,21 +313,38 @@ class RepositoryCommandHandler(CommandHandler):
         
         # Verify repository exists
         connector = get_connector()
-        repo = connector.run_query(
-            "MATCH (r:Repository) WHERE id(r) = $id RETURN r.name as name",
-            {"id": int(repo_id)}
-        )
+        
+        # First try to find by ingestion_id
+        repo_query = """
+        MATCH (r:Repository)
+        WHERE r.ingestion_id = $id 
+        RETURN r.name as name, r.ingestion_id as ingestion_id
+        """
+        
+        repo = connector.run_query(repo_query, {"id": repo_id})
+        
+        # If not found, try by node ID if it looks like a number
+        if not repo and repo_id.isdigit():
+            repo = connector.run_query(
+                """
+                MATCH (r:Repository)
+                WHERE elementId(r) = $id
+                RETURN r.name as name, r.ingestion_id as ingestion_id
+                """,
+                {"id": int(repo_id)}
+            )
         
         if not repo:
             error(f"Repository not found: {repo_id}")
             return 1
         
         repo_name = repo[0]["name"]
+        ingestion_id = repo[0]["ingestion_id"]
         
         # Confirm deletion
         if not force:
             confirmed = prompt_for_confirmation(
-                f"Are you sure you want to delete repository '{repo_name}' (ID: {repo_id})?"
+                f"Are you sure you want to delete repository '{repo_name}' (ID: {ingestion_id})?"
             )
             
             if not confirmed:
@@ -194,15 +354,14 @@ class RepositoryCommandHandler(CommandHandler):
         # Delete repository
         with create_status_indicator(f"[bold blue]Deleting repository '{repo_name}'...", spinner="dots") as status:
             # Delete all connected nodes recursively
-            connector.run_query(
-                """
-                MATCH (r:Repository)
-                WHERE id(r) = $id
-                OPTIONAL MATCH (r)-[*1..2]-(connected)
-                DETACH DELETE connected, r
-                """,
-                {"id": int(repo_id)}
-            )
+            delete_query = """
+            MATCH (r:Repository)
+            WHERE r.ingestion_id = $id
+            OPTIONAL MATCH (r)-[*]-(connected)
+            DETACH DELETE connected, r
+            """
+            
+            connector.run_query(delete_query, {"id": ingestion_id})
             status.update(f"[bold green]Repository '{repo_name}' deleted!")
         
         success(f"Repository '{repo_name}' deleted successfully.")

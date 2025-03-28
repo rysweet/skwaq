@@ -2,7 +2,7 @@
 
 ## Current Milestone: Ingestion Module Refinement - In Progress 🚧
 
-The Ingestion Module refinement is currently in progress, focusing on improving Neo4j compatibility, relationship validation, and test coverage:
+The Ingestion Module refinement is currently in progress, focusing on improving Neo4j compatibility, relationship validation, and CLI integration:
 
 - [x] Fixed Neo4j deprecation warnings
   - Updated connector to use execute_read and execute_write methods
@@ -14,6 +14,14 @@ The Ingestion Module refinement is currently in progress, focusing on improving 
   - Implemented test for documentation node relationships
   - Verified traversal paths between different node types
   - Improved relationship creation procedures
+
+- [x] Updated CLI to use new Ingestion module
+  - Removed old code_ingestion references
+  - Updated ingest_commands.py to use new Ingestion class
+  - Updated repository_commands.py with new repository management
+  - Enhanced progress tracking and status reporting
+  - Added proper handling of local and remote repositories
+  - Added integration with OpenAI client
 
 ## Previous Milestone: CLI Refactoring - Completed ✅
 

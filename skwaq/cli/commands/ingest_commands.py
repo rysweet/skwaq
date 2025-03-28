@@ -2,14 +2,15 @@
 
 import argparse
 import os
+import asyncio
+import uuid
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
-from ...ingestion.code_ingestion import ingest_repository
-from ...ingestion.knowledge_ingestion import ingest_knowledge_source
-from ...ingestion.cwe_ingestion import ingest_cve_source
+from ...ingestion import Ingestion
+from ...core.openai_client import get_openai_client
 from ..ui.console import console, success, error, info
-from ..ui.progress import create_status_indicator
+from ..ui.progress import create_status_indicator, create_progress_bar
 from .base import CommandHandler, handle_command_error
 
 
@@ -26,104 +27,124 @@ class IngestCommandHandler(CommandHandler):
         source_type = self.args.type
         source_path = Path(self.args.source)
         
-        if not source_path.exists():
-            error(f"Error: {source_path} does not exist.")
-            return 1
-        
         if source_type == "repo":
+            if not source_path.exists() and not str(source_path).startswith(("http://", "https://")):
+                error(f"Error: {source_path} does not exist or is not a valid repository URL.")
+                return 1
             return await self._handle_repo_ingestion(source_path)
-        elif source_type == "kb":
-            return await self._handle_kb_ingestion(source_path)
-        elif source_type == "cve":
-            return await self._handle_cve_ingestion(source_path)
         else:
-            error("Unknown ingestion type.")
+            error("Currently only 'repo' ingestion type is supported.")
             return 1
     
     async def _handle_repo_ingestion(self, source_path: Path) -> int:
         """Handle repository ingestion.
         
         Args:
-            source_path: Path to the repository
+            source_path: Path to the repository or repository URL
             
         Returns:
             Exit code (0 for success, non-zero for errors)
         """
-        info(f"Ingesting repository from: {source_path}")
+        # Set up parameters for ingestion
+        source_str = str(source_path)
+        is_url = source_str.startswith(("http://", "https://"))
         
-        with create_status_indicator("[bold blue]Ingesting repository...", spinner="dots") as status:
-            # Import here to avoid circular imports
-            from ...ingestion.code_ingestion import ingest_repository
-            
+        # Get OpenAI client for LLM processing if needed
+        parse_only = getattr(self.args, 'parse_only', False)
+        
+        model_client = None
+        if not parse_only:
             try:
-                result = await ingest_repository(str(source_path))
-                status.update("[bold green]Repository ingestion completed!")
+                model_client = get_openai_client(async_mode=True)
+                info("Using LLM for code summarization")
+            except Exception as e:
+                error(f"Failed to initialize OpenAI client: {str(e)}")
+                error("Defaulting to parse-only mode (no code summarization)")
+                parse_only = True
+        
+        # Create ingestion instance
+        if is_url:
+            info(f"Ingesting repository from URL: {source_str}")
+            branch = getattr(self.args, 'branch', None)
+            ingestion = Ingestion(
+                repo=source_str,
+                branch=branch,
+                model_client=model_client,
+                parse_only=parse_only,
+                max_parallel=getattr(self.args, 'threads', 3)
+            )
+        else:
+            info(f"Ingesting local repository from: {source_str}")
+            ingestion = Ingestion(
+                local_path=source_str,
+                model_client=model_client,
+                parse_only=parse_only,
+                max_parallel=getattr(self.args, 'threads', 3)
+            )
+            
+        # Start ingestion and track progress
+        with create_status_indicator("[bold blue]Starting ingestion...", spinner="dots") as status:
+            try:
+                # Start the ingestion process
+                ingestion_id = await ingestion.ingest()
+                status.update(f"[bold blue]Ingestion started with ID: {ingestion_id}")
                 
-                # Display repository information
-                success(f"Repository ingested: {result.get('repository_name', 'Unknown')}")
-                info(f"Files processed: {result.get('file_count', 0)}")
-                info(f"Code files: {result.get('code_files_processed', 0)}")
+                # Create progress tracking
+                with create_progress_bar(
+                    description="Ingesting files",
+                    unit="files"
+                ) as progress:
+                    task = progress.add_task("Ingesting", total=100)
+                    
+                    # Poll for status updates
+                    completed = False
+                    while not completed:
+                        # Get current status
+                        status_obj = await ingestion.get_status(ingestion_id)
+                        
+                        # Update progress bar
+                        if status_obj.total_files > 0:
+                            progress.update(
+                                task, 
+                                completed=status_obj.files_processed,
+                                total=status_obj.total_files,
+                                description=f"[cyan]{status_obj.message}"
+                            )
+                        else:
+                            progress.update(
+                                task,
+                                completed=status_obj.progress,
+                                total=100,
+                                description=f"[cyan]{status_obj.message}"
+                            )
+                            
+                        # Check if completed or failed
+                        if status_obj.state in ["completed", "failed"]:
+                            completed = True
+                            if status_obj.state == "completed":
+                                progress.update(task, completed=100, total=100, description="[green]Completed")
+                            else:
+                                progress.update(task, description=f"[red]Failed: {status_obj.error}")
+                        else:
+                            # Wait before polling again
+                            await asyncio.sleep(1)
+                            
+                # Get final status
+                final_status = await ingestion.get_status(ingestion_id)
                 
-                return 0
+                # Show results
+                if final_status.state == "completed":
+                    status.update("[bold green]Repository ingestion completed successfully!")
+                    success(f"Repository ingestion completed (ID: {ingestion_id})")
+                    info(f"Files processed: {final_status.files_processed}")
+                    info(f"Time elapsed: {final_status.time_elapsed:.2f} seconds")
+                    return 0
+                else:
+                    status.update("[bold red]Repository ingestion failed!")
+                    error(f"Ingestion failed: {final_status.error}")
+                    return 1
+                    
             except Exception as e:
                 status.update(f"[bold red]Repository ingestion failed: {str(e)}")
                 error(f"Failed to ingest repository: {str(e)}")
-                return 1
-    
-    async def _handle_kb_ingestion(self, source_path: Path) -> int:
-        """Handle knowledge base ingestion.
-        
-        Args:
-            source_path: Path to the knowledge source
-            
-        Returns:
-            Exit code (0 for success, non-zero for errors)
-        """
-        info(f"Ingesting knowledge source from: {source_path}")
-        
-        with create_status_indicator("[bold blue]Ingesting knowledge source...", spinner="dots") as status:
-            # Import here to avoid circular imports
-            from ...ingestion.knowledge_ingestion import ingest_knowledge_source
-            
-            try:
-                result = await ingest_knowledge_source(str(source_path))
-                status.update("[bold green]Knowledge source ingestion completed!")
-                
-                # Display knowledge information
-                success(f"Knowledge source ingested: {result.get('source_name', 'Unknown')}")
-                info(f"Documents processed: {result.get('document_count', 0)}")
-                
-                return 0
-            except Exception as e:
-                status.update(f"[bold red]Knowledge ingestion failed: {str(e)}")
-                error(f"Failed to ingest knowledge source: {str(e)}")
-                return 1
-    
-    async def _handle_cve_ingestion(self, source_path: Path) -> int:
-        """Handle CVE/CWE ingestion.
-        
-        Args:
-            source_path: Path to the CVE source
-            
-        Returns:
-            Exit code (0 for success, non-zero for errors)
-        """
-        info(f"Ingesting CVE/CWE source from: {source_path}")
-        
-        with create_status_indicator("[bold blue]Ingesting CVE/CWE source...", spinner="dots") as status:
-            # Import here to avoid circular imports
-            from ...ingestion.cwe_ingestion import ingest_cve_source
-            
-            try:
-                result = await ingest_cve_source(str(source_path))
-                status.update("[bold green]CVE/CWE source ingestion completed!")
-                
-                # Display CVE information
-                success(f"CVE/CWE source ingested: {result.get('source_name', 'Unknown')}")
-                info(f"Entries processed: {result.get('entry_count', 0)}")
-                
-                return 0
-            except Exception as e:
-                status.update(f"[bold red]CVE/CWE ingestion failed: {str(e)}")
-                error(f"Failed to ingest CVE/CWE source: {str(e)}")
                 return 1

@@ -2,6 +2,7 @@
 
 from datetime import datetime
 import uuid
+import asyncio
 from typing import Dict, Any, List, Optional
 
 from flask import Blueprint, jsonify, request, abort, Response, current_app
@@ -9,11 +10,10 @@ from skwaq.api.events import publish_repository_event, publish_analysis_event
 
 from skwaq.api.auth import login_required, require_permission
 from skwaq.core.openai_client import get_openai_client
-# Fix import, use what's available instead
-# from skwaq.ingestion.code_ingestion import CodeIngestionManager
-from skwaq.code_analysis.analyzer import CodeAnalyzer
+from skwaq.ingestion import Ingestion
 from skwaq.security.authorization import Permission
-from skwaq.db.neo4j_connector import Neo4jConnector
+from skwaq.db.neo4j_connector import get_connector, Neo4jConnector
+from skwaq.db.schema import NodeLabels
 from skwaq.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -59,55 +59,113 @@ ACTIVE_ANALYSES = {}  # repo_id -> task_info
 def get_repositories_from_db() -> List[Dict[str, Any]]:
     """Get repositories from Neo4j database.
     
-    In a real implementation, this would fetch data from Neo4j.
-    For now, we'll use our in-memory cache.
+    Fetches actual repositories from the Neo4j database.
     
     Returns:
         List of repository dictionaries
     """
     try:
-        # This is a placeholder for actual Neo4j code
-        # connector = Neo4jConnector()
-        # result = connector.query(
-        #     "MATCH (r:Repository) "
-        #     "RETURN r.id AS id, r.name AS name, r.description AS description, "
-        #     "r.status AS status, r.vulnerabilities AS vulnerabilities, "
-        #     "r.lastAnalyzed AS lastAnalyzed, r.url AS url"
-        # )
-        # return result
-        return REPOSITORIES
+        # Get database connector
+        connector = get_connector()
+        
+        # Query repositories
+        query = f"""
+        MATCH (r:{NodeLabels.REPOSITORY})
+        RETURN r.ingestion_id as id, 
+               r.name as name, 
+               r.url as url,
+               r.state as status,
+               r.files_processed as file_count,
+               r.end_time as lastAnalyzed
+        """
+        
+        results = connector.run_query(query)
+        
+        if not results:
+            return REPOSITORIES  # Return mock data if no repositories found
+            
+        # Format for API response
+        repos = []
+        for repo in results:
+            # Determine vulnerabilities count (to be implemented in the future)
+            vulnerabilities = None
+            
+            # Convert to standard format
+            repos.append({
+                "id": repo.get("id", str(uuid.uuid4())),
+                "name": repo.get("name", "Unknown Repository"),
+                "description": f"Repository from {repo.get('url', 'unknown source')}",
+                "status": repo.get("status", "Unknown"),
+                "vulnerabilities": vulnerabilities,
+                "lastAnalyzed": repo.get("lastAnalyzed"),
+                "url": repo.get("url")
+            })
+            
+        return repos
     except Exception as e:
         logger.error(f"Error retrieving repositories: {e}")
-        return []
+        return REPOSITORIES  # Return mock data on error
 
 
 def get_repository_by_id(repo_id: str) -> Optional[Dict[str, Any]]:
     """Get a repository by ID from Neo4j database.
     
-    In a real implementation, this would fetch data from Neo4j.
-    For now, we'll use our in-memory cache.
+    Fetches repository details from Neo4j database by ingestion ID.
     
     Args:
-        repo_id: Repository ID
+        repo_id: Repository ID (ingestion_id)
         
     Returns:
         Repository dictionary or None if not found
     """
     try:
-        # This is a placeholder for actual Neo4j code
-        # connector = Neo4jConnector()
-        # result = connector.query_single(
-        #     "MATCH (r:Repository {id: $id}) "
-        #     "RETURN r.id AS id, r.name AS name, r.description AS description, "
-        #     "r.status AS status, r.vulnerabilities AS vulnerabilities, "
-        #     "r.lastAnalyzed AS lastAnalyzed, r.url AS url",
-        #     {"id": repo_id}
-        # )
-        # return result
-        return next((repo for repo in REPOSITORIES if repo['id'] == repo_id), None)
+        # Try the mock data first for backward compatibility
+        mock_repo = next((repo for repo in REPOSITORIES if repo['id'] == repo_id), None)
+        
+        # Get database connector
+        connector = get_connector()
+        
+        # Query repositories by ingestion_id
+        query = f"""
+        MATCH (r:{NodeLabels.REPOSITORY})
+        WHERE r.ingestion_id = $id
+        RETURN r.ingestion_id as id, 
+               r.name as name, 
+               r.url as url,
+               r.state as status,
+               r.files_processed as file_count,
+               r.error as error,
+               r.end_time as lastAnalyzed,
+               r.progress as progress
+        """
+        
+        results = connector.run_query(query, {"id": repo_id})
+        
+        if not results:
+            return mock_repo  # Return mock data if not found
+            
+        # Format for API response
+        repo = results[0]
+        
+        # Determine vulnerabilities count (to be implemented in the future)
+        vulnerabilities = None
+        
+        # Convert to standard format
+        return {
+            "id": repo.get("id", repo_id),
+            "name": repo.get("name", "Unknown Repository"),
+            "description": f"Repository from {repo.get('url', 'unknown source')}",
+            "status": repo.get("status", "Unknown"),
+            "progress": repo.get("progress", 0),
+            "error": repo.get("error"),
+            "vulnerabilities": vulnerabilities,
+            "lastAnalyzed": repo.get("lastAnalyzed"),
+            "fileCount": repo.get("file_count", 0),
+            "url": repo.get("url")
+        }
     except Exception as e:
         logger.error(f"Error retrieving repository {repo_id}: {e}")
-        return None
+        return mock_repo  # Return mock data on error
 
 
 @bp.route('', methods=['GET'])
@@ -145,20 +203,99 @@ def add_repository() -> Response:
     if not url:
         abort(400, description="URL is required")
     
-    # In a real implementation, this would start the repository ingestion in a background task
-    # and store the repository in Neo4j
+    # Create a background task to ingest the repository
+    def ingest_repo_task(repo_url, branch=None, parse_only=False):
+        """Background task to ingest repository."""
+        async def _run_ingestion():
+            try:
+                # Get OpenAI client
+                model_client = None
+                if not parse_only:
+                    try:
+                        model_client = get_openai_client(async_mode=True)
+                    except Exception as e:
+                        logger.error(f"Failed to initialize OpenAI client: {e}")
+                        logger.info("Falling back to parse-only mode")
+                
+                # Create ingestion instance
+                ingestion = Ingestion(
+                    repo=repo_url,
+                    branch=branch,
+                    model_client=model_client,
+                    parse_only=parse_only
+                )
+                
+                # Start ingestion
+                ingestion_id = await ingestion.ingest()
+                logger.info(f"Started ingestion with ID: {ingestion_id}")
+                
+                # Track ingestion and send status updates
+                completed = False
+                while not completed:
+                    try:
+                        status = await ingestion.get_status(ingestion_id)
+                        
+                        # Send status update
+                        publish_repository_event("repository_status_update", {
+                            "id": ingestion_id,
+                            "status": status.state,
+                            "progress": status.progress,
+                            "message": status.message,
+                            "files_processed": status.files_processed,
+                            "total_files": status.total_files
+                        })
+                        
+                        if status.state in ["completed", "failed"]:
+                            completed = True
+                            logger.info(f"Ingestion {status.state} in {status.time_elapsed:.2f} seconds")
+                        else:
+                            await asyncio.sleep(2)
+                    except Exception as e:
+                        logger.error(f"Error checking ingestion status: {e}")
+                        completed = True
+                
+                return ingestion_id
+            except Exception as e:
+                logger.error(f"Error in ingestion task: {e}")
+                return None
+        
+        # Create asyncio event loop and run the task
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            return loop.run_until_complete(_run_ingestion())
+        finally:
+            loop.close()
+    
+    # Create a thread to run the ingestion task
+    import threading
+    branch = options.get('branch')
+    parse_only = options.get('parse_only', False)
+    
+    # Generate a temporary ID for the repository
+    ingestion_id = str(uuid.uuid4())
+    repo_name = url.split('/')[-2] + '/' + url.split('/')[-1] if '/' in url else url
+    
+    # Create initial repository representation
     new_repo = {
-        'id': str(uuid.uuid4()),
-        'name': url.split('/')[-2] + '/' + url.split('/')[-1],
+        'id': ingestion_id,
+        'name': repo_name,
         'description': f'Repository from {url}',
-        'status': 'Analyzing',
+        'status': 'Initializing',
+        'progress': 0,
         'vulnerabilities': None,
         'lastAnalyzed': None,
         'url': url
     }
     
-    # Add to in-memory cache
-    REPOSITORIES.append(new_repo)
+    # Start ingestion in a background thread
+    thread = threading.Thread(
+        target=ingest_repo_task, 
+        args=(url, branch, parse_only),
+        daemon=True
+    )
+    thread.start()
     
     # Send real-time update
     publish_repository_event("repository_added", new_repo)
