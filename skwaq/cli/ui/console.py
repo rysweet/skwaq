@@ -28,12 +28,13 @@ skwaq_theme = Theme(
 console = Console(theme=skwaq_theme)
 
 
-def print_banner(include_version: bool = True, version: Optional[str] = None) -> None:
+def print_banner(include_version: bool = True, version: Optional[str] = None, file=None) -> None:
     """Print the Skwaq banner.
 
     Args:
         include_version: Whether to include the version
         version: Version string to include (if None, will use default)
+        file: File object to print to (default None for stdout)
     """
     banner_text = r"""
      _                          
@@ -70,7 +71,14 @@ def print_banner(include_version: bool = True, version: Optional[str] = None) ->
     else:
         banner = Panel(banner_text, style="banner", expand=False)
 
-    console.print(banner)
+    # If file is None, print to console's default output
+    # Otherwise, use the specified file
+    if file is None:
+        console.print(banner)
+    else:
+        # For file output, we need to render the panel as a string
+        result = console.render_str(banner)
+        print(result, file=file)
 
 
 def error(message: str) -> None:

@@ -2,7 +2,13 @@
 
 import argparse
 import sys
+import io
 from typing import Optional, Callable, Dict, Any, List, Union, Tuple
+
+from ..ui.console import print_banner
+
+
+# We'll handle banner printing directly, so no need for a custom formatter
 
 
 class SkwaqArgumentParser:
@@ -20,7 +26,9 @@ class SkwaqArgumentParser:
         Args:
             description: Description of the CLI tool
         """
-        self.parser = argparse.ArgumentParser(description=description)
+        self.parser = argparse.ArgumentParser(
+            description=description
+        )
         self.subparsers = self.parser.add_subparsers(
             dest="command", help="Available commands"
         )
@@ -68,9 +76,11 @@ class SkwaqArgumentParser:
 
         # If no arguments provided, show help (only in non-test environments)
         if not args and "pytest" not in sys.modules:
+            # Banner is printed by the main function
             self.parser.print_help()
             sys.exit(0)
-
+            
+        # Process the arguments
         return self.parser.parse_args(args)
 
 

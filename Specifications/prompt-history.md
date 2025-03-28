@@ -100,3 +100,45 @@ This file maintains a running history of user prompts and a brief summary of Cla
 - Updated prompt-history.md with recent conversation history
 - Will remove the failing Git repository-related tests
 - Will provide an overview of CLI functionality
+
+## Prompt 11 (2025-03-28)
+
+**Prompt**: "This session is being continued from a previous conversation that ran out of context. The conversation is summarized below: [summary of previous conversation about implementing a sources and sinks workflow in the UI and fixing repository ingestion via CLI]. Please continue the conversation from where we left it off"
+
+**Response**:
+- Identified and fixed a "coroutine never awaited" error in the CLI entry point
+- Fixed nested Rich library displays in the CLI causing conflicts
+- Updated ingestion commands to properly display progress information
+- Created wrappers for async functions in the CLI entry point
+
+## Prompt 12 (2025-03-28)
+
+**Prompt**: "did you test the changes?"
+
+**Response**:
+- Created test scripts to verify CLI help display
+- Tested CLI commands with small repositories
+- Confirmed banner is properly displayed with help text
+- Made iterative fixes to ensure proper display without duplication
+
+## Prompt 13 (2025-03-28)
+
+**Prompt**: "The banner is printing version 1.0.0. thats not right."
+
+**Response**: 
+- Fixed version display in the CLI banner
+- Updated code to use the actual package version (0.1.0) from __version__
+- Imported version from package rather than using hardcoded values
+- Updated all instances where banner is printed to use correct version
+- Added tests to verify version display
+
+## Prompt 14 (2025-03-28)
+
+**Prompt**: "I notice that you are not keeping up the prompt-history.md like I asked. Please update your CLAUDE.md file with whatever instructions you need in order to ensure that you keep prompt-history up to date. Then update status."
+
+**Response**:
+- Checked existing prompt-history.md file and its current content
+- Updated CLAUDE.md to emphasize the mandatory requirement for prompt history
+- Added detailed format requirements and highlighting its importance
+- Updated prompt-history.md with the current conversation
+- Will update the status.md file next
