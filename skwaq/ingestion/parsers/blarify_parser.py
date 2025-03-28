@@ -186,22 +186,14 @@ class BlarifyParser(CodeParser):
                 f.write("""
 FROM python:3.10-slim
 
-# Install dependencies for language servers
+# Install minimal dependencies needed for file analysis
 RUN apt-get update && apt-get install -y \\
-    git \\
-    golang \\
-    dotnet-sdk-7.0 \\
-    nodejs \\
-    npm
+    git
 
-# Install Blarify
+# Install Blarify with minimal dependencies
 RUN pip install blarify
 
-# Install language servers
-RUN go install golang.org/x/tools/gopls@latest
-ENV PATH="/root/go/bin:${PATH}"
-
-# Create script that will run Blarify and output the results
+# Create script that will run simplified Blarify analysis
 COPY run_blarify.py /run_blarify.py
 
 WORKDIR /code
@@ -211,11 +203,178 @@ ENTRYPOINT ["python", "/run_blarify.py"]
             # Write the Python script that will run inside the container
             script_path = os.path.join(docker_dir, "run_blarify.py")
             with open(script_path, 'w') as f:
-                f.write("""
+                f.write('''
 import os
 import sys
 import json
-from blarify.prebuilt.graph_builder import GraphBuilder
+import re
+from pathlib import Path
+
+def simple_file_parser(codebase_path):
+    """A simplified file parser that creates a basic graph structure."""
+    # Extensions to process
+    code_extensions = {
+        '.py': 'Python',
+        '.js': 'JavaScript',
+        '.ts': 'TypeScript',
+        '.java': 'Java',
+        '.c': 'C',
+        '.cpp': 'C++',
+        '.h': 'C/C++ Header',
+        '.cs': 'C#',
+        '.go': 'Go',
+        '.rb': 'Ruby',
+        '.php': 'PHP',
+        '.sh': 'Shell',
+        '.rs': 'Rust',
+        '.swift': 'Swift',
+        '.kt': 'Kotlin',
+        '.m': 'Objective-C',
+    }
+    
+    # Skip directories
+    skip_dirs = ['.git', '__pycache__', 'node_modules', 'venv', '.vs', 'bin', 'obj']
+    
+    # Simple regex patterns to identify functions and classes
+    patterns = {
+        'Python': {
+            'function': r'def\s+(\w+)\s*\(',
+            'class': r'class\s+(\w+)',
+        },
+        'JavaScript': {
+            'function': r'function\s+(\w+)\s*\(|(\w+)\s*=\s*function\s*\(|(\w+)\s*\([^)]*\)\s*{',
+            'class': r'class\s+(\w+)',
+        },
+        'Java': {
+            'function': r'(?:public|private|protected|static|[ ]) +[\w<>\[\]]+\s+(\w+) *\([^)]*\)',
+            'class': r'class\s+(\w+)',
+        },
+        'C#': {
+            'function': r'(?:public|private|protected|static|[ ]) +[\w<>\[\]]+\s+(\w+) *\([^)]*\)',
+            'class': r'class\s+(\w+)',
+        },
+    }
+    
+    # Data structures to hold nodes and relationships
+    nodes = []
+    relationships = []
+    next_id = 1
+    node_id_map = {}  # Map file paths to node IDs
+    
+    # Process each file
+    for root, dirs, files in os.walk(codebase_path):
+        # Skip specified directories
+        dirs[:] = [d for d in dirs if d not in skip_dirs]
+        
+        for file in files:
+            file_path = os.path.join(root, file)
+            rel_path = os.path.relpath(file_path, codebase_path)
+            ext = os.path.splitext(file)[1].lower()
+            
+            # Skip non-code files or files that are too large
+            if ext not in code_extensions or os.path.getsize(file_path) > 1_000_000:
+                continue
+                
+            language = code_extensions[ext]
+            
+            # Create file node
+            file_node_id = next_id
+            next_id += 1
+            node_id_map[rel_path] = file_node_id
+            
+            file_node = {
+                "id": file_node_id,
+                "type": "File",
+                "labels": ["File"],
+                "file_path": rel_path,
+                "name": file,
+                "properties": {
+                    "language": language,
+                    "type": "file",
+                }
+            }
+            nodes.append(file_node)
+            
+            # Try to extract basic code entities
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    
+                # Only attempt to parse languages we have patterns for
+                if language in patterns:
+                    # Find functions
+                    if 'function' in patterns[language]:
+                        func_matches = re.finditer(patterns[language]['function'], content)
+                        for match in func_matches:
+                            # Get the function name from the first non-None group
+                            func_name = next((g for g in match.groups() if g is not None), "unknown_function")
+                            if not func_name:
+                                continue
+                                
+                            func_node_id = next_id
+                            next_id += 1
+                            
+                            func_node = {
+                                "id": func_node_id,
+                                "type": "Function",
+                                "labels": ["Function"],
+                                "file_path": rel_path,
+                                "name": func_name,
+                                "properties": {
+                                    "type": "function",
+                                    "language": language,
+                                    "start_line": content[:match.start()].count('\\n') + 1,
+                                    "end_line": content[:match.end()].count('\\n') + 1,
+                                }
+                            }
+                            nodes.append(func_node)
+                            
+                            # Create relationship between file and function
+                            relationships.append({
+                                "source_id": file_node_id,
+                                "target_id": func_node_id,
+                                "type": "DEFINES",
+                                "properties": {}
+                            })
+                    
+                    # Find classes
+                    if 'class' in patterns[language]:
+                        class_matches = re.finditer(patterns[language]['class'], content)
+                        for match in class_matches:
+                            class_name = match.group(1)
+                            if not class_name:
+                                continue
+                                
+                            class_node_id = next_id
+                            next_id += 1
+                            
+                            class_node = {
+                                "id": class_node_id,
+                                "type": "Class",
+                                "labels": ["Class"],
+                                "file_path": rel_path,
+                                "name": class_name,
+                                "properties": {
+                                    "type": "class",
+                                    "language": language,
+                                    "start_line": content[:match.start()].count('\\n') + 1,
+                                    "end_line": content[:match.end()].count('\\n') + 1,
+                                }
+                            }
+                            nodes.append(class_node)
+                            
+                            # Create relationship between file and class
+                            relationships.append({
+                                "source_id": file_node_id,
+                                "target_id": class_node_id,
+                                "type": "DEFINES",
+                                "properties": {}
+                            })
+                            
+            except Exception as e:
+                print(f"Error parsing file {rel_path}: {str(e)}", file=sys.stderr)
+    
+    return nodes, relationships, node_id_map
 
 def main():
     # Get the repository path from args
@@ -226,71 +385,32 @@ def main():
     codebase_path = sys.argv[1]
     
     try:
-        # Create a Blarify graph builder
-        graph_builder = GraphBuilder(
-            root_path=codebase_path,
-            extensions_to_skip=[".json", ".md", ".txt", ".html", ".css"],
-            names_to_skip=["__pycache__", "node_modules", "venv", ".git"]
-        )
-        
-        # Build the graph
-        graph = graph_builder.build()
-        
-        # Get nodes and relationships
-        nodes = graph.get_nodes_as_objects()
-        relationships = graph.get_relationships_as_objects()
-        
-        # We need to serialize the data to send back as JSON
-        # Create a simplified representation
-        serialized_nodes = []
-        for node in nodes:
-            node_data = {
-                "id": getattr(node, "id", None),
-                "type": node.__class__.__name__,
-                "labels": getattr(node, "labels", []),
-                "file_path": getattr(node, "file_path", ""),
-                "name": getattr(node, "name", ""),
-                "properties": {
-                    # Add more properties as needed
-                    "language": getattr(node, "language", ""),
-                    "start_line": getattr(node, "start_line", 0),
-                    "end_line": getattr(node, "end_line", 0),
-                }
-            }
-            serialized_nodes.append(node_data)
-        
-        serialized_relationships = []
-        for rel in relationships:
-            rel_data = {
-                "source_id": getattr(rel.source_node, "id", None),
-                "target_id": getattr(rel.target_node, "id", None),
-                "type": rel.type,
-                "properties": {}  # Add properties if needed
-            }
-            serialized_relationships.append(rel_data)
+        # Use simplified file parser instead of Blarify's full parser
+        print(f"Analyzing repository at {codebase_path}...", file=sys.stderr)
+        nodes, relationships, node_id_map = simple_file_parser(codebase_path)
         
         # Output the graph data as JSON
         result = {
             "success": True,
             "stats": {
-                "files_processed": len(set(node.file_path for node in nodes if hasattr(node, "file_path"))),
+                "files_processed": len([n for n in nodes if n["type"] == "File"]),
                 "nodes_created": len(nodes),
                 "relationships_created": len(relationships),
                 "errors": 0,
             },
-            "nodes": serialized_nodes,
-            "relationships": serialized_relationships
+            "nodes": nodes,
+            "relationships": relationships
         }
         print(json.dumps(result))
         
     except Exception as e:
-        error_msg = f"Failed to parse codebase with Blarify: {str(e)}"
+        error_msg = f"Failed to parse codebase: {str(e)}"
         print(json.dumps({"error": error_msg}))
         sys.exit(1)
 
 if __name__ == "__main__":
     main()
-                """)
+                ''')
             
             # Build the Docker image
             try:

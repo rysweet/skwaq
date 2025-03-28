@@ -44,8 +44,8 @@ class ASTFileMapper:
         # Query to find AST nodes with file paths
         query = (
             "MATCH (n) "
-            "WHERE exists(n.file_path) "
-            "RETURN id(n) as node_id, n.file_path as file_path"
+            "WHERE n.file_path IS NOT NULL "
+            "RETURN elementId(n) as node_id, n.file_path as file_path"
         )
         
         ast_nodes = self.connector.run_query(query)
