@@ -298,7 +298,11 @@ class OpenAIClient:
             
             # Add optional parameters if provided
             if max_tokens is not None:
-                kwargs["max_tokens"] = max_tokens
+                # Azure OpenAI API uses max_completion_tokens instead of max_tokens
+                if hasattr(self, 'deployment') and self.deployment:
+                    kwargs["max_completion_tokens"] = max_tokens
+                else:
+                    kwargs["max_tokens"] = max_tokens
                 
             if stop_sequences is not None:
                 kwargs["stop"] = stop_sequences
