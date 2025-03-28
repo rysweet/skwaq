@@ -8,6 +8,7 @@ Keep the plan status up to date by updating a file called /Specifications/status
 Please follow these guidelines for code design and implementation:
 
 ### Modularity
+
 - Maintain clear separation between different concerns (e.g., knowledge ingestion, code ingestion, analysis)
 - Create dedicated modules for distinct functionality
 - Use composition over inheritance where appropriate
@@ -15,6 +16,7 @@ Please follow these guidelines for code design and implementation:
 - Follow the module structure established in the codebase (shared, code_analysis, etc.)
 
 ### Code Reuse
+
 - Extract shared code into dedicated utility modules
 - Avoid duplicating functionality across different modules
 - Prefer composition and delegation over inheritance for code reuse
@@ -22,13 +24,15 @@ Please follow these guidelines for code design and implementation:
 - Utilize the shared module for cross-cutting concerns
 
 ### Design Patterns
-- Use the Strategy pattern for varying behaviors (as in code_analysis.strategies)
+
+- Use the Strategy pattern for varying behaviors 
 - Apply the Factory pattern for object creation where appropriate
 - Implement interfaces (abstract base classes) for polymorphic behavior
 - Use composition to combine behaviors flexibly
 - Follow established patterns in the codebase for consistency
 
 ### Function/Method Design
+
 - Keep functions and methods short (generally under 50 lines)
 - Each function should have a single responsibility
 - Extract complex logic into smaller, well-named helper functions
@@ -36,12 +40,14 @@ Please follow these guidelines for code design and implementation:
 - Use descriptive naming that indicates purpose
 
 ### Error Handling
+
 - Handle errors explicitly at appropriate levels
 - Use specific exception types rather than generic exceptions
 - Document expected exceptions in function docstrings
 - Log errors with appropriate context before re-raising
 
 ### Testing
+
 - Write tests for each component
 - Write unit tests for individual functions and methods
 - When creating shared resources or code for unit tests
@@ -50,9 +56,10 @@ Please follow these guidelines for code design and implementation:
 - Ensure public interfaces are well-tested
 - Use dependency injection to make components testable
 - Maintain test coverage during refactoring
-- Follow the testing patterns in tests/milestones
+- Integration tests should not use mocks for the components they are testing
 
 ### Code Organization
+
 - Group related functionality in dedicated modules and packages
 - Use a consistent file structure within modules
 - Place interfaces in base.py files at the package root
@@ -86,3 +93,8 @@ Do not move on to the next milestone until the current milestone is complete wit
 Do not move on to the next milestone while there are test failures anywhere in the project. 
 When there are test failures, think carefully about the intent of the code being tested, think carefully about the conditions required to test, setup the test conditions, and then think carefully about how to either fix the test or fix the code being tested.
 If a step of the implementation fails, try again by attempting to correct the error. If you are unable to correct the error, update the status.md and please ask me for help.
+
+# Prompt history
+
+Maintain a running history of my prompts, with very short summary of your responses and actions, in a file called /Specifications/prompt_history.md.
+This file should be updated after each prompt.
