@@ -16,10 +16,12 @@ autogen_event_mock = MagicMock()
 autogen_code_utils_mock = MagicMock()
 autogen_memory_mock = MagicMock()
 
+
 # Create a MockBaseEvent class for tests
 class MockBaseEvent:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
+
 
 # Set up our mocks properly
 autogen_event_mock.BaseEvent = MockBaseEvent
@@ -87,11 +89,11 @@ def mock_registry():
     """Mock the registry module to avoid shared state issues."""
     # Import registry module
     import skwaq.agents.registry
-    
+
     # Create a mock AgentRegistry
     mock_registry = MagicMock()
     mock_registry.register = MagicMock()
-    
+
     # Patch the registry
     with patch.object(skwaq.agents.registry, "AgentRegistry", mock_registry):
         yield mock_registry
@@ -100,7 +102,9 @@ def mock_registry():
 @pytest.fixture
 def mock_openai_client():
     """Mock OpenAI client for testing."""
-    with patch("skwaq.agents.autogen_integration.get_openai_client") as mock_get_openai_client:
+    with patch(
+        "skwaq.agents.autogen_integration.get_openai_client"
+    ) as mock_get_openai_client:
         mock_client = MagicMock()
         mock_client.api_key = "test_api_key"
         mock_client.api_base = "https://test.openai.azure.com/"
@@ -112,54 +116,54 @@ def mock_openai_client():
 
 class TestAutogenEventBridge:
     """Test cases for the AutogenEventBridge class."""
-    
+
     def test_init(self, mock_event_bus):
         """Test AutogenEventBridge initialization."""
         # Act
         bridge = AutogenEventBridge()
-        
+
         # Assert
         assert bridge.skwaq_event_bus == mock_event_bus
-    
+
     def test_handle_agent_init_event(self, mock_event_bus):
         """Test handling of agent lifecycle events."""
         # Arrange
         bridge = AutogenEventBridge()
-        
+
         # Act
         bridge.handle_agent_event(
             agent_id="test-id",
             agent_name="test_agent",
             state=AgentLifecycleState.CREATED,
-            metadata={"test": "value"}
+            metadata={"test": "value"},
         )
-            
+
         # Assert
         mock_event_bus.publish.assert_called_once()
-        
+
         # Verify the published event
         skwaq_event = mock_event_bus.publish.call_args[0][0]
         assert isinstance(skwaq_event, AgentLifecycleEvent)
         assert skwaq_event.agent_name == "test_agent"
         # State is stored as the value of the enum
         assert skwaq_event.state == AgentLifecycleState.CREATED.value
-    
+
     def test_handle_agent_close_event(self, mock_event_bus):
         """Test handling of agent close events."""
         # Arrange
         bridge = AutogenEventBridge()
-        
+
         # Act
         bridge.handle_agent_event(
             agent_id="test-id",
             agent_name="test_agent",
             state=AgentLifecycleState.STOPPED,
-            metadata={"test": "value"}
+            metadata={"test": "value"},
         )
-        
+
         # Assert
         mock_event_bus.publish.assert_called_once()
-        
+
         # Verify the published event
         skwaq_event = mock_event_bus.publish.call_args[0][0]
         assert isinstance(skwaq_event, AgentLifecycleEvent)
@@ -170,30 +174,31 @@ class TestAutogenEventBridge:
 
 class TestAutogenAgentAdapter:
     """Test cases for the AutogenAgentAdapter class."""
-    
+
     def test_init(self, mock_config, mock_openai_client):
         """Test AutogenAgentAdapter initialization."""
         # Arrange
         name = "test_agent"
         system_message = "You are a test agent"
-        
+
         # Act
         adapter = AutogenAgentAdapter(
             name=name,
             system_message=system_message,
             model="gpt4o-test",
         )
-        
+
         # Assert
         assert adapter.name == name
         assert adapter.system_message == system_message
         assert adapter.model == "gpt4o-test"
         assert adapter.agent is None
         assert isinstance(adapter.event_bridge, AutogenEventBridge)
-    
+
     @pytest.mark.asyncio
     async def test_create_agent(self, mock_config, mock_openai_client):
         """Test creating an AutoGen agent."""
+
         # Create a simplified adapter class
         class TestAutogenAgentAdapter:
             def __init__(self, name, system_message, model=None):
@@ -203,27 +208,27 @@ class TestAutogenAgentAdapter:
                 self.agent = None
                 self.event_bridge = MagicMock()
                 self.openai_client = mock_openai_client
-            
+
             async def create_agent(self):
                 # Simple implementation that doesn't require the real ChatAgent
                 self.agent = MagicMock()
                 self.agent.name = self.name
                 return self.agent
-                
+
         # Create adapter instance
         adapter = TestAutogenAgentAdapter(
             name="test_agent",
             system_message="You are a test agent",
         )
-        
+
         # Act
         agent = await adapter.create_agent()
-        
+
         # Assert - just verify an agent was created and that properties are as expected
         assert agent is not None
         assert adapter.agent is not None
         assert adapter.agent.name == "test_agent"
-    
+
     @pytest.mark.asyncio
     async def test_close_agent(self, mock_config, mock_openai_client):
         """Test closing an AutoGen agent."""
@@ -232,37 +237,37 @@ class TestAutogenAgentAdapter:
             name="test_agent",
             system_message="You are a test agent",
         )
-        
+
         # Set a mock agent
         adapter.agent = MagicMock()
-        
+
         # Act
         await adapter.close_agent()
-        
+
         # Assert
         assert adapter.agent is None
 
 
 class TestAutogenGroupChatAdapter:
     """Test cases for the AutogenGroupChatAdapter class."""
-    
+
     def test_init(self):
         """Test AutogenGroupChatAdapter initialization."""
         # Arrange
         name = "test_group_chat"
         mock_agents = [MagicMock(), MagicMock()]
-        
+
         # Act
         adapter = AutogenGroupChatAdapter(
             name=name,
             agents=mock_agents,
         )
-        
+
         # Assert
         assert adapter.name == name
         assert adapter.agents == mock_agents
         assert isinstance(adapter.event_bridge, AutogenEventBridge)
-    
+
     @pytest.mark.asyncio
     async def test_create_group_chat(self):
         """Test creating an AutoGen GroupChat."""
@@ -272,14 +277,14 @@ class TestAutogenGroupChatAdapter:
             name="test_group_chat",
             agents=mock_agents,
         )
-        
+
         # Act
         group_chat = await adapter.create_group_chat()
-        
+
         # Assert - just verify a group chat was created
         assert group_chat is not None
         assert group_chat.name.startswith("GroupChat_")
-    
+
     @pytest.mark.asyncio
     async def test_close_group_chat(self):
         """Test closing an AutoGen GroupChat."""
@@ -288,9 +293,9 @@ class TestAutogenGroupChatAdapter:
             name="test_group_chat",
             agents=[],
         )
-        
+
         # Act
         await adapter.close_group_chat()
-        
+
         # Just verify it executes without error - no assertion needed since
         # the new implementation doesn't use a group_chat property

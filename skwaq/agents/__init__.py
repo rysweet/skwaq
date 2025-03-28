@@ -47,18 +47,15 @@ __all__ = [
     "AgentState",
     "AgentContext",
     "AgentRegistry",
-    
     # AutoGen integration
     "AutogenEventBridge",
     "AutogenAgentAdapter",
     "AutogenGroupChatAdapter",
-    
     # Agent communication
     "AgentCommunicationEvent",
     "TaskAssignmentEvent",
     "TaskResultEvent",
     "Task",
-    
     # Core agents
     "OrchestratorAgent",
     "KnowledgeAgent",

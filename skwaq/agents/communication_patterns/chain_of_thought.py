@@ -44,11 +44,13 @@ class CognitiveStepEvent(AgentCommunicationEvent):
         """
         step_message = f"Step {step_number}: {reasoning}"
         step_metadata = metadata or {}
-        step_metadata.update({
-            "step_number": step_number,
-            "context": context,
-            "pattern": "chain_of_thought"
-        })
+        step_metadata.update(
+            {
+                "step_number": step_number,
+                "context": context,
+                "pattern": "chain_of_thought",
+            }
+        )
 
         super().__init__(
             sender_id=sender_id,
@@ -79,7 +81,7 @@ class ChainOfThoughtPattern:
         self.max_steps = max_steps
         self.step_timeout = step_timeout
         self.current_chains: Dict[str, List[Dict[str, Any]]] = {}
-        
+
     @LogEvent("chain_of_thought_started")
     async def execute(
         self,
@@ -101,58 +103,62 @@ class ChainOfThoughtPattern:
         """
         chain_id = f"{task.task_id}_{int(time.time())}"
         self.current_chains[chain_id] = []
-        
+
         # Initialize the reasoning context
         reasoning_context = {
             "task": task.to_dict(),
             "initial_context": context,
             "chain_id": chain_id,
             "steps_completed": 0,
-            "final_result": None
+            "final_result": None,
         }
-        
+
         # Create the first cognitive step event
         first_step = CognitiveStepEvent(
             sender_id=initial_agent.agent_id,
             receiver_id=target_agent.agent_id,
             step_number=1,
             reasoning="I'll analyze this task step by step to ensure thoroughness.",
-            context=reasoning_context
+            context=reasoning_context,
         )
-        
+
         # Emit the first event
         await initial_agent.emit_event(first_step)
         self.current_chains[chain_id].append(first_step.to_dict())
-        
+
         # Set up event handlers to track the chain of thought
         step_complete_event = asyncio.Event()
-        
+
         # Define handler for cognitive step events
         async def _handle_cognitive_step(event: CognitiveStepEvent) -> None:
             if not isinstance(event, CognitiveStepEvent):
                 return
-                
+
             if event.context.get("chain_id") != chain_id:
                 return
-                
+
             self.current_chains[chain_id].append(event.to_dict())
             reasoning_context["steps_completed"] = event.step_number
-            
+
             if event.step_number >= self.max_steps or "conclusion" in event.metadata:
                 reasoning_context["final_result"] = event.reasoning
                 step_complete_event.set()
-        
+
         # Register event handler
         initial_agent.register_event_handler(CognitiveStepEvent, _handle_cognitive_step)
-        
+
         try:
             # Wait for chain to complete or timeout
             try:
-                await asyncio.wait_for(step_complete_event.wait(), self.max_steps * self.step_timeout)
+                await asyncio.wait_for(
+                    step_complete_event.wait(), self.max_steps * self.step_timeout
+                )
             except asyncio.TimeoutError:
-                logger.warning(f"Chain of thought reasoning timed out after {self.max_steps * self.step_timeout} seconds")
+                logger.warning(
+                    f"Chain of thought reasoning timed out after {self.max_steps * self.step_timeout} seconds"
+                )
                 reasoning_context["timeout"] = True
-            
+
             # Compile results
             result = {
                 "chain_id": chain_id,
@@ -160,17 +166,21 @@ class ChainOfThoughtPattern:
                 "result": reasoning_context.get("final_result"),
                 "completed_steps": reasoning_context.get("steps_completed", 0),
                 "timed_out": reasoning_context.get("timeout", False),
-                "task_id": task.task_id
+                "task_id": task.task_id,
             }
-            
+
             # Log completion
-            logger.info(f"Chain of thought reasoning completed with {len(self.current_chains[chain_id])} steps")
-            
+            logger.info(
+                f"Chain of thought reasoning completed with {len(self.current_chains[chain_id])} steps"
+            )
+
             return result
         finally:
             # Clean up
-            initial_agent.deregister_event_handler(CognitiveStepEvent, _handle_cognitive_step)
-            
+            initial_agent.deregister_event_handler(
+                CognitiveStepEvent, _handle_cognitive_step
+            )
+
     def get_chain(self, chain_id: str) -> List[Dict[str, Any]]:
         """Get the steps in a specific reasoning chain.
 

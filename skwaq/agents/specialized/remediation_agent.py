@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 
 class RemediationPriority(enum.Enum):
     """Priority levels for vulnerability remediation."""
-    
+
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -33,7 +33,7 @@ class RemediationPriority(enum.Enum):
 
 class RemediationComplexity(enum.Enum):
     """Complexity levels for remediation implementation."""
-    
+
     SIMPLE = "simple"
     MODERATE = "moderate"
     COMPLEX = "complex"
@@ -71,14 +71,16 @@ class RemediationPlanEvent(SystemEvent):
             metadata: Additional metadata for the event
         """
         plan_metadata = metadata or {}
-        plan_metadata.update({
-            "finding_id": finding_id,
-            "priority": priority.value,
-            "complexity": complexity.value,
-            "steps_count": len(steps),
-            "plan_id": plan_id or str(uuid.uuid4()),
-            "event_type": "remediation_plan"
-        })
+        plan_metadata.update(
+            {
+                "finding_id": finding_id,
+                "priority": priority.value,
+                "complexity": complexity.value,
+                "steps_count": len(steps),
+                "plan_id": plan_id or str(uuid.uuid4()),
+                "event_type": "remediation_plan",
+            }
+        )
 
         message = f"Remediation plan for finding {finding_id}: {priority.value} priority, {complexity.value} complexity"
 
@@ -100,7 +102,7 @@ class RemediationPlanEvent(SystemEvent):
 
 class RemediationPlanningAgent(AutogenChatAgent):
     """Specialized agent for creating vulnerability remediation plans.
-    
+
     This agent analyzes vulnerability findings and creates detailed plans for
     remediation, including specific steps, code changes, and implementation
     considerations.
@@ -156,20 +158,22 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
             agent_id=agent_id,
             model=model,
         )
-        
+
         # Set up remediation plan tracking
         self.remediation_plans: Dict[str, Dict[str, Any]] = {}
         self.remediation_tasks: Dict[str, Task] = {}
-        
+
     async def _start(self):
         """Initialize the agent on startup."""
         await super()._start()
-        
+
         # Register event handlers
-        self.register_event_handler(RemediationPlanEvent, self._handle_remediation_plan_event)
+        self.register_event_handler(
+            RemediationPlanEvent, self._handle_remediation_plan_event
+        )
         self.register_event_handler(TaskAssignmentEvent, self._handle_task_assignment)
         self.register_event_handler(TaskResultEvent, self._handle_task_result)
-        
+
     async def create_remediation_plan(
         self,
         finding: Union[Finding, Dict[str, Any]],
@@ -190,17 +194,19 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
         """
         # Generate plan ID if not provided
         plan_id = plan_id or f"remediation_{int(time.time())}_{str(uuid.uuid4())[:8]}"
-        
+
         # Convert Finding to dict if needed
         if isinstance(finding, Finding):
             finding_dict = finding.to_dict()
             finding_id = finding.file_id
         else:
             finding_dict = finding
-            finding_id = finding_dict.get("file_id", finding_dict.get("finding_id", "unknown"))
-            
+            finding_id = finding_dict.get(
+                "file_id", finding_dict.get("finding_id", "unknown")
+            )
+
         logger.info(f"Creating remediation plan for finding: {finding_id}")
-        
+
         # Create remediation task
         remediation_task = Task(
             task_id=plan_id,
@@ -209,16 +215,16 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
             task_parameters={
                 "finding_id": finding_id,
                 "context": context or {},
-                "code_context": code_context or {}
+                "code_context": code_context or {},
             },
             priority=3,
             sender_id=self.agent_id,
             receiver_id=self.agent_id,
-            status="in_progress"
+            status="in_progress",
         )
-        
+
         self.remediation_tasks[plan_id] = remediation_task
-        
+
         try:
             # Prepare the remediation plan record
             plan = {
@@ -232,44 +238,44 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
                 "complexity": None,
                 "steps": [],
                 "code_changes": {},
-                "estimated_effort": None
+                "estimated_effort": None,
             }
-            
+
             # Generate the remediation plan
             plan_result = await self._generate_remediation_plan(
-                finding_dict, 
-                context or {},
-                code_context or {}
+                finding_dict, context or {}, code_context or {}
             )
-            
+
             # Update the plan with results
             plan.update(plan_result)
-            
+
             # Store the remediation plan
             self.remediation_plans[plan_id] = plan
-            
+
             # Update task status
             remediation_task.status = "completed"
             remediation_task.result = plan
-            
+
             # Emit remediation plan event
             await self._emit_remediation_plan_event(plan)
-            
-            logger.info(f"Completed remediation plan with priority: {plan['priority']}, complexity: {plan['complexity']}")
-            
+
+            logger.info(
+                f"Completed remediation plan with priority: {plan['priority']}, complexity: {plan['complexity']}"
+            )
+
             return plan
-            
+
         except Exception as e:
             logger.error(f"Error creating remediation plan: {e}")
             remediation_task.status = "failed"
             remediation_task.error = str(e)
             raise
-    
+
     async def _generate_remediation_plan(
         self,
         finding: Dict[str, Any],
         context: Dict[str, Any],
-        code_context: Dict[str, Any]
+        code_context: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Generate a detailed remediation plan for a finding.
 
@@ -285,7 +291,7 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
         finding_str = json.dumps(finding, indent=2)
         context_str = json.dumps(context, indent=2)
         code_context_str = json.dumps(code_context, indent=2)
-        
+
         # Build comprehensive prompt for the LLM
         remediation_prompt = (
             f"I need you to create a detailed remediation plan for the following vulnerability finding:\n\n"
@@ -309,23 +315,23 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
             f"- challenges: Array of potential challenges\n"
             f"- best_practices: Array of best practice recommendations\n"
         )
-        
+
         # Use the chat model to generate the remediation plan
         response = await self.openai_client.create_completion(
             prompt=remediation_prompt,
             model=self.model,
             temperature=0.2,
             max_tokens=2500,
-            response_format={"type": "json"}
+            response_format={"type": "json"},
         )
-        
+
         # Extract the text response
         response_text = response.get("choices", [{}])[0].get("text", "").strip()
-        
+
         try:
             # Parse the JSON response
             plan = json.loads(response_text)
-            
+
             # Ensure all required fields are present
             if "priority" not in plan:
                 plan["priority"] = "medium"
@@ -341,23 +347,23 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
                 plan["challenges"] = []
             if "best_practices" not in plan:
                 plan["best_practices"] = []
-                
+
             # Validate priority
             try:
                 priority = RemediationPriority(plan["priority"])
                 plan["priority"] = priority.value
             except ValueError:
                 plan["priority"] = RemediationPriority.MEDIUM.value
-                
+
             # Validate complexity
             try:
                 complexity = RemediationComplexity(plan["complexity"])
                 plan["complexity"] = complexity.value
             except ValueError:
                 plan["complexity"] = RemediationComplexity.MODERATE.value
-                
+
             return plan
-            
+
         except json.JSONDecodeError:
             logger.error(f"Failed to parse remediation plan: {response_text}")
             # Return a default plan on parsing error
@@ -367,19 +373,19 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
                 "steps": [
                     {
                         "description": "Review vulnerability details",
-                        "explanation": "Analyze the finding to understand the underlying issue"
+                        "explanation": "Analyze the finding to understand the underlying issue",
                     },
                     {
                         "description": "Implement fixes following secure coding practices",
-                        "explanation": "Error creating detailed remediation plan; generic guidance provided"
-                    }
+                        "explanation": "Error creating detailed remediation plan; generic guidance provided",
+                    },
                 ],
                 "code_changes": {},
                 "estimated_effort": "Unknown (plan generation failed)",
                 "challenges": ["Plan generation error"],
-                "best_practices": ["Follow secure coding guidelines"]
+                "best_practices": ["Follow secure coding guidelines"],
             }
-    
+
     async def _emit_remediation_plan_event(self, plan: Dict[str, Any]) -> None:
         """Emit a remediation plan event with results.
 
@@ -395,7 +401,7 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
                     priority = RemediationPriority.MEDIUM
             else:
                 priority = plan["priority"]
-                
+
             if isinstance(plan["complexity"], str):
                 try:
                     complexity = RemediationComplexity(plan["complexity"])
@@ -403,7 +409,7 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
                     complexity = RemediationComplexity.MODERATE
             else:
                 complexity = plan["complexity"]
-                
+
             # Create remediation plan event
             event = RemediationPlanEvent(
                 sender_id=self.agent_id,
@@ -413,15 +419,15 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
                 steps=plan.get("steps", []),
                 code_changes=plan.get("code_changes"),
                 estimated_effort=plan.get("estimated_effort"),
-                plan_id=plan["plan_id"]
+                plan_id=plan["plan_id"],
             )
-            
+
             # Emit the event
             self.emit_event(event)
-            
+
         except Exception as e:
             logger.error(f"Error emitting remediation plan event: {e}")
-    
+
     async def _handle_remediation_plan_event(self, event: RemediationPlanEvent) -> None:
         """Handle incoming remediation plan events.
 
@@ -433,7 +439,7 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
             f"Received remediation plan event for finding {event.finding_id}: "
             f"{event.priority.value} priority, {event.complexity.value} complexity"
         )
-        
+
         # Store the plan for reference
         self.remediation_plans[event.plan_id] = {
             "plan_id": event.plan_id,
@@ -444,9 +450,9 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
             "code_changes": event.code_changes,
             "estimated_effort": event.estimated_effort,
             "sender_id": event.sender_id,
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
-        
+
     async def _handle_task_assignment(self, event: TaskAssignmentEvent) -> None:
         """Handle task assignment events.
 
@@ -455,7 +461,7 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
         """
         if event.receiver_id != self.agent_id:
             return
-            
+
         if event.task_type == "remediation_planning":
             # Extract finding information from task parameters
             params = event.task_parameters
@@ -463,53 +469,51 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
             finding_data = params.get("finding")
             context = params.get("context", {})
             code_context = params.get("code_context", {})
-            
+
             if not finding_id or not finding_data:
-                logger.warning(f"Received remediation planning task without finding data: {event.task_id}")
-                
+                logger.warning(
+                    f"Received remediation planning task without finding data: {event.task_id}"
+                )
+
                 # Emit task result with error
                 await self._emit_task_result(
                     task_id=event.task_id,
                     sender_id=event.sender_id,
                     status="failed",
-                    result={"error": "Missing finding data"}
+                    result={"error": "Missing finding data"},
                 )
                 return
-                
+
             # Begin remediation planning process
             try:
                 result = await self.create_remediation_plan(
                     finding=finding_data,
                     context=context,
                     code_context=code_context,
-                    plan_id=event.task_id
+                    plan_id=event.task_id,
                 )
-                
+
                 # Emit task result
                 await self._emit_task_result(
                     task_id=event.task_id,
                     sender_id=event.sender_id,
                     status="completed",
-                    result=result
+                    result=result,
                 )
-                
+
             except Exception as e:
                 logger.error(f"Error in remediation planning task: {e}")
-                
+
                 # Emit task result with error
                 await self._emit_task_result(
                     task_id=event.task_id,
                     sender_id=event.sender_id,
                     status="failed",
-                    result={"error": str(e)}
+                    result={"error": str(e)},
                 )
-            
+
     async def _emit_task_result(
-        self,
-        task_id: str,
-        sender_id: str,
-        status: str,
-        result: Any
+        self, task_id: str, sender_id: str, status: str, result: Any
     ) -> None:
         """Emit a task result event.
 
@@ -524,10 +528,10 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
             receiver_id=sender_id,
             task_id=task_id,
             status=status,
-            result=result
+            result=result,
         )
         self.emit_event(event)
-            
+
     async def _handle_task_result(self, event: TaskResultEvent) -> None:
         """Handle task result events.
 
@@ -536,7 +540,7 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
         """
         # Currently no specific handling needed for task results
         pass
-        
+
     def get_remediation_plan(self, plan_id: str) -> Optional[Dict[str, Any]]:
         """Get a remediation plan by ID.
 
@@ -547,7 +551,7 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
             Remediation plan or None if not found
         """
         return self.remediation_plans.get(plan_id)
-        
+
     def get_remediation_plans_by_finding(self, finding_id: str) -> List[Dict[str, Any]]:
         """Get all remediation plans for a specific finding.
 
@@ -558,6 +562,7 @@ guidance that addresses the root cause of each vulnerability, not just the sympt
             List of remediation plans for the finding
         """
         return [
-            p for p in self.remediation_plans.values()
+            p
+            for p in self.remediation_plans.values()
             if p.get("finding_id") == finding_id
         ]

@@ -15,6 +15,7 @@ from unittest.mock import MagicMock
 
 import autogen_core
 from autogen_core import Agent, BaseAgent
+
 # Use AutoGen's event system
 from autogen_core import event
 
@@ -42,18 +43,23 @@ class AutogenEventBridge:
         """Initialize the event bridge."""
         self.skwaq_event_bus = EventBus()
         logger.info("Initialized AutogenEventBridge")
-        
+
     async def register_events(self) -> None:
         """Register event handlers with the Skwaq event bus.
-        
+
         This method should be called after initializing agent objects.
         """
         logger.info("Registered events with Skwaq event bus")
-        
-    def handle_agent_event(self, agent_id: str, agent_name: str, 
-                          state: AgentLifecycleState, metadata: Dict[str, Any]) -> None:
+
+    def handle_agent_event(
+        self,
+        agent_id: str,
+        agent_name: str,
+        state: AgentLifecycleState,
+        metadata: Dict[str, Any],
+    ) -> None:
         """Handle agent lifecycle events.
-        
+
         Args:
             agent_id: ID of the agent
             agent_name: Name of the agent
@@ -62,20 +68,17 @@ class AutogenEventBridge:
         """
         # Create and publish a Skwaq event
         skwaq_event = AgentLifecycleEvent(
-            agent_id=agent_id,
-            agent_name=agent_name,
-            state=state,
-            metadata=metadata
+            agent_id=agent_id, agent_name=agent_name, state=state, metadata=metadata
         )
-        
+
         # Publish to Skwaq event bus
         self.skwaq_event_bus.publish(skwaq_event)
-        
+
         logger.debug(f"Published agent lifecycle event for {agent_name}")
-        
+
     def handle_message_event(self, sender: str, receiver: str, message: str) -> None:
         """Handle message events.
-        
+
         Args:
             sender: Sender of the message
             receiver: Receiver of the message
@@ -185,29 +188,27 @@ class AutogenGroupChatAdapter:
         self.kwargs = kwargs
         self.event_bridge = AutogenEventBridge()
 
-        logger.info(
-            f"Created AutoGen agents group {name} with {len(agents)} agents"
-        )
+        logger.info(f"Created AutoGen agents group {name} with {len(agents)} agents")
 
     async def create_group_chat(self) -> Any:
         """Create and initialize the agent group chat.
-        
+
         This method is maintained for backward compatibility with tests.
-        
+
         Returns:
             A placeholder for the group chat
         """
         # In the current version of autogen_core, we set up message routing differently
         logger.info(f"Set up agent communication for {self.name}")
         return MagicMock(name=f"GroupChat_{self.name}")
-        
+
     async def close_group_chat(self) -> None:
         """Close the group chat.
-        
+
         This method is maintained for backward compatibility with tests.
         """
         logger.info(f"Closed agent group {self.name}")
-        
+
     # Alias methods for newer implementations
     setup_agents = create_group_chat
     close_agents = close_group_chat

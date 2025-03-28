@@ -280,26 +280,26 @@ class TestAnalysisResult:
 
         result.add_findings(findings)
         assert result.patterns_matched == 2
-        
+
     def test_file_path_property(self):
         """Test the file_path property."""
         # Create instance without file_path
         result = AnalysisResult(file_id=123)
         assert result.file_path is None
-        
+
         # Set the file_path
         test_file_path = "/path/to/test.py"
         result.file_path = test_file_path
         assert result.file_path == test_file_path
-        
+
         # Create instance with file_path
         result2 = AnalysisResult(file_id=456, file_path=test_file_path)
         assert result2.file_path == test_file_path
-        
+
         # Test to_dict includes file_path
         result_dict = result2.to_dict()
         assert result_dict["file_path"] == test_file_path
-        
+
         # Test empty file_path not included in to_dict
         result3 = AnalysisResult(file_id=789)
         result_dict3 = result3.to_dict()

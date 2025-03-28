@@ -5,17 +5,13 @@ enabling seamless transitions, context preservation, and data sharing between
 different workflows.
 """
 
-from .context_manager import (
-    WorkflowContext,
-    ContextManager,
-    get_context_manager
-)
+from .context_manager import WorkflowContext, ContextManager, get_context_manager
 
 from .workflow_chain import (
     TransitionType,
     WorkflowTransition,
     WorkflowChain,
-    WorkflowExecutionPlan
+    WorkflowExecutionPlan,
 )
 
 from .workflow_communication import (
@@ -24,7 +20,7 @@ from .workflow_communication import (
     WorkflowMessage,
     WorkflowCommunicationEvent,
     WorkflowCommunicationManager,
-    get_communication_manager
+    get_communication_manager,
 )
 
 from .performance_optimizer import (
@@ -32,7 +28,7 @@ from .performance_optimizer import (
     PerformanceOptimizer,
     ResourceManager,
     get_performance_optimizer,
-    get_resource_manager
+    get_resource_manager,
 )
 
 __all__ = [
@@ -40,25 +36,22 @@ __all__ = [
     "WorkflowContext",
     "ContextManager",
     "get_context_manager",
-    
     # Workflow Chaining
     "TransitionType",
     "WorkflowTransition",
     "WorkflowChain",
     "WorkflowExecutionPlan",
-    
     # Workflow Communication
     "CommunicationChannel",
     "MessageType",
     "WorkflowMessage",
-    "WorkflowCommunicationEvent", 
+    "WorkflowCommunicationEvent",
     "WorkflowCommunicationManager",
     "get_communication_manager",
-    
     # Performance Optimization
     "WorkflowCache",
     "PerformanceOptimizer",
     "ResourceManager",
     "get_performance_optimizer",
-    "get_resource_manager"
+    "get_resource_manager",
 ]

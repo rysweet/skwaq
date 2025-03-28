@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Set, Any
 # Try to import python-magic for better MIME type detection
 try:
     import magic
+
     HAS_MAGIC = True
 except ImportError:
     HAS_MAGIC = False
@@ -38,29 +39,80 @@ class CodebaseFileSystem:
         self.root_path = os.path.abspath(root_path)
         self._files_cache: List[str] = []
         self._dirs_cache: List[str] = []
-        
+
         # Initialize magic for mime type detection if available
         self._mime_magic = None
         if HAS_MAGIC:
             try:
                 self._mime_magic = magic.Magic(mime=True)
             except Exception as e:
-                logger.warning(f"Failed to initialize magic for MIME type detection: {e}")
-        
+                logger.warning(
+                    f"Failed to initialize magic for MIME type detection: {e}"
+                )
+
         # Common extensions to ignore
         self._ignore_extensions = {
-            '.pyc', '.pyo', '.pyd', '.obj', '.o', '.a', '.lib', '.so', '.dll',
-            '.exe', '.bin', '.dat', '.db', '.sqlite', '.sqlite3', '.pickle', '.pkl',
-            '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.ico', '.svg',
-            '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx',
-            '.zip', '.tar', '.gz', '.bz2', '.7z', '.rar',
+            ".pyc",
+            ".pyo",
+            ".pyd",
+            ".obj",
+            ".o",
+            ".a",
+            ".lib",
+            ".so",
+            ".dll",
+            ".exe",
+            ".bin",
+            ".dat",
+            ".db",
+            ".sqlite",
+            ".sqlite3",
+            ".pickle",
+            ".pkl",
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".gif",
+            ".bmp",
+            ".tiff",
+            ".ico",
+            ".svg",
+            ".pdf",
+            ".doc",
+            ".docx",
+            ".ppt",
+            ".pptx",
+            ".xls",
+            ".xlsx",
+            ".zip",
+            ".tar",
+            ".gz",
+            ".bz2",
+            ".7z",
+            ".rar",
         }
-        
+
         # Common directories to ignore
         self._ignore_dirs = {
-            '.git', '.svn', '.hg', '__pycache__', 'node_modules', 'venv',
-            '.env', '.venv', 'env', 'virtualenv', '.virtualenv', 'build',
-            'dist', 'target', 'bin', '.idea', '.vscode', '.vs', 'tmp',
+            ".git",
+            ".svn",
+            ".hg",
+            "__pycache__",
+            "node_modules",
+            "venv",
+            ".env",
+            ".venv",
+            "env",
+            "virtualenv",
+            ".virtualenv",
+            "build",
+            "dist",
+            "target",
+            "bin",
+            ".idea",
+            ".vscode",
+            ".vs",
+            "tmp",
         }
 
     def get_relative_path(self, path: str) -> str:
@@ -82,23 +134,23 @@ class CodebaseFileSystem:
         """
         if self._files_cache:
             return self._files_cache
-        
+
         result = []
-        
+
         for root, dirs, files in os.walk(self.root_path):
             # Skip ignored directories
             dirs[:] = [d for d in dirs if d not in self._ignore_dirs]
-            
+
             for file in files:
                 file_path = os.path.join(root, file)
                 _, ext = os.path.splitext(file_path)
-                
+
                 # Skip ignored extensions
                 if ext.lower() in self._ignore_extensions:
                     continue
-                
+
                 result.append(file_path)
-        
+
         self._files_cache = result
         return result
 
@@ -110,22 +162,22 @@ class CodebaseFileSystem:
         """
         if self._dirs_cache:
             return self._dirs_cache
-        
+
         result = []
-        
+
         for root, dirs, _ in os.walk(self.root_path):
             # Skip ignored directories
             filtered_dirs = [d for d in dirs if d not in self._ignore_dirs]
             dirs[:] = filtered_dirs
-            
+
             # Add the current directory
             result.append(root)
-            
+
             # Add all subdirectories
             for dir_name in filtered_dirs:
                 dir_path = os.path.join(root, dir_name)
                 result.append(dir_path)
-        
+
         self._dirs_cache = result
         return result
 
@@ -139,27 +191,29 @@ class CodebaseFileSystem:
             Dictionary with file metadata
         """
         _, ext = os.path.splitext(file_path)
-        
+
         # Infer language from extension
         language = self._get_language_from_extension(ext)
-        
+
         # Get file size
         try:
             size = os.path.getsize(file_path)
         except (OSError, IOError):
             size = 0
-        
+
         # Get MIME type
         mime_type = "application/octet-stream"
         try:
             if self._mime_magic:
                 mime_type = self._mime_magic.from_file(file_path)
             else:
-                mime_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
+                mime_type = (
+                    mimetypes.guess_type(file_path)[0] or "application/octet-stream"
+                )
         except Exception:
             # Fallback to mimetypes if magic fails
             mime_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
-        
+
         # Get encoding (limited detection)
         encoding = "utf-8"  # Default assumption
         try:
@@ -174,7 +228,7 @@ class CodebaseFileSystem:
                     encoding = "utf-16-be"
         except Exception:
             pass
-        
+
         return {
             "extension": ext.lstrip(".").lower() if ext else "",
             "language": language,
@@ -209,56 +263,42 @@ class CodebaseFileSystem:
             Inferred programming language or 'unknown'
         """
         ext = ext.lower()
-        
+
         language_map = {
             ".py": "python",
             ".pyc": "python",
             ".pyd": "python",
             ".pyx": "python",
             ".pyi": "python",
-            
             ".js": "javascript",
             ".jsx": "javascript",
             ".ts": "typescript",
             ".tsx": "typescript",
-            
             ".java": "java",
             ".class": "java",
             ".jar": "java",
-            
             ".c": "c",
             ".h": "c",
-            
             ".cpp": "cpp",
             ".cc": "cpp",
             ".cxx": "cpp",
             ".hpp": "cpp",
             ".hxx": "cpp",
-            
             ".cs": "csharp",
-            
             ".go": "go",
-            
             ".rb": "ruby",
-            
             ".php": "php",
-            
             ".swift": "swift",
-            
             ".rs": "rust",
-            
             ".scala": "scala",
-            
             ".kt": "kotlin",
             ".kts": "kotlin",
-            
             ".html": "html",
             ".htm": "html",
             ".css": "css",
             ".scss": "css",
             ".sass": "css",
             ".less": "css",
-            
             ".xml": "xml",
             ".json": "json",
             ".yml": "yaml",
@@ -267,13 +307,10 @@ class CodebaseFileSystem:
             ".ini": "ini",
             ".cfg": "ini",
             ".conf": "ini",
-            
             ".md": "markdown",
             ".markdown": "markdown",
             ".rst": "restructuredtext",
-            
             ".sql": "sql",
-            
             ".sh": "shell",
             ".bash": "shell",
             ".zsh": "shell",
@@ -281,7 +318,7 @@ class CodebaseFileSystem:
             ".cmd": "batch",
             ".ps1": "powershell",
         }
-        
+
         return language_map.get(ext, "unknown")
 
 
@@ -300,7 +337,9 @@ class FilesystemGraphBuilder:
         """
         self.connector = connector
 
-    async def build_graph(self, repo_node_id: int, fs: CodebaseFileSystem) -> Dict[str, int]:
+    async def build_graph(
+        self, repo_node_id: int, fs: CodebaseFileSystem
+    ) -> Dict[str, int]:
         """Build a graph representation of the filesystem.
 
         Args:
@@ -313,7 +352,7 @@ class FilesystemGraphBuilder:
         # Get all files and directories
         all_files = fs.get_all_files()
         all_dirs = fs.get_all_dirs()
-        
+
         # Create a node for each directory
         dir_nodes = {}
         for dir_path in all_dirs:
@@ -324,18 +363,18 @@ class FilesystemGraphBuilder:
                 "full_path": dir_path,
                 "type": "directory",
             }
-            
+
             dir_node_id = self.connector.create_node(
                 ["Directory", NodeLabels.FILE], properties
             )
-            
+
             dir_nodes[dir_path] = dir_node_id
-            
+
             # Create relationship to repository
             self.connector.create_relationship(
                 repo_node_id, dir_node_id, RelationshipTypes.CONTAINS
             )
-        
+
         # Create parent-child relationships for directories
         for dir_path, node_id in dir_nodes.items():
             parent_dir = os.path.dirname(dir_path)
@@ -344,13 +383,13 @@ class FilesystemGraphBuilder:
                 self.connector.create_relationship(
                     parent_node_id, node_id, RelationshipTypes.CONTAINS
                 )
-        
+
         # Create a node for each file
         file_nodes = {}
         for file_path in all_files:
             rel_path = fs.get_relative_path(file_path)
             file_info = fs.get_file_info(file_path)
-            
+
             properties = {
                 "path": rel_path,
                 "name": os.path.basename(file_path),
@@ -362,13 +401,11 @@ class FilesystemGraphBuilder:
                 "mime_type": file_info.get("mime_type", ""),
                 "encoding": file_info.get("encoding", ""),
             }
-            
-            file_node_id = self.connector.create_node(
-                NodeLabels.FILE, properties
-            )
-            
+
+            file_node_id = self.connector.create_node(NodeLabels.FILE, properties)
+
             file_nodes[file_path] = file_node_id
-            
+
             # Create relationship to parent directory
             parent_dir = os.path.dirname(file_path)
             if parent_dir in dir_nodes:
@@ -381,7 +418,7 @@ class FilesystemGraphBuilder:
                 self.connector.create_relationship(
                     repo_node_id, file_node_id, RelationshipTypes.CONTAINS
                 )
-                
+
         # Combine file and directory nodes for the return value
         all_nodes = {**dir_nodes, **file_nodes}
         return all_nodes

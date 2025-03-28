@@ -28,7 +28,7 @@ def mock_config():
     """Mock configuration."""
     config = MagicMock()
     config.get.return_value = None  # Default return value
-    
+
     # Return different values for specific keys
     def mock_get(key, default=None):
         config_values = {
@@ -40,7 +40,7 @@ def mock_config():
             "telemetry.enabled": True,
         }
         return config_values.get(key, default)
-    
+
     config.get.side_effect = mock_get
     return config
 
@@ -62,7 +62,7 @@ def mock_global_modules():
         "blarify": MagicMock(),
         "codeql": MagicMock(),
     }
-    
+
     # Apply patching to sys.modules
     with patch.dict(sys.modules, mock_modules):
         yield
@@ -83,15 +83,16 @@ def mock_github_repo():
     repo.clone_url = "https://github.com/test-user/test-repo.git"
     repo.ssh_url = "git@github.com:test-user/test-repo.git"
     repo.html_url = "https://github.com/test-user/test-repo"
-    
+
     # Mock dates
     from datetime import datetime
+
     repo.created_at = datetime.now()
     repo.updated_at = datetime.now()
-    
+
     # Mock languages
     repo.get_languages.return_value = {"Python": 1000, "JavaScript": 500}
-    
+
     return repo
 
 
@@ -109,7 +110,7 @@ def mock_repository_ingestor(mock_connector, mock_openai_client, mock_github_cli
     """Create a properly mocked RepositoryIngestor instance."""
     # Create a simple MagicMock instead of using spec which causes problems
     ingestor = MagicMock()
-    
+
     # Initialize with the mock dependencies
     ingestor.connector = mock_connector
     ingestor.openai_client = mock_openai_client
@@ -119,13 +120,13 @@ def mock_repository_ingestor(mock_connector, mock_openai_client, mock_github_cli
     ingestor.show_progress = False
     ingestor.excluded_dirs = {".git", "node_modules", "__pycache__"}
     ingestor.temp_dir = None
-    
+
     # Mock the important methods
     ingestor._init_github_client.return_value = mock_github_client
     ingestor._get_timestamp.return_value = "2023-01-01T00:00:00"
     ingestor._generate_repo_summary = AsyncMock(return_value="Test repository summary")
     ingestor._parse_github_url.return_value = ("test-user", "test-repo")
-    
+
     # Mock the high-level methods
     mock_ingest_result = {
         "repository_id": 1,
@@ -134,21 +135,17 @@ def mock_repository_ingestor(mock_connector, mock_openai_client, mock_github_cli
         "directory_count": 5,
         "code_files_processed": 7,
         "processing_time_seconds": 0.1,
-        "summary": "Test repository summary"
+        "summary": "Test repository summary",
     }
-    
+
     mock_github_result = {
         "repository_id": 1,
         "repository_name": "test-repo",
-        "metadata": {
-            "name": "test-repo",
-            "owner": "test-user",
-            "stars": 10
-        },
-        "content_ingested": False
+        "metadata": {"name": "test-repo", "owner": "test-user", "stars": 10},
+        "content_ingested": False,
     }
-    
+
     ingestor.ingest_from_path = AsyncMock(return_value=mock_ingest_result)
     ingestor.ingest_from_github = AsyncMock(return_value=mock_github_result)
-    
+
     return ingestor

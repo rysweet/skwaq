@@ -15,14 +15,26 @@ autogen_event_mock = MagicMock()
 autogen_code_utils_mock = MagicMock()
 autogen_memory_mock = MagicMock()
 
+
 # Create a MockBaseEvent class for tests
 class MockBaseEvent:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
 
+
 # Create a mock Task and TaskAssignmentEvent
 class Task:
-    def __init__(self, task_id, task_type, task_description, task_parameters, priority, sender_id, receiver_id, status):
+    def __init__(
+        self,
+        task_id,
+        task_type,
+        task_description,
+        task_parameters,
+        priority,
+        sender_id,
+        receiver_id,
+        status,
+    ):
         self.task_id = task_id
         self.task_type = task_type
         self.task_description = task_description
@@ -34,11 +46,14 @@ class Task:
         self.result = None
         self.error = None
 
+
 class TaskAssignmentEvent(MockBaseEvent):
     pass
 
+
 class TaskResultEvent(MockBaseEvent):
     pass
+
 
 # Set up our mocks properly
 autogen_event_mock.BaseEvent = MockBaseEvent
@@ -62,25 +77,25 @@ from skwaq.agents.specialized.guided_assessment_agent import (
     GuidedAssessmentAgent,
     AssessmentStage,
     AssessmentPlanEvent,
-    AssessmentStageEvent
+    AssessmentStageEvent,
 )
 from skwaq.agents.specialized.exploitation_agent import (
     ExploitationVerificationAgent,
     ExploitabilityStatus,
-    ExploitVerificationEvent
+    ExploitVerificationEvent,
 )
 from skwaq.agents.specialized.remediation_agent import (
     RemediationPlanningAgent,
     RemediationPriority,
     RemediationComplexity,
-    RemediationPlanEvent
+    RemediationPlanEvent,
 )
 from skwaq.agents.specialized.policy_agent import (
     SecurityPolicyAgent,
     ComplianceStatus,
     PolicyRecommendationType,
     PolicyEvaluationEvent,
-    PolicyRecommendationEvent
+    PolicyRecommendationEvent,
 )
 from skwaq.agents.specialized.orchestration import (
     AdvancedOrchestrator,
@@ -88,7 +103,7 @@ from skwaq.agents.specialized.orchestration import (
     WorkflowStatus,
     WorkflowEvent,
     WorkflowDefinition,
-    WorkflowExecution
+    WorkflowExecution,
 )
 
 
@@ -107,7 +122,10 @@ class TestGuidedAssessmentAgent:
         mock_base_init.assert_called_once()
         args, kwargs = mock_base_init.call_args
         assert kwargs["name"] == "GuidedAssessmentAgent"
-        assert kwargs["description"] == "Provides guided vulnerability assessment workflows"
+        assert (
+            kwargs["description"]
+            == "Provides guided vulnerability assessment workflows"
+        )
         assert kwargs["config_key"] == "agents.guided_assessment"
         assert "step-by-step approach" in kwargs["system_message"]
 
@@ -125,7 +143,7 @@ class TestGuidedAssessmentAgent:
     async def test_start_registers_event_handlers(self, mock_base_init, mock_super):
         """Test that _start registers event handlers."""
         mock_base_init.return_value = None
-        
+
         # Set up super() mock to return an object with _start method
         mock_super_obj = MagicMock()
         mock_super_obj._start = AsyncMock()
@@ -140,10 +158,12 @@ class TestGuidedAssessmentAgent:
 
         # Verify super()._start was called
         mock_super_obj._start.assert_called_once()
-        
+
         # Verify register_event_handler was called for all event types
         assert agent.register_event_handler.call_count >= 3
-        event_types = [call.args[0] for call in agent.register_event_handler.call_args_list]
+        event_types = [
+            call.args[0] for call in agent.register_event_handler.call_args_list
+        ]
         assert AssessmentPlanEvent in event_types
         assert AssessmentStageEvent in event_types
 
@@ -152,53 +172,56 @@ class TestGuidedAssessmentAgent:
     @patch("skwaq.agents.specialized.guided_assessment_agent.uuid")
     @patch("skwaq.agents.specialized.guided_assessment_agent.logger")
     @patch("skwaq.agents.specialized.guided_assessment_agent.AutogenChatAgent.__init__")
-    async def test_create_assessment(self, mock_base_init, mock_logger, mock_uuid, mock_time):
+    async def test_create_assessment(
+        self, mock_base_init, mock_logger, mock_uuid, mock_time
+    ):
         """Test creating an assessment."""
         mock_base_init.return_value = None
-        mock_uuid.uuid4.return_value = uuid.UUID('12345678-1234-5678-1234-567812345678')
+        mock_uuid.uuid4.return_value = uuid.UUID("12345678-1234-5678-1234-567812345678")
         mock_time.time.return_value = 1000000
 
         # Initialize agent
         agent = GuidedAssessmentAgent()
-        
+
         # Mock _generate_assessment_plan and _emit_assessment_plan_event
-        agent._generate_assessment_plan = AsyncMock(return_value={
-            "name": "Assessment Plan",
-            "stages": [
-                {"name": "initialization", "tasks": [{"task_id": "init_1"}]}
-            ]
-        })
+        agent._generate_assessment_plan = AsyncMock(
+            return_value={
+                "name": "Assessment Plan",
+                "stages": [
+                    {"name": "initialization", "tasks": [{"task_id": "init_1"}]}
+                ],
+            }
+        )
         agent._emit_assessment_plan_event = AsyncMock()
-        
+
         # Mock asyncio.create_task
         with patch("asyncio.create_task") as mock_create_task:
             # Create assessment
             result = await agent.create_assessment(
                 repository_id="repo123",
                 repository_info={"languages": ["python"], "size": 1000},
-                assessment_parameters={"depth": "standard"}
+                assessment_parameters={"depth": "standard"},
             )
-            
+
             # Verify the result
             assert result["assessment_id"] == "assessment_repo123_1000000_12345678"
             assert result["repository_id"] == "repo123"
             assert result["status"] == "started"
-            
+
             # Verify assessment was stored
             assert "assessment_repo123_1000000_12345678" in agent.assessments
             stored_assessment = agent.assessments["assessment_repo123_1000000_12345678"]
             assert stored_assessment["repository_id"] == "repo123"
             assert stored_assessment["status"] == "planned"
-            
+
             # Verify _generate_assessment_plan was called
             agent._generate_assessment_plan.assert_called_once_with(
-                {"languages": ["python"], "size": 1000},
-                {"depth": "standard"}
+                {"languages": ["python"], "size": 1000}, {"depth": "standard"}
             )
-            
+
             # Verify _emit_assessment_plan_event was called
             agent._emit_assessment_plan_event.assert_called_once()
-            
+
             # Verify asyncio.create_task was called
             mock_create_task.assert_called_once()
 
@@ -210,52 +233,53 @@ class TestGuidedAssessmentAgent:
 
         # Initialize agent with mocked openai_client
         agent = GuidedAssessmentAgent()
-        
+
         # Create a properly mocked openai_client
         mock_openai_client = MagicMock()
-        
+
         # Mock create_completion method to return a valid response
         mock_completion = AsyncMock()
         mock_completion.return_value = {
             "choices": [
                 {
-                    "text": json.dumps({
-                        "name": "Assessment Plan",
-                        "stages": [
-                            {
-                                "name": "initialization",
-                                "tasks": [
-                                    {
-                                        "task_id": "init_1",
-                                        "description": "Initialize repository assessment",
-                                        "estimated_time": "5m"
-                                    }
-                                ]
-                            }
-                        ]
-                    })
+                    "text": json.dumps(
+                        {
+                            "name": "Assessment Plan",
+                            "stages": [
+                                {
+                                    "name": "initialization",
+                                    "tasks": [
+                                        {
+                                            "task_id": "init_1",
+                                            "description": "Initialize repository assessment",
+                                            "estimated_time": "5m",
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    )
                 }
             ]
         }
-        
+
         mock_openai_client.create_completion = mock_completion
-        
+
         # Assign the mock to the agent
         agent.openai_client = mock_openai_client
         agent.model = "gpt-4"  # Set model attribute which is used in the implementation
-        
+
         # Generate plan
         plan = await agent._generate_assessment_plan(
-            {"languages": ["python"], "size": 1000},
-            {"depth": "standard"}
+            {"languages": ["python"], "size": 1000}, {"depth": "standard"}
         )
-        
+
         # Verify the plan
         assert plan["name"] == "Assessment Plan"
         assert isinstance(plan["stages"], list)
         assert len(plan["stages"]) > 0
         assert plan["stages"][0]["name"] == "initialization"
-        
+
         # Verify openai_client.create_completion was called
         mock_completion.assert_called_once()
         args, kwargs = mock_completion.call_args
@@ -279,7 +303,10 @@ class TestExploitationVerificationAgent:
         mock_base_init.assert_called_once()
         args, kwargs = mock_base_init.call_args
         assert kwargs["name"] == "ExploitationVerificationAgent"
-        assert kwargs["description"] == "Verifies if vulnerabilities are exploitable in practice"
+        assert (
+            kwargs["description"]
+            == "Verifies if vulnerabilities are exploitable in practice"
+        )
         assert kwargs["config_key"] == "agents.exploitation_verification"
         assert "analyze reported vulnerabilities" in kwargs["system_message"]
 
@@ -296,59 +323,60 @@ class TestExploitationVerificationAgent:
     async def test_verify_exploitability(self, mock_base_init, mock_uuid, mock_time):
         """Test verifying exploitability of a finding."""
         mock_base_init.return_value = None
-        mock_uuid.uuid4.return_value = uuid.UUID('12345678-1234-5678-1234-567812345678')
+        mock_uuid.uuid4.return_value = uuid.UUID("12345678-1234-5678-1234-567812345678")
         mock_time.time.return_value = 1000000
 
         # Initialize agent
         agent = ExploitationVerificationAgent()
-        
+
         # Set model attribute used in the implementation
         agent.model = "gpt-4"
         agent.agent_id = "test_exploitation_agent"
-        
+
         # Create a properly mocked openai_client
         mock_openai_client = MagicMock()
-        
+
         # Mock create_completion method to return a valid response
         mock_completion = AsyncMock()
         mock_completion.return_value = {
             "choices": [
                 {
-                    "text": json.dumps({
-                        "status": ExploitabilityStatus.EXPLOITABLE.value,
-                        "justification": "Easy to exploit",
-                        "exploitation_path": {"step1": "Inject payload"},
-                        "risk_factors": {"authentication": "none"},
-                        "impact": {"data_breach": "high"},
-                        "confidence": 0.9
-                    })
+                    "text": json.dumps(
+                        {
+                            "status": ExploitabilityStatus.EXPLOITABLE.value,
+                            "justification": "Easy to exploit",
+                            "exploitation_path": {"step1": "Inject payload"},
+                            "risk_factors": {"authentication": "none"},
+                            "impact": {"data_breach": "high"},
+                            "confidence": 0.9,
+                        }
+                    )
                 }
             ]
         }
-        
+
         mock_openai_client.create_completion = mock_completion
-        
+
         # Assign the mock to the agent
         agent.openai_client = mock_openai_client
-        
+
         # Mock the emit_event method to avoid side effects
         agent.emit_event = AsyncMock()
-        
+
         # Create a test finding
         finding = {
             "file_id": "finding123",
             "vulnerability_type": "SQL Injection",
             "severity": "high",
             "line_number": 42,
-            "matched_text": "query = 'SELECT * FROM users WHERE id = ' + user_input"
+            "matched_text": "query = 'SELECT * FROM users WHERE id = ' + user_input",
         }
-        
+
         # Verify exploitability
         result = await agent.verify_exploitability(
-            finding=finding,
-            context={"environment": "production"}
+            finding=finding, context={"environment": "production"}
         )
-        
+
         # Verify the result
         assert result["finding_id"] == "finding123"
         assert result["status"] == ExploitabilityStatus.EXPLOITABLE.value
@@ -357,18 +385,18 @@ class TestExploitationVerificationAgent:
         assert "step1" in result["exploitation_path"]
         assert "risk_factors" in result
         assert "confidence" in result
-        
+
         # Verify verification was stored
         verification_id = result["verification_id"]
         assert verification_id in agent.verifications
-        
+
         # Verify openai_client.create_completion was called
         mock_completion.assert_called_once()
         args, kwargs = mock_completion.call_args
         assert "vulnerability finding" in kwargs["prompt"]
         assert kwargs["model"] == "gpt-4"
         assert kwargs["response_format"] == {"type": "json"}
-        
+
         # Verify emit_event was called (at least once)
         assert agent.emit_event.called
 
@@ -388,9 +416,15 @@ class TestRemediationPlanningAgent:
         mock_base_init.assert_called_once()
         args, kwargs = mock_base_init.call_args
         assert kwargs["name"] == "RemediationPlanningAgent"
-        assert kwargs["description"] == "Creates detailed remediation plans for vulnerabilities"
+        assert (
+            kwargs["description"]
+            == "Creates detailed remediation plans for vulnerabilities"
+        )
         assert kwargs["config_key"] == "agents.remediation_planning"
-        assert "analyze reported vulnerabilities and create detailed" in kwargs["system_message"]
+        assert (
+            "analyze reported vulnerabilities and create detailed"
+            in kwargs["system_message"]
+        )
 
         # Verify internal data structures initialized
         assert hasattr(agent, "remediation_plans")
@@ -405,67 +439,72 @@ class TestRemediationPlanningAgent:
     async def test_create_remediation_plan(self, mock_base_init, mock_uuid, mock_time):
         """Test creating a remediation plan for a finding."""
         mock_base_init.return_value = None
-        mock_uuid.uuid4.return_value = uuid.UUID('12345678-1234-5678-1234-567812345678')
+        mock_uuid.uuid4.return_value = uuid.UUID("12345678-1234-5678-1234-567812345678")
         mock_time.time.return_value = 1000000
 
         # Initialize agent
         agent = RemediationPlanningAgent()
-        
+
         # Set model attribute used in the implementation
         agent.model = "gpt-4"
         agent.agent_id = "test_remediation_agent"
-        
+
         # Create a properly mocked openai_client
         mock_openai_client = MagicMock()
-        
+
         # Mock create_completion method to return a valid response
         mock_completion = AsyncMock()
         mock_completion.return_value = {
             "choices": [
                 {
-                    "text": json.dumps({
-                        "priority": RemediationPriority.HIGH.value,
-                        "complexity": RemediationComplexity.MODERATE.value,
-                        "steps": [
-                            {"description": "Sanitize inputs", "explanation": "Use parameterized queries"}
-                        ],
-                        "code_changes": {
-                            "before": "query = 'SELECT * FROM users WHERE id = ' + user_input",
-                            "after": "query = 'SELECT * FROM users WHERE id = ?'\nparams = [user_input]"
-                        },
-                        "estimated_effort": "2 hours",
-                        "challenges": ["Updating all query instances"],
-                        "best_practices": ["Always use parameterized queries"]
-                    })
+                    "text": json.dumps(
+                        {
+                            "priority": RemediationPriority.HIGH.value,
+                            "complexity": RemediationComplexity.MODERATE.value,
+                            "steps": [
+                                {
+                                    "description": "Sanitize inputs",
+                                    "explanation": "Use parameterized queries",
+                                }
+                            ],
+                            "code_changes": {
+                                "before": "query = 'SELECT * FROM users WHERE id = ' + user_input",
+                                "after": "query = 'SELECT * FROM users WHERE id = ?'\nparams = [user_input]",
+                            },
+                            "estimated_effort": "2 hours",
+                            "challenges": ["Updating all query instances"],
+                            "best_practices": ["Always use parameterized queries"],
+                        }
+                    )
                 }
             ]
         }
-        
+
         mock_openai_client.create_completion = mock_completion
-        
+
         # Assign the mock to the agent
         agent.openai_client = mock_openai_client
-        
+
         # Mock the emit_event method to avoid side effects
         agent.emit_event = AsyncMock()
-        
+
         # Create a test finding
         finding = {
             "file_id": "finding123",
             "vulnerability_type": "SQL Injection",
             "severity": "high",
             "line_number": 42,
-            "matched_text": "query = 'SELECT * FROM users WHERE id = ' + user_input"
+            "matched_text": "query = 'SELECT * FROM users WHERE id = ' + user_input",
         }
-        
+
         # Create remediation plan
         result = await agent.create_remediation_plan(
             finding=finding,
             context={"environment": "production"},
             code_context={"language": "python", "file_content": "...code..."},
-            plan_id="remediation_123"
+            plan_id="remediation_123",
         )
-        
+
         # Verify the result
         assert result["plan_id"] == "remediation_123"
         assert result["finding_id"] == "finding123"
@@ -475,17 +514,17 @@ class TestRemediationPlanningAgent:
         assert len(result["steps"]) > 0
         assert "code_changes" in result
         assert "estimated_effort" in result
-        
+
         # Verify plan was stored
         assert "remediation_123" in agent.remediation_plans
-        
+
         # Verify openai_client.create_completion was called
         mock_completion.assert_called_once()
         args, kwargs = mock_completion.call_args
         assert "remediation plan" in kwargs["prompt"]
         assert kwargs["model"] == "gpt-4"
         assert kwargs["response_format"] == {"type": "json"}
-        
+
         # Verify emit_event was called (at least once)
         assert agent.emit_event.called
 
@@ -505,9 +544,15 @@ class TestSecurityPolicyAgent:
         mock_base_init.assert_called_once()
         args, kwargs = mock_base_init.call_args
         assert kwargs["name"] == "SecurityPolicyAgent"
-        assert kwargs["description"] == "Evaluates security policies and generates recommendations"
+        assert (
+            kwargs["description"]
+            == "Evaluates security policies and generates recommendations"
+        )
         assert kwargs["config_key"] == "agents.security_policy"
-        assert "evaluate findings and repositories against security policies" in kwargs["system_message"]
+        assert (
+            "evaluate findings and repositories against security policies"
+            in kwargs["system_message"]
+        )
 
         # Verify internal data structures initialized
         assert hasattr(agent, "policy_evaluations")
@@ -523,66 +568,82 @@ class TestSecurityPolicyAgent:
     @patch("skwaq.agents.specialized.policy_agent.time")
     @patch("skwaq.agents.specialized.policy_agent.uuid")
     @patch("skwaq.agents.specialized.policy_agent.AutogenChatAgent.__init__")
-    async def test_evaluate_policy_compliance(self, mock_base_init, mock_uuid, mock_time):
+    async def test_evaluate_policy_compliance(
+        self, mock_base_init, mock_uuid, mock_time
+    ):
         """Test evaluating policy compliance of a target."""
         mock_base_init.return_value = None
-        mock_uuid.uuid4.return_value = uuid.UUID('12345678-1234-5678-1234-567812345678')
+        mock_uuid.uuid4.return_value = uuid.UUID("12345678-1234-5678-1234-567812345678")
         mock_time.time.return_value = 1000000
 
         # Initialize agent
         agent = SecurityPolicyAgent()
-        
+
         # Set model attribute used in the implementation
         agent.model = "gpt-4"
         agent.agent_id = "test_policy_agent"
-        
+
         # Create a properly mocked openai_client
         mock_openai_client = MagicMock()
-        
+
         # Mock create_completion method to return a valid response
         mock_completion = AsyncMock()
         mock_completion.return_value = {
             "choices": [
                 {
-                    "text": json.dumps({
-                        "policy_references": [
-                            {"standard": "OWASP_ASVS", "control_id": "4.1.3", "description": "Input validation"}
-                        ],
-                        "compliance_status": ComplianceStatus.PARTIALLY_COMPLIANT.value,
-                        "compliance_gaps": [
-                            {"category": "input_validation", "description": "Missing input validation", "severity": "high"}
-                        ],
-                        "recommendations": [
-                            {"type": "policy_update", "title": "Update input validation policy", "description": "..."}
-                        ]
-                    })
+                    "text": json.dumps(
+                        {
+                            "policy_references": [
+                                {
+                                    "standard": "OWASP_ASVS",
+                                    "control_id": "4.1.3",
+                                    "description": "Input validation",
+                                }
+                            ],
+                            "compliance_status": ComplianceStatus.PARTIALLY_COMPLIANT.value,
+                            "compliance_gaps": [
+                                {
+                                    "category": "input_validation",
+                                    "description": "Missing input validation",
+                                    "severity": "high",
+                                }
+                            ],
+                            "recommendations": [
+                                {
+                                    "type": "policy_update",
+                                    "title": "Update input validation policy",
+                                    "description": "...",
+                                }
+                            ],
+                        }
+                    )
                 }
             ]
         }
-        
+
         mock_openai_client.create_completion = mock_completion
-        
+
         # Assign the mock to the agent
         agent.openai_client = mock_openai_client
-        
+
         # Mock the emit_event method to avoid side effects
         agent.emit_event = AsyncMock()
-        
+
         # Create test target
         target = {
             "file_id": "finding123",
             "vulnerability_type": "SQL Injection",
-            "severity": "high"
+            "severity": "high",
         }
-        
+
         # Evaluate policy compliance
         result = await agent.evaluate_policy_compliance(
             target=target,
             target_type="finding",
             policy_context={"standards": ["OWASP_ASVS"]},
-            evaluation_id="policy_eval_123"
+            evaluation_id="policy_eval_123",
         )
-        
+
         # Verify the result
         assert result["evaluation_id"] == "policy_eval_123"
         assert result["target_id"] == "finding123"
@@ -592,17 +653,17 @@ class TestSecurityPolicyAgent:
         assert len(result["policy_references"]) > 0
         assert "compliance_gaps" in result
         assert "recommendations" in result
-        
+
         # Verify evaluation was stored
         assert "policy_eval_123" in agent.policy_evaluations
-        
+
         # Verify openai_client.create_completion was called
         mock_completion.assert_called_once()
         args, kwargs = mock_completion.call_args
         assert "security policy compliance" in kwargs["prompt"]
         assert kwargs["model"] == "gpt-4"
         assert kwargs["response_format"] == {"type": "json"}
-        
+
         # Verify emit_event was called (at least once)
         assert agent.emit_event.called
 
@@ -622,7 +683,10 @@ class TestAdvancedOrchestrator:
         mock_base_init.assert_called_once()
         args, kwargs = mock_base_init.call_args
         assert kwargs["name"] == "AdvancedOrchestrator"
-        assert kwargs["description"] == "Coordinates advanced vulnerability assessment workflows"
+        assert (
+            kwargs["description"]
+            == "Coordinates advanced vulnerability assessment workflows"
+        )
         assert kwargs["config_key"] == "agents.advanced_orchestrator"
         assert "coordinate complex workflows" in kwargs["system_message"]
 
@@ -645,12 +709,18 @@ class TestAdvancedOrchestrator:
     @patch("skwaq.agents.specialized.orchestration.ExploitationVerificationAgent")
     @patch("skwaq.agents.specialized.orchestration.RemediationPlanningAgent")
     @patch("skwaq.agents.specialized.orchestration.SecurityPolicyAgent")
-    async def test_start_initializes_specialized_agents(self, mock_policy_agent, mock_remediation_agent, 
-                                                       mock_exploit_agent, mock_guided_agent, 
-                                                       mock_base_init, mock_super):
+    async def test_start_initializes_specialized_agents(
+        self,
+        mock_policy_agent,
+        mock_remediation_agent,
+        mock_exploit_agent,
+        mock_guided_agent,
+        mock_base_init,
+        mock_super,
+    ):
         """Test that _start initializes specialized agents."""
         mock_base_init.return_value = None
-        
+
         # Set up super() mock to return an object with _start method
         mock_super_obj = MagicMock()
         mock_super_obj._start = AsyncMock()
@@ -660,15 +730,15 @@ class TestAdvancedOrchestrator:
         mock_guided_instance = MagicMock()
         mock_guided_instance.start = AsyncMock()
         mock_guided_agent.return_value = mock_guided_instance
-        
+
         mock_exploit_instance = MagicMock()
         mock_exploit_instance.start = AsyncMock()
         mock_exploit_agent.return_value = mock_exploit_instance
-        
+
         mock_remediation_instance = MagicMock()
         mock_remediation_instance.start = AsyncMock()
         mock_remediation_agent.return_value = mock_remediation_instance
-        
+
         mock_policy_instance = MagicMock()
         mock_policy_instance.start = AsyncMock()
         mock_policy_agent.return_value = mock_policy_instance
@@ -676,11 +746,13 @@ class TestAdvancedOrchestrator:
         # Initialize agent
         agent = AdvancedOrchestrator()
         agent.register_event_handler = MagicMock()
-        
+
         # Create mock register_event_handler that captures event registrations
         event_types = []
+
         def mock_register_handler(event_type, handler):
             event_types.append(event_type)
+
         agent.register_event_handler.side_effect = mock_register_handler
 
         # Call _start
@@ -688,28 +760,28 @@ class TestAdvancedOrchestrator:
 
         # Verify super()._start was called
         mock_super_obj._start.assert_called_once()
-        
+
         # Verify specialized agents were created
         mock_guided_agent.assert_called_once()
         mock_exploit_agent.assert_called_once()
         mock_remediation_agent.assert_called_once()
         mock_policy_agent.assert_called_once()
-        
+
         # Verify agents were started
         mock_guided_instance.start.assert_called_once()
         mock_exploit_instance.start.assert_called_once()
         mock_remediation_instance.start.assert_called_once()
         mock_policy_instance.start.assert_called_once()
-        
+
         # Verify specialized agents were stored
         assert "guided_assessment" in agent.specialized_agents
         assert "exploitation_verification" in agent.specialized_agents
         assert "remediation_planning" in agent.specialized_agents
         assert "security_policy" in agent.specialized_agents
-        
+
         # Verify register_event_handler was called the expected number of times
         assert agent.register_event_handler.call_count >= 8
-        
+
         # Verify by class name instead of direct class equality since our mocks create different instances
         event_class_names = [event_type.__name__ for event_type in event_types]
         assert "WorkflowEvent" in event_class_names
@@ -728,21 +800,27 @@ class TestAdvancedOrchestrator:
     async def test_create_workflow(self, mock_base_init, mock_uuid, mock_time):
         """Test creating a workflow definition."""
         mock_base_init.return_value = None
-        mock_uuid.uuid4.return_value = uuid.UUID('12345678-1234-5678-1234-567812345678')
+        mock_uuid.uuid4.return_value = uuid.UUID("12345678-1234-5678-1234-567812345678")
         mock_time.time.return_value = 1000000
 
         # Initialize agent
         agent = AdvancedOrchestrator()
-        
+
         # Mock _generate_workflow_components
-        agent._generate_workflow_components = AsyncMock(return_value={
-            "agents": ["guided_assessment"],
-            "stages": [
-                {"name": "initialization", "agent": "guided_assessment", "description": "Initialize workflow"}
-            ],
-            "communication_patterns": ["chain_of_thought"]
-        })
-        
+        agent._generate_workflow_components = AsyncMock(
+            return_value={
+                "agents": ["guided_assessment"],
+                "stages": [
+                    {
+                        "name": "initialization",
+                        "agent": "guided_assessment",
+                        "description": "Initialize workflow",
+                    }
+                ],
+                "communication_patterns": ["chain_of_thought"],
+            }
+        )
+
         # Create workflow
         result = await agent.create_workflow(
             workflow_type=WorkflowType.GUIDED_ASSESSMENT,
@@ -750,9 +828,9 @@ class TestAdvancedOrchestrator:
             target_type="repository",
             parameters={"depth": "standard"},
             name="Test Workflow",
-            description="Workflow for testing"
+            description="Workflow for testing",
         )
-        
+
         # Verify the result
         workflow_id = f"workflow_guided_assessment_1000000_12345678"
         assert result["workflow_id"] == workflow_id
@@ -762,7 +840,7 @@ class TestAdvancedOrchestrator:
         assert result["target_id"] == "repo123"
         assert result["target_type"] == "repository"
         assert result["status"] == "created"
-        
+
         # Verify workflow was stored
         assert workflow_id in agent.workflow_definitions
         assert workflow_id in agent.workflow_executions
@@ -771,12 +849,10 @@ class TestAdvancedOrchestrator:
         assert workflow_def.target_id == "repo123"
         assert workflow_def.target_type == "repository"
         assert workflow_def.workflow_type == WorkflowType.GUIDED_ASSESSMENT
-        
+
         # Verify _generate_workflow_components was called
         agent._generate_workflow_components.assert_called_once_with(
-            WorkflowType.GUIDED_ASSESSMENT,
-            "repository",
-            {"depth": "standard"}
+            WorkflowType.GUIDED_ASSESSMENT, "repository", {"depth": "standard"}
         )
 
     @pytest.mark.asyncio
@@ -786,15 +862,15 @@ class TestAdvancedOrchestrator:
     async def test_start_workflow(self, mock_base_init, mock_uuid, mock_time):
         """Test starting a workflow execution."""
         mock_base_init.return_value = None
-        mock_uuid.uuid4.return_value = uuid.UUID('12345678-1234-5678-1234-567812345678')
+        mock_uuid.uuid4.return_value = uuid.UUID("12345678-1234-5678-1234-567812345678")
         mock_time.time.return_value = 1000000
 
         # Initialize agent
         agent = AdvancedOrchestrator()
-        
+
         # Mock _emit_workflow_event
         agent._emit_workflow_event = AsyncMock()
-        
+
         # Mock asyncio.create_task
         with patch("asyncio.create_task") as mock_create_task:
             # Create workflow definition
@@ -809,44 +885,45 @@ class TestAdvancedOrchestrator:
                 parameters={},
                 agents=["guided_assessment"],
                 stages=[
-                    {"name": "initialization", "agent": "guided_assessment", "description": "Initialize workflow"}
+                    {
+                        "name": "initialization",
+                        "agent": "guided_assessment",
+                        "description": "Initialize workflow",
+                    }
                 ],
                 communication_patterns=["chain_of_thought"],
-                created_at=1000000
+                created_at=1000000,
             )
             workflow_exec = WorkflowExecution(
                 workflow_id=workflow_id,
                 definition=workflow_def,
-                status=WorkflowStatus.INITIALIZING
+                status=WorkflowStatus.INITIALIZING,
             )
-            
+
             # Store workflow definition and execution
             agent.workflow_definitions[workflow_id] = workflow_def
             agent.workflow_executions[workflow_id] = workflow_exec
-            
+
             # Start workflow
             result = await agent.start_workflow(workflow_id)
-            
+
             # Verify the result
             assert result["workflow_id"] == workflow_id
             assert result["name"] == "Test Workflow"
             assert result["status"] == "running"
-            
+
             # Verify workflow execution was updated
             assert workflow_exec.status == WorkflowStatus.RUNNING
             assert workflow_exec.start_time == 1000000
-            
+
             # Verify workflow was added to active workflows
             assert workflow_id in agent.active_workflows
-            
+
             # Verify _emit_workflow_event was called
             agent._emit_workflow_event.assert_called_once_with(
-                workflow_id,
-                WorkflowType.GUIDED_ASSESSMENT,
-                WorkflowStatus.RUNNING,
-                0.0
+                workflow_id, WorkflowType.GUIDED_ASSESSMENT, WorkflowStatus.RUNNING, 0.0
             )
-            
+
             # Verify asyncio.create_task was called
             mock_create_task.assert_called_once()
 
@@ -858,7 +935,7 @@ class TestAdvancedOrchestrator:
 
         # Initialize agent
         agent = AdvancedOrchestrator()
-        
+
         # Create workflow definition
         workflow_id = "workflow_test_1000000_12345678"
         workflow_def = WorkflowDefinition(
@@ -871,10 +948,14 @@ class TestAdvancedOrchestrator:
             parameters={},
             agents=["guided_assessment"],
             stages=[
-                {"name": "initialization", "agent": "guided_assessment", "description": "Initialize workflow"}
+                {
+                    "name": "initialization",
+                    "agent": "guided_assessment",
+                    "description": "Initialize workflow",
+                }
             ],
             communication_patterns=["chain_of_thought"],
-            created_at=1000000
+            created_at=1000000,
         )
         workflow_exec = WorkflowExecution(
             workflow_id=workflow_id,
@@ -882,16 +963,16 @@ class TestAdvancedOrchestrator:
             status=WorkflowStatus.RUNNING,
             current_stage=0,
             progress=0.5,
-            start_time=1000000
+            start_time=1000000,
         )
-        
+
         # Store workflow definition and execution
         agent.workflow_definitions[workflow_id] = workflow_def
         agent.workflow_executions[workflow_id] = workflow_exec
-        
+
         # Get workflow status
         status = await agent.get_workflow_status(workflow_id)
-        
+
         # Verify the status
         assert status["workflow_id"] == workflow_id
         assert status["name"] == "Test Workflow"

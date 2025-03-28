@@ -4,7 +4,11 @@ import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 import autogen
 
-from skwaq.core.openai_client import OpenAIClient, reset_client_registry, get_openai_client
+from skwaq.core.openai_client import (
+    OpenAIClient,
+    reset_client_registry,
+    get_openai_client,
+)
 from skwaq.utils.config import Config
 
 
@@ -51,8 +55,10 @@ async def test_get_completion():
     # Rather than trying to mock the autogen core directly, which is complex,
     # we'll patch the method on our client
 
-    with patch.object(OpenAIClient, "__init__", return_value=None) as mock_init, \
-         patch.object(OpenAIClient, "get_completion") as mock_get_completion:
+    with (
+        patch.object(OpenAIClient, "__init__", return_value=None) as mock_init,
+        patch.object(OpenAIClient, "get_completion") as mock_get_completion,
+    ):
         # Make our mocked method return a simple response
         mock_get_completion.return_value = "Test completion"
 
@@ -64,8 +70,8 @@ async def test_get_completion():
             # Add necessary Azure OpenAI config to prevent ValueError
             openai={
                 "endpoint": "https://test.openai.azure.com/",
-                "api_version": "2023-05-15"
-            }
+                "api_version": "2023-05-15",
+            },
         )
 
         # Create a client instance that will use our mocked method
@@ -84,10 +90,10 @@ def test_azure_api_key_auth():
         openai_api_key="test-api-key",
         openai_org_id="test-org-id",
         openai={
-            "api_type": "azure", 
-            "endpoint": "https://test.openai.azure.com/", 
-            "api_version": "2023-05-15"
-        }
+            "api_type": "azure",
+            "endpoint": "https://test.openai.azure.com/",
+            "api_version": "2023-05-15",
+        },
     )
 
     # Initialize client
@@ -101,8 +107,9 @@ def test_azure_api_key_auth():
 
 
 @pytest.mark.skipif(
-    not hasattr(OpenAIClient, "HAS_AZURE_IDENTITY") or not OpenAIClient.HAS_AZURE_IDENTITY,
-    reason="Azure Identity package not installed"
+    not hasattr(OpenAIClient, "HAS_AZURE_IDENTITY")
+    or not OpenAIClient.HAS_AZURE_IDENTITY,
+    reason="Azure Identity package not installed",
 )
 def test_azure_entra_id_auth():
     """Test initialization with Azure Entra ID authentication."""
@@ -116,13 +123,13 @@ def test_azure_entra_id_auth():
             openai_api_key="",  # Empty API key
             openai_org_id="test-org-id",
             openai={
-                "api_type": "azure", 
-                "endpoint": "https://test.openai.azure.com/", 
+                "api_type": "azure",
+                "endpoint": "https://test.openai.azure.com/",
                 "api_version": "2023-05-15",
                 "use_entra_id": True,
                 "tenant_id": "test-tenant-id",
-                "client_id": "test-client-id"
-            }
+                "client_id": "test-client-id",
+            },
         )
 
         # Initialize client
@@ -136,14 +143,17 @@ def test_azure_entra_id_auth():
 
 
 @pytest.mark.skipif(
-    not hasattr(OpenAIClient, "HAS_AZURE_IDENTITY") or not OpenAIClient.HAS_AZURE_IDENTITY,
-    reason="Azure Identity package not installed"
+    not hasattr(OpenAIClient, "HAS_AZURE_IDENTITY")
+    or not OpenAIClient.HAS_AZURE_IDENTITY,
+    reason="Azure Identity package not installed",
 )
 def test_azure_bearer_token_auth():
     """Test initialization with Azure bearer token authentication."""
     # Mock functionality needed for bearer token
-    with patch("azure.identity.DefaultAzureCredential") as mock_credential, \
-         patch("azure.identity.get_bearer_token_provider") as mock_get_token_provider:
+    with (
+        patch("azure.identity.DefaultAzureCredential") as mock_credential,
+        patch("azure.identity.get_bearer_token_provider") as mock_get_token_provider,
+    ):
         # Mock credential and token provider instances
         mock_credential.return_value = MagicMock()
         mock_token_provider = MagicMock()
@@ -154,13 +164,13 @@ def test_azure_bearer_token_auth():
             openai_api_key="",  # Empty API key
             openai_org_id="test-org-id",
             openai={
-                "api_type": "azure", 
-                "endpoint": "https://test.openai.azure.com/", 
+                "api_type": "azure",
+                "endpoint": "https://test.openai.azure.com/",
                 "api_version": "2023-05-15",
                 "use_entra_id": True,
                 "auth_method": "bearer_token",
-                "token_scope": "https://cognitiveservices.azure.com/.default"
-            }
+                "token_scope": "https://cognitiveservices.azure.com/.default",
+            },
         )
 
         # Initialize client
@@ -171,11 +181,10 @@ def test_azure_bearer_token_auth():
         assert client.config_list[0]["api_type"] == "azure"
         assert client.config_list[0]["base_url"] == "https://test.openai.azure.com/"
         assert "azure_ad_token_provider" in client.config_list[0]
-        
+
         # Verify the token provider was created with the correct scope
         mock_get_token_provider.assert_called_once_with(
-            mock_credential.return_value, 
-            "https://cognitiveservices.azure.com/.default"
+            mock_credential.return_value, "https://cognitiveservices.azure.com/.default"
         )
 
 
@@ -183,34 +192,34 @@ def test_client_registry():
     """Test the OpenAI client registry."""
     # Reset registry to start with a clean state
     reset_client_registry()
-    
+
     # Create a config
     config = Config(
         openai_api_key="test-api-key",
         openai_org_id="test-org-id",
-        openai={"api_type": "azure", "endpoint": "https://test.openai.azure.com/"}
+        openai={"api_type": "azure", "endpoint": "https://test.openai.azure.com/"},
     )
-    
+
     # Get client from registry
     client1 = get_openai_client(config)
-    
+
     # Get client again - should be the same instance
     client2 = get_openai_client(config)
-    
+
     # Verify it's the same instance
     assert client1 is client2
-    
+
     # Get a client with a different registry key
     client3 = get_openai_client(config, registry_key="test")
-    
+
     # Should be a different instance
     assert client1 is not client3
-    
+
     # Reset registry
     reset_client_registry()
-    
+
     # Get client again - should be a new instance
     client4 = get_openai_client(config)
-    
+
     # Verify it's a different instance
     assert client1 is not client4

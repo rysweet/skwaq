@@ -80,7 +80,7 @@ class GuidedInquiryWorkflow(Workflow):
         self.current_step = GuidedInquiryStep.INITIAL_ASSESSMENT
         self.assessment_data: Dict[str, Any] = {}
         self.findings: List[Finding] = []
-        
+
         # State management
         self._should_continue = True
         self._pause_event = asyncio.Event()
@@ -100,18 +100,20 @@ class GuidedInquiryWorkflow(Workflow):
                 )
                 if result:
                     self.investigation_id = result[0]["id"]
-                    logger.info(f"Created new investigation with ID: {self.investigation_id}")
+                    logger.info(
+                        f"Created new investigation with ID: {self.investigation_id}"
+                    )
             except Exception as e:
                 logger.warning(f"Failed to create investigation: {e}")
                 # Still continue even if we can't create an investigation
-        
+
         # Initialize agents
         self.agents = {}
         self.agents["guided"] = GuidedInquiryAgent(
             repository_id=self.repository_id,
             investigation_id=self.investigation_id,
         )
-        
+
         logger.info("Guided inquiry workflow initialized")
 
     async def run(self) -> AsyncGenerator[Dict[str, Any], None]:
@@ -126,34 +128,36 @@ class GuidedInquiryWorkflow(Workflow):
             "step": self.current_step.value,
             "message": "Starting guided vulnerability assessment",
         }
-        
+
         # Process each step in sequence
         while self.should_continue():
             # Check if we need to pause
             await self._pause_event.wait()
-            
+
             # Process current step
             step_result = await self._process_step(self.current_step)
-            
+
             # Record step results
             self.assessment_data[self.current_step.value] = step_result
-            
+
             # Emit event for the step - adapted for new autogen_core version
             inquiry_event = GuidedInquiryEvent(
                 sender=self.__class__.__name__,
                 step=self.current_step,
                 data=step_result,
             )
-            
+
             # Log the event
-            logger.info(f"Emitting event: {inquiry_event.__class__.__name__} for step {self.current_step.value}")
-            
+            logger.info(
+                f"Emitting event: {inquiry_event.__class__.__name__} for step {self.current_step.value}"
+            )
+
             yield {
                 "status": "step_completed",
                 "step": self.current_step.value,
                 "data": step_result,
             }
-            
+
             # Move to next step
             if self.current_step == GuidedInquiryStep.FINAL_REPORT:
                 # Workflow is complete
@@ -172,7 +176,7 @@ class GuidedInquiryWorkflow(Workflow):
                     "step": self.current_step.value,
                     "message": f"Moving to {self.current_step.value}",
                 }
-        
+
         # Update investigation status if we have one
         if self.investigation_id:
             self.connector.run_query(
@@ -180,25 +184,29 @@ class GuidedInquiryWorkflow(Workflow):
                 "SET i.status = 'Complete', i.completed = datetime()",
                 {"id": self.investigation_id},
             )
-    
+
     def should_continue(self) -> bool:
         """Check if the workflow should continue.
-        
+
         Returns:
             True if the workflow should continue, False otherwise
         """
         return self._should_continue
-    
+
     def pause(self) -> None:
         """Pause the workflow."""
         self._pause_event.clear()
-        logger.info(f"Guided inquiry workflow paused at step: {self.current_step.value}")
-    
+        logger.info(
+            f"Guided inquiry workflow paused at step: {self.current_step.value}"
+        )
+
     def resume(self) -> None:
         """Resume the workflow."""
         self._pause_event.set()
-        logger.info(f"Guided inquiry workflow resumed at step: {self.current_step.value}")
-    
+        logger.info(
+            f"Guided inquiry workflow resumed at step: {self.current_step.value}"
+        )
+
     def _advance_step(self) -> None:
         """Advance to the next step in the workflow."""
         steps = list(GuidedInquiryStep)
@@ -206,18 +214,18 @@ class GuidedInquiryWorkflow(Workflow):
         if current_idx < len(steps) - 1:
             self.current_step = steps[current_idx + 1]
         logger.info(f"Advanced to step: {self.current_step.value}")
-    
+
     async def _process_step(self, step: GuidedInquiryStep) -> Dict[str, Any]:
         """Process a single step in the guided inquiry workflow.
-        
+
         Args:
             step: The step to process
-            
+
         Returns:
             Results of processing the step
         """
         logger.info(f"Processing step: {step.value}")
-        
+
         # Different processing based on step
         if step == GuidedInquiryStep.INITIAL_ASSESSMENT:
             return await self._process_initial_assessment()
@@ -235,10 +243,10 @@ class GuidedInquiryWorkflow(Workflow):
             return await self._process_final_report()
         else:
             return {"error": f"Unknown step: {step.value}"}
-    
+
     async def _process_initial_assessment(self) -> Dict[str, Any]:
         """Process the initial assessment step.
-        
+
         Returns:
             Assessment results
         """
@@ -254,19 +262,19 @@ class GuidedInquiryWorkflow(Workflow):
             )
             if result:
                 repo_info = result[0]
-        
+
         # Use the guided inquiry agent to do initial assessment
         assessment = await self.agents["guided"].initial_assessment(repo_info)
-        
+
         return {
             "repository": repo_info,
             "assessment": assessment,
             "timestamp": self._get_timestamp(),
         }
-    
+
     async def _process_scope_definition(self) -> Dict[str, Any]:
         """Process the scope definition step.
-        
+
         Returns:
             Scope definition results
         """
@@ -281,123 +289,129 @@ class GuidedInquiryWorkflow(Workflow):
                 {"repo_id": self.repository_id},
             )
             if result:
-                file_types = {r["language"]: r["count"] for r in result if r["language"]}
-        
+                file_types = {
+                    r["language"]: r["count"] for r in result if r["language"]
+                }
+
         # Use the guided inquiry agent to define scope
-        previous_assessment = self.assessment_data.get(GuidedInquiryStep.INITIAL_ASSESSMENT.value, {})
-        scope = await self.agents["guided"].define_scope(previous_assessment, file_types)
-        
+        previous_assessment = self.assessment_data.get(
+            GuidedInquiryStep.INITIAL_ASSESSMENT.value, {}
+        )
+        scope = await self.agents["guided"].define_scope(
+            previous_assessment, file_types
+        )
+
         return {
             "file_types": file_types,
             "scope": scope,
             "timestamp": self._get_timestamp(),
         }
-    
+
     async def _process_threat_modeling(self) -> Dict[str, Any]:
         """Process the threat modeling step.
-        
+
         Returns:
             Threat modeling results
         """
         # Use the guided inquiry agent to do threat modeling
         scope = self.assessment_data.get(GuidedInquiryStep.SCOPE_DEFINITION.value, {})
-        
+
         threats = await self.agents["guided"].identify_threats(scope)
-        
+
         return {
             "threats": threats,
             "timestamp": self._get_timestamp(),
         }
-    
+
     async def _process_vulnerability_discovery(self) -> Dict[str, Any]:
         """Process the vulnerability discovery step.
-        
+
         Returns:
             Vulnerability discovery results
         """
         from ..code_analysis.analyzer import CodeAnalyzer
-        
+
         # Get threat model and scope
         threats = self.assessment_data.get(GuidedInquiryStep.THREAT_MODELING.value, {})
         scope = self.assessment_data.get(GuidedInquiryStep.SCOPE_DEFINITION.value, {})
-        
+
         # Run analysis based on the threats and scope
         analyzer = CodeAnalyzer()
-        
+
         # Determine analysis strategies based on threat model
         strategies = await self.agents["guided"].determine_analysis_strategies(threats)
-        
+
         # Run code analysis if we have a repository
         findings = []
         if self.repository_id:
             # Run analysis and collect findings
             with_semantic = "semantic_analysis" in strategies
             with_ast = "ast_analysis" in strategies
-            
+
             analysis_result = await analyzer.analyze_repository(
                 repository_id=self.repository_id,
                 with_semantic=with_semantic,
                 with_ast=with_ast,
             )
-            
+
             if analysis_result and analysis_result.findings:
                 findings = analysis_result.findings
                 self.findings.extend(findings)
-        
+
         # Use the guided inquiry agent to summarize findings
         findings_summary = await self.agents["guided"].summarize_findings(findings)
-        
+
         return {
             "strategies_used": strategies,
             "findings_count": len(findings),
             "findings_summary": findings_summary,
             "timestamp": self._get_timestamp(),
         }
-    
+
     async def _process_impact_assessment(self) -> Dict[str, Any]:
         """Process the impact assessment step.
-        
+
         Returns:
             Impact assessment results
         """
         # Get findings from the previous step
         findings = self.findings
-        
+
         # Let the agent assess the impact
         impact = await self.agents["guided"].assess_impact(findings)
-        
+
         return {
             "impact": impact,
             "timestamp": self._get_timestamp(),
         }
-    
+
     async def _process_remediation_planning(self) -> Dict[str, Any]:
         """Process the remediation planning step.
-        
+
         Returns:
             Remediation planning results
         """
         # Get findings and impact assessment
         findings = self.findings
         impact = self.assessment_data.get(GuidedInquiryStep.IMPACT_ASSESSMENT.value, {})
-        
+
         # Let the agent create remediation plans
         remediation = await self.agents["guided"].plan_remediation(findings, impact)
-        
+
         return {
             "remediation_plan": remediation,
             "timestamp": self._get_timestamp(),
         }
-    
+
     async def _process_final_report(self) -> Dict[str, Any]:
         """Process the final report step.
-        
+
         Returns:
             Final report data
         """
         # Use all the data from previous steps to generate a report
         report = await self.agents["guided"].generate_report(self.assessment_data)
-        
+
         # Store the report in the database if we have an investigation
         if self.investigation_id:
             self.connector.run_query(
@@ -409,29 +423,30 @@ class GuidedInquiryWorkflow(Workflow):
                     "content": json.dumps(report),
                 },
             )
-        
+
         return {
             "report": report,
             "timestamp": self._get_timestamp(),
         }
-    
+
     def _get_timestamp(self) -> str:
         """Get the current timestamp.
-        
+
         Returns:
             Timestamp string in ISO format
         """
         import datetime
+
         return datetime.datetime.utcnow().isoformat()
 
 
 class GuidedInquiryAgent(SkwaqAgent):
     """Agent for guiding vulnerability assessment inquiries.
-    
+
     This agent helps users through a structured vulnerability assessment process,
     providing guidance, interpreting results, and generating recommendations.
     """
-    
+
     def __init__(
         self,
         repository_id: Optional[int] = None,
@@ -452,22 +467,24 @@ focused assessments, and actionable recommendations at each step of the process.
             description="Guides users through structured vulnerability assessments",
             **kwargs,
         )
-        
+
         self.repository_id = repository_id
         self.investigation_id = investigation_id
         self.connector = get_connector()
-    
-    async def initial_assessment(self, repository_info: Dict[str, Any]) -> Dict[str, Any]:
+
+    async def initial_assessment(
+        self, repository_info: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Perform an initial assessment of the repository.
-        
+
         Args:
             repository_info: Information about the repository
-            
+
         Returns:
             Initial assessment data
         """
         from ..core.openai_client import get_openai_client
-        
+
         # Prepare prompt for initial assessment
         prompt = f"""Perform an initial security assessment based on the following repository information:
 
@@ -483,11 +500,11 @@ Provide a structured initial security assessment with the following components:
 
 Format your response as a JSON object with keys: general_assessment, priority_areas, potential_challenges, and recommended_approach.
 """
-        
+
         # Get completion
         openai_client = get_openai_client(async_mode=True)
         response = await openai_client.get_completion(prompt, temperature=0.3)
-        
+
         # Parse response as JSON
         try:
             assessment = json.loads(response)
@@ -500,26 +517,26 @@ Format your response as a JSON object with keys: general_assessment, priority_ar
                 "potential_challenges": [],
                 "recommended_approach": "Perform standard security assessment",
             }
-        
+
         return assessment
-    
+
     async def define_scope(
         self, previous_assessment: Dict[str, Any], file_types: Dict[str, int]
     ) -> Dict[str, Any]:
         """Define the scope of the security assessment.
-        
+
         Args:
             previous_assessment: Results from the initial assessment
             file_types: Distribution of file types in the repository
-            
+
         Returns:
             Scope definition data
         """
         from ..core.openai_client import get_openai_client
-        
+
         # Extract the assessment part from previous results
         assessment = previous_assessment.get("assessment", {})
-        
+
         # Prepare prompt for scope definition
         prompt = f"""Define the scope for a security assessment based on the following information:
 
@@ -540,11 +557,11 @@ Define a focused scope for the security assessment with the following components
 
 Format your response as a JSON object with keys: included, excluded, priority_ranking, vulnerability_focus, and assessment_depth.
 """
-        
+
         # Get completion
         openai_client = get_openai_client(async_mode=True)
         response = await openai_client.get_completion(prompt, temperature=0.3)
-        
+
         # Parse response as JSON
         try:
             scope = json.loads(response)
@@ -558,23 +575,23 @@ Format your response as a JSON object with keys: included, excluded, priority_ra
                 "vulnerability_focus": ["Common vulnerabilities"],
                 "assessment_depth": {"default": "standard"},
             }
-        
+
         return scope
-    
+
     async def identify_threats(self, scope: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Identify potential threats based on the defined scope.
-        
+
         Args:
             scope: The defined assessment scope
-            
+
         Returns:
             List of identified threats
         """
         from ..core.openai_client import get_openai_client
-        
+
         # Extract scope data
         scope_info = scope.get("scope", {})
-        
+
         # Prepare prompt for threat modeling
         prompt = f"""Perform threat modeling based on the following assessment scope:
 
@@ -599,11 +616,11 @@ Format your response as a JSON array where each item has:
 - "impact": Estimated impact if exploited (high, medium, low)
 - "detection_methods": How to detect this type of threat in code
 """
-        
+
         # Get completion
         openai_client = get_openai_client(async_mode=True)
         response = await openai_client.get_completion(prompt, temperature=0.3)
-        
+
         # Parse response as JSON
         try:
             threats = json.loads(response)
@@ -621,50 +638,54 @@ Format your response as a JSON array where each item has:
                     "detection_methods": ["Code review for hardcoded secrets"],
                 }
             ]
-        
+
         return threats
-    
+
     async def determine_analysis_strategies(
         self, threat_data: Dict[str, Any]
     ) -> List[str]:
         """Determine which analysis strategies to use based on the threats.
-        
+
         Args:
             threat_data: The threat modeling data
-            
+
         Returns:
             List of analysis strategies to use
         """
         # Extract threats
         threats = threat_data.get("threats", [])
-        
+
         # Always include pattern matching
         strategies = ["pattern_matching"]
-        
+
         # Add semantic analysis for complex threats
-        complex_categories = ["Repudiation", "Information Disclosure", "Elevation of Privilege"]
+        complex_categories = [
+            "Repudiation",
+            "Information Disclosure",
+            "Elevation of Privilege",
+        ]
         if any(t.get("category") in complex_categories for t in threats):
             strategies.append("semantic_analysis")
-        
+
         # Add AST analysis for code structure threats
         structure_categories = ["Tampering", "Elevation of Privilege"]
         if any(t.get("category") in structure_categories for t in threats):
             strategies.append("ast_analysis")
-        
+
         logger.info(f"Selected analysis strategies: {strategies}")
         return strategies
-    
+
     async def summarize_findings(self, findings: List[Finding]) -> Dict[str, Any]:
         """Summarize the vulnerability findings.
-        
+
         Args:
             findings: List of findings from the analysis
-            
+
         Returns:
             Summary of findings
         """
         from ..core.openai_client import get_openai_client
-        
+
         # Convert findings to a simplified format for the prompt
         findings_text = []
         for i, finding in enumerate(findings):
@@ -673,9 +694,9 @@ Format your response as a JSON array where each item has:
                 f"   Location: {finding.file_path}:{finding.line_number}\n"
                 f"   Description: {finding.description}\n"
             )
-        
+
         findings_str = "\n".join(findings_text) if findings_text else "No findings."
-        
+
         # Prepare prompt for findings summary
         prompt = f"""Summarize the following vulnerability findings:
 
@@ -690,11 +711,11 @@ Provide a comprehensive summary with the following components:
 
 Format your response as a JSON object with keys: overall_assessment, distribution, key_patterns, critical_issues, and false_positive_estimate.
 """
-        
+
         # Get completion
         openai_client = get_openai_client(async_mode=True)
         response = await openai_client.get_completion(prompt, temperature=0.3)
-        
+
         # Parse response as JSON
         try:
             summary = json.loads(response)
@@ -708,20 +729,20 @@ Format your response as a JSON object with keys: overall_assessment, distributio
                 "critical_issues": [],
                 "false_positive_estimate": "Unknown",
             }
-        
+
         return summary
-    
+
     async def assess_impact(self, findings: List[Finding]) -> Dict[str, Any]:
         """Assess the impact of the identified vulnerabilities.
-        
+
         Args:
             findings: List of findings from the analysis
-            
+
         Returns:
             Impact assessment data
         """
         from ..core.openai_client import get_openai_client
-        
+
         # Convert findings to a simplified format for the prompt
         findings_text = []
         for i, finding in enumerate(findings):
@@ -730,9 +751,9 @@ Format your response as a JSON object with keys: overall_assessment, distributio
                 f"   Location: {finding.file_path}:{finding.line_number}\n"
                 f"   Description: {finding.description}\n"
             )
-        
+
         findings_str = "\n".join(findings_text) if findings_text else "No findings."
-        
+
         # Prepare prompt for impact assessment
         prompt = f"""Assess the impact of the following vulnerability findings:
 
@@ -747,11 +768,11 @@ Provide a comprehensive impact assessment with the following components:
 
 Format your response as a JSON object with keys: business_impact, security_impact, exploitation_difficulty, risk_score, and contextual_factors.
 """
-        
+
         # Get completion
         openai_client = get_openai_client(async_mode=True)
         response = await openai_client.get_completion(prompt, temperature=0.3)
-        
+
         # Parse response as JSON
         try:
             impact = json.loads(response)
@@ -765,23 +786,23 @@ Format your response as a JSON object with keys: business_impact, security_impac
                 "risk_score": 5,  # Medium risk as default
                 "contextual_factors": [],
             }
-        
+
         return impact
-    
+
     async def plan_remediation(
         self, findings: List[Finding], impact: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Plan remediation for the identified vulnerabilities.
-        
+
         Args:
             findings: List of findings from the analysis
             impact: Impact assessment data
-            
+
         Returns:
             Remediation plan data
         """
         from ..core.openai_client import get_openai_client
-        
+
         # Convert findings to a simplified format for the prompt
         findings_text = []
         for i, finding in enumerate(findings):
@@ -790,12 +811,12 @@ Format your response as a JSON object with keys: business_impact, security_impac
                 f"   Location: {finding.file_path}:{finding.line_number}\n"
                 f"   Description: {finding.description}\n"
             )
-        
+
         findings_str = "\n".join(findings_text) if findings_text else "No findings."
-        
+
         # Extract impact assessment
         impact_data = impact.get("impact", {})
-        
+
         # Prepare prompt for remediation planning
         prompt = f"""Create a remediation plan for the following vulnerability findings:
 
@@ -816,11 +837,11 @@ Provide a comprehensive remediation plan with the following components:
 
 Format your response as a JSON object with keys: prioritized_vulnerabilities, remediation_steps, difficulty, timeline, resources, and testing.
 """
-        
+
         # Get completion
         openai_client = get_openai_client(async_mode=True)
         response = await openai_client.get_completion(prompt, temperature=0.3)
-        
+
         # Parse response as JSON
         try:
             plan = json.loads(response)
@@ -828,35 +849,41 @@ Format your response as a JSON object with keys: prioritized_vulnerabilities, re
             logger.error("Failed to parse remediation plan response as JSON")
             # Create a basic remediation plan manually
             plan = {
-                "prioritized_vulnerabilities": [f.vulnerability_type for f in findings[:5]],
+                "prioritized_vulnerabilities": [
+                    f.vulnerability_type for f in findings[:5]
+                ],
                 "remediation_steps": {},
                 "difficulty": "medium",
                 "timeline": "Varies by vulnerability",
                 "resources": ["Security engineer"],
                 "testing": "Manual verification",
             }
-        
+
         return plan
-    
+
     async def generate_report(self, assessment_data: Dict[str, Any]) -> Dict[str, Any]:
         """Generate a final report based on all assessment data.
-        
+
         Args:
             assessment_data: All data collected during the assessment
-            
+
         Returns:
             Final report data
         """
         from ..core.openai_client import get_openai_client
-        
+
         # Extract key information from each step
         initial = assessment_data.get(GuidedInquiryStep.INITIAL_ASSESSMENT.value, {})
         scope = assessment_data.get(GuidedInquiryStep.SCOPE_DEFINITION.value, {})
         threats = assessment_data.get(GuidedInquiryStep.THREAT_MODELING.value, {})
-        findings = assessment_data.get(GuidedInquiryStep.VULNERABILITY_DISCOVERY.value, {})
+        findings = assessment_data.get(
+            GuidedInquiryStep.VULNERABILITY_DISCOVERY.value, {}
+        )
         impact = assessment_data.get(GuidedInquiryStep.IMPACT_ASSESSMENT.value, {})
-        remediation = assessment_data.get(GuidedInquiryStep.REMEDIATION_PLANNING.value, {})
-        
+        remediation = assessment_data.get(
+            GuidedInquiryStep.REMEDIATION_PLANNING.value, {}
+        )
+
         # Prepare a concise summary of the assessment for the prompt
         assessment_summary = {
             "initial_assessment": initial.get("assessment", {}),
@@ -866,7 +893,7 @@ Format your response as a JSON object with keys: prioritized_vulnerabilities, re
             "impact": impact.get("impact", {}),
             "remediation_plan": remediation.get("remediation_plan", {}),
         }
-        
+
         # Prepare prompt for final report
         prompt = f"""Generate a final security assessment report based on the following data:
 
@@ -883,11 +910,11 @@ Create a comprehensive security assessment report with the following sections:
 Format your response as a JSON object with these sections as keys. For each section, provide detailed,
 professional content suitable for a formal security assessment report.
 """
-        
+
         # Get completion
         openai_client = get_openai_client(async_mode=True)
         response = await openai_client.get_completion(prompt, temperature=0.4)
-        
+
         # Parse response as JSON
         try:
             report = json.loads(response)
@@ -902,5 +929,5 @@ professional content suitable for a formal security assessment report.
                 "detailed_remediation_plan": "See remediation planning",
                 "conclusion_and_next_steps": "Follow remediation plan",
             }
-        
+
         return report

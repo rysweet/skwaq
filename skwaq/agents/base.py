@@ -326,7 +326,7 @@ class BaseAgent:
 
     def register_event_handler(
         self,
-        event_type: Type[Any], 
+        event_type: Type[Any],
         handler: Callable[[Any], Awaitable[None]],
     ) -> None:
         """Register a handler for a specific event type.
@@ -470,9 +470,11 @@ class AutogenChatAgent(BaseAgent):
 
         # In autogen_core 0.4.x, the API is different
         logger.info(f"Using LLM to generate response to: {message[:50]}...")
-        
+
         # Using the OpenAI client instead
         openai_client = get_openai_client()
-        response = "I'm a simulated response because of autogen_core API changes. " + message
+        response = (
+            "I'm a simulated response because of autogen_core API changes. " + message
+        )
 
         return response

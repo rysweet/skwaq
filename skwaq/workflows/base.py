@@ -11,13 +11,13 @@ class Workflow(ABC):
     """Base workflow class that all specific workflows should inherit from."""
 
     def __init__(
-        self, 
+        self,
         name: str = "Workflow",
         description: str = "Generic workflow",
-        repository_id: Optional[int] = None
+        repository_id: Optional[int] = None,
     ):
         """Initialize the workflow.
-        
+
         Args:
             name: Name of the workflow
             description: Description of the workflow
@@ -29,7 +29,7 @@ class Workflow(ABC):
         self.investigation_id: Optional[int] = None
         self.agents: Dict[str, Any] = {}
         self.connector = get_connector()
-        
+
         # State management
         self._should_continue = True
         self._pause_event = asyncio.Event()
@@ -59,12 +59,13 @@ class Workflow(ABC):
     def resume(self) -> None:
         """Resume the workflow iteration."""
         self._pause_event.set()
-    
+
     def _get_timestamp(self) -> str:
         """Get the current timestamp.
-        
+
         Returns:
             Timestamp string in ISO format
         """
         import datetime
+
         return datetime.datetime.utcnow().isoformat()

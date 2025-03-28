@@ -35,5 +35,3 @@ We want to add a demo mode to the CLI which walks through the CLI commands and d
 - Runs the commands against the eShop repository
 
 We want to analyze files across the project to see which are too large/too big for your token window These are good candidates for refactoring into smaller modules. I'd like to be strict about separation of concerns and single responsibility principle. Analyze the project and identify files that are too large or have too many functions. Think careully about how to refactor the code to make it more modular and easier to understand and test. then refactor the code accordingly. Make sure that you then also refactor the related tests and ensure that all tests are still passing. 
-
-The CLI banner prints "Skwaq" However the "q" looks like a "g". Please fix this. Please also make sure that "s" is lowercase. To really make me happy, see if you can make an ascii art depiction of a raven as part of the banner.

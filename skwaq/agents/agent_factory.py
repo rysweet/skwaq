@@ -22,5 +22,5 @@ def create_orchestrator_agent(**kwargs: Any) -> OrchestratorAgent:
         system_message="""You are the orchestrator agent for a vulnerability assessment system.
 Your role is to coordinate the activities of all specialized agents and ensure the
 assessment process runs smoothly.""",
-        **kwargs
+        **kwargs,
     )

@@ -137,7 +137,7 @@ class Neo4jConnector:
                 return self.connect(max_retries=1, retry_delay=0.5)
             except Exception:
                 return False
-                
+
         # Even if connected flag is True, verify with a quick test query
         try:
             with self._driver.session(database=self._database) as session:
@@ -151,7 +151,7 @@ class Neo4jConnector:
             logger.error(f"Connection verification failed: {e}")
             self._connected = False
             return False
-        
+
     def get_server_info(self) -> Optional[Dict[str, str]]:
         """Get information about the Neo4j server.
 
@@ -165,9 +165,13 @@ class Neo4jConnector:
             with self._driver.session(database=self._database) as session:
                 # Execute a read transaction that fully consumes the result within the transaction
                 records = session.execute_read(
-                    lambda tx: list(tx.run("CALL dbms.components() YIELD name, versions, edition RETURN name, versions, edition"))
+                    lambda tx: list(
+                        tx.run(
+                            "CALL dbms.components() YIELD name, versions, edition RETURN name, versions, edition"
+                        )
+                    )
                 )
-                
+
                 if records and len(records) > 0:
                     record = records[0]  # Get the first record
                     return {
@@ -201,28 +205,53 @@ class Neo4jConnector:
             try:
                 # Better detection of read vs write queries
                 query_upper = query.strip().upper()
-                
+
                 # These keywords usually indicate read-only queries
-                read_keywords = ["MATCH", "RETURN", "CALL", "SHOW", "COUNT", "PROFILE", "EXPLAIN"]
-                
+                read_keywords = [
+                    "MATCH",
+                    "RETURN",
+                    "CALL",
+                    "SHOW",
+                    "COUNT",
+                    "PROFILE",
+                    "EXPLAIN",
+                ]
+
                 # These keywords indicate write operations
-                write_keywords = ["CREATE", "DELETE", "SET", "REMOVE", "MERGE", "DROP", "IMPORT"]
-                
+                write_keywords = [
+                    "CREATE",
+                    "DELETE",
+                    "SET",
+                    "REMOVE",
+                    "MERGE",
+                    "DROP",
+                    "IMPORT",
+                ]
+
                 # Determine if this is a read or write query
-                is_write_query = any(query_upper.startswith(kw) or f" {kw} " in query_upper for kw in write_keywords)
-                
+                is_write_query = any(
+                    query_upper.startswith(kw) or f" {kw} " in query_upper
+                    for kw in write_keywords
+                )
+
                 # Default to write query for safety if unclear
-                if is_write_query or not any(query_upper.startswith(kw) for kw in read_keywords):
+                if is_write_query or not any(
+                    query_upper.startswith(kw) for kw in read_keywords
+                ):
                     logger.debug("Executing write transaction")
                     records = session.execute_write(
-                        lambda tx: [dict(record) for record in tx.run(query, query_params)]
+                        lambda tx: [
+                            dict(record) for record in tx.run(query, query_params)
+                        ]
                     )
                 else:
                     logger.debug("Executing read transaction")
                     records = session.execute_read(
-                        lambda tx: [dict(record) for record in tx.run(query, query_params)]
+                        lambda tx: [
+                            dict(record) for record in tx.run(query, query_params)
+                        ]
                     )
-                
+
                 return records
             except Exception as e:
                 logger.error(f"Query failed: {e}")
@@ -242,14 +271,14 @@ class Neo4jConnector:
         Returns:
             Node ID if created successfully, None otherwise
         """
-        if isinstance(labels, str) or hasattr(labels, 'value'):
+        if isinstance(labels, str) or hasattr(labels, "value"):
             # Convert to list - handle both string and enum
             labels = [labels]
-            
+
         # Process the list of labels - handle both strings and enums
         processed_labels = []
         for label in labels:
-            if hasattr(label, 'value'):
+            if hasattr(label, "value"):
                 processed_labels.append(label.value)
             else:
                 processed_labels.append(label)
@@ -262,7 +291,9 @@ class Neo4jConnector:
             result = self.run_query(query, {"properties": properties})
             if result and "node_id" in result[0]:
                 node_id = result[0]["node_id"]
-                logger.debug(f"Created node with ID {node_id} and labels {processed_labels}")
+                logger.debug(
+                    f"Created node with ID {node_id} and labels {processed_labels}"
+                )
                 return node_id
         except Exception as e:
             logger.error(f"Failed to create node: {e}")
@@ -285,14 +316,14 @@ class Neo4jConnector:
         Returns:
             Node ID if merged successfully, None otherwise
         """
-        if isinstance(labels, str) or hasattr(labels, 'value'):
+        if isinstance(labels, str) or hasattr(labels, "value"):
             # Convert to list - handle both string and enum
             labels = [labels]
-            
+
         # Process the list of labels - handle both strings and enums
         processed_labels = []
         for label in labels:
-            if hasattr(label, 'value'):
+            if hasattr(label, "value"):
                 processed_labels.append(label.value)
             else:
                 processed_labels.append(label)
@@ -313,7 +344,9 @@ class Neo4jConnector:
             result = self.run_query(query, params)
             if result and "node_id" in result[0]:
                 node_id = result[0]["node_id"]
-                logger.debug(f"Merged node with ID {node_id} and labels {processed_labels}")
+                logger.debug(
+                    f"Merged node with ID {node_id} and labels {processed_labels}"
+                )
                 return node_id
         except Exception as e:
             logger.error(f"Failed to merge node: {e}")
@@ -339,11 +372,11 @@ class Neo4jConnector:
             True if relationship was created successfully, False otherwise
         """
         properties = properties or {}
-        
+
         # Handle enum types by converting to string
-        if hasattr(rel_type, 'value'):
+        if hasattr(rel_type, "value"):
             rel_type = rel_type.value
-            
+
         query = (
             "MATCH (a), (b) "
             "WHERE elementId(a) = $start_id AND elementId(b) = $end_id "
@@ -378,7 +411,9 @@ class Neo4jConnector:
         Returns:
             Node data if found, None otherwise
         """
-        query = "MATCH (n) WHERE elementId(n) = $node_id " "RETURN n, labels(n) AS labels"
+        query = (
+            "MATCH (n) WHERE elementId(n) = $node_id " "RETURN n, labels(n) AS labels"
+        )
 
         result = self.run_query(query, {"node_id": node_id})
         if result:
@@ -412,17 +447,17 @@ class Neo4jConnector:
         # Add label filter if provided
         if labels:
             # Handle string, enum, or list of labels
-            if isinstance(labels, str) or hasattr(labels, 'value'):
+            if isinstance(labels, str) or hasattr(labels, "value"):
                 labels = [labels]
-                
+
             # Process the list of labels - handle both strings and enums
             processed_labels = []
             for label in labels:
-                if hasattr(label, 'value'):
+                if hasattr(label, "value"):
                     processed_labels.append(label.value)
                 else:
                     processed_labels.append(label)
-                    
+
             query_parts[0] = f"MATCH (n:{':'.join(processed_labels)})"
 
         # Add property filters if provided
@@ -472,9 +507,9 @@ class Neo4jConnector:
             True if index was created successfully, False otherwise
         """
         # Handle enum node label by converting to string
-        if hasattr(node_label, 'value'):
+        if hasattr(node_label, "value"):
             node_label = node_label.value
-            
+
         # Check if index already exists
         index_query = "SHOW INDEXES WHERE name = $index_name"
         result = self.run_query(index_query, {"index_name": index_name})
@@ -520,9 +555,9 @@ class Neo4jConnector:
             List of matching nodes with similarity scores
         """
         # Handle enum node label by converting to string
-        if hasattr(node_label, 'value'):
+        if hasattr(node_label, "value"):
             node_label = node_label.value
-            
+
         query = (
             f"MATCH (n:{node_label}) "
             f"WHERE n.{vector_property} IS NOT NULL "

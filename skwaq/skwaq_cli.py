@@ -14,9 +14,9 @@ from skwaq.utils.logging import setup_logging
 if __name__ == "__main__":
     # Set up the main logger
     setup_logging(module_name="skwaq.cli", level=logging.INFO)
-    
+
     # Keep blarify integration warnings at ERROR level to avoid spamming users
     logging.getLogger("skwaq.code_analysis.blarify_integration").setLevel(logging.ERROR)
-    
+
     # Run the main CLI function (run() handles the async execution)
     run()

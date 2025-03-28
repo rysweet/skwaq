@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 
 class VerificationStatus(enum.Enum):
     """Status of verification for a finding or analysis."""
-    
+
     VERIFIED = "verified"
     PARTIALLY_VERIFIED = "partially_verified"
     UNVERIFIED = "unverified"
@@ -58,13 +58,15 @@ class VerificationEvent(AgentCommunicationEvent):
             metadata: Additional metadata
         """
         verification_metadata = metadata or {}
-        verification_metadata.update({
-            "content_id": content_id,
-            "status": status.value,
-            "evidence_count": len(evidence),
-            "verification_id": verification_id or str(uuid.uuid4()),
-            "event_type": "verification"
-        })
+        verification_metadata.update(
+            {
+                "content_id": content_id,
+                "status": status.value,
+                "evidence_count": len(evidence),
+                "verification_id": verification_id or str(uuid.uuid4()),
+                "event_type": "verification",
+            }
+        )
 
         # Format message based on status
         if status == VerificationStatus.VERIFIED:
@@ -94,7 +96,7 @@ class VerificationEvent(AgentCommunicationEvent):
 
 class VerificationAgent(AutogenChatAgent):
     """Verification agent for validating findings and analyses.
-    
+
     This agent is responsible for verifying the work of other agents,
     particularly focusing on validating vulnerability findings and
     ensuring they are accurate and well-supported.
@@ -147,20 +149,20 @@ and trustworthy.
             agent_id=agent_id,
             model=model,
         )
-        
+
         # Set up verification tracking
         self.verifications: Dict[str, Dict[str, Any]] = {}
         self.verification_tasks: Dict[str, Task] = {}
-        
+
     async def _start(self):
         """Initialize the agent on startup."""
         await super()._start()
-        
+
         # Register event handlers
         self.register_event_handler(VerificationEvent, self._handle_verification_event)
         self.register_event_handler(TaskAssignmentEvent, self._handle_task_assignment)
         self.register_event_handler(TaskResultEvent, self._handle_task_result)
-        
+
     async def verify_finding(
         self,
         finding: Finding,
@@ -179,11 +181,15 @@ and trustworthy.
         Returns:
             Dictionary with verification results
         """
-        verification_id = task_id or f"verify_{int(time.time())}_{str(uuid.uuid4())[:8]}"
+        verification_id = (
+            task_id or f"verify_{int(time.time())}_{str(uuid.uuid4())[:8]}"
+        )
         content_id = f"finding_{finding.file_id}_{finding.line_number}"
-        
-        logger.info(f"Starting verification of finding: {finding.vulnerability_type} at line {finding.line_number}")
-        
+
+        logger.info(
+            f"Starting verification of finding: {finding.vulnerability_type} at line {finding.line_number}"
+        )
+
         # Create verification task
         verification_task = Task(
             task_id=verification_id,
@@ -192,17 +198,17 @@ and trustworthy.
             parameters={
                 "finding_id": finding.file_id,
                 "line_number": finding.line_number,
-                "vulnerability_type": finding.vulnerability_type
+                "vulnerability_type": finding.vulnerability_type,
             },
-            status="in_progress"
+            status="in_progress",
         )
-        
+
         self.verification_tasks[verification_id] = verification_task
-        
+
         try:
             # Prepare the finding for verification
             finding_dict = finding.to_dict()
-            
+
             # Structure for the verification
             verification_result = {
                 "finding": finding_dict,
@@ -212,41 +218,48 @@ and trustworthy.
                 "status": None,
                 "justification": "",
                 "evidence": evidence or [],
-                "context": context or {}
+                "context": context or {},
             }
-            
+
             # Gather additional context if needed
             if not evidence:
                 # For a real implementation, we would gather evidence here
                 verification_result["evidence"] = [
-                    {"type": "code_snippet", "content": finding.matched_text or "No code snippet available"}
+                    {
+                        "type": "code_snippet",
+                        "content": finding.matched_text or "No code snippet available",
+                    }
                 ]
-            
+
             # Perform verification analysis
             verification_result.update(
-                await self._analyze_finding(finding_dict, verification_result["evidence"], context or {})
+                await self._analyze_finding(
+                    finding_dict, verification_result["evidence"], context or {}
+                )
             )
-            
+
             # Store the verification
             self.verifications[verification_id] = verification_result
-            
+
             # Update task status
             verification_task.status = "completed"
             verification_task.result = verification_result
-            
+
             # Emit verification event
             await self._emit_verification_event(verification_result)
-            
+
             # Log completion
-            logger.info(f"Completed verification of finding with status: {verification_result['status']}")
-            
+            logger.info(
+                f"Completed verification of finding with status: {verification_result['status']}"
+            )
+
             return verification_result
         except Exception as e:
             logger.error(f"Error verifying finding: {e}")
             verification_task.status = "failed"
             verification_task.error = str(e)
             raise
-    
+
     async def _analyze_finding(
         self,
         finding: Dict[str, Any],
@@ -267,7 +280,7 @@ and trustworthy.
         finding_str = json.dumps(finding, indent=2)
         evidence_str = json.dumps(evidence, indent=2)
         context_str = json.dumps(context, indent=2)
-        
+
         verification_prompt = (
             f"I need you to verify the following vulnerability finding:\n\n"
             f"FINDING:\n{finding_str}\n\n"
@@ -281,23 +294,23 @@ and trustworthy.
             f"- missing_evidence: List of any additional evidence that would be needed for full verification\n"
             f"- issues: List of any issues or problems with the finding itself\n"
         )
-        
+
         # Use the chat model to analyze the finding
         response = await self.openai_client.create_completion(
             prompt=verification_prompt,
             model=self.model,
             temperature=0.1,
             max_tokens=1500,
-            response_format={"type": "json"}
+            response_format={"type": "json"},
         )
-        
+
         # Extract the text response
         response_text = response.get("choices", [{}])[0].get("text", "").strip()
-        
+
         try:
             # Parse the JSON response
             verification = json.loads(response_text)
-            
+
             # Ensure all required fields are present
             if "status" not in verification:
                 verification["status"] = "insufficient_evidence"
@@ -309,16 +322,16 @@ and trustworthy.
                 verification["missing_evidence"] = []
             if "issues" not in verification:
                 verification["issues"] = []
-                
+
             # Convert status string to enum
             try:
                 status = VerificationStatus(verification["status"])
             except ValueError:
                 # Default to insufficient evidence if invalid status
                 status = VerificationStatus.INSUFFICIENT_EVIDENCE
-                
+
             verification["status"] = status.value
-            
+
             return verification
         except json.JSONDecodeError:
             logger.error(f"Failed to parse verification result: {response_text}")
@@ -328,9 +341,9 @@ and trustworthy.
                 "justification": "Error analyzing finding for verification",
                 "confidence": 0.0,
                 "missing_evidence": ["Valid analysis result"],
-                "issues": ["Could not process verification"]
+                "issues": ["Could not process verification"],
             }
-    
+
     async def _emit_verification_event(self, verification: Dict[str, Any]) -> None:
         """Emit a verification event with results.
 
@@ -346,7 +359,7 @@ and trustworthy.
                     status = VerificationStatus.INSUFFICIENT_EVIDENCE
             else:
                 status = verification["status"]
-                
+
             # Create verification event
             event = VerificationEvent(
                 sender_id=self.agent_id,
@@ -355,15 +368,15 @@ and trustworthy.
                 status=status,
                 justification=verification["justification"],
                 evidence=verification.get("evidence", []),
-                verification_id=verification["verification_id"]
+                verification_id=verification["verification_id"],
             )
-            
+
             # Emit the event
             await self.emit_event(event)
-            
+
         except Exception as e:
             logger.error(f"Error emitting verification event: {e}")
-    
+
     async def _handle_verification_event(self, event: VerificationEvent) -> None:
         """Handle incoming verification events.
 
@@ -372,10 +385,12 @@ and trustworthy.
         """
         if not isinstance(event, VerificationEvent):
             return
-            
+
         # Log the received verification
-        logger.info(f"Received verification event for content {event.content_id} with status {event.status.value}")
-        
+        logger.info(
+            f"Received verification event for content {event.content_id} with status {event.status.value}"
+        )
+
         # Store the verification for reference
         self.verifications[event.verification_id] = {
             "verification_id": event.verification_id,
@@ -384,9 +399,9 @@ and trustworthy.
             "justification": event.justification,
             "evidence": event.evidence,
             "sender_id": event.sender_id,
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
-        
+
     async def _handle_task_assignment(self, event: TaskAssignmentEvent) -> None:
         """Handle task assignment events.
 
@@ -395,31 +410,32 @@ and trustworthy.
         """
         if event.receiver_id != self.agent_id:
             return
-            
+
         if event.task_type == "finding_verification":
             # Extract finding information from task parameters
             params = event.task_parameters
             finding_id = params.get("finding_id")
-            
+
             if not finding_id:
-                logger.warning(f"Received verification task without finding_id: {event.task_id}")
+                logger.warning(
+                    f"Received verification task without finding_id: {event.task_id}"
+                )
                 return
-                
+
             # Create a placeholder Finding object
             finding = Finding(
                 type=params.get("type", "unknown"),
                 vulnerability_type=params.get("vulnerability_type", "unknown"),
                 description=params.get("description", ""),
                 file_id=finding_id,
-                line_number=params.get("line_number", 0)
+                line_number=params.get("line_number", 0),
             )
-            
+
             # Begin verification process
-            asyncio.create_task(self.verify_finding(
-                finding=finding,
-                task_id=event.task_id
-            ))
-            
+            asyncio.create_task(
+                self.verify_finding(finding=finding, task_id=event.task_id)
+            )
+
     async def _handle_task_result(self, event: TaskResultEvent) -> None:
         """Handle task result events.
 
@@ -428,7 +444,7 @@ and trustworthy.
         """
         # Currently no specific handling needed
         pass
-        
+
     def get_verification(self, verification_id: str) -> Optional[Dict[str, Any]]:
         """Get a verification result by ID.
 

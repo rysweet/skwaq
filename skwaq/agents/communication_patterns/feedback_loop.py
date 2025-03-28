@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 
 class FeedbackType(enum.Enum):
     """Types of feedback that can be provided in the feedback loop."""
-    
+
     CORRECTION = "correction"
     SUGGESTION = "suggestion"
     QUESTION = "question"
@@ -58,13 +58,15 @@ class FeedbackEvent(AgentCommunicationEvent):
             metadata: Additional metadata
         """
         feedback_metadata = metadata or {}
-        feedback_metadata.update({
-            "feedback_type": feedback_type.value,
-            "content_reference": content_reference,
-            "loop_id": loop_id,
-            "iteration": iteration,
-            "pattern": "feedback_loop"
-        })
+        feedback_metadata.update(
+            {
+                "feedback_type": feedback_type.value,
+                "content_reference": content_reference,
+                "loop_id": loop_id,
+                "iteration": iteration,
+                "pattern": "feedback_loop",
+            }
+        )
 
         super().__init__(
             sender_id=sender_id,
@@ -107,13 +109,15 @@ class RevisionEvent(AgentCommunicationEvent):
             metadata: Additional metadata
         """
         revision_metadata = metadata or {}
-        revision_metadata.update({
-            "original_content_reference": original_content_reference,
-            "changes_made": changes_made,
-            "loop_id": loop_id,
-            "iteration": iteration,
-            "pattern": "feedback_loop"
-        })
+        revision_metadata.update(
+            {
+                "original_content_reference": original_content_reference,
+                "changes_made": changes_made,
+                "loop_id": loop_id,
+                "iteration": iteration,
+                "pattern": "feedback_loop",
+            }
+        )
 
         super().__init__(
             sender_id=sender_id,
@@ -137,10 +141,10 @@ class FeedbackLoopPattern:
     """
 
     def __init__(
-        self, 
-        max_iterations: int = 3, 
+        self,
+        max_iterations: int = 3,
         iteration_timeout: float = 120.0,
-        improvement_threshold: float = 0.1
+        improvement_threshold: float = 0.1,
     ):
         """Initialize the Feedback Loop pattern.
 
@@ -153,7 +157,7 @@ class FeedbackLoopPattern:
         self.iteration_timeout = iteration_timeout
         self.improvement_threshold = improvement_threshold
         self.current_loops: Dict[str, Dict[str, Any]] = {}
-        
+
     @LogEvent("feedback_loop_started")
     async def execute(
         self,
@@ -179,7 +183,7 @@ class FeedbackLoopPattern:
         """
         # Generate unique loop ID
         loop_id = f"feedback_{int(time.time())}_{content_id}"[:32]
-        
+
         # Initialize feedback loop structure
         loop_structure = {
             "loop_id": loop_id,
@@ -196,92 +200,94 @@ class FeedbackLoopPattern:
             "initial_content": initial_content,
             "final_content": None,
             "completed": False,
-            "improvement_scores": []
+            "improvement_scores": [],
         }
-        
+
         self.current_loops[loop_id] = loop_structure
-        
+
         # Set up coordination primitives
         feedback_received = asyncio.Event()
         revision_received = asyncio.Event()
-        
+
         # Track events by iteration
         feedbacks: Dict[int, FeedbackEvent] = {}
         revisions: Dict[int, RevisionEvent] = {}
-        
+
         # Define event handler for feedback events
         async def _handle_feedback(event: FeedbackEvent) -> None:
             if not isinstance(event, FeedbackEvent):
                 return
-                
+
             if event.loop_id != loop_id:
                 return
-                
+
             # Record this feedback
             feedbacks[event.iteration] = event
-            
+
             # Signal that feedback has been received
             feedback_received.set()
-        
+
         # Define event handler for revision events
         async def _handle_revision(event: RevisionEvent) -> None:
             if not isinstance(event, RevisionEvent):
                 return
-                
+
             if event.loop_id != loop_id:
                 return
-                
+
             # Record this revision
             revisions[event.iteration] = event
-            
+
             # Update the current content
             loop_structure["current_content"] = event.revised_content
-            
+
             # Signal that revision has been received
             revision_received.set()
-        
+
         # Register event handlers
         creator_agent.register_event_handler(FeedbackEvent, _handle_feedback)
         reviewer_agent.register_event_handler(RevisionEvent, _handle_revision)
-        
+
         try:
             # Start with the initial content
             current_content = initial_content
-            
+
             # Run feedback loops for specified iterations
             for iteration in range(1, self.max_iterations + 1):
                 # Reset event flags
                 feedback_received.clear()
                 revision_received.clear()
-                
+
                 # Update current iteration
                 loop_structure["current_iteration"] = iteration
-                
+
                 # Initiate feedback for this iteration
                 await self._request_feedback(
-                    reviewer_agent, 
+                    reviewer_agent,
                     creator_agent,
                     current_content,
                     content_id,
                     loop_id,
-                    iteration
+                    iteration,
                 )
-                
+
                 # Wait for feedback or timeout
                 try:
-                    await asyncio.wait_for(feedback_received.wait(), self.iteration_timeout)
+                    await asyncio.wait_for(
+                        feedback_received.wait(), self.iteration_timeout
+                    )
                     logger.info(f"Feedback received for iteration {iteration}")
                 except asyncio.TimeoutError:
                     logger.warning(f"Feedback timed out for iteration {iteration}")
                     loop_structure["timeout"] = True
                     break
-                
+
                 # Extract the feedback for this iteration
                 feedback = feedbacks.get(iteration)
                 if not feedback:
                     logger.warning(f"No feedback found for iteration {iteration}")
                     break
-                    
+
                 # Request revision based on feedback
                 await self._request_revision(
                     creator_agent,
@@ -290,78 +296,86 @@ class FeedbackLoopPattern:
                     feedback,
                     content_id,
                     loop_id,
-                    iteration
+                    iteration,
                 )
-                
+
                 # Wait for revision or timeout
                 try:
-                    await asyncio.wait_for(revision_received.wait(), self.iteration_timeout)
+                    await asyncio.wait_for(
+                        revision_received.wait(), self.iteration_timeout
+                    )
                     logger.info(f"Revision received for iteration {iteration}")
                 except asyncio.TimeoutError:
                     logger.warning(f"Revision timed out for iteration {iteration}")
                     loop_structure["timeout"] = True
                     break
-                
+
                 # Extract the revision for this iteration
                 revision = revisions.get(iteration)
                 if not revision:
                     logger.warning(f"No revision found for iteration {iteration}")
                     break
-                
+
                 # Update current content
                 current_content = revision.revised_content
-                
+
                 # Record this iteration
                 iteration_data = {
                     "iteration": iteration,
                     "feedback": {
                         "text": feedback.feedback,
                         "type": feedback.feedback_type.value,
-                        "agent_id": feedback.sender_id
+                        "agent_id": feedback.sender_id,
                     },
                     "revision": {
                         "content": revision.revised_content,
                         "changes": revision.changes_made,
-                        "agent_id": revision.sender_id
-                    }
+                        "agent_id": revision.sender_id,
+                    },
                 }
-                
+
                 loop_structure["iterations"].append(iteration_data)
-                
+
                 # Calculate improvement score
                 improvement_score = await self._calculate_improvement(
                     reviewer_agent,
                     loop_structure["initial_content"],
                     current_content,
                     loop_id,
-                    iteration
+                    iteration,
                 )
-                
+
                 loop_structure["improvement_scores"].append(improvement_score)
-                
+
                 # Check if we've reached diminishing returns
                 if iteration > 1 and improvement_score < self.improvement_threshold:
-                    logger.info(f"Stopping feedback loop due to diminishing returns (score: {improvement_score})")
+                    logger.info(
+                        f"Stopping feedback loop due to diminishing returns (score: {improvement_score})"
+                    )
                     break
-            
+
             # Mark as completed and set final content
             loop_structure["completed"] = True
             loop_structure["final_content"] = current_content
-            
+
             # Calculate overall improvement
             if loop_structure["improvement_scores"]:
-                loop_structure["total_improvement"] = sum(loop_structure["improvement_scores"])
+                loop_structure["total_improvement"] = sum(
+                    loop_structure["improvement_scores"]
+                )
             else:
                 loop_structure["total_improvement"] = 0.0
-                
-            logger.info(f"Feedback loop completed with {len(loop_structure['iterations'])} iterations")
-            
+
+            logger.info(
+                f"Feedback loop completed with {len(loop_structure['iterations'])} iterations"
+            )
+
             return loop_structure
         finally:
             # Clean up event handlers
             creator_agent.deregister_event_handler(FeedbackEvent, _handle_feedback)
             reviewer_agent.deregister_event_handler(RevisionEvent, _handle_revision)
-    
+
     async def _request_feedback(
         self,
         reviewer_agent: BaseAgent,
@@ -369,7 +383,7 @@ class FeedbackLoopPattern:
         content: str,
         content_id: str,
         loop_id: str,
-        iteration: int
+        iteration: int,
     ) -> None:
         """Request feedback from the reviewer agent.
 
@@ -392,13 +406,13 @@ class FeedbackLoopPattern:
                 "loop_id": loop_id,
                 "iteration": iteration,
                 "pattern": "feedback_loop",
-                "action": "request_feedback"
-            }
+                "action": "request_feedback",
+            },
         )
-        
+
         # Emit the event
         await creator_agent.emit_event(request_event)
-    
+
     async def _request_revision(
         self,
         creator_agent: BaseAgent,
@@ -407,7 +421,7 @@ class FeedbackLoopPattern:
         feedback: FeedbackEvent,
         content_id: str,
         loop_id: str,
-        iteration: int
+        iteration: int,
     ) -> None:
         """Request a revision from the creator agent.
 
@@ -432,20 +446,20 @@ class FeedbackLoopPattern:
                 "loop_id": loop_id,
                 "iteration": iteration,
                 "pattern": "feedback_loop",
-                "action": "request_revision"
-            }
+                "action": "request_revision",
+            },
         )
-        
+
         # Emit the event
         await reviewer_agent.emit_event(request_event)
-    
+
     async def _calculate_improvement(
         self,
         reviewer_agent: BaseAgent,
         original_content: str,
         current_content: str,
         loop_id: str,
-        iteration: int
+        iteration: int,
     ) -> float:
         """Calculate improvement score between original and current content.
 
@@ -468,21 +482,21 @@ class FeedbackLoopPattern:
                 "original_content": original_content,
                 "revised_content": current_content,
                 "loop_id": loop_id,
-                "iteration": iteration
+                "iteration": iteration,
             },
-            status="pending"
+            status="pending",
         )
-        
+
         # In a real implementation, we would have the reviewer agent
         # calculate the improvement. For simplicity, we're using a
         # simple length-based heuristic here.
         original_length = len(original_content)
         current_length = len(current_content)
-        
+
         # Simple heuristic: normalized length difference
         if original_length == 0:
             return 0.0
-            
+
         # Higher score for longer content, but with diminishing returns
         length_ratio = current_length / original_length
         if length_ratio < 1.0:
@@ -494,7 +508,7 @@ class FeedbackLoopPattern:
         else:
             # Linear scaling between 1.0x and 2.0x with diminishing returns
             return 0.5 * (length_ratio - 1.0)
-        
+
     def get_loop(self, loop_id: str) -> Dict[str, Any]:
         """Get a specific feedback loop by ID.
 

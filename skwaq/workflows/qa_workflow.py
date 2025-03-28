@@ -125,4 +125,5 @@ class QAWorkflow(Workflow):
             Timestamp string
         """
         from datetime import datetime
+
         return datetime.utcnow().isoformat()

@@ -428,7 +428,8 @@ class AgentLifecycleEvent(SystemEvent):
         """
         super().__init__(
             sender=agent_name,
-            message=message or f"Agent {agent_name} lifecycle state changed to {state.value}",
+            message=message
+            or f"Agent {agent_name} lifecycle state changed to {state.value}",
             target=target,
             metadata=metadata or {},
         )
@@ -462,7 +463,7 @@ class EventBus:
 
     _instance = None
 
-    def __new__(cls) -> 'EventBus':
+    def __new__(cls) -> "EventBus":
         """Create a singleton instance.
 
         Returns:
@@ -477,7 +478,7 @@ class EventBus:
     def __init__(self) -> None:
         """Initialize the event bus."""
         # Already initialized in __new__
-        if not hasattr(self, '_subscribers'):
+        if not hasattr(self, "_subscribers"):
             self._subscribers: Dict[Type[SystemEvent], Dict[str, EventHandler]] = {}
 
     def subscribe(self, event_type: Type[SystemEvent], handler: EventHandler) -> str:
@@ -496,7 +497,9 @@ class EventBus:
             self._subscribers[event_type] = {}
 
         self._subscribers[event_type][subscriber_id] = handler
-        logger.debug(f"Added subscriber {subscriber_id} to {event_type.name if hasattr(event_type, 'name') else str(event_type)}")
+        logger.debug(
+            f"Added subscriber {subscriber_id} to {event_type.name if hasattr(event_type, 'name') else str(event_type)}"
+        )
 
         return subscriber_id
 
@@ -605,7 +608,7 @@ def subscribe(event_type: Type[SystemEvent], handler: EventHandler) -> str:
     Args:
         event_type: The event type to subscribe to
         handler: The handler function to call when event occurs
-        
+
     Returns:
         Subscriber ID
     """

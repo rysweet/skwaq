@@ -53,7 +53,9 @@ class StructuredLogRecord(logging.LogRecord):
         """
         if hasattr(self, "context") and self.context:
             record_data = {
-                "timestamp": datetime.fromtimestamp(self.created, tz=timezone.utc).isoformat(),
+                "timestamp": datetime.fromtimestamp(
+                    self.created, tz=timezone.utc
+                ).isoformat(),
                 "level": self.levelname,
                 "logger": self.name,
                 "message": super().getMessage(),

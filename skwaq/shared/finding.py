@@ -11,11 +11,11 @@ from typing import Dict, Any, Optional, List
 @dataclass
 class CodeSummary:
     """Represents a summary of a code component.
-    
+
     This class provides a standardized structure for representing code summaries
     at different levels of abstraction (function, class, module, system).
     """
-    
+
     name: str  # Name of the code component
     summary: str  # Summary of the component
     complexity: int  # Complexity rating
@@ -24,16 +24,16 @@ class CodeSummary:
     input_types: List[str]  # List of input types (for functions)
     output_types: List[str]  # List of output types (for functions)
     security_considerations: List[str]  # Security considerations
-    
+
 
 @dataclass
 class ArchitectureModel:
     """Represents an architectural model of a system.
-    
+
     This class provides a standardized structure for representing the
     architecture of a software system, with components and relationships.
     """
-    
+
     name: str  # Name of the system
     components: List[Dict[str, Any]]  # List of components
     relationships: List[Dict[str, Any]]  # List of relationships between components
@@ -88,7 +88,7 @@ class Finding:
 
         if self.suggestion:
             result["suggestion"] = self.suggestion
-            
+
         if self.tool_name:
             result["tool_name"] = self.tool_name
 
@@ -136,7 +136,7 @@ class Finding:
 
         if "suggestion" in data:
             optional_args["suggestion"] = data["suggestion"]
-            
+
         if "tool_name" in data:
             optional_args["tool_name"] = data["tool_name"]
 
@@ -170,7 +170,9 @@ class AnalysisResult:
     findings: List[Finding] = field(default_factory=list)  # List of findings
     metadata: Dict[str, Any] = field(default_factory=dict)  # Analysis metadata
     metrics: Optional[Dict[str, Any]] = None  # Code metrics if collected
-    advanced_analysis_results: Dict[str, Any] = field(default_factory=dict)  # Results from advanced analysis
+    advanced_analysis_results: Dict[str, Any] = field(
+        default_factory=dict
+    )  # Results from advanced analysis
     summary: Optional[CodeSummary] = None  # Code summary if generated
     file_path: Optional[str] = None  # Original file path (for CLI analysis)
 
@@ -211,19 +213,19 @@ class AnalysisResult:
             "file_id": self.file_id,
             "metadata": self.metadata,
         }
-        
+
         # Include file path if available
         if self.file_path:
             result["file_path"] = self.file_path
-        
+
         # Add metrics if available
         if self.metrics:
             result["metrics"] = self.metrics
-            
+
         # Add advanced analysis results if available
         if self.advanced_analysis_results:
             result["advanced_analysis_results"] = self.advanced_analysis_results
-            
+
         return result
 
     def add_finding(self, finding: Finding) -> None:

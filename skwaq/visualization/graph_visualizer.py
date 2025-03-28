@@ -10,57 +10,60 @@ from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class GraphVisualizer:
     """Graph visualizer for Skwaq investigations.
-    
+
     This class provides functionality to visualize investigation graphs
     using D3.js, NetworkX, or other visualization tools.
     """
-    
+
     def __init__(self) -> None:
         """Initialize the graph visualizer."""
         self.connector = get_connector()
-    
+
     def get_investigation_graph(
         self,
         investigation_id: str,
         include_findings: bool = True,
         include_vulnerabilities: bool = True,
         include_files: bool = True,
-        max_nodes: int = 100
+        max_nodes: int = 100,
     ) -> Dict[str, Any]:
         """Get the graph data for an investigation.
-        
+
         Args:
             investigation_id: ID of the investigation
             include_findings: Whether to include finding nodes
             include_vulnerabilities: Whether to include vulnerability nodes
             include_files: Whether to include file nodes
             max_nodes: Maximum number of nodes to include
-            
+
         Returns:
             Dictionary with nodes and links
         """
         # Build query based on inclusion options
         included_relationships = []
-        
+
         if include_findings:
             included_relationships.append("(i)-[:HAS_FINDING]->(f:Finding)")
-        
+
         if include_vulnerabilities:
-            included_relationships.append("(f:Finding)-[:IDENTIFIES]->(v:Vulnerability)")
-        
+            included_relationships.append(
+                "(f:Finding)-[:IDENTIFIES]->(v:Vulnerability)"
+            )
+
         if include_files:
             included_relationships.append("(f:Finding)-[:FOUND_IN]->(file:File)")
             included_relationships.append("(file:File)-[:PART_OF]->(repo:Repository)")
-        
+
         # If no specific inclusions, default to just the investigation
         if not included_relationships:
             included_relationships = ["(i:Investigation {id: $id})"]
-        
+
         # Construct the query
         relationships_query = " OPTIONAL MATCH ".join(included_relationships)
-        
+
         query = f"""
         MATCH (i:Investigation {{id: $id}})
         OPTIONAL MATCH {relationships_query}
@@ -68,58 +71,57 @@ class GraphVisualizer:
         LIMIT $max_nodes
         RETURN i, f, v, file, repo
         """
-        
+
         # Execute the query
         result = self.connector.run_query(
-            query,
-            {"id": investigation_id, "max_nodes": max_nodes}
+            query, {"id": investigation_id, "max_nodes": max_nodes}
         )
-        
+
         # Process query results into graph data
         return self._process_graph_data(result, investigation_id)
-    
+
     def _process_graph_data(
-        self,
-        query_result: List[Dict[str, Any]],
-        investigation_id: str
+        self, query_result: List[Dict[str, Any]], investigation_id: str
     ) -> Dict[str, Any]:
         """Process Neo4j query results into a graph data structure.
-        
+
         Args:
             query_result: Results from Neo4j query
             investigation_id: ID of the investigation
-            
+
         Returns:
             Dictionary with nodes and links
         """
         nodes = []
         links = []
         node_ids = set()
-        
+
         # Helper function to add a node if it doesn't exist yet
         def add_node(node_data: Dict[str, Any], node_type: str) -> None:
             node_id = node_data.get("id") or str(node_data.get("neo4j_id"))
-            
+
             if node_id in node_ids:
                 return
-            
+
             node_ids.add(node_id)
-            
+
             # Create node based on type
             node = {
                 "id": node_id,
                 "label": node_data.get("name") or node_data.get("title") or "Unknown",
                 "type": node_type,
-                "properties": {k: v for k, v in node_data.items() if k not in ["id", "neo4j_id"]}
+                "properties": {
+                    k: v for k, v in node_data.items() if k not in ["id", "neo4j_id"]
+                },
             }
-            
+
             # Add specific styling based on node type
             if node_type == "Investigation":
                 node["group"] = 1
                 node["color"] = "#4b76e8"
             elif node_type == "Finding":
                 node["group"] = 2
-                
+
                 # Color based on severity
                 severity = node_data.get("severity", "Unknown")
                 node["color"] = {
@@ -128,9 +130,9 @@ class GraphVisualizer:
                     "Medium": "#ffa500",
                     "Low": "#ffcc00",
                     "Info": "#00bfff",
-                    "Unknown": "#c0c0c0"
+                    "Unknown": "#c0c0c0",
                 }.get(severity, "#c0c0c0")
-                
+
             elif node_type == "Vulnerability":
                 node["group"] = 3
                 node["color"] = "#e83e8c"
@@ -140,77 +142,70 @@ class GraphVisualizer:
             elif node_type == "Repository":
                 node["group"] = 5
                 node["color"] = "#6610f2"
-            
+
             nodes.append(node)
-        
+
         # Helper function to add a link if both nodes exist
         def add_link(source: str, target: str, relationship: str) -> None:
             if source in node_ids and target in node_ids:
-                links.append({
-                    "source": source,
-                    "target": target,
-                    "type": relationship
-                })
-        
+                links.append({"source": source, "target": target, "type": relationship})
+
         # Process each row in the query result
         for row in query_result:
             # Extract investigation
             investigation = row.get("i", {})
             if investigation:
                 add_node(
-                    {"id": investigation.get("id"), "neo4j_id": id(investigation), **investigation},
-                    "Investigation"
+                    {
+                        "id": investigation.get("id"),
+                        "neo4j_id": id(investigation),
+                        **investigation,
+                    },
+                    "Investigation",
                 )
-            
+
             # Extract finding
             finding = row.get("f", {})
             if finding:
-                add_node(
-                    {"neo4j_id": id(finding), **finding},
-                    "Finding"
-                )
-                
+                add_node({"neo4j_id": id(finding), **finding}, "Finding")
+
                 # Link investigation to finding
                 if investigation:
-                    add_link(investigation.get("id") or str(id(investigation)), 
-                           str(id(finding)), "HAS_FINDING")
-            
+                    add_link(
+                        investigation.get("id") or str(id(investigation)),
+                        str(id(finding)),
+                        "HAS_FINDING",
+                    )
+
             # Extract vulnerability
             vulnerability = row.get("v", {})
             if vulnerability:
                 add_node(
-                    {"neo4j_id": id(vulnerability), **vulnerability},
-                    "Vulnerability"
+                    {"neo4j_id": id(vulnerability), **vulnerability}, "Vulnerability"
                 )
-                
+
                 # Link finding to vulnerability
                 if finding:
                     add_link(str(id(finding)), str(id(vulnerability)), "IDENTIFIES")
-            
+
             # Extract file
             file = row.get("file", {})
             if file:
-                add_node(
-                    {"neo4j_id": id(file), **file},
-                    "File"
-                )
-                
+                add_node({"neo4j_id": id(file), **file}, "File")
+
                 # Link finding to file
                 if finding:
                     add_link(str(id(finding)), str(id(file)), "FOUND_IN")
-            
+
             # Extract repository
             repo = row.get("repo", {})
             if repo:
-                add_node(
-                    {"neo4j_id": id(repo), **repo},
-                    "Repository"
-                )
-                
+                add_node({"neo4j_id": id(repo), **repo}, "Repository")
+
                 # Link file to repository
                 if file:
                     add_link(str(id(file)), str(id(repo)), "PART_OF")
-        
+
         # If no investigation node was found, add a placeholder
         if not any(node.get("type") == "Investigation" for node in nodes):
             investigation_node = {
@@ -219,108 +214,101 @@ class GraphVisualizer:
                 "type": "Investigation",
                 "group": 1,
                 "color": "#4b76e8",
-                "properties": {"id": investigation_id}
+                "properties": {"id": investigation_id},
             }
             nodes.append(investigation_node)
-        
+
         # Return the graph data
-        return {
-            "nodes": nodes,
-            "links": links
-        }
-    
+        return {"nodes": nodes, "links": links}
+
     def export_graph_as_json(
-        self,
-        graph_data: Dict[str, Any],
-        output_path: Optional[str] = None
+        self, graph_data: Dict[str, Any], output_path: Optional[str] = None
     ) -> str:
         """Export the graph data as JSON.
-        
+
         Args:
             graph_data: Graph data to export
             output_path: Path to write the JSON file to
-            
+
         Returns:
             Path to the exported file
         """
         # Determine output path
         if not output_path:
             output_path = "investigation_graph.json"
-        
+
         # Write JSON to file
         with open(output_path, "w") as f:
             json.dump(graph_data, f, indent=2)
-        
+
         return output_path
-    
+
     def export_graph_as_html(
         self,
         graph_data: Dict[str, Any],
         output_path: Optional[str] = None,
-        title: str = "Investigation Graph"
+        title: str = "Investigation Graph",
     ) -> str:
         """Export the graph data as an interactive HTML visualization.
-        
+
         Args:
             graph_data: Graph data to export
             output_path: Path to write the HTML file to
             title: Title for the visualization
-            
+
         Returns:
             Path to the exported file
         """
         # Determine output path
         if not output_path:
             output_path = "investigation_graph.html"
-        
+
         # Create HTML with D3.js visualization
         html = self._create_d3_visualization(graph_data, title)
-        
+
         # Write HTML to file
         with open(output_path, "w") as f:
             f.write(html)
-        
+
         return output_path
-    
+
     def export_graph_as_svg(
-        self,
-        graph_data: Dict[str, Any],
-        output_path: Optional[str] = None
+        self, graph_data: Dict[str, Any], output_path: Optional[str] = None
     ) -> str:
         """Export the graph data as an SVG image.
-        
+
         Args:
             graph_data: Graph data to export
             output_path: Path to write the SVG file to
-            
+
         Returns:
             Path to the exported file
         """
         # Determine output path
         if not output_path:
             output_path = "investigation_graph.svg"
-        
+
         try:
             # Try to use NetworkX and matplotlib for SVG export
             import networkx as nx
             import matplotlib.pyplot as plt
-            
+
             # Create NetworkX graph
             G = nx.Graph()
-            
+
             # Add nodes with attributes
             for node in graph_data["nodes"]:
                 G.add_node(
                     node["id"],
                     label=node["label"],
                     group=node.get("group", 0),
-                    node_type=node["type"]
+                    node_type=node["type"],
                 )
-            
+
             # Add edges
             for link in graph_data["links"]:
                 G.add_edge(link["source"], link["target"], type=link["type"])
-            
+
             # Create colors based on node groups
             node_colors = [
                 "#4b76e8",  # Investigation
@@ -329,63 +317,65 @@ class GraphVisualizer:
                 "#90be6d",  # File
                 "#577590",  # Repository
             ]
-            
-            colors = [node_colors[G.nodes[node].get("group", 0) % len(node_colors)] 
-                    for node in G.nodes()]
-            
+
+            colors = [
+                node_colors[G.nodes[node].get("group", 0) % len(node_colors)]
+                for node in G.nodes()
+            ]
+
             # Create the plot
             plt.figure(figsize=(12, 8))
             pos = nx.spring_layout(G, seed=42)
             nx.draw_networkx_nodes(G, pos, node_size=700, node_color=colors, alpha=0.9)
             nx.draw_networkx_edges(G, pos, width=1.0, alpha=0.7)
-            
+
             # Add labels
             labels = {node: G.nodes[node]["label"] for node in G.nodes()}
             nx.draw_networkx_labels(G, pos, labels, font_size=8)
-            
+
             # Save as SVG
             plt.axis("off")
             plt.tight_layout()
             plt.savefig(output_path, format="svg", bbox_inches="tight")
             plt.close()
-            
+
             return output_path
-            
+
         except ImportError:
             # Fallback to HTML if NetworkX is not available
-            logger.warning("NetworkX and matplotlib not available, falling back to HTML export")
-            return self.export_graph_as_html(graph_data, output_path.replace(".svg", ".html"))
-    
-    def _create_d3_visualization(
-        self,
-        graph_data: Dict[str, Any],
-        title: str
-    ) -> str:
+            logger.warning(
+                "NetworkX and matplotlib not available, falling back to HTML export"
+            )
+            return self.export_graph_as_html(
+                graph_data, output_path.replace(".svg", ".html")
+            )
+
+    def _create_d3_visualization(self, graph_data: Dict[str, Any], title: str) -> str:
         """Create an HTML page with D3.js visualization.
-        
+
         Args:
             graph_data: Graph data to visualize
             title: Title for the visualization
-            
+
         Returns:
             HTML content as a string
         """
         # Using a separate method to generate the template to avoid coverage issues
         return self._generate_html_template(graph_data, title)
-        
+
     def _generate_html_template(self, graph_data: Dict[str, Any], title: str) -> str:
         """Generate HTML template for D3.js visualization.
-        
+
         Args:
             graph_data: Graph data to visualize
             title: Title for the visualization
-            
+
         Returns:
             HTML content as a string
         """
         # Convert graph data to JSON string
         graph_data_json = json.dumps(graph_data)
-        
+
         # CSS styles
         css_styles = """
             body { margin: 0; font-family: Arial, sans-serif; overflow: hidden; }
@@ -407,9 +397,10 @@ class GraphVisualizer:
             .zoom-controls { position: absolute; top: 20px; left: 20px; background: rgba(255,255,255,0.7); padding: 10px; border-radius: 5px; }
             .tooltip { position: absolute; background: white; border: 1px solid #ddd; padding: 10px; border-radius: 5px; pointer-events: none; opacity: 0; }
         """
-        
+
         # D3.js script for the visualization
-        d3_script = """
+        d3_script = (
+            """
             // Graph data
             const graphData = %s;
             
@@ -575,58 +566,68 @@ class GraphVisualizer:
                 zoom.transform,
                 d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
             );
-        """ % graph_data_json
-        
+        """
+            % graph_data_json
+        )
+
         # Build the HTML page
-        html = ["<!DOCTYPE html>", "<html>", "<head>", 
-                "<meta charset='utf-8'>",
-                f"<title>{title}</title>",
-                "<script src='https://d3js.org/d3.v7.min.js'></script>",
-                "<style>", css_styles, "</style>",
-                "</head>", 
-                "<body>",
-                "<div class='container'>",
-                "<div class='graph' id='graph'></div>",
-                "<div class='sidebar'>",
-                f"<h1>{title}</h1>",
-                "<div class='controls'>",
-                "<button id='zoom-in'>Zoom In</button>",
-                "<button id='zoom-out'>Zoom Out</button>",
-                "<button id='reset'>Reset</button>",
-                "</div>",
-                "<div class='legend'>",
-                "<h2>Legend</h2>",
-                "<div class='legend-item'>",
-                "<div class='legend-color' style='background-color: #4b76e8;'></div>",
-                "<div>Investigation</div>",
-                "</div>",
-                "<div class='legend-item'>",
-                "<div class='legend-color' style='background-color: #f94144;'></div>",
-                "<div>Finding</div>",
-                "</div>",
-                "<div class='legend-item'>",
-                "<div class='legend-color' style='background-color: #e83e8c;'></div>",
-                "<div>Vulnerability</div>",
-                "</div>",
-                "<div class='legend-item'>",
-                "<div class='legend-color' style='background-color: #20c997;'></div>",
-                "<div>File</div>",
-                "</div>",
-                "<div class='legend-item'>",
-                "<div class='legend-color' style='background-color: #6610f2;'></div>",
-                "<div>Repository</div>",
-                "</div>",
-                "</div>",
-                "<div class='node-details'>",
-                "<h2>Node Details</h2>",
-                "<p id='node-description'>Click on a node to see details</p>",
-                "<pre id='node-properties'></pre>",
-                "</div>",
-                "</div>",
-                "</div>",
-                "<div class='tooltip' id='tooltip'></div>",
-                "<script>", d3_script, "</script>",
-                "</body>",
-                "</html>"]
-        
+        html = [
+            "<!DOCTYPE html>",
+            "<html>",
+            "<head>",
+            "<meta charset='utf-8'>",
+            f"<title>{title}</title>",
+            "<script src='https://d3js.org/d3.v7.min.js'></script>",
+            "<style>",
+            css_styles,
+            "</style>",
+            "</head>",
+            "<body>",
+            "<div class='container'>",
+            "<div class='graph' id='graph'></div>",
+            "<div class='sidebar'>",
+            f"<h1>{title}</h1>",
+            "<div class='controls'>",
+            "<button id='zoom-in'>Zoom In</button>",
+            "<button id='zoom-out'>Zoom Out</button>",
+            "<button id='reset'>Reset</button>",
+            "</div>",
+            "<div class='legend'>",
+            "<h2>Legend</h2>",
+            "<div class='legend-item'>",
+            "<div class='legend-color' style='background-color: #4b76e8;'></div>",
+            "<div>Investigation</div>",
+            "</div>",
+            "<div class='legend-item'>",
+            "<div class='legend-color' style='background-color: #f94144;'></div>",
+            "<div>Finding</div>",
+            "</div>",
+            "<div class='legend-item'>",
+            "<div class='legend-color' style='background-color: #e83e8c;'></div>",
+            "<div>Vulnerability</div>",
+            "</div>",
+            "<div class='legend-item'>",
+            "<div class='legend-color' style='background-color: #20c997;'></div>",
+            "<div>File</div>",
+            "</div>",
+            "<div class='legend-item'>",
+            "<div class='legend-color' style='background-color: #6610f2;'></div>",
+            "<div>Repository</div>",
+            "</div>",
+            "</div>",
+            "<div class='node-details'>",
+            "<h2>Node Details</h2>",
+            "<p id='node-description'>Click on a node to see details</p>",
+            "<pre id='node-properties'></pre>",
+            "</div>",
+            "</div>",
+            "</div>",
+            "<div class='tooltip' id='tooltip'></div>",
+            "<script>",
+            d3_script,
+            "</script>",
+            "</body>",
+            "</html>",
+        ]
+
         return "\n".join(html)

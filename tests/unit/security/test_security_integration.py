@@ -6,50 +6,39 @@ from unittest.mock import MagicMock, patch, mock_open
 from pathlib import Path
 
 from skwaq.security.authentication import (
-    AuthenticationManager, 
-    AuthRole, 
+    AuthenticationManager,
+    AuthRole,
     UserCredentials,
-    get_auth_manager
+    get_auth_manager,
 )
-from skwaq.security.authorization import (
-    Authorization,
-    Permission,
-    get_authorization
-)
+from skwaq.security.authorization import Authorization, Permission, get_authorization
 from skwaq.security.audit import (
     AuditLogger,
     AuditEventType,
     AuditLogLevel,
     log_security_event,
-    get_audit_logger
+    get_audit_logger,
 )
 from skwaq.security.encryption import (
     EncryptionManager,
     DataClassification,
     encrypt_sensitive_data,
     decrypt_sensitive_data,
-    get_encryption_manager
+    get_encryption_manager,
 )
 from skwaq.security.compliance import (
     ComplianceManager,
     ComplianceStandard,
     ComplianceCategory,
-    get_compliance_manager
+    get_compliance_manager,
 )
-from skwaq.security.sandbox import (
-    Sandbox,
-    SandboxIsolationLevel,
-    create_sandbox
-)
-from skwaq.security.vulnerability import (
-    VulnerabilityManager,
-    get_vulnerability_manager
-)
+from skwaq.security.sandbox import Sandbox, SandboxIsolationLevel, create_sandbox
+from skwaq.security.vulnerability import VulnerabilityManager, get_vulnerability_manager
 
 
 class TestSecurityIntegration:
     """Tests for the security module integration."""
-    
+
     def setup_method(self):
         """Set up test fixtures before each test."""
         # Reset singleton instances
@@ -59,57 +48,70 @@ class TestSecurityIntegration:
         EncryptionManager._instance = None
         ComplianceManager._instance = None
         VulnerabilityManager._instance = None
-    
-    @pytest.mark.skip(reason="Security component initialization not fully implemented yet")
-    @patch('skwaq.security.authentication.get_config')
-    @patch('skwaq.security.authorization.get_config')
-    @patch('skwaq.security.audit.get_config')
-    @patch('skwaq.security.encryption.get_config')
-    @patch('skwaq.security.compliance.get_config')
-    @patch('skwaq.security.vulnerability.get_config')
-    @patch('os.makedirs')
+
+    @pytest.mark.skip(
+        reason="Security component initialization not fully implemented yet"
+    )
+    @patch("skwaq.security.authentication.get_config")
+    @patch("skwaq.security.authorization.get_config")
+    @patch("skwaq.security.audit.get_config")
+    @patch("skwaq.security.encryption.get_config")
+    @patch("skwaq.security.compliance.get_config")
+    @patch("skwaq.security.vulnerability.get_config")
+    @patch("os.makedirs")
     def test_security_component_initialization(
-        self, mock_makedirs, mock_vuln_config, mock_compliance_config, 
-        mock_encryption_config, mock_audit_config, mock_auth_config,
-        mock_authn_config
+        self,
+        mock_makedirs,
+        mock_vuln_config,
+        mock_compliance_config,
+        mock_encryption_config,
+        mock_audit_config,
+        mock_auth_config,
+        mock_authn_config,
     ):
         """Test that all security components can be initialized together."""
         pass
-    
-    @pytest.mark.skip(reason="Authentication/authorization integration not fully implemented yet")
-    @patch('skwaq.security.authentication.get_config')
-    @patch('skwaq.security.authorization.get_config')
-    @patch('os.makedirs')
+
+    @pytest.mark.skip(
+        reason="Authentication/authorization integration not fully implemented yet"
+    )
+    @patch("skwaq.security.authentication.get_config")
+    @patch("skwaq.security.authorization.get_config")
+    @patch("os.makedirs")
     def test_authentication_authorization_integration(
         self, mock_makedirs, mock_auth_config, mock_authn_config
     ):
         """Test integration between authentication and authorization components."""
         pass
-    
-    @pytest.mark.skip(reason="Authentication/audit integration not fully implemented yet")
-    @patch('skwaq.security.authentication.get_config')
-    @patch('skwaq.security.audit.get_config')
-    @patch('os.makedirs')
+
+    @pytest.mark.skip(
+        reason="Authentication/audit integration not fully implemented yet"
+    )
+    @patch("skwaq.security.authentication.get_config")
+    @patch("skwaq.security.audit.get_config")
+    @patch("os.makedirs")
     def test_authentication_audit_integration(
         self, mock_makedirs, mock_audit_config, mock_authn_config
     ):
         """Test integration between authentication and audit components."""
         pass
-    
+
     @pytest.mark.skip(reason="Encryption/audit integration not fully implemented yet")
-    @patch('skwaq.security.encryption.get_config')
-    @patch('skwaq.security.audit.get_config')
-    @patch('os.makedirs')
+    @patch("skwaq.security.encryption.get_config")
+    @patch("skwaq.security.audit.get_config")
+    @patch("os.makedirs")
     def test_encryption_audit_integration(
         self, mock_makedirs, mock_audit_config, mock_encryption_config
     ):
         """Test integration between encryption and audit components."""
         pass
-    
-    @pytest.mark.skip(reason="Compliance/vulnerability integration not fully implemented yet")
-    @patch('skwaq.security.compliance.get_config')
-    @patch('skwaq.security.vulnerability.get_config')
-    @patch('os.makedirs')
+
+    @pytest.mark.skip(
+        reason="Compliance/vulnerability integration not fully implemented yet"
+    )
+    @patch("skwaq.security.compliance.get_config")
+    @patch("skwaq.security.vulnerability.get_config")
+    @patch("os.makedirs")
     def test_compliance_vulnerability_integration(
         self, mock_makedirs, mock_vuln_config, mock_compliance_config
     ):
@@ -119,31 +121,36 @@ class TestSecurityIntegration:
 
 class TestSecurityConfiguration:
     """Tests for security configuration integration."""
-    
+
     @pytest.mark.skip(reason="Security configuration loading not fully implemented yet")
-    @patch('skwaq.security.authentication.get_config')
-    @patch('skwaq.security.authorization.get_config')
-    @patch('skwaq.security.audit.get_config')
-    @patch('skwaq.security.encryption.get_config')
-    @patch('skwaq.security.compliance.get_config')
-    @patch('skwaq.utils.config.get_config')
-    @patch('os.makedirs')
+    @patch("skwaq.security.authentication.get_config")
+    @patch("skwaq.security.authorization.get_config")
+    @patch("skwaq.security.audit.get_config")
+    @patch("skwaq.security.encryption.get_config")
+    @patch("skwaq.security.compliance.get_config")
+    @patch("skwaq.utils.config.get_config")
+    @patch("os.makedirs")
     def test_security_configuration_loading(
-        self, mock_makedirs, mock_global_config, mock_compliance_config, 
-        mock_encryption_config, mock_audit_config, mock_auth_config,
-        mock_authn_config
+        self,
+        mock_makedirs,
+        mock_global_config,
+        mock_compliance_config,
+        mock_encryption_config,
+        mock_audit_config,
+        mock_auth_config,
+        mock_authn_config,
     ):
         """Test that security configurations are loaded correctly."""
         pass
 
 
 @pytest.mark.skip(reason="Sandbox integration not fully implemented yet")
-@patch('skwaq.security.sandbox.subprocess.run')
-@patch('skwaq.security.sandbox.os.makedirs')
+@patch("skwaq.security.sandbox.subprocess.run")
+@patch("skwaq.security.sandbox.os.makedirs")
 class TestSandboxIntegration:
     """Tests for sandbox integration with other security components."""
-    
-    @patch('skwaq.security.audit.get_config')
+
+    @patch("skwaq.security.audit.get_config")
     def test_sandbox_audit_integration(
         self, mock_audit_config, mock_makedirs, mock_subprocess_run
     ):

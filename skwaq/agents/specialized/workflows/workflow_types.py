@@ -12,7 +12,7 @@ from datetime import datetime
 
 class WorkflowType(enum.Enum):
     """Types of vulnerability assessment workflows."""
-    
+
     GUIDED_ASSESSMENT = "guided_assessment"
     TARGETED_ANALYSIS = "targeted_analysis"
     EXPLOITATION_VERIFICATION = "exploitation_verification"
@@ -23,7 +23,7 @@ class WorkflowType(enum.Enum):
 
 class WorkflowStatus(enum.Enum):
     """Status of workflow execution."""
-    
+
     INITIALIZING = "initializing"
     RUNNING = "running"
     PAUSED = "paused"
@@ -35,7 +35,7 @@ class WorkflowStatus(enum.Enum):
 @dataclass
 class WorkflowDefinition:
     """Definition of a workflow with all required components."""
-    
+
     workflow_id: str
     workflow_type: WorkflowType
     name: str

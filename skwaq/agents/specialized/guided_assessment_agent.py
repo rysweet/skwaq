@@ -24,7 +24,7 @@ logger = get_logger(__name__)
 
 class AssessmentStage(enum.Enum):
     """Stages in a guided vulnerability assessment workflow."""
-    
+
     INITIALIZATION = "initialization"
     REPOSITORY_SCAN = "repository_scan"
     THREAT_MODELING = "threat_modeling"
@@ -60,12 +60,14 @@ class AssessmentPlanEvent(SystemEvent):
             metadata: Additional metadata for the event
         """
         plan_metadata = metadata or {}
-        plan_metadata.update({
-            "repository_id": repository_id,
-            "assessment_id": assessment_id,
-            "stages": len(plan.get("stages", [])),
-            "event_type": "assessment_plan"
-        })
+        plan_metadata.update(
+            {
+                "repository_id": repository_id,
+                "assessment_id": assessment_id,
+                "stages": len(plan.get("stages", [])),
+                "event_type": "assessment_plan",
+            }
+        )
 
         message = f"Assessment plan created for repository {repository_id}"
 
@@ -111,16 +113,20 @@ class AssessmentStageEvent(SystemEvent):
             metadata: Additional metadata for the event
         """
         stage_metadata = metadata or {}
-        stage_metadata.update({
-            "repository_id": repository_id,
-            "assessment_id": assessment_id,
-            "stage": stage.value,
-            "status": status,
-            "progress": progress,
-            "event_type": "assessment_stage"
-        })
+        stage_metadata.update(
+            {
+                "repository_id": repository_id,
+                "assessment_id": assessment_id,
+                "stage": stage.value,
+                "status": status,
+                "progress": progress,
+                "event_type": "assessment_stage",
+            }
+        )
 
-        message = f"Assessment stage {stage.value} {status} for repository {repository_id}"
+        message = (
+            f"Assessment stage {stage.value} {status} for repository {repository_id}"
+        )
 
         super().__init__(
             sender=sender_id,
@@ -139,7 +145,7 @@ class AssessmentStageEvent(SystemEvent):
 
 class GuidedAssessmentAgent(AutogenChatAgent):
     """Guided assessment agent that provides a structured approach to vulnerability assessment.
-    
+
     This agent orchestrates a step-by-step vulnerability assessment workflow,
     guiding the assessment process through different stages and delegating
     specialized tasks to other agents in the system.
@@ -191,22 +197,26 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
             agent_id=agent_id,
             model=model,
         )
-        
+
         # Set up assessment tracking
         self.assessments: Dict[str, Dict[str, Any]] = {}
         self.active_stages: Dict[str, AssessmentStage] = {}
         self.stage_results: Dict[str, Dict[AssessmentStage, Any]] = {}
-        
+
     async def _start(self):
         """Initialize the agent on startup."""
         await super()._start()
-        
+
         # Register event handlers
-        self.register_event_handler(AssessmentPlanEvent, self._handle_assessment_plan_event)
-        self.register_event_handler(AssessmentStageEvent, self._handle_assessment_stage_event)
+        self.register_event_handler(
+            AssessmentPlanEvent, self._handle_assessment_plan_event
+        )
+        self.register_event_handler(
+            AssessmentStageEvent, self._handle_assessment_stage_event
+        )
         self.register_event_handler(TaskAssignmentEvent, self._handle_task_assignment)
         self.register_event_handler(TaskResultEvent, self._handle_task_result)
-        
+
     async def create_assessment(
         self,
         repository_id: str,
@@ -226,10 +236,12 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
             Assessment details including ID and plan
         """
         # Generate unique assessment ID
-        assessment_id = f"assessment_{repository_id}_{int(time.time())}_{str(uuid.uuid4())[:8]}"
-        
+        assessment_id = (
+            f"assessment_{repository_id}_{int(time.time())}_{str(uuid.uuid4())[:8]}"
+        )
+
         logger.info(f"Creating assessment plan for repository {repository_id}")
-        
+
         # Initialize assessment record
         assessment = {
             "assessment_id": assessment_id,
@@ -241,58 +253,58 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
             "current_stage": AssessmentStage.INITIALIZATION,
             "plan": None,
             "findings": [],
-            "status": "initializing"
+            "status": "initializing",
         }
-        
+
         # Store assessment
         self.assessments[assessment_id] = assessment
-        
+
         # Initialize stage results
         self.stage_results[assessment_id] = {}
-        
+
         try:
             # Generate assessment plan
             plan = await self._generate_assessment_plan(
-                repository_info, 
-                assessment_parameters or {}
+                repository_info, assessment_parameters or {}
             )
-            
+
             # Update assessment with plan
             assessment["plan"] = plan
             assessment["status"] = "planned"
-            
+
             # Emit assessment plan event
             await self._emit_assessment_plan_event(
-                assessment_id, 
-                repository_id, 
-                plan, 
+                assessment_id,
+                repository_id,
+                plan,
                 assessment_context={
                     "repository_info": repository_info,
-                    "parameters": assessment_parameters or {}
-                }
+                    "parameters": assessment_parameters or {},
+                },
             )
-            
-            logger.info(f"Assessment plan created for {repository_id} with {len(plan['stages'])} stages")
-            
+
+            logger.info(
+                f"Assessment plan created for {repository_id} with {len(plan['stages'])} stages"
+            )
+
             # Begin initial stage
-            asyncio.create_task(self._execute_stage(
-                assessment_id,
-                AssessmentStage.INITIALIZATION
-            ))
-            
+            asyncio.create_task(
+                self._execute_stage(assessment_id, AssessmentStage.INITIALIZATION)
+            )
+
             return {
                 "assessment_id": assessment_id,
                 "repository_id": repository_id,
                 "plan": plan,
-                "status": "started"
+                "status": "started",
             }
-            
+
         except Exception as e:
             logger.error(f"Error creating assessment plan: {e}")
             assessment["status"] = "failed"
             assessment["error"] = str(e)
             raise
-    
+
     async def get_assessment_status(self, assessment_id: str) -> Dict[str, Any]:
         """Get the current status of an assessment.
 
@@ -307,14 +319,14 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
         """
         if assessment_id not in self.assessments:
             raise ValueError(f"Assessment ID {assessment_id} not found")
-            
+
         assessment = self.assessments[assessment_id]
         current_stage = assessment.get("current_stage", AssessmentStage.INITIALIZATION)
-        
+
         # Calculate overall progress based on completed stages
         stages = assessment.get("plan", {}).get("stages", [])
         stage_count = len(stages)
-        
+
         if stage_count == 0:
             progress = 0.0
         else:
@@ -324,15 +336,17 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
                 if stage.get("name") == current_stage.value:
                     current_stage_index = i
                     break
-                    
+
             # Calculate progress
             progress = (current_stage_index / stage_count) * 100
-            
+
             # Add partial completion of current stage if available
             if current_stage.value in assessment.get("stage_progress", {}):
-                stage_progress = assessment["stage_progress"].get(current_stage.value, 0)
-                progress += (stage_progress / stage_count)
-        
+                stage_progress = assessment["stage_progress"].get(
+                    current_stage.value, 0
+                )
+                progress += stage_progress / stage_count
+
         return {
             "assessment_id": assessment_id,
             "repository_id": assessment["repository_id"],
@@ -342,13 +356,11 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
             "start_time": assessment["start_time"],
             "completion_time": assessment.get("completion_time"),
             "findings_count": len(assessment.get("findings", [])),
-            "error": assessment.get("error")
+            "error": assessment.get("error"),
         }
-        
+
     async def _generate_assessment_plan(
-        self, 
-        repository_info: Dict[str, Any],
-        parameters: Dict[str, Any]
+        self, repository_info: Dict[str, Any], parameters: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Generate an assessment plan based on repository information.
 
@@ -363,11 +375,11 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
         languages = repository_info.get("languages", [])
         code_size = repository_info.get("size", 0)
         repo_type = repository_info.get("type", "unknown")
-        
+
         # Prepare prompt for plan generation
         repo_info_str = json.dumps(repository_info, indent=2)
         params_str = json.dumps(parameters, indent=2)
-        
+
         plan_prompt = (
             f"I need you to create a comprehensive vulnerability assessment plan for a repository "
             f"with the following characteristics:\n\n"
@@ -387,39 +399,39 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
             f"- Required tools or agents\n"
             f"- Expected outputs\n\n"
             f"Return your plan in JSON format with the following structure:\n"
-            f"{{\"name\": \"Assessment Plan\", \"stages\": [{{"
-            f"\"name\": \"initialization\", \"tasks\": [{{"
-            f"\"task_id\": \"init_1\", \"description\": \"Task description\", "
-            f"\"estimated_time\": \"10m\", \"tools\": [\"tool1\"], \"outputs\": [\"output1\"]"
+            f'{{"name": "Assessment Plan", "stages": [{{'
+            f'"name": "initialization", "tasks": [{{'
+            f'"task_id": "init_1", "description": "Task description", '
+            f'"estimated_time": "10m", "tools": ["tool1"], "outputs": ["output1"]'
             f"}}]}}]}}"
         )
-        
+
         # Use the chat model to generate the plan
         response = await self.openai_client.create_completion(
             prompt=plan_prompt,
             model=self.model,
             temperature=0.2,
             max_tokens=2500,
-            response_format={"type": "json"}
+            response_format={"type": "json"},
         )
-        
+
         # Extract the text response
         response_text = response.get("choices", [{}])[0].get("text", "").strip()
-        
+
         try:
             # Parse the JSON response
             plan = json.loads(response_text)
-            
+
             # Validate plan structure
             if "stages" not in plan:
                 plan["stages"] = []
-                
+
             # Normalize stage names
             for stage in plan["stages"]:
                 stage["name"] = stage["name"].lower().replace(" ", "_")
-                
+
             return plan
-            
+
         except json.JSONDecodeError:
             logger.error(f"Failed to parse assessment plan: {response_text}")
             # Return a minimal default plan
@@ -434,9 +446,9 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
                                 "description": "Initialize repository assessment",
                                 "estimated_time": "5m",
                                 "tools": [],
-                                "outputs": ["initialization_report"]
+                                "outputs": ["initialization_report"],
                             }
-                        ]
+                        ],
                     },
                     {
                         "name": "repository_scan",
@@ -446,14 +458,16 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
                                 "description": "Scan repository for basic security issues",
                                 "estimated_time": "15m",
                                 "tools": ["code_analyzer"],
-                                "outputs": ["scan_report"]
+                                "outputs": ["scan_report"],
                             }
-                        ]
-                    }
-                ]
+                        ],
+                    },
+                ],
             }
-    
-    async def _execute_stage(self, assessment_id: str, stage: AssessmentStage) -> Dict[str, Any]:
+
+    async def _execute_stage(
+        self, assessment_id: str, stage: AssessmentStage
+    ) -> Dict[str, Any]:
         """Execute a specific stage of the assessment.
 
         Args:
@@ -465,81 +479,86 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
         """
         if assessment_id not in self.assessments:
             raise ValueError(f"Assessment ID {assessment_id} not found")
-            
+
         assessment = self.assessments[assessment_id]
         repository_id = assessment["repository_id"]
-        
+
         # Find the stage in the plan
         plan = assessment.get("plan", {})
         stages = plan.get("stages", [])
         stage_info = None
-        
+
         for s in stages:
             if s.get("name") == stage.value:
                 stage_info = s
                 break
-                
+
         if not stage_info:
             logger.warning(f"Stage {stage.value} not found in assessment plan")
-            stage_info = {
-                "name": stage.value,
-                "tasks": []
-            }
-            
+            stage_info = {"name": stage.value, "tasks": []}
+
         # Update assessment with current stage
         assessment["current_stage"] = stage
-        
+
         # Emit stage starting event
         await self._emit_assessment_stage_event(
-            assessment_id, 
-            repository_id, 
-            stage,
-            "starting",
-            0.0
+            assessment_id, repository_id, stage, "starting", 0.0
         )
-        
+
         logger.info(f"Starting assessment stage {stage.value} for {repository_id}")
-        
+
         try:
             # Execute the stage-specific logic
             if stage == AssessmentStage.INITIALIZATION:
-                results = await self._execute_initialization_stage(assessment_id, stage_info)
-                
+                results = await self._execute_initialization_stage(
+                    assessment_id, stage_info
+                )
+
             elif stage == AssessmentStage.REPOSITORY_SCAN:
-                results = await self._execute_repository_scan_stage(assessment_id, stage_info)
-                
+                results = await self._execute_repository_scan_stage(
+                    assessment_id, stage_info
+                )
+
             elif stage == AssessmentStage.THREAT_MODELING:
-                results = await self._execute_threat_modeling_stage(assessment_id, stage_info)
-                
+                results = await self._execute_threat_modeling_stage(
+                    assessment_id, stage_info
+                )
+
             elif stage == AssessmentStage.DEPENDENCY_ANALYSIS:
-                results = await self._execute_dependency_analysis_stage(assessment_id, stage_info)
-                
+                results = await self._execute_dependency_analysis_stage(
+                    assessment_id, stage_info
+                )
+
             elif stage == AssessmentStage.CODE_REVIEW:
-                results = await self._execute_code_review_stage(assessment_id, stage_info)
-                
+                results = await self._execute_code_review_stage(
+                    assessment_id, stage_info
+                )
+
             elif stage == AssessmentStage.FINDING_VERIFICATION:
-                results = await self._execute_finding_verification_stage(assessment_id, stage_info)
-                
+                results = await self._execute_finding_verification_stage(
+                    assessment_id, stage_info
+                )
+
             elif stage == AssessmentStage.REPORT_GENERATION:
-                results = await self._execute_report_generation_stage(assessment_id, stage_info)
-                
+                results = await self._execute_report_generation_stage(
+                    assessment_id, stage_info
+                )
+
             else:
                 logger.warning(f"Unknown assessment stage: {stage.value}")
-                results = {"status": "skipped", "reason": f"Unknown stage {stage.value}"}
-                
+                results = {
+                    "status": "skipped",
+                    "reason": f"Unknown stage {stage.value}",
+                }
+
             # Store stage results
             self.stage_results[assessment_id][stage] = results
-            
+
             # Emit stage completed event
             await self._emit_assessment_stage_event(
-                assessment_id, 
-                repository_id, 
-                stage,
-                "completed",
-                1.0,
-                results
+                assessment_id, repository_id, stage, "completed", 1.0, results
             )
-            
+
             # Move to next stage if this isn't the final stage
             if stage != AssessmentStage.REPORT_GENERATION:
                 # Find next stage
@@ -547,35 +566,32 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
                 if next_stage:
                     # Schedule next stage execution
                     asyncio.create_task(self._execute_stage(assessment_id, next_stage))
-                    
+
             else:
                 # Mark assessment as completed
                 assessment["status"] = "completed"
                 assessment["completion_time"] = time.time()
-                
+
             logger.info(f"Completed assessment stage {stage.value} for {repository_id}")
             return results
-            
+
         except Exception as e:
             logger.error(f"Error executing assessment stage {stage.value}: {e}")
-            
+
             # Emit stage failed event
             await self._emit_assessment_stage_event(
-                assessment_id, 
-                repository_id, 
-                stage,
-                "failed",
-                0.0,
-                {"error": str(e)}
+                assessment_id, repository_id, stage, "failed", 0.0, {"error": str(e)}
             )
-            
+
             # Update assessment with error
             assessment["status"] = "failed"
             assessment["error"] = str(e)
-            
+
             raise
-    
-    def _get_next_stage(self, current_stage: AssessmentStage) -> Optional[AssessmentStage]:
+
+    def _get_next_stage(
+        self, current_stage: AssessmentStage
+    ) -> Optional[AssessmentStage]:
         """Get the next stage in the assessment process.
 
         Args:
@@ -586,27 +602,25 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
         """
         stages = [
             AssessmentStage.INITIALIZATION,
-            AssessmentStage.REPOSITORY_SCAN, 
+            AssessmentStage.REPOSITORY_SCAN,
             AssessmentStage.THREAT_MODELING,
             AssessmentStage.DEPENDENCY_ANALYSIS,
             AssessmentStage.CODE_REVIEW,
             AssessmentStage.FINDING_VERIFICATION,
-            AssessmentStage.REPORT_GENERATION
+            AssessmentStage.REPORT_GENERATION,
         ]
-        
+
         try:
             current_index = stages.index(current_stage)
             if current_index < len(stages) - 1:
                 return stages[current_index + 1]
         except ValueError:
             pass
-            
+
         return None
 
     async def _execute_initialization_stage(
-        self, 
-        assessment_id: str,
-        stage_info: Dict[str, Any]
+        self, assessment_id: str, stage_info: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute the initialization stage of the assessment.
 
@@ -619,10 +633,10 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
         """
         assessment = self.assessments[assessment_id]
         repository_info = assessment.get("repository_info", {})
-        
+
         # Simulate initialization tasks
         await asyncio.sleep(1)  # In a real implementation, this would do actual work
-        
+
         # Prepare initialization results
         results = {
             "stage": "initialization",
@@ -630,24 +644,22 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
             "repository_details": {
                 "languages": repository_info.get("languages", []),
                 "size": repository_info.get("size", 0),
-                "files_count": repository_info.get("files_count", 0)
+                "files_count": repository_info.get("files_count", 0),
             },
             "assessment_configuration": {
                 "focus_areas": assessment.get("parameters", {}).get("focus_areas", []),
-                "depth": assessment.get("parameters", {}).get("depth", "standard")
+                "depth": assessment.get("parameters", {}).get("depth", "standard"),
             },
-            "status": "completed"
+            "status": "completed",
         }
-        
+
         # In a real implementation, this would perform actual initialization tasks
         # such as repository checking, environment preparation, etc.
-        
+
         return results
 
     async def _execute_repository_scan_stage(
-        self, 
-        assessment_id: str,
-        stage_info: Dict[str, Any]
+        self, assessment_id: str, stage_info: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute the repository scan stage of the assessment.
 
@@ -660,9 +672,9 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
         """
         # This would involve scanning the repository for basic metrics and issues
         # For this example, we'll simulate finding a few issues
-        
+
         await asyncio.sleep(2)  # Simulate work
-        
+
         # Simulate finding some issues
         findings = [
             {
@@ -671,7 +683,7 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
                 "severity": "medium",
                 "confidence": 0.85,
                 "description": "Hardcoded credentials found in configuration file",
-                "location": "config/database.yml"
+                "location": "config/database.yml",
             },
             {
                 "finding_id": f"finding_{assessment_id}_2",
@@ -679,14 +691,14 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
                 "severity": "low",
                 "confidence": 0.7,
                 "description": "Debug information exposure in error handler",
-                "location": "src/handlers/errors.js"
-            }
+                "location": "src/handlers/errors.js",
+            },
         ]
-        
+
         # Add findings to assessment
         assessment = self.assessments[assessment_id]
         assessment["findings"].extend(findings)
-        
+
         # Return stage results
         return {
             "stage": "repository_scan",
@@ -694,13 +706,11 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
             "files_scanned": 120,  # Example count
             "findings": findings,
             "scan_coverage": 0.85,
-            "status": "completed"
+            "status": "completed",
         }
 
     async def _execute_threat_modeling_stage(
-        self, 
-        assessment_id: str,
-        stage_info: Dict[str, Any]
+        self, assessment_id: str, stage_info: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute the threat modeling stage of the assessment.
 
@@ -713,37 +723,35 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
         """
         # This would involve analyzing attack surfaces and potential threats
         await asyncio.sleep(2)  # Simulate work
-        
+
         # Simulate threat model
         threat_model = {
             "assets": [
                 {"name": "User data", "sensitivity": "high"},
                 {"name": "Authentication system", "sensitivity": "high"},
-                {"name": "Public API", "sensitivity": "medium"}
+                {"name": "Public API", "sensitivity": "medium"},
             ],
             "threat_actors": [
                 {"name": "Malicious users", "capability": "medium"},
-                {"name": "Advanced attackers", "capability": "high"}
+                {"name": "Advanced attackers", "capability": "high"},
             ],
             "attack_vectors": [
                 {"name": "SQL Injection", "likelihood": "medium", "impact": "high"},
                 {"name": "XSS", "likelihood": "high", "impact": "medium"},
-                {"name": "CSRF", "likelihood": "low", "impact": "medium"}
-            ]
+                {"name": "CSRF", "likelihood": "low", "impact": "medium"},
+            ],
         }
-        
+
         # Return stage results
         return {
             "stage": "threat_modeling",
             "tasks_completed": len(stage_info.get("tasks", [])),
             "threat_model": threat_model,
-            "status": "completed"
+            "status": "completed",
         }
 
     async def _execute_dependency_analysis_stage(
-        self, 
-        assessment_id: str,
-        stage_info: Dict[str, Any]
+        self, assessment_id: str, stage_info: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute the dependency analysis stage of the assessment.
 
@@ -756,7 +764,7 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
         """
         # This would involve analyzing dependencies for vulnerabilities
         await asyncio.sleep(1.5)  # Simulate work
-        
+
         # Simulate dependency findings
         dependency_findings = [
             {
@@ -766,14 +774,14 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
                 "confidence": 0.95,
                 "description": "Known SQL injection vulnerability in outdated library",
                 "dependency": "example-library@1.2.3",
-                "cve": "CVE-2023-12345"
+                "cve": "CVE-2023-12345",
             }
         ]
-        
+
         # Add findings to assessment
         assessment = self.assessments[assessment_id]
         assessment["findings"].extend(dependency_findings)
-        
+
         # Return stage results
         return {
             "stage": "dependency_analysis",
@@ -781,13 +789,11 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
             "dependencies_analyzed": 45,  # Example count
             "vulnerable_dependencies": 3,
             "findings": dependency_findings,
-            "status": "completed"
+            "status": "completed",
         }
 
     async def _execute_code_review_stage(
-        self, 
-        assessment_id: str,
-        stage_info: Dict[str, Any]
+        self, assessment_id: str, stage_info: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute the code review stage of the assessment.
 
@@ -800,7 +806,7 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
         """
         # This would involve detailed code review for security issues
         await asyncio.sleep(3)  # Simulate longer work
-        
+
         # Simulate code review findings
         code_review_findings = [
             {
@@ -810,7 +816,7 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
                 "confidence": 0.9,
                 "description": "Use of weak MD5 hashing for password storage",
                 "location": "src/auth/password.js",
-                "line_number": 42
+                "line_number": 42,
             },
             {
                 "finding_id": f"finding_{assessment_id}_5",
@@ -819,14 +825,14 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
                 "confidence": 0.85,
                 "description": "Missing authorization check in admin API",
                 "location": "src/api/admin.js",
-                "line_number": 87
-            }
+                "line_number": 87,
+            },
         ]
-        
+
         # Add findings to assessment
         assessment = self.assessments[assessment_id]
         assessment["findings"].extend(code_review_findings)
-        
+
         # Return stage results
         return {
             "stage": "code_review",
@@ -834,13 +840,11 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
             "files_reviewed": 25,
             "code_patterns_detected": 12,
             "findings": code_review_findings,
-            "status": "completed"
+            "status": "completed",
         }
 
     async def _execute_finding_verification_stage(
-        self, 
-        assessment_id: str,
-        stage_info: Dict[str, Any]
+        self, assessment_id: str, stage_info: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute the finding verification stage of the assessment.
 
@@ -853,15 +857,15 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
         """
         # This would involve verifying findings and eliminating false positives
         await asyncio.sleep(2)  # Simulate work
-        
+
         # Get findings from assessment
         assessment = self.assessments[assessment_id]
         findings = assessment.get("findings", [])
-        
+
         # Simulate verification results
         verified_findings = []
         false_positives = []
-        
+
         for i, finding in enumerate(findings):
             # Simulate that 10% of findings are false positives
             if i % 10 == 0:
@@ -869,10 +873,10 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
             else:
                 finding["verified"] = True
                 verified_findings.append(finding)
-        
+
         # Update assessment with verified findings
         assessment["findings"] = verified_findings
-        
+
         # Return stage results
         return {
             "stage": "finding_verification",
@@ -881,13 +885,11 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
             "verified_findings": len(verified_findings),
             "false_positives": len(false_positives),
             "verification_confidence": 0.9,
-            "status": "completed"
+            "status": "completed",
         }
 
     async def _execute_report_generation_stage(
-        self, 
-        assessment_id: str,
-        stage_info: Dict[str, Any]
+        self, assessment_id: str, stage_info: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute the report generation stage of the assessment.
 
@@ -900,18 +902,18 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
         """
         # This would involve generating a comprehensive vulnerability report
         await asyncio.sleep(1)  # Simulate work
-        
+
         # Get assessment data
         assessment = self.assessments[assessment_id]
         findings = assessment.get("findings", [])
-        
+
         # Categorize findings by severity
         severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
         for finding in findings:
             severity = finding.get("severity", "info").lower()
             if severity in severity_counts:
                 severity_counts[severity] += 1
-        
+
         # Generate report (in a real implementation, this would create a structured report)
         report = {
             "assessment_id": assessment_id,
@@ -919,26 +921,26 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
             "summary": {
                 "total_findings": len(findings),
                 "severity_distribution": severity_counts,
-                "risk_level": self._calculate_risk_level(severity_counts)
+                "risk_level": self._calculate_risk_level(severity_counts),
             },
             "findings": findings,
             "stage_results": {
                 stage.value: results
                 for stage, results in self.stage_results.get(assessment_id, {}).items()
             },
-            "generated_at": time.time()
+            "generated_at": time.time(),
         }
-        
+
         # Set the report on the assessment
         assessment["report"] = report
-        
+
         # Return stage results
         return {
             "stage": "report_generation",
             "tasks_completed": len(stage_info.get("tasks", [])),
             "report_sections": ["summary", "findings", "recommendations"],
             "report_id": f"report_{assessment_id}",
-            "status": "completed"
+            "status": "completed",
         }
 
     def _calculate_risk_level(self, severity_counts: Dict[str, int]) -> str:
@@ -960,13 +962,13 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
             return "low"
         else:
             return "low"
-    
+
     async def _emit_assessment_plan_event(
         self,
         assessment_id: str,
         repository_id: str,
         plan: Dict[str, Any],
-        assessment_context: Dict[str, Any]
+        assessment_context: Dict[str, Any],
     ) -> None:
         """Emit an assessment plan event.
 
@@ -981,10 +983,10 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
             repository_id=repository_id,
             assessment_id=assessment_id,
             plan=plan,
-            assessment_context=assessment_context
+            assessment_context=assessment_context,
         )
         self.emit_event(event)
-    
+
     async def _emit_assessment_stage_event(
         self,
         assessment_id: str,
@@ -992,7 +994,7 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
         stage: AssessmentStage,
         status: str,
         progress: float,
-        results: Optional[Dict[str, Any]] = None
+        results: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Emit an assessment stage event.
 
@@ -1011,10 +1013,10 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
             stage=stage,
             status=status,
             progress=progress,
-            results=results
+            results=results,
         )
         self.emit_event(event)
-    
+
     async def _handle_assessment_plan_event(self, event: AssessmentPlanEvent) -> None:
         """Handle assessment plan events.
 
@@ -1022,7 +1024,7 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
             event: The assessment plan event
         """
         logger.info(f"Received assessment plan event for {event.repository_id}")
-        
+
         # Store plan if from another agent
         if event.sender_id != self.agent_id:
             if event.assessment_id not in self.assessments:
@@ -1031,9 +1033,9 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
                     "repository_id": event.repository_id,
                     "plan": event.plan,
                     "status": "received",
-                    "findings": []
+                    "findings": [],
                 }
-    
+
     async def _handle_assessment_stage_event(self, event: AssessmentStageEvent) -> None:
         """Handle assessment stage events.
 
@@ -1045,24 +1047,24 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
             f"Received assessment stage event: {event.stage.value} {event.status} "
             f"for {event.repository_id}"
         )
-        
+
         # If this is from another agent, update our records
         if event.sender_id != self.agent_id and event.assessment_id in self.assessments:
             assessment = self.assessments[event.assessment_id]
-            
+
             # Update assessment with stage progress
             if "stage_progress" not in assessment:
                 assessment["stage_progress"] = {}
-                
+
             assessment["stage_progress"][event.stage.value] = event.progress
-            
+
             # If stage completed, store results
             if event.status == "completed" and event.results:
                 if event.assessment_id not in self.stage_results:
                     self.stage_results[event.assessment_id] = {}
-                    
+
                 self.stage_results[event.assessment_id][event.stage] = event.results
-    
+
     async def _handle_task_assignment(self, event: TaskAssignmentEvent) -> None:
         """Handle task assignment events.
 
@@ -1072,89 +1074,85 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
         # Only handle tasks assigned to this agent
         if event.receiver_id != self.agent_id:
             return
-            
+
         logger.info(f"Received task assignment: {event.task_id} - {event.task_type}")
-        
+
         # Handle different task types
         if event.task_type == "create_assessment":
             # Extract parameters
             params = event.task_parameters
             repository_id = params.get("repository_id")
             repository_info = params.get("repository_info", {})
-            
+
             # Create assessment
             try:
                 assessment = await self.create_assessment(
                     repository_id=repository_id,
                     repository_info=repository_info,
                     assessment_parameters=params.get("parameters"),
-                    user_id=params.get("user_id")
+                    user_id=params.get("user_id"),
                 )
-                
+
                 # Emit task result
                 await self._emit_task_result(
                     task_id=event.task_id,
                     sender_id=event.sender_id,
                     status="completed",
-                    result=assessment
+                    result=assessment,
                 )
-                
+
             except Exception as e:
                 logger.error(f"Error creating assessment: {e}")
-                
+
                 # Emit task failure
                 await self._emit_task_result(
                     task_id=event.task_id,
                     sender_id=event.sender_id,
                     status="failed",
-                    result={"error": str(e)}
+                    result={"error": str(e)},
                 )
-                
+
         elif event.task_type == "get_assessment_status":
             # Extract parameters
             params = event.task_parameters
             assessment_id = params.get("assessment_id")
-            
+
             # Get assessment status
             try:
                 status = await self.get_assessment_status(assessment_id)
-                
+
                 # Emit task result
                 await self._emit_task_result(
                     task_id=event.task_id,
                     sender_id=event.sender_id,
                     status="completed",
-                    result=status
+                    result=status,
                 )
-                
+
             except Exception as e:
                 logger.error(f"Error getting assessment status: {e}")
-                
+
                 # Emit task failure
                 await self._emit_task_result(
                     task_id=event.task_id,
                     sender_id=event.sender_id,
                     status="failed",
-                    result={"error": str(e)}
+                    result={"error": str(e)},
                 )
-        
+
         else:
             logger.warning(f"Unknown task type: {event.task_type}")
-            
+
             # Emit task failure
             await self._emit_task_result(
                 task_id=event.task_id,
                 sender_id=event.sender_id,
                 status="failed",
-                result={"error": f"Unknown task type: {event.task_type}"}
+                result={"error": f"Unknown task type: {event.task_type}"},
             )
-    
+
     async def _emit_task_result(
-        self,
-        task_id: str,
-        sender_id: str,
-        status: str,
-        result: Any
+        self, task_id: str, sender_id: str, status: str, result: Any
     ) -> None:
         """Emit a task result event.
 
@@ -1169,10 +1167,10 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
             receiver_id=sender_id,
             task_id=task_id,
             status=status,
-            result=result
+            result=result,
         )
         self.emit_event(event)
-    
+
     async def _handle_task_result(self, event: TaskResultEvent) -> None:
         """Handle task result events.
 
@@ -1182,8 +1180,8 @@ helps ensure that vulnerability assessments are thorough, consistent, and effect
         # Only process results intended for this agent
         if event.receiver_id != self.agent_id:
             return
-            
+
         logger.info(f"Received task result: {event.task_id} - {event.status}")
-        
+
         # Currently no specific handling needed for task results
         # In a real implementation, we might update assessment state based on task results

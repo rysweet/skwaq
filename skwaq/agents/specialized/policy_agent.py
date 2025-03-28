@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 
 class ComplianceStatus(enum.Enum):
     """Status of compliance with security policies."""
-    
+
     COMPLIANT = "compliant"
     NON_COMPLIANT = "non_compliant"
     PARTIALLY_COMPLIANT = "partially_compliant"
@@ -33,7 +33,7 @@ class ComplianceStatus(enum.Enum):
 
 class PolicyRecommendationType(enum.Enum):
     """Types of policy recommendations."""
-    
+
     NEW_POLICY = "new_policy"
     POLICY_UPDATE = "policy_update"
     PROCESS_IMPROVEMENT = "process_improvement"
@@ -72,16 +72,18 @@ class PolicyEvaluationEvent(SystemEvent):
             metadata: Additional metadata for the event
         """
         eval_metadata = metadata or {}
-        eval_metadata.update({
-            "target_id": target_id,
-            "target_type": target_type,
-            "compliance_status": compliance_status.value,
-            "policy_count": len(policy_references),
-            "gaps_count": len(compliance_gaps),
-            "recommendations_count": len(recommendations),
-            "evaluation_id": evaluation_id or str(uuid.uuid4()),
-            "event_type": "policy_evaluation"
-        })
+        eval_metadata.update(
+            {
+                "target_id": target_id,
+                "target_type": target_type,
+                "compliance_status": compliance_status.value,
+                "policy_count": len(policy_references),
+                "gaps_count": len(compliance_gaps),
+                "recommendations_count": len(recommendations),
+                "evaluation_id": evaluation_id or str(uuid.uuid4()),
+                "event_type": "policy_evaluation",
+            }
+        )
 
         message = f"Policy evaluation for {target_type} {target_id}: {compliance_status.value}"
 
@@ -132,12 +134,14 @@ class PolicyRecommendationEvent(SystemEvent):
             metadata: Additional metadata for the event
         """
         rec_metadata = metadata or {}
-        rec_metadata.update({
-            "recommendation_type": recommendation_type.value,
-            "implementation_steps_count": len(implementation_steps),
-            "recommendation_id": recommendation_id or str(uuid.uuid4()),
-            "event_type": "policy_recommendation"
-        })
+        rec_metadata.update(
+            {
+                "recommendation_type": recommendation_type.value,
+                "implementation_steps_count": len(implementation_steps),
+                "recommendation_id": recommendation_id or str(uuid.uuid4()),
+                "event_type": "policy_recommendation",
+            }
+        )
 
         message = f"Policy recommendation: {title} ({recommendation_type.value})"
 
@@ -159,7 +163,7 @@ class PolicyRecommendationEvent(SystemEvent):
 
 class SecurityPolicyAgent(AutogenChatAgent):
     """Specialized agent for evaluating security policies and compliance.
-    
+
     This agent evaluates findings and repositories against security policies
     and compliance requirements, identifies gaps, and generates policy
     recommendations to improve security posture.
@@ -216,43 +220,67 @@ implementable within reasonable constraints.
             agent_id=agent_id,
             model=model,
         )
-        
+
         # Set up policy evaluation tracking
         self.policy_evaluations: Dict[str, Dict[str, Any]] = {}
         self.policy_recommendations: Dict[str, Dict[str, Any]] = {}
         self.evaluation_tasks: Dict[str, Task] = {}
-        
+
         # Initialize policy knowledge base
         self.policy_knowledge: Dict[str, Dict[str, Any]] = {
             "standards": {
-                "NIST_800_53": {"description": "NIST Special Publication 800-53 Security Controls"},
-                "OWASP_ASVS": {"description": "OWASP Application Security Verification Standard"},
+                "NIST_800_53": {
+                    "description": "NIST Special Publication 800-53 Security Controls"
+                },
+                "OWASP_ASVS": {
+                    "description": "OWASP Application Security Verification Standard"
+                },
                 "CIS": {"description": "Center for Internet Security Benchmarks"},
-                "ISO_27001": {"description": "ISO/IEC 27001 Information Security Management"},
-                "PCI_DSS": {"description": "Payment Card Industry Data Security Standard"}
+                "ISO_27001": {
+                    "description": "ISO/IEC 27001 Information Security Management"
+                },
+                "PCI_DSS": {
+                    "description": "Payment Card Industry Data Security Standard"
+                },
             },
             "categories": {
-                "access_control": {"description": "Controls for managing system access"},
-                "authentication": {"description": "Authentication mechanisms and policies"},
+                "access_control": {
+                    "description": "Controls for managing system access"
+                },
+                "authentication": {
+                    "description": "Authentication mechanisms and policies"
+                },
                 "authorization": {"description": "Authorization controls and policies"},
-                "data_protection": {"description": "Data encryption and protection policies"},
-                "secure_coding": {"description": "Secure coding practices and requirements"},
-                "logging_monitoring": {"description": "Logging and monitoring requirements"},
+                "data_protection": {
+                    "description": "Data encryption and protection policies"
+                },
+                "secure_coding": {
+                    "description": "Secure coding practices and requirements"
+                },
+                "logging_monitoring": {
+                    "description": "Logging and monitoring requirements"
+                },
                 "incident_response": {"description": "Incident response procedures"},
-                "configuration_management": {"description": "Secure configuration requirements"}
-            }
+                "configuration_management": {
+                    "description": "Secure configuration requirements"
+                },
+            },
         }
-        
+
     async def _start(self):
         """Initialize the agent on startup."""
         await super()._start()
-        
+
         # Register event handlers
-        self.register_event_handler(PolicyEvaluationEvent, self._handle_policy_evaluation_event)
-        self.register_event_handler(PolicyRecommendationEvent, self._handle_policy_recommendation_event)
+        self.register_event_handler(
+            PolicyEvaluationEvent, self._handle_policy_evaluation_event
+        )
+        self.register_event_handler(
+            PolicyRecommendationEvent, self._handle_policy_recommendation_event
+        )
         self.register_event_handler(TaskAssignmentEvent, self._handle_task_assignment)
         self.register_event_handler(TaskResultEvent, self._handle_task_result)
-        
+
     async def evaluate_policy_compliance(
         self,
         target: Union[Finding, Dict[str, Any]],
@@ -272,18 +300,25 @@ implementable within reasonable constraints.
             Policy evaluation results
         """
         # Generate evaluation ID if not provided
-        evaluation_id = evaluation_id or f"policy_eval_{int(time.time())}_{str(uuid.uuid4())[:8]}"
-        
+        evaluation_id = (
+            evaluation_id or f"policy_eval_{int(time.time())}_{str(uuid.uuid4())[:8]}"
+        )
+
         # Convert Finding to dict if needed
         if isinstance(target, Finding):
             target_dict = target.to_dict()
             target_id = target.file_id
         else:
             target_dict = target
-            target_id = target_dict.get("file_id", target_dict.get("finding_id", target_dict.get("id", "unknown")))
-            
-        logger.info(f"Starting policy compliance evaluation for {target_type} {target_id}")
-        
+            target_id = target_dict.get(
+                "file_id",
+                target_dict.get("finding_id", target_dict.get("id", "unknown")),
+            )
+
+        logger.info(
+            f"Starting policy compliance evaluation for {target_type} {target_id}"
+        )
+
         # Create evaluation task
         evaluation_task = Task(
             task_id=evaluation_id,
@@ -292,16 +327,16 @@ implementable within reasonable constraints.
             task_parameters={
                 "target_id": target_id,
                 "target_type": target_type,
-                "policy_context": policy_context or {}
+                "policy_context": policy_context or {},
             },
             priority=2,
             sender_id=self.agent_id,
             receiver_id=self.agent_id,
-            status="in_progress"
+            status="in_progress",
         )
-        
+
         self.evaluation_tasks[evaluation_id] = evaluation_task
-        
+
         try:
             # Prepare the evaluation record
             evaluation = {
@@ -314,39 +349,39 @@ implementable within reasonable constraints.
                 "policy_references": [],
                 "compliance_status": None,
                 "compliance_gaps": [],
-                "recommendations": []
+                "recommendations": [],
             }
-            
+
             # Perform the policy evaluation
             evaluation_result = await self._analyze_policy_compliance(
-                target_dict, 
-                target_type,
-                policy_context or {}
+                target_dict, target_type, policy_context or {}
             )
-            
+
             # Update the evaluation with results
             evaluation.update(evaluation_result)
-            
+
             # Store the evaluation
             self.policy_evaluations[evaluation_id] = evaluation
-            
+
             # Update task status
             evaluation_task.status = "completed"
             evaluation_task.result = evaluation
-            
+
             # Emit evaluation event
             await self._emit_policy_evaluation_event(evaluation)
-            
-            logger.info(f"Completed policy evaluation with status: {evaluation['compliance_status']}")
-            
+
+            logger.info(
+                f"Completed policy evaluation with status: {evaluation['compliance_status']}"
+            )
+
             return evaluation
-            
+
         except Exception as e:
             logger.error(f"Error evaluating policy compliance: {e}")
             evaluation_task.status = "failed"
             evaluation_task.error = str(e)
             raise
-            
+
     async def generate_policy_recommendation(
         self,
         input_data: Dict[str, Any],
@@ -366,26 +401,47 @@ implementable within reasonable constraints.
             Policy recommendation details
         """
         # Generate recommendation ID if not provided
-        recommendation_id = recommendation_id or f"policy_rec_{int(time.time())}_{str(uuid.uuid4())[:8]}"
-        
-        logger.info(f"Generating policy recommendation of type {recommendation_type.value if recommendation_type else 'auto'}")
-        
+        recommendation_id = (
+            recommendation_id
+            or f"policy_rec_{int(time.time())}_{str(uuid.uuid4())[:8]}"
+        )
+
+        logger.info(
+            f"Generating policy recommendation of type {recommendation_type.value if recommendation_type else 'auto'}"
+        )
+
         try:
             # Determine recommendation type if not specified
             if recommendation_type is None:
                 recommendation_type = PolicyRecommendationType.POLICY_UPDATE
-                
+
                 # Try to infer type from input data
                 if "gaps" in input_data and input_data.get("gaps", []):
-                    if any("missing policy" in gap.get("description", "").lower() for gap in input_data["gaps"]):
+                    if any(
+                        "missing policy" in gap.get("description", "").lower()
+                        for gap in input_data["gaps"]
+                    ):
                         recommendation_type = PolicyRecommendationType.NEW_POLICY
-                    elif any("implementation" in gap.get("description", "").lower() for gap in input_data["gaps"]):
-                        recommendation_type = PolicyRecommendationType.CONTROL_IMPLEMENTATION
-                    elif any("process" in gap.get("description", "").lower() for gap in input_data["gaps"]):
-                        recommendation_type = PolicyRecommendationType.PROCESS_IMPROVEMENT
-                    elif any("training" in gap.get("description", "").lower() for gap in input_data["gaps"]):
+                    elif any(
+                        "implementation" in gap.get("description", "").lower()
+                        for gap in input_data["gaps"]
+                    ):
+                        recommendation_type = (
+                            PolicyRecommendationType.CONTROL_IMPLEMENTATION
+                        )
+                    elif any(
+                        "process" in gap.get("description", "").lower()
+                        for gap in input_data["gaps"]
+                    ):
+                        recommendation_type = (
+                            PolicyRecommendationType.PROCESS_IMPROVEMENT
+                        )
+                    elif any(
+                        "training" in gap.get("description", "").lower()
+                        for gap in input_data["gaps"]
+                    ):
                         recommendation_type = PolicyRecommendationType.TRAINING
-            
+
             # Prepare the recommendation record
             recommendation = {
                 "recommendation_id": recommendation_id,
@@ -397,38 +453,33 @@ implementable within reasonable constraints.
                 "description": "",
                 "justification": "",
                 "implementation_steps": [],
-                "policy_references": []
+                "policy_references": [],
             }
-            
+
             # Generate the recommendation
             recommendation_result = await self._generate_recommendation(
-                input_data,
-                recommendation_type,
-                policy_context or {}
+                input_data, recommendation_type, policy_context or {}
             )
-            
+
             # Update the recommendation with results
             recommendation.update(recommendation_result)
-            
+
             # Store the recommendation
             self.policy_recommendations[recommendation_id] = recommendation
-            
+
             # Emit recommendation event
             await self._emit_policy_recommendation_event(recommendation)
-            
+
             logger.info(f"Generated policy recommendation: {recommendation['title']}")
-            
+
             return recommendation
-            
+
         except Exception as e:
             logger.error(f"Error generating policy recommendation: {e}")
             raise
-    
+
     async def _analyze_policy_compliance(
-        self,
-        target: Dict[str, Any],
-        target_type: str,
-        policy_context: Dict[str, Any]
+        self, target: Dict[str, Any], target_type: str, policy_context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Analyze policy compliance for a target.
 
@@ -443,11 +494,11 @@ implementable within reasonable constraints.
         # Prepare prompt for policy compliance analysis
         target_str = json.dumps(target, indent=2)
         context_str = json.dumps(policy_context, indent=2)
-        
+
         # Include known policy frameworks in the prompt
         policy_frameworks = json.dumps(self.policy_knowledge["standards"], indent=2)
         policy_categories = json.dumps(self.policy_knowledge["categories"], indent=2)
-        
+
         # Build comprehensive prompt for the LLM
         policy_prompt = (
             f"I need you to evaluate the following {target_type} for security policy compliance:\n\n"
@@ -467,23 +518,23 @@ implementable within reasonable constraints.
             f"- compliance_gaps: Array of objects with category, description, and severity fields\n"
             f"- recommendations: Array of objects with type, title, and description fields\n"
         )
-        
+
         # Use the chat model to analyze policy compliance
         response = await self.openai_client.create_completion(
             prompt=policy_prompt,
             model=self.model,
             temperature=0.2,
             max_tokens=2000,
-            response_format={"type": "json"}
+            response_format={"type": "json"},
         )
-        
+
         # Extract the text response
         response_text = response.get("choices", [{}])[0].get("text", "").strip()
-        
+
         try:
             # Parse the JSON response
             evaluation = json.loads(response_text)
-            
+
             # Ensure all required fields are present
             if "policy_references" not in evaluation:
                 evaluation["policy_references"] = []
@@ -493,16 +544,18 @@ implementable within reasonable constraints.
                 evaluation["compliance_gaps"] = []
             if "recommendations" not in evaluation:
                 evaluation["recommendations"] = []
-                
+
             # Validate compliance status
             try:
                 status = ComplianceStatus(evaluation["compliance_status"])
                 evaluation["compliance_status"] = status.value
             except ValueError:
-                evaluation["compliance_status"] = ComplianceStatus.REQUIRES_INVESTIGATION.value
-                
+                evaluation["compliance_status"] = (
+                    ComplianceStatus.REQUIRES_INVESTIGATION.value
+                )
+
             return evaluation
-            
+
         except json.JSONDecodeError:
             logger.error(f"Failed to parse policy compliance analysis: {response_text}")
             # Return a default evaluation on parsing error
@@ -513,23 +566,23 @@ implementable within reasonable constraints.
                     {
                         "category": "analysis_error",
                         "description": "Error analyzing policy compliance",
-                        "severity": "medium"
+                        "severity": "medium",
                     }
                 ],
                 "recommendations": [
                     {
                         "type": "process_improvement",
                         "title": "Manual review needed",
-                        "description": "Automated analysis failed, manual review recommended"
+                        "description": "Automated analysis failed, manual review recommended",
                     }
-                ]
+                ],
             }
-    
+
     async def _generate_recommendation(
         self,
         input_data: Dict[str, Any],
         recommendation_type: PolicyRecommendationType,
-        policy_context: Dict[str, Any]
+        policy_context: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Generate a policy recommendation based on input data.
 
@@ -544,7 +597,7 @@ implementable within reasonable constraints.
         # Prepare prompt for recommendation generation
         input_str = json.dumps(input_data, indent=2)
         context_str = json.dumps(policy_context, indent=2)
-        
+
         # Build comprehensive prompt for the LLM
         rec_prompt = (
             f"I need you to generate a detailed security policy recommendation "
@@ -566,40 +619,45 @@ implementable within reasonable constraints.
             f"- implementation_steps: Array of specific steps to implement\n"
             f"- policy_references: Array of objects with standard, control_id, and description fields\n"
         )
-        
+
         # Use the chat model to generate the recommendation
         response = await self.openai_client.create_completion(
             prompt=rec_prompt,
             model=self.model,
             temperature=0.3,
             max_tokens=2000,
-            response_format={"type": "json"}
+            response_format={"type": "json"},
         )
-        
+
         # Extract the text response
         response_text = response.get("choices", [{}])[0].get("text", "").strip()
-        
+
         try:
             # Parse the JSON response
             recommendation = json.loads(response_text)
-            
+
             # Ensure all required fields are present
             if "title" not in recommendation:
-                recommendation["title"] = f"Security {recommendation_type.value.replace('_', ' ').title()} Recommendation"
+                recommendation["title"] = (
+                    f"Security {recommendation_type.value.replace('_', ' ').title()} Recommendation"
+                )
             if "description" not in recommendation:
                 recommendation["description"] = "No description provided"
             if "justification" not in recommendation:
                 recommendation["justification"] = "Addresses identified security gaps"
             if "implementation_steps" not in recommendation:
-                recommendation["implementation_steps"] = ["Review recommendation details", "Develop implementation plan"]
+                recommendation["implementation_steps"] = [
+                    "Review recommendation details",
+                    "Develop implementation plan",
+                ]
             if "policy_references" not in recommendation:
                 recommendation["policy_references"] = []
-                
+
             # Add recommendation type
             recommendation["recommendation_type"] = recommendation_type.value
-                
+
             return recommendation
-            
+
         except json.JSONDecodeError:
             logger.error(f"Failed to parse policy recommendation: {response_text}")
             # Return a default recommendation on parsing error
@@ -611,12 +669,12 @@ implementable within reasonable constraints.
                     "Review the identified security gaps",
                     "Develop a detailed implementation plan",
                     "Implement the recommended security controls",
-                    "Verify implementation effectiveness"
+                    "Verify implementation effectiveness",
                 ],
                 "policy_references": [],
-                "recommendation_type": recommendation_type.value
+                "recommendation_type": recommendation_type.value,
             }
-    
+
     async def _emit_policy_evaluation_event(self, evaluation: Dict[str, Any]) -> None:
         """Emit a policy evaluation event with results.
 
@@ -632,7 +690,7 @@ implementable within reasonable constraints.
                     status = ComplianceStatus.REQUIRES_INVESTIGATION
             else:
                 status = evaluation["compliance_status"]
-                
+
             # Create policy evaluation event
             event = PolicyEvaluationEvent(
                 sender_id=self.agent_id,
@@ -642,16 +700,18 @@ implementable within reasonable constraints.
                 compliance_status=status,
                 compliance_gaps=evaluation.get("compliance_gaps", []),
                 recommendations=evaluation.get("recommendations", []),
-                evaluation_id=evaluation["evaluation_id"]
+                evaluation_id=evaluation["evaluation_id"],
             )
-            
+
             # Emit the event
             self.emit_event(event)
-            
+
         except Exception as e:
             logger.error(f"Error emitting policy evaluation event: {e}")
-    
-    async def _emit_policy_recommendation_event(self, recommendation: Dict[str, Any]) -> None:
+
+    async def _emit_policy_recommendation_event(
+        self, recommendation: Dict[str, Any]
+    ) -> None:
         """Emit a policy recommendation event.
 
         Args:
@@ -661,12 +721,14 @@ implementable within reasonable constraints.
             # Convert type string to enum
             if isinstance(recommendation["recommendation_type"], str):
                 try:
-                    rec_type = PolicyRecommendationType(recommendation["recommendation_type"])
+                    rec_type = PolicyRecommendationType(
+                        recommendation["recommendation_type"]
+                    )
                 except ValueError:
                     rec_type = PolicyRecommendationType.POLICY_UPDATE
             else:
                 rec_type = recommendation["recommendation_type"]
-                
+
             # Create policy recommendation event
             event = PolicyRecommendationEvent(
                 sender_id=self.agent_id,
@@ -676,16 +738,18 @@ implementable within reasonable constraints.
                 justification=recommendation["justification"],
                 implementation_steps=recommendation.get("implementation_steps", []),
                 policy_references=recommendation.get("policy_references", []),
-                recommendation_id=recommendation["recommendation_id"]
+                recommendation_id=recommendation["recommendation_id"],
             )
-            
+
             # Emit the event
             self.emit_event(event)
-            
+
         except Exception as e:
             logger.error(f"Error emitting policy recommendation event: {e}")
-    
-    async def _handle_policy_evaluation_event(self, event: PolicyEvaluationEvent) -> None:
+
+    async def _handle_policy_evaluation_event(
+        self, event: PolicyEvaluationEvent
+    ) -> None:
         """Handle incoming policy evaluation events.
 
         Args:
@@ -696,7 +760,7 @@ implementable within reasonable constraints.
             f"Received policy evaluation event for {event.target_type} {event.target_id} "
             f"with status {event.compliance_status.value}"
         )
-        
+
         # Store the evaluation for reference
         self.policy_evaluations[event.evaluation_id] = {
             "evaluation_id": event.evaluation_id,
@@ -707,10 +771,12 @@ implementable within reasonable constraints.
             "compliance_gaps": event.compliance_gaps,
             "recommendations": event.recommendations,
             "sender_id": event.sender_id,
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
-    
-    async def _handle_policy_recommendation_event(self, event: PolicyRecommendationEvent) -> None:
+
+    async def _handle_policy_recommendation_event(
+        self, event: PolicyRecommendationEvent
+    ) -> None:
         """Handle incoming policy recommendation events.
 
         Args:
@@ -721,7 +787,7 @@ implementable within reasonable constraints.
             f"Received policy recommendation event: {event.title} "
             f"({event.recommendation_type.value})"
         )
-        
+
         # Store the recommendation for reference
         self.policy_recommendations[event.recommendation_id] = {
             "recommendation_id": event.recommendation_id,
@@ -732,9 +798,9 @@ implementable within reasonable constraints.
             "implementation_steps": event.implementation_steps,
             "policy_references": event.policy_references,
             "sender_id": event.sender_id,
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
-        
+
     async def _handle_task_assignment(self, event: TaskAssignmentEvent) -> None:
         """Handle task assignment events.
 
@@ -743,7 +809,7 @@ implementable within reasonable constraints.
         """
         if event.receiver_id != self.agent_id:
             return
-            
+
         if event.task_type == "policy_evaluation":
             # Extract task parameters
             params = event.task_parameters
@@ -751,108 +817,112 @@ implementable within reasonable constraints.
             target_type = params.get("target_type")
             target_data = params.get("target")
             policy_context = params.get("policy_context", {})
-            
+
             if not target_id or not target_data:
-                logger.warning(f"Received policy evaluation task without target data: {event.task_id}")
-                
+                logger.warning(
+                    f"Received policy evaluation task without target data: {event.task_id}"
+                )
+
                 # Emit task result with error
                 await self._emit_task_result(
                     task_id=event.task_id,
                     sender_id=event.sender_id,
                     status="failed",
-                    result={"error": "Missing target data"}
+                    result={"error": "Missing target data"},
                 )
                 return
-                
+
             # Begin policy evaluation
             try:
                 result = await self.evaluate_policy_compliance(
                     target=target_data,
                     target_type=target_type,
                     policy_context=policy_context,
-                    evaluation_id=event.task_id
+                    evaluation_id=event.task_id,
                 )
-                
+
                 # Emit task result
                 await self._emit_task_result(
                     task_id=event.task_id,
                     sender_id=event.sender_id,
                     status="completed",
-                    result=result
+                    result=result,
                 )
-                
+
             except Exception as e:
                 logger.error(f"Error in policy evaluation task: {e}")
-                
+
                 # Emit task result with error
                 await self._emit_task_result(
                     task_id=event.task_id,
                     sender_id=event.sender_id,
                     status="failed",
-                    result={"error": str(e)}
+                    result={"error": str(e)},
                 )
-                
+
         elif event.task_type == "policy_recommendation":
             # Extract task parameters
             params = event.task_parameters
             input_data = params.get("input_data", {})
             recommendation_type_str = params.get("recommendation_type")
             policy_context = params.get("policy_context", {})
-            
+
             if not input_data:
-                logger.warning(f"Received policy recommendation task without input data: {event.task_id}")
-                
+                logger.warning(
+                    f"Received policy recommendation task without input data: {event.task_id}"
+                )
+
                 # Emit task result with error
                 await self._emit_task_result(
                     task_id=event.task_id,
                     sender_id=event.sender_id,
                     status="failed",
-                    result={"error": "Missing input data"}
+                    result={"error": "Missing input data"},
                 )
                 return
-                
+
             # Convert recommendation type string to enum if provided
             recommendation_type = None
             if recommendation_type_str:
                 try:
-                    recommendation_type = PolicyRecommendationType(recommendation_type_str)
+                    recommendation_type = PolicyRecommendationType(
+                        recommendation_type_str
+                    )
                 except ValueError:
-                    logger.warning(f"Invalid recommendation type: {recommendation_type_str}")
-                
+                    logger.warning(
+                        f"Invalid recommendation type: {recommendation_type_str}"
+                    )
+
             # Begin recommendation generation
             try:
                 result = await self.generate_policy_recommendation(
                     input_data=input_data,
                     recommendation_type=recommendation_type,
                     policy_context=policy_context,
-                    recommendation_id=event.task_id
+                    recommendation_id=event.task_id,
                 )
-                
+
                 # Emit task result
                 await self._emit_task_result(
                     task_id=event.task_id,
                     sender_id=event.sender_id,
                     status="completed",
-                    result=result
+                    result=result,
                 )
-                
+
             except Exception as e:
                 logger.error(f"Error in policy recommendation task: {e}")
-                
+
                 # Emit task result with error
                 await self._emit_task_result(
                     task_id=event.task_id,
                     sender_id=event.sender_id,
                     status="failed",
-                    result={"error": str(e)}
+                    result={"error": str(e)},
                 )
-            
+
     async def _emit_task_result(
-        self,
-        task_id: str,
-        sender_id: str,
-        status: str,
-        result: Any
+        self, task_id: str, sender_id: str, status: str, result: Any
     ) -> None:
         """Emit a task result event.
 
@@ -867,10 +937,10 @@ implementable within reasonable constraints.
             receiver_id=sender_id,
             task_id=task_id,
             status=status,
-            result=result
+            result=result,
         )
         self.emit_event(event)
-            
+
     async def _handle_task_result(self, event: TaskResultEvent) -> None:
         """Handle task result events.
 
@@ -879,7 +949,7 @@ implementable within reasonable constraints.
         """
         # Currently no specific handling needed for task results
         pass
-        
+
     def get_policy_evaluation(self, evaluation_id: str) -> Optional[Dict[str, Any]]:
         """Get a policy evaluation result by ID.
 
@@ -890,8 +960,10 @@ implementable within reasonable constraints.
             Policy evaluation or None if not found
         """
         return self.policy_evaluations.get(evaluation_id)
-        
-    def get_policy_recommendation(self, recommendation_id: str) -> Optional[Dict[str, Any]]:
+
+    def get_policy_recommendation(
+        self, recommendation_id: str
+    ) -> Optional[Dict[str, Any]]:
         """Get a policy recommendation by ID.
 
         Args:
@@ -901,8 +973,10 @@ implementable within reasonable constraints.
             Policy recommendation or None if not found
         """
         return self.policy_recommendations.get(recommendation_id)
-        
-    def get_evaluations_by_target(self, target_id: str, target_type: Optional[str] = None) -> List[Dict[str, Any]]:
+
+    def get_evaluations_by_target(
+        self, target_id: str, target_type: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """Get all policy evaluations for a specific target.
 
         Args:
@@ -914,11 +988,14 @@ implementable within reasonable constraints.
         """
         if target_type:
             return [
-                e for e in self.policy_evaluations.values()
-                if e.get("target_id") == target_id and e.get("target_type") == target_type
+                e
+                for e in self.policy_evaluations.values()
+                if e.get("target_id") == target_id
+                and e.get("target_type") == target_type
             ]
         else:
             return [
-                e for e in self.policy_evaluations.values()
+                e
+                for e in self.policy_evaluations.values()
                 if e.get("target_id") == target_id
             ]

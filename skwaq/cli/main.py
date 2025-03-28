@@ -1,7 +1,7 @@
 """Main entry point for the Skwaq CLI.
 
 This module provides the main entry point for the Skwaq CLI application.
-It is a thin wrapper around the refactored implementation to maintain 
+It is a thin wrapper around the refactored implementation to maintain
 backward compatibility with existing code.
 """
 
@@ -21,21 +21,27 @@ main = refactored_main
 run = refactored_run
 command_handlers = COMMAND_HANDLERS
 
+
 # These functions are deprecated and will be removed in a future version
 def create_parser(*args, **kwargs):
     """Create a parser (deprecated, use parser.base.create_parser instead)."""
     from .parser.base import create_parser as new_create_parser
+
     return new_create_parser(*args, **kwargs)
+
 
 def register_parsers(*args, **kwargs):
     """Register parsers (deprecated, use parser.commands.register_all_parsers instead)."""
     from .parser.commands import register_all_parsers
+
     return register_all_parsers(*args, **kwargs)
+
 
 def handle_command(*args, **kwargs):
     """Handle a command (deprecated, use appropriate CommandHandler instead)."""
     error("handle_command is deprecated. Use appropriate CommandHandler instead.")
     return 1
+
 
 # For backward compatibility with entry points
 if __name__ == "__main__":

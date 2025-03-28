@@ -21,6 +21,7 @@ from . import CodeParser
 try:
     from blarify.prebuilt.graph_builder import GraphBuilder
     from blarify.db_managers.neo4j_manager import Neo4jManager
+
     HAS_BLARIFY = True
 except ImportError:
     HAS_BLARIFY = False
@@ -42,25 +43,30 @@ class BlarifyParser(CodeParser):
             ImportError: If Blarify is not installed
         """
         if not HAS_BLARIFY:
-            logger.error("Blarify is not installed. Please install it with: pip install blarify")
+            logger.error(
+                "Blarify is not installed. Please install it with: pip install blarify"
+            )
             raise ImportError("Blarify is not installed")
-        
+
         self.connector = get_connector()
         self.use_docker = platform.system() == "Darwin"  # Use Docker on macOS
-        
+
         # Check if Docker is available if needed
         if self.use_docker:
             try:
-                result = subprocess.run(["docker", "--version"], 
-                                    capture_output=True, 
-                                    text=True, 
-                                    check=False)
+                result = subprocess.run(
+                    ["docker", "--version"], capture_output=True, text=True, check=False
+                )
                 self.docker_available = result.returncode == 0
                 if not self.docker_available:
-                    logger.warning("Docker is not available but would be needed for Blarify on macOS.")
+                    logger.warning(
+                        "Docker is not available but would be needed for Blarify on macOS."
+                    )
             except FileNotFoundError:
                 self.docker_available = False
-                logger.warning("Docker command not found. It's needed for Blarify on macOS.")
+                logger.warning(
+                    "Docker command not found. It's needed for Blarify on macOS."
+                )
 
     async def parse(self, codebase_path: str) -> Dict[str, Any]:
         """Parse a codebase using Blarify and create a graph representation.
@@ -70,7 +76,7 @@ class BlarifyParser(CodeParser):
 
         Returns:
             Dictionary with parsing results and statistics
-        
+
         Raises:
             ValueError: If codebase path is invalid or if parsing fails
         """
@@ -78,45 +84,47 @@ class BlarifyParser(CodeParser):
             error_msg = f"Invalid codebase path: {codebase_path}"
             logger.error(error_msg)
             raise ValueError(error_msg)
-        
+
         logger.info(f"Parsing codebase at {codebase_path} with Blarify")
-        
+
         # Set up statistics
         stats = {
             "files_processed": 0,
             "nodes_created": 0,
             "relationships_created": 0,
             "errors": 0,
-            "docker_mode": False
+            "docker_mode": False,
         }
-        
+
         # Check if we should use Docker
         if self.use_docker and self.docker_available:
             logger.info("Using Docker for Blarify parsing on macOS")
             return await self._parse_with_docker(codebase_path, stats)
-        
+
         # Try direct parsing if we're not using Docker or Docker isn't available
         try:
             # Create a Blarify graph builder
             graph_builder = GraphBuilder(
                 root_path=codebase_path,
                 extensions_to_skip=[".json", ".md", ".txt", ".html", ".css"],
-                names_to_skip=["__pycache__", "node_modules", "venv", ".git"]
+                names_to_skip=["__pycache__", "node_modules", "venv", ".git"],
             )
-            
+
             # Build the graph
             logger.info("Building AST graph with Blarify")
             graph = graph_builder.build()
-            
+
             # Get nodes and relationships
             nodes = graph.get_nodes_as_objects()
             relationships = graph.get_relationships_as_objects()
-            
-            logger.info(f"Built graph with {len(nodes)} nodes and {len(relationships)} relationships")
-            
+
+            logger.info(
+                f"Built graph with {len(nodes)} nodes and {len(relationships)} relationships"
+            )
+
             # Save the graph to Neo4j
             logger.info("Saving AST graph to Neo4j")
-            
+
             # Get the database URI, username, and password from the connector
             db_config = {
                 "uri": self.connector._uri,
@@ -124,7 +132,7 @@ class BlarifyParser(CodeParser):
                 "password": self.connector._password,
                 "database": self.connector._database,
             }
-            
+
             # Create a Blarify Neo4j manager
             graph_manager = Neo4jManager(
                 repo_id="repo",
@@ -134,56 +142,61 @@ class BlarifyParser(CodeParser):
                 password=db_config["password"],
                 database=db_config["database"],
             )
-            
+
             # Save the graph
             graph_manager.save_graph(nodes, relationships)
             graph_manager.close()
-            
+
             # Update statistics
-            stats["files_processed"] = len(set(node.file_path for node in nodes if hasattr(node, "file_path")))
+            stats["files_processed"] = len(
+                set(node.file_path for node in nodes if hasattr(node, "file_path"))
+            )
             stats["nodes_created"] = len(nodes)
             stats["relationships_created"] = len(relationships)
-            
+
             logger.info(f"Successfully parsed codebase with Blarify: {stats}")
-            
+
             return {
                 "success": True,
                 "stats": stats,
                 "files_processed": stats["files_processed"],
             }
-            
+
         except Exception as e:
             error_msg = f"Failed to parse codebase with Blarify: {str(e)}"
             logger.error(error_msg)
             stats["errors"] += 1
-            
+
             # If Docker is available, try with Docker
             if not stats.get("docker_mode") and self.docker_available:
                 logger.info("Direct parsing failed, attempting to use Docker")
                 return await self._parse_with_docker(codebase_path, stats)
-            
+
             raise ValueError(error_msg)
-    
-    async def _parse_with_docker(self, codebase_path: str, stats: Dict[str, Any]) -> Dict[str, Any]:
+
+    async def _parse_with_docker(
+        self, codebase_path: str, stats: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Parse a codebase using Blarify in a Docker container.
-        
+
         Args:
             codebase_path: Path to the codebase to parse
             stats: Statistics dictionary to update
-            
+
         Returns:
             Dictionary with parsing results and statistics
         """
         stats["docker_mode"] = True
-        
+
         # Create a Dockerfile in a temp directory
         with tempfile.TemporaryDirectory() as docker_dir:
             logger.info("Creating Docker environment for Blarify")
-            
+
             # Write Dockerfile
             dockerfile_path = os.path.join(docker_dir, "Dockerfile")
-            with open(dockerfile_path, 'w') as f:
-                f.write("""
+            with open(dockerfile_path, "w") as f:
+                f.write(
+                    """
 FROM python:3.10-slim
 
 # Install minimal dependencies needed for file analysis
@@ -198,12 +211,14 @@ COPY run_blarify.py /run_blarify.py
 
 WORKDIR /code
 ENTRYPOINT ["python", "/run_blarify.py"]
-                """)
-            
+                """
+                )
+
             # Write the Python script that will run inside the container
             script_path = os.path.join(docker_dir, "run_blarify.py")
-            with open(script_path, 'w') as f:
-                f.write(r'''
+            with open(script_path, "w") as f:
+                f.write(
+                    r'''
 import os
 import sys
 import json
@@ -410,68 +425,81 @@ def main():
 
 if __name__ == "__main__":
     main()
-                ''')
-            
+                '''
+                )
+
             # Build the Docker image
             try:
                 logger.info("Building Docker image for Blarify")
                 build_cmd = ["docker", "build", "-t", "skwaq-blarify", docker_dir]
                 subprocess.run(build_cmd, check=True, capture_output=True)
-                
+
                 # Run Blarify in the Docker container
                 logger.info("Running Blarify in Docker container")
-                
+
                 # Create a temporary output file
-                with tempfile.NamedTemporaryFile(mode='w+', delete=False) as temp_output:
+                with tempfile.NamedTemporaryFile(
+                    mode="w+", delete=False
+                ) as temp_output:
                     output_path = temp_output.name
-                
+
                 # Run the Docker container
                 docker_cmd = [
-                    "docker", "run", "--rm",
-                    "-v", f"{codebase_path}:/code",
-                    "skwaq-blarify", "/code"
+                    "docker",
+                    "run",
+                    "--rm",
+                    "-v",
+                    f"{codebase_path}:/code",
+                    "skwaq-blarify",
+                    "/code",
                 ]
-                result = subprocess.run(docker_cmd, capture_output=True, text=True, check=False)
-                
+                result = subprocess.run(
+                    docker_cmd, capture_output=True, text=True, check=False
+                )
+
                 # Process the result
                 if result.returncode != 0:
                     error_msg = f"Docker run failed: {result.stderr}"
                     logger.error(error_msg)
                     stats["errors"] += 1
                     raise ValueError(error_msg)
-                
+
                 try:
                     # Parse the output JSON
                     blarify_result = json.loads(result.stdout)
-                    
+
                     # Check if there was an error
                     if "error" in blarify_result:
                         error_msg = blarify_result["error"]
                         logger.error(error_msg)
                         stats["errors"] += 1
                         raise ValueError(error_msg)
-                    
+
                     # Process the nodes and relationships
                     self._process_docker_result(blarify_result)
-                    
+
                     # Update statistics
                     stats.update(blarify_result["stats"])
-                    
-                    logger.info(f"Successfully parsed codebase with Blarify in Docker: {stats}")
-                    
+
+                    logger.info(
+                        f"Successfully parsed codebase with Blarify in Docker: {stats}"
+                    )
+
                     return {
                         "success": True,
                         "stats": stats,
                         "files_processed": stats["files_processed"],
-                        "docker_mode": True
+                        "docker_mode": True,
                     }
-                    
+
                 except json.JSONDecodeError:
-                    error_msg = f"Failed to parse Docker output as JSON: {result.stdout}"
+                    error_msg = (
+                        f"Failed to parse Docker output as JSON: {result.stdout}"
+                    )
                     logger.error(error_msg)
                     stats["errors"] += 1
                     raise ValueError(error_msg)
-                
+
             except subprocess.CalledProcessError as e:
                 error_msg = f"Docker command failed: {e.stderr.decode() if e.stderr else str(e)}"
                 logger.error(error_msg)
@@ -482,15 +510,15 @@ if __name__ == "__main__":
                 logger.error(error_msg)
                 stats["errors"] += 1
                 raise ValueError(error_msg)
-    
+
     def _process_docker_result(self, result: Dict[str, Any]) -> None:
         """Process the result from Docker and save to Neo4j.
-        
+
         Args:
             result: Dictionary with nodes and relationships from Docker
         """
         logger.info("Processing Docker result and saving to Neo4j")
-        
+
         # Get the database URI, username, and password from the connector
         db_config = {
             "uri": self.connector._uri,
@@ -498,10 +526,10 @@ if __name__ == "__main__":
             "password": self.connector._password,
             "database": self.connector._database,
         }
-        
+
         # Process and create nodes
         node_id_mapping = {}  # Map Blarify node IDs to Neo4j node IDs
-        
+
         for node in result.get("nodes", []):
             # Create node properties
             node_props = {
@@ -512,30 +540,32 @@ if __name__ == "__main__":
                 "start_line": node.get("properties", {}).get("start_line", 0),
                 "end_line": node.get("properties", {}).get("end_line", 0),
             }
-            
+
             # Convert labels to Neo4j node labels
             labels = node.get("labels", [])
             if not labels:
                 # Use the type as a label if no labels are provided
                 labels = [node.get("type", "Node")]
-            
+
             # Create the node in Neo4j
             node_id = self.connector.create_node(labels, node_props)
             if node_id and node.get("id"):
                 node_id_mapping[node["id"]] = node_id
-        
+
         # Process and create relationships
         for rel in result.get("relationships", []):
             source_id = node_id_mapping.get(rel.get("source_id"))
             target_id = node_id_mapping.get(rel.get("target_id"))
             rel_type = rel.get("type")
-            
+
             if source_id and target_id and rel_type:
                 self.connector.create_relationship(
                     source_id, target_id, rel_type, rel.get("properties", {})
                 )
 
-    async def connect_ast_to_files(self, repo_node_id: int, file_path_mapping: Dict[str, int]) -> None:
+    async def connect_ast_to_files(
+        self, repo_node_id: int, file_path_mapping: Dict[str, int]
+    ) -> None:
         """Connect AST nodes to their corresponding file nodes.
 
         Note:

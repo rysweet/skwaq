@@ -84,6 +84,7 @@ if __name__ == "__main__":
   - if the user supplied additional documentation, parse the documentation into a graph and relate it to the codebase graph. Use the LLM for this if needed. 
 
 ## Dependencies
+
 - **Neo4j**: The ingestion module shall use the neo4j database to store the graph representation of the codebase.  The neo4j connection shall be managed by the skwaq db module. The ingestion module shall use the skwaq db module to connect to the neo4j database and store the graph representation of the codebase.
 - **Blarify**: The ingestion module shall use the blarify parser to generate a syntax tree for the codebase. The blarify parser shall be registered as one of the available syntax tree parsers in the ingestion module.
 - **Azure OpenAI**: The ingestion module shall use the Azure OpenAI model client to generate summaries of the code and the developer intent. The model client shall be passed in by the calling code. The ingestion module shall not be responsible for configuring the model client.
@@ -142,7 +143,8 @@ consider having modules for:
 - there shall be aspects of the tests to validate each of the acceptance criteria.
 - there shall be integration tests for the ingestion module that test the entire process from start to finish.
   - the integration tests shall use [eShop](https://github.com/dotnet/eShop) as the integration test codebase.
-- the integration tests shall use a not use a mock neo4j database to test the ingestion process.
+  - the integration tests shall not use a mock neo4j database to test the ingestion process.
+  - the integration tests shall not use a mock LLM to test the ingestion process.
 
 ## Example of using the Ingestion Module
 

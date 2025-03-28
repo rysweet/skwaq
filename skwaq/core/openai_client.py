@@ -5,6 +5,7 @@ specific to the Skwaq vulnerability assessment copilot.
 
 from typing import Dict, List, Optional, Union
 import json
+
 # Import autogen_core directly
 import autogen_core
 from ..utils.config import Config, get_config
@@ -12,6 +13,7 @@ from ..utils.logging import get_logger
 
 try:
     from azure.identity import DefaultAzureCredential, ClientSecretCredential
+
     HAS_AZURE_IDENTITY = True
 except ImportError:
     HAS_AZURE_IDENTITY = False
@@ -44,7 +46,7 @@ class OpenAIClient:
         api_type = config.get("openai", {}).get("api_type", "azure").lower()
         openai_config = config.get("openai", {})
         use_entra_id = openai_config.get("use_entra_id", False)
-        
+
         # Get model configuration
         model_deployments = openai_config.get("model_deployments", {})
         default_chat_model = model_deployments.get("chat", "gpt4o")
@@ -54,14 +56,16 @@ class OpenAIClient:
             "api_type": api_type,
             "api_version": openai_config.get("api_version", "2023-05-15"),
         }
-        
+
         # Add API endpoint
         if api_type == "azure":
             endpoint = openai_config.get("endpoint")
             if not endpoint:
-                raise ValueError("Azure OpenAI endpoint is required but not provided in configuration")
+                raise ValueError(
+                    "Azure OpenAI endpoint is required but not provided in configuration"
+                )
             base_config["base_url"] = endpoint
-        
+
         # Configure authentication based on method
         if api_type == "azure" and use_entra_id:
             if not HAS_AZURE_IDENTITY:
@@ -69,25 +73,35 @@ class OpenAIClient:
                     "The 'azure-identity' package is required for Entra ID authentication. "
                     "Install it with 'pip install azure-identity'."
                 )
-                
+
             # Set up Azure AD authentication
-            logger.info("Using Microsoft Entra ID (Azure AD) authentication for Azure OpenAI")
-            
+            logger.info(
+                "Using Microsoft Entra ID (Azure AD) authentication for Azure OpenAI"
+            )
+
             # Create credentials for authentication
-            if "auth_method" in openai_config and openai_config["auth_method"] == "bearer_token":
+            if (
+                "auth_method" in openai_config
+                and openai_config["auth_method"] == "bearer_token"
+            ):
                 try:
                     from azure.identity import get_bearer_token_provider
-                    
+
                     credential = DefaultAzureCredential()
-                    scope = openai_config.get("token_scope", "https://cognitiveservices.azure.com/.default")
-                    
-                    base_config["azure_ad_token_provider"] = get_bearer_token_provider(
-                        credential, 
-                        scope
+                    scope = openai_config.get(
+                        "token_scope", "https://cognitiveservices.azure.com/.default"
                     )
-                    logger.info(f"Using bearer token authentication with scope: {scope}")
+
+                    base_config["azure_ad_token_provider"] = get_bearer_token_provider(
+                        credential, scope
+                    )
+                    logger.info(
+                        f"Using bearer token authentication with scope: {scope}"
+                    )
                 except (ImportError, AttributeError) as e:
-                    logger.error(f"Bearer token authentication requires newer azure-identity version: {e}")
+                    logger.error(
+                        f"Bearer token authentication requires newer azure-identity version: {e}"
+                    )
                     raise ImportError(
                         "Bearer token authentication requires azure-identity>=1.15.0. "
                         "Please upgrade with 'pip install azure-identity>=1.15.0'."
@@ -95,45 +109,53 @@ class OpenAIClient:
             elif "client_id" in openai_config and "tenant_id" in openai_config:
                 tenant_id = openai_config["tenant_id"]
                 client_id = openai_config["client_id"]
-                
+
                 if "client_secret" in openai_config:
                     # Use service principal authentication
                     client_secret = openai_config["client_secret"]
                     base_config["azure_ad_token_provider"] = ClientSecretCredential(
                         tenant_id=tenant_id,
                         client_id=client_id,
-                        client_secret=client_secret
+                        client_secret=client_secret,
                     )
-                    logger.info("Using service principal authentication with tenant, client ID and secret")
+                    logger.info(
+                        "Using service principal authentication with tenant, client ID and secret"
+                    )
                 else:
                     # Use managed identity or default authentication
                     base_config["azure_ad_token_provider"] = DefaultAzureCredential()
-                    logger.info("Using DefaultAzureCredential (managed identity or environment)")
+                    logger.info(
+                        "Using DefaultAzureCredential (managed identity or environment)"
+                    )
             else:
                 # Use default authentication methods
                 base_config["azure_ad_token_provider"] = DefaultAzureCredential()
-                logger.info("Using DefaultAzureCredential (managed identity or environment)")
-            
+                logger.info(
+                    "Using DefaultAzureCredential (managed identity or environment)"
+                )
+
             # For Azure AD auth, we don't set api_key
             self.config_list = [
                 {
                     "model": openai_config.get("chat_model", default_chat_model),
-                    **base_config
+                    **base_config,
                 }
             ]
         else:
             # Use API key authentication
             if not config.openai_api_key:
-                raise ValueError("OpenAI API key is required but not provided in configuration")
-                
+                raise ValueError(
+                    "OpenAI API key is required but not provided in configuration"
+                )
+
             logger.info("Using API key authentication for OpenAI")
-            
+
             if api_type == "azure":
                 self.config_list = [
                     {
                         "model": openai_config.get("chat_model", default_chat_model),
                         "api_key": config.openai_api_key,
-                        **base_config
+                        **base_config,
                     }
                 ]
             else:
@@ -144,7 +166,7 @@ class OpenAIClient:
                         "api_type": "openai",
                     }
                 ]
-        
+
         # Set the model based on configuration
         if api_type == "azure":
             self.model = openai_config.get("chat_model", default_chat_model)
@@ -294,32 +316,34 @@ def reset_client_registry() -> None:
     """
     global _client_registry
     _client_registry.clear()
-    
-    
+
+
 async def test_openai_connection() -> bool:
     """Test the connection to the OpenAI API.
-    
+
     This function attempts to make a simple API call to test if the
     OpenAI configuration is correct and the connection works.
-    
+
     Returns:
         True if connection is successful, False otherwise
     """
     try:
         client = get_openai_client(async_mode=True)
-        
+
         # Make a minimal API call to test connection
         test_prompt = "Return only the word 'OK' if you can see this message."
         response = await client.get_completion(test_prompt, temperature=0.0)
-        
+
         # Check if we got a reasonable response
         if response and "OK" in response:
             logger.info("OpenAI API connection test successful")
             return True
         else:
-            logger.warning(f"OpenAI API responded but with unexpected content: {response[:100]}")
+            logger.warning(
+                f"OpenAI API responded but with unexpected content: {response[:100]}"
+            )
             return False
-            
+
     except Exception as e:
         logger.error(f"OpenAI API connection test failed: {e}")
         return False

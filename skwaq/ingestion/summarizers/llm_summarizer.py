@@ -32,7 +32,7 @@ class LLMSummarizer(CodeSummarizer):
         self.context_token_limit = 20000
         self.connector = get_connector()
         self.semaphore = None
-        
+
         # Keep track of content to maintain context
         self._context_buffer = []
         self._context_size = 0
@@ -47,18 +47,19 @@ class LLMSummarizer(CodeSummarizer):
         """
         if "model_client" in kwargs:
             self.model_client = kwargs["model_client"]
-        
+
         if "max_parallel" in kwargs:
             self.max_parallel = kwargs["max_parallel"]
-            
+
         if "context_token_limit" in kwargs:
             self.context_token_limit = kwargs["context_token_limit"]
-            
+
         # Create semaphore for limiting concurrent tasks
         self.semaphore = asyncio.Semaphore(self.max_parallel)
 
-    async def summarize_files(self, file_nodes: List[Dict[str, Any]], 
-                              fs: Any, repo_node_id: int) -> Dict[str, Any]:
+    async def summarize_files(
+        self, file_nodes: List[Dict[str, Any]], fs: Any, repo_node_id: int
+    ) -> Dict[str, Any]:
         """Generate summaries for a list of files.
 
         Args:
@@ -68,7 +69,7 @@ class LLMSummarizer(CodeSummarizer):
 
         Returns:
             Dictionary with summarization results and statistics
-        
+
         Raises:
             ValueError: If model client is not configured
         """
@@ -76,7 +77,7 @@ class LLMSummarizer(CodeSummarizer):
             error_msg = "Model client not configured for LLM summarizer"
             logger.error(error_msg)
             raise ValueError(error_msg)
-        
+
         # Set up statistics
         stats = {
             "files_processed": 0,
@@ -84,41 +85,65 @@ class LLMSummarizer(CodeSummarizer):
             "total_tokens": 0,
             "total_time": 0,
         }
-        
+
         # Set up error collection
         errors = []
-        
+
         # Set up context
         self._context_buffer = []
         self._context_size = 0
-        
+
         # Create tasks for each file
         tasks = []
         for file_node in file_nodes:
             file_id = file_node["file_id"]
             file_path = file_node["path"]
             language = file_node.get("language", "unknown")
-            
+
             # Only process certain languages
-            if language in ["python", "javascript", "typescript", "java", "csharp", "go", "cpp", "c", "php", "ruby"]:
-                tasks.append(self._summarize_file(file_id, file_path, language, fs, stats, errors))
-        
+            if language in [
+                "python",
+                "javascript",
+                "typescript",
+                "java",
+                "csharp",
+                "go",
+                "cpp",
+                "c",
+                "php",
+                "ruby",
+            ]:
+                tasks.append(
+                    self._summarize_file(
+                        file_id, file_path, language, fs, stats, errors
+                    )
+                )
+
         # Run tasks with concurrency limit
         start_time = time.time()
         if tasks:
             await asyncio.gather(*tasks)
         stats["total_time"] = time.time() - start_time
-        
-        logger.info(f"Summarized {stats['files_processed']} files in {stats['total_time']:.2f} seconds")
-        
+
+        logger.info(
+            f"Summarized {stats['files_processed']} files in {stats['total_time']:.2f} seconds"
+        )
+
         return {
             "stats": stats,
             "files_processed": stats["files_processed"],
             "errors": errors,
         }
 
-    async def _summarize_file(self, file_id: int, file_path: str, language: str, 
-                              fs: Any, stats: Dict[str, Any], errors: List[Dict[str, Any]]) -> None:
+    async def _summarize_file(
+        self,
+        file_id: int,
+        file_path: str,
+        language: str,
+        fs: Any,
+        stats: Dict[str, Any],
+        errors: List[Dict[str, Any]],
+    ) -> None:
         """Summarize a single file using LLM.
 
         Args:
@@ -132,45 +157,47 @@ class LLMSummarizer(CodeSummarizer):
         async with self.semaphore:
             try:
                 # Find the full path in the filesystem
-                full_paths = [path for path in fs.get_all_files() if path.endswith(file_path)]
-                
+                full_paths = [
+                    path for path in fs.get_all_files() if path.endswith(file_path)
+                ]
+
                 if not full_paths:
-                    errors.append({
-                        "file": file_path,
-                        "error": "File not found in filesystem"
-                    })
+                    errors.append(
+                        {"file": file_path, "error": "File not found in filesystem"}
+                    )
                     return
-                
+
                 full_path = full_paths[0]
-                
+
                 # Read the file content
                 content = fs.read_file(full_path)
-                
+
                 if not content:
-                    errors.append({
-                        "file": file_path,
-                        "error": "Could not read file content"
-                    })
+                    errors.append(
+                        {"file": file_path, "error": "Could not read file content"}
+                    )
                     return
-                
+
                 # Truncate content if it's too large
                 if len(content) > 50000:
                     content = content[:50000] + "... [truncated]"
-                
+
                 # Extract file name and extension
                 file_name = os.path.basename(file_path)
-                
+
                 # Add to context buffer
                 self._add_to_context(file_name, content)
-                
+
                 # Create the prompt
                 prompt = self._create_summary_prompt(file_name, content, language)
-                
+
                 # Generate summary
                 summary_start_time = time.time()
-                summary = await self.model_client.get_completion(prompt, temperature=0.3)
+                summary = await self.model_client.get_completion(
+                    prompt, temperature=0.3
+                )
                 summary_time = time.time() - summary_start_time
-                
+
                 # Create summary node
                 summary_node_id = self.connector.create_node(
                     "CodeSummary",
@@ -180,38 +207,39 @@ class LLMSummarizer(CodeSummarizer):
                         "language": language,
                         "created_at": time.time(),
                         "generation_time": summary_time,
-                    }
+                    },
                 )
-                
+
                 # Create relationship to file
                 self.connector.create_relationship(
                     file_id, summary_node_id, RelationshipTypes.DESCRIBES
                 )
-                
+
                 # Update file node with summary
                 query = (
                     "MATCH (file:File) "
                     "WHERE id(file) = $file_id "
                     "SET file.summary = $summary"
                 )
-                
-                self.connector.run_query(query, {"file_id": file_id, "summary": summary})
-                
+
+                self.connector.run_query(
+                    query, {"file_id": file_id, "summary": summary}
+                )
+
                 # Add to statistics
                 stats["files_processed"] += 1
                 stats["total_tokens"] += len(prompt.split()) + len(summary.split())
-                
+
                 logger.debug(f"Summarized file: {file_path}")
-                
+
             except Exception as e:
                 logger.error(f"Error summarizing file {file_path}: {str(e)}")
                 stats["errors"] += 1
-                errors.append({
-                    "file": file_path,
-                    "error": str(e)
-                })
+                errors.append({"file": file_path, "error": str(e)})
 
-    def _create_summary_prompt(self, file_name: str, content: str, language: str) -> str:
+    def _create_summary_prompt(
+        self, file_name: str, content: str, language: str
+    ) -> str:
         """Create a prompt for summarizing a code file.
 
         Args:
@@ -244,13 +272,13 @@ class LLMSummarizer(CodeSummarizer):
         
         Context from other files already processed (if relevant):
         """
-        
+
         # Add context from other files if available
         if self._context_buffer:
             prompt += "\n" + "\n".join(self._context_buffer)
-        
+
         prompt += "\n\nSummary:"
-        
+
         return prompt
 
     def _add_to_context(self, file_name: str, content: str) -> None:
@@ -263,12 +291,15 @@ class LLMSummarizer(CodeSummarizer):
         # Create a summary entry for the context
         entry = f"\nFile: {file_name}\nContent summary: {content[:200]}...\n"
         entry_tokens = len(entry.split())
-        
+
         # Check if we need to remove old context to stay under token limit
-        while self._context_size + entry_tokens > self.context_token_limit and self._context_buffer:
+        while (
+            self._context_size + entry_tokens > self.context_token_limit
+            and self._context_buffer
+        ):
             removed_entry = self._context_buffer.pop(0)
             self._context_size -= len(removed_entry.split())
-        
+
         # Add new entry to context
         self._context_buffer.append(entry)
         self._context_size += entry_tokens

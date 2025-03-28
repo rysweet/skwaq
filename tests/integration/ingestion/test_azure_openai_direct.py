@@ -12,6 +12,7 @@ from azure.identity import DefaultAzureCredential
 
 try:
     from dotenv import load_dotenv, find_dotenv
+
     HAS_DOTENV = True
 except ImportError:
     HAS_DOTENV = False
@@ -26,6 +27,7 @@ if HAS_DOTENV:
 # Check for OpenAI package
 try:
     import openai
+
     HAS_OPENAI = True
 except ImportError:
     HAS_OPENAI = False
@@ -38,8 +40,13 @@ async def test_azure_openai_direct():
     # Get configuration from environment
     endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
     api_version = os.environ.get("AZURE_OPENAI_API_VERSION", "2023-05-15")
-    use_entra_id = os.environ.get("AZURE_OPENAI_USE_ENTRA_ID", "").lower() in ("true", "yes", "1", "y")
-    
+    use_entra_id = os.environ.get("AZURE_OPENAI_USE_ENTRA_ID", "").lower() in (
+        "true",
+        "yes",
+        "1",
+        "y",
+    )
+
     # Get model deployments
     model_deployments_str = os.environ.get("AZURE_OPENAI_MODEL_DEPLOYMENTS", "{}")
     try:
@@ -47,26 +54,30 @@ async def test_azure_openai_direct():
         deployment_name = model_deployments.get("chat", "o1")
     except json.JSONDecodeError:
         deployment_name = "o1"  # Default
-    
+
     # Skip if no endpoint
     if not endpoint:
         print("Azure OpenAI endpoint not configured, skipping test")
         return
-    
+
     # Set up authentication
     if use_entra_id:
         # Get token scope from environment or use default
-        token_scope = os.environ.get("AZURE_OPENAI_TOKEN_SCOPE", "https://cognitiveservices.azure.com/.default")
+        token_scope = os.environ.get(
+            "AZURE_OPENAI_TOKEN_SCOPE", "https://cognitiveservices.azure.com/.default"
+        )
         print(f"Using Azure AD authentication with scope: {token_scope}")
-        
+
         # Create Azure credential
         azure_credential = DefaultAzureCredential()
-        
+
         # Configure the client with Azure AD authentication
         client = openai.AsyncAzureOpenAI(
             api_version=api_version,
             azure_endpoint=endpoint,
-            azure_ad_token_provider=lambda: azure_credential.get_token(token_scope).token,
+            azure_ad_token_provider=lambda: azure_credential.get_token(
+                token_scope
+            ).token,
         )
     else:
         # Use API key authentication
@@ -74,7 +85,7 @@ async def test_azure_openai_direct():
         if not api_key:
             print("Azure OpenAI API key not configured, skipping test")
             return
-        
+
         # Configure the client with API key authentication
         client = openai.AsyncAzureOpenAI(
             api_version=api_version,
@@ -82,17 +93,23 @@ async def test_azure_openai_direct():
             api_key=api_key,
         )
         print("Using API key authentication")
-    
+
     # Create a test prompt
     messages = [
-        {"role": "system", "content": "You are a helpful assistant that explains code."},
-        {"role": "user", "content": "What does this function do? def add(a, b): return a + b"}
+        {
+            "role": "system",
+            "content": "You are a helpful assistant that explains code.",
+        },
+        {
+            "role": "user",
+            "content": "What does this function do? def add(a, b): return a + b",
+        },
     ]
-    
+
     try:
         # Make the API call
         print(f"Making API call to Azure OpenAI deployment: {deployment_name}")
-        
+
         # Try without temperature if model doesn't support it
         try:
             response = await client.chat.completions.create(
@@ -109,18 +126,20 @@ async def test_azure_openai_direct():
                 )
             else:
                 raise
-        
+
         # Print the response
         result = response.choices[0].message.content
         print(f"Azure OpenAI response: {result}")
-        
+
         # Validate the response
         assert result and len(result) > 0, "No response from Azure OpenAI API"
-        assert "add" in result.lower() or "sum" in result.lower(), "Response doesn't mention function purpose"
-        
+        assert (
+            "add" in result.lower() or "sum" in result.lower()
+        ), "Response doesn't mention function purpose"
+
         print("Azure OpenAI direct integration test succeeded!")
         return True
-    
+
     except Exception as e:
         print(f"Error calling Azure OpenAI API: {str(e)}")
         return False

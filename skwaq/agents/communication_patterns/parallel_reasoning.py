@@ -24,7 +24,7 @@ logger = get_logger(__name__)
 
 class ReasoningPriority(enum.Enum):
     """Priority levels for parallel reasoning tasks."""
-    
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -60,14 +60,16 @@ class AnalysisEvent(AgentCommunicationEvent):
             metadata: Additional metadata
         """
         analysis_metadata = metadata or {}
-        analysis_metadata.update({
-            "conclusion": conclusion,
-            "evidence": evidence or [],
-            "confidence": confidence,
-            "priority": priority.value,
-            "reasoning_id": reasoning_id,
-            "pattern": "parallel_reasoning"
-        })
+        analysis_metadata.update(
+            {
+                "conclusion": conclusion,
+                "evidence": evidence or [],
+                "confidence": confidence,
+                "priority": priority.value,
+                "reasoning_id": reasoning_id,
+                "pattern": "parallel_reasoning",
+            }
+        )
 
         super().__init__(
             sender_id=sender_id,
@@ -111,13 +113,15 @@ class SynthesisEvent(AgentCommunicationEvent):
             metadata: Additional metadata
         """
         synthesis_metadata = metadata or {}
-        synthesis_metadata.update({
-            "final_conclusion": final_conclusion,
-            "supporting_analyses": supporting_analyses,
-            "confidence": confidence,
-            "reasoning_id": reasoning_id,
-            "pattern": "parallel_reasoning"
-        })
+        synthesis_metadata.update(
+            {
+                "final_conclusion": final_conclusion,
+                "supporting_analyses": supporting_analyses,
+                "confidence": confidence,
+                "reasoning_id": reasoning_id,
+                "pattern": "parallel_reasoning",
+            }
+        )
 
         super().__init__(
             sender_id=sender_id,
@@ -141,10 +145,10 @@ class ParallelReasoningPattern:
     """
 
     def __init__(
-        self, 
+        self,
         analysis_timeout: float = 180.0,
         synthesis_timeout: float = 120.0,
-        min_analyses: int = 2
+        min_analyses: int = 2,
     ):
         """Initialize the Parallel Reasoning pattern.
 
@@ -157,7 +161,7 @@ class ParallelReasoningPattern:
         self.synthesis_timeout = synthesis_timeout
         self.min_analyses = min_analyses
         self.current_reasoning: Dict[str, Dict[str, Any]] = {}
-        
+
     @LogEvent("parallel_reasoning_started")
     async def execute(
         self,
@@ -182,11 +186,13 @@ class ParallelReasoningPattern:
             Dictionary with reasoning results
         """
         if len(analyst_agents) < self.min_analyses:
-            raise ValueError(f"At least {self.min_analyses} analyst agents are required")
-            
+            raise ValueError(
+                f"At least {self.min_analyses} analyst agents are required"
+            )
+
         # Generate unique reasoning ID
         reasoning_id = f"reasoning_{int(time.time())}_{uuid.uuid4().hex[:8]}"
-        
+
         # Initialize reasoning structure
         reasoning_structure = {
             "reasoning_id": reasoning_id,
@@ -196,34 +202,34 @@ class ParallelReasoningPattern:
             "priority": priority.value,
             "participants": {
                 "analysts": [agent.agent_id for agent in analyst_agents],
-                "coordinator": coordinator_agent.agent_id
+                "coordinator": coordinator_agent.agent_id,
             },
             "analyses": [],
             "synthesis": None,
             "completion_time": None,
-            "completed": False
+            "completed": False,
         }
-        
+
         self.current_reasoning[reasoning_id] = reasoning_structure
-        
+
         # Set up coordination primitives
         analysis_complete = asyncio.Event()
         synthesis_complete = asyncio.Event()
-        
+
         # Track analyses
         analyses: Dict[str, AnalysisEvent] = {}
-        
+
         # Define event handler for analysis events
         async def _handle_analysis(event: AnalysisEvent) -> None:
             if not isinstance(event, AnalysisEvent):
                 return
-                
+
             if event.reasoning_id != reasoning_id:
                 return
-                
+
             # Record this analysis
             analyses[event.sender_id] = event
-            
+
             # Check if we have enough analyses
             if len(analyses) >= len(analyst_agents):
                 analysis_complete.set()
@@ -233,38 +239,38 @@ class ParallelReasoningPattern:
                 high_priority_complete = all(
                     agent.agent_id in analyses
                     for agent in analyst_agents
-                    if getattr(agent, "priority", ReasoningPriority.MEDIUM) 
-                       in [ReasoningPriority.HIGH, ReasoningPriority.CRITICAL]
+                    if getattr(agent, "priority", ReasoningPriority.MEDIUM)
+                    in [ReasoningPriority.HIGH, ReasoningPriority.CRITICAL]
                 )
-                
+
                 if high_priority_complete:
                     analysis_complete.set()
-        
+
         # Define event handler for synthesis events
         async def _handle_synthesis(event: SynthesisEvent) -> None:
             if not isinstance(event, SynthesisEvent):
                 return
-                
+
             if event.reasoning_id != reasoning_id:
                 return
-                
+
             # Record the synthesis
             reasoning_structure["synthesis"] = {
                 "text": event.synthesis,
                 "conclusion": event.final_conclusion,
                 "confidence": event.confidence,
-                "supporting_analyses": event.supporting_analyses
+                "supporting_analyses": event.supporting_analyses,
             }
-            
+
             # Mark as complete
             synthesis_complete.set()
-            
+
         # Register event handlers
         for agent in analyst_agents:
             agent.register_event_handler(AnalysisEvent, _handle_analysis)
-            
+
         coordinator_agent.register_event_handler(SynthesisEvent, _handle_synthesis)
-        
+
         try:
             # Start analysis phase
             await self._start_analysis_phase(
@@ -273,20 +279,22 @@ class ParallelReasoningPattern:
                 problem,
                 context or {},
                 reasoning_id,
-                priority
+                priority,
             )
-            
+
             # Wait for analysis phase to complete or timeout
             try:
                 await asyncio.wait_for(analysis_complete.wait(), self.analysis_timeout)
                 logger.info(f"Analysis phase completed with {len(analyses)} analyses")
             except asyncio.TimeoutError:
-                logger.warning(f"Analysis phase timed out with {len(analyses)}/{len(analyst_agents)} analyses")
+                logger.warning(
+                    f"Analysis phase timed out with {len(analyses)}/{len(analyst_agents)} analyses"
+                )
                 if len(analyses) < self.min_analyses:
                     reasoning_structure["timeout"] = "analysis_insufficient"
                     reasoning_structure["completed"] = False
                     return reasoning_structure
-            
+
             # Record completed analyses
             for analysis in analyses.values():
                 analysis_data = {
@@ -295,39 +303,43 @@ class ParallelReasoningPattern:
                     "conclusion": analysis.conclusion,
                     "evidence": analysis.evidence,
                     "confidence": analysis.confidence,
-                    "priority": analysis.priority.value
+                    "priority": analysis.priority.value,
                 }
                 reasoning_structure["analyses"].append(analysis_data)
-            
+
             # Start synthesis phase
             await self._start_synthesis_phase(
                 coordinator_agent,
                 reasoning_structure["analyses"],
                 problem,
                 context or {},
-                reasoning_id
+                reasoning_id,
             )
-            
+
             # Wait for synthesis phase to complete or timeout
             try:
-                await asyncio.wait_for(synthesis_complete.wait(), self.synthesis_timeout)
+                await asyncio.wait_for(
+                    synthesis_complete.wait(), self.synthesis_timeout
+                )
                 logger.info(f"Synthesis phase completed successfully")
             except asyncio.TimeoutError:
                 logger.warning(f"Synthesis phase timed out")
                 reasoning_structure["timeout"] = "synthesis"
-                
+
             # Mark as completed
             reasoning_structure["completed"] = True
             reasoning_structure["completion_time"] = time.time()
-            
+
             return reasoning_structure
         finally:
             # Clean up event handlers
             for agent in analyst_agents:
                 agent.deregister_event_handler(AnalysisEvent, _handle_analysis)
-                
-            coordinator_agent.deregister_event_handler(SynthesisEvent, _handle_synthesis)
-    
+
+            coordinator_agent.deregister_event_handler(
+                SynthesisEvent, _handle_synthesis
+            )
+
     async def _start_analysis_phase(
         self,
         analyst_agents: List[BaseAgent],
@@ -335,7 +347,7 @@ class ParallelReasoningPattern:
         problem: str,
         context: Dict[str, Any],
         reasoning_id: str,
-        priority: ReasoningPriority
+        priority: ReasoningPriority,
     ) -> None:
         """Start the analysis phase with all analyst agents.
 
@@ -360,25 +372,22 @@ class ParallelReasoningPattern:
                     "problem": problem,
                     "context": context,
                     "reasoning_id": reasoning_id,
-                    "priority": priority.value
+                    "priority": priority.value,
                 },
                 priority=self._priority_to_int(priority),
-                metadata={
-                    "pattern": "parallel_reasoning",
-                    "phase": "analysis"
-                }
+                metadata={"pattern": "parallel_reasoning", "phase": "analysis"},
             )
-            
+
             # Emit the event
             await coordinator_agent.emit_event(task_event)
-    
+
     async def _start_synthesis_phase(
         self,
         coordinator_agent: BaseAgent,
         analyses: List[Dict[str, Any]],
         problem: str,
         context: Dict[str, Any],
-        reasoning_id: str
+        reasoning_id: str,
     ) -> None:
         """Start the synthesis phase with the coordinator agent.
 
@@ -400,18 +409,15 @@ class ParallelReasoningPattern:
                 "problem": problem,
                 "context": context,
                 "reasoning_id": reasoning_id,
-                "analyses": analyses
+                "analyses": analyses,
             },
             priority=5,  # High priority for synthesis
-            metadata={
-                "pattern": "parallel_reasoning",
-                "phase": "synthesis"
-            }
+            metadata={"pattern": "parallel_reasoning", "phase": "synthesis"},
         )
-        
+
         # Emit the event
         await coordinator_agent.emit_event(task_event)
-    
+
     def _priority_to_int(self, priority: ReasoningPriority) -> int:
         """Convert a ReasoningPriority to an integer value.
 
@@ -425,10 +431,10 @@ class ParallelReasoningPattern:
             ReasoningPriority.LOW: 1,
             ReasoningPriority.MEDIUM: 3,
             ReasoningPriority.HIGH: 4,
-            ReasoningPriority.CRITICAL: 5
+            ReasoningPriority.CRITICAL: 5,
         }
         return priority_map.get(priority, 3)
-        
+
     def get_reasoning(self, reasoning_id: str) -> Dict[str, Any]:
         """Get a specific reasoning by ID.
 

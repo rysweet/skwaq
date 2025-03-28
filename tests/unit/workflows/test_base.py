@@ -15,7 +15,7 @@ class ConcreteWorkflow(Workflow):
         super().__init__(
             name="TestWorkflow",
             description="Test workflow for unit tests",
-            repository_id=None
+            repository_id=None,
         )
         self.run_called = False
 
@@ -38,10 +38,10 @@ class TestWorkflow:
             # Setup connector mock
             mock_connector = MagicMock()
             mock_get_connector.return_value = mock_connector
-            
+
             # Create workflow
             workflow = ConcreteWorkflow()
-            
+
             # Validate initialization
             assert workflow.name == "TestWorkflow"
             assert workflow.description == "Test workflow for unit tests"
@@ -57,7 +57,7 @@ class TestWorkflow:
         with patch("skwaq.workflows.base.get_connector"):
             workflow = ConcreteWorkflow()
             result = await workflow.run()
-            
+
             assert workflow.run_called is True
             assert result == "workflow result"
 
@@ -65,14 +65,14 @@ class TestWorkflow:
         """Test the should_continue method."""
         with patch("skwaq.workflows.base.get_connector"):
             workflow = ConcreteWorkflow()
-            
+
             # Default value from initialization
             assert workflow.should_continue() is True
-            
+
             # Set to False
             workflow.set_should_continue(False)
             assert workflow.should_continue() is False
-            
+
             # Set back to True
             workflow.set_should_continue(True)
             assert workflow.should_continue() is True
@@ -81,19 +81,19 @@ class TestWorkflow:
         """Test the pause and resume methods with event."""
         with patch("skwaq.workflows.base.get_connector"):
             workflow = ConcreteWorkflow()
-            
+
             # Initially event should be set
             assert workflow._pause_event.is_set() is True
-            
+
             # Pause workflow
             workflow.pause()
-            
+
             # Event should be cleared (paused)
             assert workflow._pause_event.is_set() is False
-            
+
             # Resume workflow
             workflow.resume()
-            
+
             # Event should be set again (resumed)
             assert workflow._pause_event.is_set() is True
 
@@ -103,15 +103,16 @@ class TestWorkflow:
         with patch("skwaq.workflows.base.get_connector"):
             workflow = ConcreteWorkflow()
             timestamp = workflow._get_timestamp()
-            
+
             # Verify it's a properly formatted ISO timestamp
             assert isinstance(timestamp, str)
-            
+
             # Should be in ISO format (basic check)
             assert "T" in timestamp
             assert "-" in timestamp
             assert ":" in timestamp
-            
+
             # Try parsing it as a datetime
             import datetime
+
             datetime.datetime.fromisoformat(timestamp)

@@ -15,6 +15,7 @@ import json
 
 try:
     from dotenv import load_dotenv, find_dotenv
+
     HAS_DOTENV = True
 except ImportError:
     HAS_DOTENV = False
@@ -192,27 +193,37 @@ class EnvConfigSource(BaseConfigSource):
         # Azure Entra ID (Azure AD) authentication
         if "AZURE_OPENAI_USE_ENTRA_ID" in os.environ:
             use_entra_id = os.environ["AZURE_OPENAI_USE_ENTRA_ID"].lower() in (
-                "true", "1", "yes", "y"
+                "true",
+                "1",
+                "yes",
+                "y",
             )
             config["openai"] = config.get("openai", {})
             config["openai"]["use_entra_id"] = use_entra_id
-            
+
             if use_entra_id:
                 # Check if we're using bearer token authentication
-                if "AZURE_OPENAI_AUTH_METHOD" in os.environ and os.environ["AZURE_OPENAI_AUTH_METHOD"] == "bearer_token":
+                if (
+                    "AZURE_OPENAI_AUTH_METHOD" in os.environ
+                    and os.environ["AZURE_OPENAI_AUTH_METHOD"] == "bearer_token"
+                ):
                     config["openai"]["auth_method"] = "bearer_token"
                     if "AZURE_OPENAI_TOKEN_SCOPE" in os.environ:
-                        config["openai"]["token_scope"] = os.environ["AZURE_OPENAI_TOKEN_SCOPE"]
+                        config["openai"]["token_scope"] = os.environ[
+                            "AZURE_OPENAI_TOKEN_SCOPE"
+                        ]
                 else:
                     # Standard Entra ID authentication with client credentials
                     if "AZURE_TENANT_ID" in os.environ:
                         config["openai"]["tenant_id"] = os.environ["AZURE_TENANT_ID"]
-                    
+
                     if "AZURE_CLIENT_ID" in os.environ:
                         config["openai"]["client_id"] = os.environ["AZURE_CLIENT_ID"]
-                    
+
                     if "AZURE_CLIENT_SECRET" in os.environ:
-                        config["openai"]["client_secret"] = os.environ["AZURE_CLIENT_SECRET"]
+                        config["openai"]["client_secret"] = os.environ[
+                            "AZURE_CLIENT_SECRET"
+                        ]
 
         # Model deployments
         if "AZURE_OPENAI_MODEL_DEPLOYMENTS" in os.environ:
@@ -272,10 +283,10 @@ class DotEnvConfigSource(BaseConfigSource):
     """Configuration source that loads from a .env file."""
 
     def __init__(
-        self, 
+        self,
         file_path: Optional[Union[str, Path]] = None,
         name: str = "dotenv",
-        priority: int = 75
+        priority: int = 75,
     ):
         """Initialize a dotenv-based configuration source.
 
@@ -289,18 +300,18 @@ class DotEnvConfigSource(BaseConfigSource):
                 "The 'python-dotenv' package is required for DotEnvConfigSource. "
                 "Install it with 'pip install python-dotenv'."
             )
-        
+
         super().__init__(name=name, priority=priority)
-        
+
         if file_path:
             self.file_path = Path(file_path)
         else:
             # Try to find a .env file
             dotenv_path = find_dotenv(usecwd=True)
             self.file_path = Path(dotenv_path) if dotenv_path else None
-            
+
         self.loaded = False
-        
+
     def get_config(self) -> Dict[str, Any]:
         """Get configuration from .env file.
 
@@ -308,17 +319,17 @@ class DotEnvConfigSource(BaseConfigSource):
             Dictionary with configuration values
         """
         config = {}
-        
+
         if not self.file_path or not self.file_path.exists():
             logger.debug("No .env file found for configuration")
             return config
-        
+
         # Load the .env file into environment variables if not already loaded
         if not self.loaded:
             load_dotenv(self.file_path)
             self.loaded = True
             logger.info(f"Loaded configuration from .env file: {self.file_path}")
-        
+
         # Create an environment config source to parse the environment variables
         # that were just loaded from the .env file
         env_source = EnvConfigSource(name=f"dotenv:{self.file_path}")
@@ -831,10 +842,10 @@ def get_config() -> Config:
                             register_config_source(dotenv_source)
                         except Exception as e:
                             logger.debug(f"Error setting up dotenv config source: {e}")
-                    
+
                     # Register the environment source (higher priority than dotenv)
                     register_config_source(EnvConfigSource())
-                    
+
                     # Create configuration from registered sources
                     _config = Config.from_sources(_config_sources)
 
@@ -910,45 +921,45 @@ def reload_config() -> None:
 
 def update_config(key: str, value: Any, source: str = "cli") -> None:
     """Update a configuration value.
-    
+
     Args:
         key: Configuration key (can use dot notation for nested values)
         value: New value to set
         source: Source identifier for tracking
-    
+
     Raises:
         ValueError: If the key format is invalid
     """
     config = get_config()
-    
+
     if not key:
         raise ValueError("Configuration key cannot be empty")
-    
+
     result = config.set(key, value, source)
-    
+
     if not result:
         raise ValueError(f"Failed to update configuration key: {key}")
-    
+
     logger.info(f"Updated configuration: {key} = {value}")
 
 
 def save_config(file_path: Optional[Union[str, Path]] = None) -> None:
     """Save the current configuration to a file.
-    
+
     Args:
         file_path: Path to save the configuration file (defaults to ~/.skwaq/config.json)
     """
     config = get_config()
-    
+
     if file_path is None:
         # Use default configuration path
         file_path = Path.home() / ".skwaq" / "config.json"
-    
+
     file_path = Path(file_path)
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     config.save_to_file(file_path)
-    
+
     # Register or update file config source
     for source in _config_sources:
         if isinstance(source, FileConfigSource) and source.file_path == file_path:
@@ -956,27 +967,29 @@ def save_config(file_path: Optional[Union[str, Path]] = None) -> None:
     else:
         # File source not found, register it
         register_config_source(FileConfigSource(file_path, auto_reload=True))
-    
+
     logger.info(f"Saved configuration to: {file_path}")
 
 
 def reset_config() -> None:
     """Reset configuration to defaults and remove all custom settings."""
     global _config, _config_sources
-    
+
     with _config_lock:
         # Create a new default configuration
         default_config = Config(
             openai_api_key="",
             openai_org_id="",
         )
-        
+
         # Update the global config
         _config = default_config
-        
+
         # Remove all file sources
-        _config_sources = [s for s in _config_sources if not isinstance(s, FileConfigSource)]
-        
+        _config_sources = [
+            s for s in _config_sources if not isinstance(s, FileConfigSource)
+        ]
+
         # Delete user config file if it exists
         config_path = Path.home() / ".skwaq" / "config.json"
         if config_path.exists():
@@ -985,5 +998,5 @@ def reset_config() -> None:
                 logger.info(f"Deleted configuration file: {config_path}")
             except Exception as e:
                 logger.warning(f"Failed to delete configuration file: {e}")
-        
+
         logger.info("Configuration reset to defaults")

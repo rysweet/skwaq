@@ -36,7 +36,9 @@ class CodeParser(ABC):
         pass
 
     @abstractmethod
-    async def connect_ast_to_files(self, repo_node_id: int, file_path_mapping: Dict[str, int]) -> None:
+    async def connect_ast_to_files(
+        self, repo_node_id: int, file_path_mapping: Dict[str, int]
+    ) -> None:
         """Connect AST nodes to their corresponding file nodes.
 
         Args:
@@ -71,7 +73,7 @@ def get_parser(name: str) -> Optional[CodeParser]:
     if name not in _parser_registry:
         logger.warning(f"Parser not found: {name}")
         return None
-    
+
     return _parser_registry[name]()
 
 
@@ -83,6 +85,7 @@ def register_parsers() -> None:
     # Import standard parsers
     try:
         from .blarify_parser import BlarifyParser
+
         register_parser("blarify", BlarifyParser)
     except ImportError as e:
         logger.warning(f"Could not register Blarify parser: {e}")

@@ -32,7 +32,9 @@ class TelemetryEndpoint:
 class Telemetry:
     """Telemetry system for capturing and reporting events."""
 
-    def __init__(self, config: Any = None, enabled: Optional[bool] = None, testing: bool = False) -> None:
+    def __init__(
+        self, config: Any = None, enabled: Optional[bool] = None, testing: bool = False
+    ) -> None:
         """Initialize the telemetry system.
 
         Args:
@@ -65,7 +67,9 @@ class Telemetry:
         self.session_id = str(uuid.uuid4())
         self.endpoints: Dict[str, TelemetryEndpoint] = {}
         # Define captured_events with proper typing
-        self.captured_events: Optional[List[Dict[str, Any]]] = [] if testing else None  # Track events for testing
+        self.captured_events: Optional[List[Dict[str, Any]]] = (
+            [] if testing else None
+        )  # Track events for testing
 
         # Initialize endpoints from config if available
         telemetry_config = getattr(config, "telemetry", {})

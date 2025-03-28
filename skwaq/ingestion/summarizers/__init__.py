@@ -33,8 +33,9 @@ class CodeSummarizer(ABC):
         pass
 
     @abstractmethod
-    async def summarize_files(self, file_nodes: List[Dict[str, Any]], 
-                              fs: Any, repo_node_id: int) -> Dict[str, Any]:
+    async def summarize_files(
+        self, file_nodes: List[Dict[str, Any]], fs: Any, repo_node_id: int
+    ) -> Dict[str, Any]:
         """Generate summaries for a list of files.
 
         Args:
@@ -73,7 +74,7 @@ def get_summarizer(name: str) -> Optional[CodeSummarizer]:
     if name not in _summarizer_registry:
         logger.warning(f"Summarizer not found: {name}")
         return None
-    
+
     return _summarizer_registry[name]()
 
 
@@ -85,6 +86,7 @@ def register_summarizers() -> None:
     # Import standard summarizers
     try:
         from .llm_summarizer import LLMSummarizer
+
         register_summarizer("llm", LLMSummarizer)
     except ImportError as e:
         logger.warning(f"Could not register LLM summarizer: {e}")
