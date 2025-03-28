@@ -138,7 +138,35 @@ class GuiCommandHandler(CommandHandler):
                 
                 # Wait for the React app to begin starting
                 import time
-                time.sleep(5)  # Give it more time for dependency installation
+                import socket
+                
+                # Function to check if port is in use (server is running)
+                def is_port_in_use(port, host='localhost'):
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                        try:
+                            s.settimeout(0.5)
+                            s.connect((host, port))
+                            return True
+                        except (socket.error, socket.timeout):
+                            return False
+                
+                # Wait for server to start (up to 60 seconds)
+                max_wait_time = 60  # seconds
+                start_time = time.time()
+                server_started = False
+                
+                while time.time() - start_time < max_wait_time:
+                    if is_port_in_use(port):
+                        server_started = True
+                        break
+                    time.sleep(1)
+                    status.update(f"[bold blue]Waiting for GUI server to start ({int(time.time() - start_time)}s)...")
+                
+                if not server_started:
+                    status.update(f"[bold yellow]Server not detected within {max_wait_time} seconds, but it might still be starting...")
+                    info("The GUI server appears to be starting but may take longer to initialize")
+                else:
+                    status.update(f"[bold green]GUI server detected running on port {port}!")
                 
                 # Open browser if requested
                 if not no_browser:

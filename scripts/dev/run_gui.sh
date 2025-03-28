@@ -26,31 +26,89 @@ cd "$FRONTEND_DIR"
 echo "Installing missing dependencies..."
 npm install --save react-markdown react-syntax-highlighter remark-gfm file-saver
 
+# Define simple fix_file function that works on MacOS and Linux
+fix_file() {
+    local file="$1"
+    local find="$2"
+    local replace="$3"
+    
+    if [ ! -f "$file" ]; then
+        echo "Warning: File $file doesn't exist, skipping fix"
+        return
+    fi
+    
+    # Create backup
+    cp "$file" "${file}.bak"
+    
+    # Write changes to temp file
+    awk -v find="$find" -v replace="$replace" '{
+        gsub(find, replace);
+        print;
+    }' "$file" > "${file}.tmp"
+    
+    # Replace original file
+    mv "${file}.tmp" "$file"
+    echo "Fixed $file"
+}
+
 # Fix api export issue
-if grep -q "export default api;" "$FRONTEND_DIR/src/services/api.ts"; then
+if [ -f "$FRONTEND_DIR/src/services/api.ts" ] && grep -q "export default api;" "$FRONTEND_DIR/src/services/api.ts"; then
     echo "Fixing API export..."
-    # Create a backup
-    cp "$FRONTEND_DIR/src/services/api.ts" "$FRONTEND_DIR/src/services/api.ts.bak"
-    # Modify the export
-    sed -i.bak 's/export default api;/export default api;\nexport { api };/' "$FRONTEND_DIR/src/services/api.ts"
+    # Create a new file with the fixed content
+    fix_file "$FRONTEND_DIR/src/services/api.ts" "export default api;" "export default api;\nexport { api };"
 fi
 
 # Fix useRealTimeEvents export issue
-if grep -q "export { useRealTimeEvents" "$FRONTEND_DIR/src/hooks/useRealTimeEvents.ts"; then
+if [ -f "$FRONTEND_DIR/src/hooks/useRealTimeEvents.ts" ] && grep -q "export { useRealTimeEvents" "$FRONTEND_DIR/src/hooks/useRealTimeEvents.ts"; then
     echo "Fixing useRealTimeEvents export..."
-    # Create a backup
-    cp "$FRONTEND_DIR/src/hooks/useRealTimeEvents.ts" "$FRONTEND_DIR/src/hooks/useRealTimeEvents.ts.bak"
-    # Modify the export to include default
-    sed -i.bak 's/export { useRealTimeEvents/export { useRealTimeEvents as default, useRealTimeEvents/' "$FRONTEND_DIR/src/hooks/useRealTimeEvents.ts"
+    fix_file "$FRONTEND_DIR/src/hooks/useRealTimeEvents.ts" "export { useRealTimeEvents" "export { useRealTimeEvents as default, useRealTimeEvents"
 fi
 
 # Fix ChatInterface to handle optional parentId
-if grep -q "if (msg.parentId)" "$FRONTEND_DIR/src/components/ChatInterface.tsx"; then
-    echo "Fixing ChatInterface.tsx..."
-    # Create a backup
-    cp "$FRONTEND_DIR/src/components/ChatInterface.tsx" "$FRONTEND_DIR/src/components/ChatInterface.tsx.bak"
-    # Update type to include optional parentId
-    sed -i.bak 's/interface ChatMessage {/interface ChatMessage {\n  parentId?: string;/' "$FRONTEND_DIR/src/services/chatService.ts"
+if [ -f "$FRONTEND_DIR/src/components/ChatInterface.tsx" ] && grep -q "if (msg.parentId)" "$FRONTEND_DIR/src/components/ChatInterface.tsx"; then
+    if [ -f "$FRONTEND_DIR/src/services/chatService.ts" ]; then
+        echo "Fixing ChatMessage interface..."
+        # Check if the file already has parentId defined
+        if ! grep -q "parentId?: string;" "$FRONTEND_DIR/src/services/chatService.ts"; then
+            fix_file "$FRONTEND_DIR/src/services/chatService.ts" "interface ChatMessage {" "interface ChatMessage {\n  parentId?: string;"
+        fi
+    else
+        echo "Warning: chatService.ts not found, can't fix ChatMessage interface"
+    fi
+fi
+
+# Create basic implementations for missing files if needed
+if [ ! -f "$FRONTEND_DIR/src/services/api.ts" ]; then
+    echo "Creating missing api.ts file..."
+    mkdir -p "$FRONTEND_DIR/src/services"
+    cat > "$FRONTEND_DIR/src/services/api.ts" << 'EOF'
+// Simple API client
+const api = {
+  get: async (url: string) => {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response.json();
+  },
+  post: async (url: string, data: any) => {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response.json();
+  }
+};
+
+export default api;
+export { api };
+EOF
 fi
 
 # Start the React development server
