@@ -104,17 +104,41 @@ class GuiCommandHandler(CommandHandler):
                 status.update("[bold green]Launching GUI frontend...")
                 
                 # Use subprocess to run the shell script
-                # We don't wait for it to complete because npm start runs continuously
+                # We'll log the output for diagnostic purposes
                 process = subprocess.Popen(
                     [str(script_path)],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    text=True
+                    text=True,
+                    bufsize=1,  # Line buffered
                 )
                 
-                # Wait a moment for the server to start
+                # Add a listener for the script output
+                import threading
+                
+                def log_output(stream, prefix):
+                    for line in stream:
+                        if "Installing" in line or "Starting" in line or "Error" in line:
+                            if "Error" in line:
+                                error(f"{line.strip()}")
+                            else:
+                                info(f"{line.strip()}")
+                
+                # Start threads to handle stdout and stderr
+                stdout_thread = threading.Thread(
+                    target=log_output, args=(process.stdout, "OUT")
+                )
+                stderr_thread = threading.Thread(
+                    target=log_output, args=(process.stderr, "ERR")
+                )
+                stdout_thread.daemon = True
+                stderr_thread.daemon = True
+                stdout_thread.start()
+                stderr_thread.start()
+                
+                # Wait for the React app to begin starting
                 import time
-                time.sleep(2)
+                time.sleep(5)  # Give it more time for dependency installation
                 
                 # Open browser if requested
                 if not no_browser:
