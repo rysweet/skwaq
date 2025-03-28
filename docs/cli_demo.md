@@ -29,21 +29,21 @@ Output:
 │ |___/_|\_\  \_/\_/ \__,_|\__, |__   │
 │                             |___/   │
 │                                     │
-│ ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣀⣀⣀⠀⠀⠀⠀⠀⠀⠀⠀      │
-│ ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⣿⣿⡟⠋⢻⣷⣄⡀⠀⠀⠀⠀⠀      │
-│ ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣤⣾⣿⣷⣿⣿⣿⣿⣿⣶⣾⣿⣿⠿⠿⠿⠶⠄⠀      │
-│ ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠉⠀⠀⠀⠀⠀⠀⠀      │
-│ ⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀      │
-│ ⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠀⠀⠀⠀⠀⠀⠀⠀      │
-│ ⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀      │
-│ ⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀      │
-│ ⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⣿⡟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀      │
-│ ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⣿⣿⣿⣿⠟⠻⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀      │
-│ ⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⣆⣤⠿⢶⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀      │
-│ ⠀⠀⠀⠀⠀⠀⠀⠀⢰⣿⣿⣿⣿⣿⣿⣿⣿⡀⠀⠀⠀⠑⠀⠀⠀⠀⠀⠀⠀⠀      │
-│ ⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀      │
-│ ⠀⠀⠀⠀⠀⠀⠀⠸⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀      │
-│ ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠙⠛⠋⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀      │
+│ ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣀⣀⣀⠀⠀⠀⠀⠀⠀⠀⠀      │
+│⠀ ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⣿⣿⡟⠋⢻⣷⣄⡀⠀⠀⠀⠀⠀      │
+│ ⠀⠀⠀⠀⠀⠀⠀⣤⣾⣿⣷⣿⣿⣿⣿⣿⣶⣾⣿⣿⠿⠿⠿⠶⠄⠀      │
+│ ⠀⠀⠀⠀⠀⠀⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠉⠀⠀⠀⠀⠀⠀⠀      │
+│ ⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀      │
+│ ⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠀⠀⠀⠀⠀⠀⠀⠀      │
+│ ⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀      │
+│ ⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀      │
+│ ⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⣿⡟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀      │
+│ ⠀⠀⠀⠀⠀⠈⣿⣿⣿⣿⣿⠟⠻⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀      │
+│ ⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⣆⣤⠿⢶⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀      │
+│ ⠀⠀⠀⠀⢰⣿⣿⣿⣿⣿⣿⣿⣿⡀⠀⠀⠀⠑⠀⠀⠀⠀⠀⠀⠀⠀      │
+│ ⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀      │
+│ ⠀⠀⠀⠸⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀      │
+│ ⠀⠀⠀⠀⠀⠀⠉⠉⠙⠛⠋⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀      │
 │                                     │
 │ Version: 0.1.0                      │
 ╰─────────────────────────────────────╯
@@ -108,18 +108,6 @@ Investigation created successfully: AI Samples Security Analysis (Full)
 Investigation ID: inv-c4e062ca
 ```
 
-To ensure proper analysis, we need to link the investigation to the repository. This can be done using a Cypher query:
-
-```python
-# Connect the investigation to the repository
-from skwaq.db.neo4j_connector import Neo4jConnector
-connector = Neo4jConnector()
-connector.connect()
-connector.run_query(
-    'MATCH (i:Investigation {id: "inv-c4e062ca"}), (r:Repository) WHERE r.ingestion_id = "f687b1f6-89cf-4f5d-aa45-4cc4189b17fd" CREATE (i)-[:HAS_REPOSITORY]->(r)'
-)
-```
-
 Now we can run the sources and sinks analysis on this investigation:
 
 ```bash
@@ -153,7 +141,7 @@ Sources and sinks analysis completed. Results saved to:
 reports/sources_and_sinks_inv-c4e062ca.markdown
 ```
 
-With our enhanced CodeSummaryFunnel implementation, the system successfully identified 15 potential source nodes and 5 potential sink nodes based on the LLM-generated summaries. The improved implementation can now find potential sources and sinks even when there are gaps in the graph relationships, providing more robust analysis capabilities.
+The CodeSummaryFunnel implementation successfully identified 15 potential source nodes and 5 potential sink nodes based on the LLM-generated summaries. The improved implementation can now find potential sources and sinks even when there are gaps in the graph relationships, providing more robust analysis capabilities.
 
 The potential sources include functions that:
 - Accept user input from forms or API endpoints
@@ -164,17 +152,6 @@ The potential sinks include functions that:
 - Execute database queries (particularly SQL)
 - Write to files or network sockets
 - Execute commands or render templates
-
-### LLM Analyzer Integration Fix
-
-We've also implemented a comprehensive fix for the LLM analyzer integration issue that was preventing the complete end-to-end analysis workflow. Our solution addresses the "module 'autogen_core' has no attribute 'ChatCompletionClient'" error by:
-
-1. Enhancing the `chat_completion` method in `openai_client.py` to handle different response formats
-2. Adding robust error handling and response format normalization
-3. Creating a compatibility layer for `ChatCompletionClient` in `autogen_compat.py`
-4. Patching the `autogen_core` module to include the required class
-
-The solution ensures that regardless of the response format from the underlying API, the system can normalize it to a consistent structure that all components expect, making the integration more robust against API changes or version differences.
 
 To examine specific potential sources and sinks directly, we can query the database:
 
@@ -238,16 +215,8 @@ This demonstration shows the complete workflow from ingestion to analysis and vi
 2. **Investigation Creation**: Creating a comprehensive investigation and linking it to the repository
 3. **Sources and Sinks Analysis**: Running the enhanced sources and sinks workflow that successfully identified 15 potential sources and 5 potential sinks
 4. **Graph Visualization**: Generating a visualization of the results
-5. **LLM Analyzer Integration Fix**: Implementing a robust fix for the LLM analyzer integration
 
-Our analysis successfully identified potential sources and sinks in the code based on LLM-generated summaries, and our code improvements have addressed several key challenges:
-
-1. **Robust CodeSummaryFunnel**: Enhanced the query mechanisms to find potential security-relevant code patterns even with imperfect graph relationships
-2. **Improved Response Handling**: Implemented robust error handling and format normalization for API responses
-3. **Compatibility Layer**: Created a compatibility layer for the ChatCompletionClient to handle API version differences
-4. **Enhanced Error Recovery**: Added fallback mechanisms to ensure the system can continue functioning even when encountering errors
-
-These improvements make the system more resilient and effective for real-world codebases, where graph relationships may not be perfect and API specifications may change over time. The enhanced robustness also improves the tool's ability to integrate with different LLM backends and handle various response formats.
+Our analysis successfully identified potential sources and sinks in the code based on LLM-generated summaries.
 
 For future iterations and improvements, we could:
 1. Enhance the LLM analyzer to use multiple prompting strategies for better source/sink identification

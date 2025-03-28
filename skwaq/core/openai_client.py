@@ -1,19 +1,22 @@
-"""OpenAI client implementation for Skwaq using autogen-core.
-This module provides a wrapper around the autogen-core OpenAI functionality with configuration
+"""OpenAI client implementation for Skwaq using Azure OpenAI API directly.
+This module provides a wrapper around the Azure OpenAI API with configuration
 specific to the Skwaq vulnerability assessment copilot.
 """
 
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any
 import json
 
-# Import autogen_core directly
-import autogen_core
+# Direct OpenAI imports
+from openai import AzureOpenAI, OpenAI
 from ..utils.config import Config, get_config
 from ..utils.logging import get_logger
 
 try:
-    from azure.identity import DefaultAzureCredential, ClientSecretCredential
-
+    from azure.identity import (
+        DefaultAzureCredential, 
+        ClientSecretCredential,
+        get_bearer_token_provider
+    )
     HAS_AZURE_IDENTITY = True
 except ImportError:
     HAS_AZURE_IDENTITY = False
@@ -22,22 +25,22 @@ logger = get_logger(__name__)
 
 
 class OpenAIClient:
-    """OpenAI client wrapper for Skwaq using autogen-core.
+    """OpenAI client wrapper for Skwaq using Azure OpenAI API directly.
 
-    This class provides a configured OpenAI client instance using autogen-core
-    with proper authentication and retry logic for the Skwaq system.
+    This class provides a configured OpenAI client instance using the modern OpenAI
+    Python client with proper authentication and retry logic for the Skwaq system.
 
     Args:
         config: Configuration object containing OpenAI settings
         async_mode: Whether to use async client. Defaults to False.
 
     Attributes:
-        config_list: The autogen config list for model inference
+        client: The OpenAI client instance (AzureOpenAI or OpenAI)
         model: The default model to use for completions
     """
 
     def __init__(self, config: Config, async_mode: bool = False) -> None:
-        """Initialize the OpenAI client with autogen-core.
+        """Initialize the OpenAI client with the modern OpenAI SDK.
 
         Args:
             config: Configuration object containing OpenAI settings
@@ -50,134 +53,160 @@ class OpenAIClient:
         # Get model configuration
         model_deployments = openai_config.get("model_deployments", {})
         default_chat_model = model_deployments.get("chat", "gpt4o")
-
-        # Set up base configuration
-        base_config = {
-            "api_type": api_type,
-            "api_version": openai_config.get("api_version", "2023-05-15"),
-        }
-
-        # Add API endpoint
+        
+        # Set up the client instance
         if api_type == "azure":
+            # For Azure OpenAI
             endpoint = openai_config.get("endpoint")
             if not endpoint:
                 raise ValueError(
                     "Azure OpenAI endpoint is required but not provided in configuration"
                 )
-            base_config["base_url"] = endpoint
+                
+            api_version = openai_config.get("api_version", "2023-05-15")
+            
+            if use_entra_id:
+                # Use Azure AD authentication
+                if not HAS_AZURE_IDENTITY:
+                    raise ImportError(
+                        "The 'azure-identity' package is required for Entra ID authentication. "
+                        "Install it with 'pip install azure-identity'."
+                    )
 
-        # Configure authentication based on method
-        if api_type == "azure" and use_entra_id:
-            if not HAS_AZURE_IDENTITY:
-                raise ImportError(
-                    "The 'azure-identity' package is required for Entra ID authentication. "
-                    "Install it with 'pip install azure-identity'."
+                logger.info(
+                    "Using Microsoft Entra ID (Azure AD) authentication for Azure OpenAI"
                 )
+                
+                # Create credentials for authentication
+                if (
+                    "auth_method" in openai_config
+                    and openai_config["auth_method"] == "bearer_token"
+                ):
+                    try:
+                        credential = DefaultAzureCredential()
+                        scope = openai_config.get(
+                            "token_scope", "https://cognitiveservices.azure.com/.default"
+                        )
+                        
+                        token_provider = get_bearer_token_provider(credential, scope)
+                        logger.info(f"Using bearer token authentication with scope: {scope}")
+                        
+                        self.client = AzureOpenAI(
+                            azure_endpoint=endpoint,
+                            api_version=api_version,
+                            azure_ad_token_provider=token_provider,
+                        )
+                    except (ImportError, AttributeError) as e:
+                        logger.error(
+                            f"Bearer token authentication requires newer azure-identity version: {e}"
+                        )
+                        raise ImportError(
+                            "Bearer token authentication requires azure-identity>=1.15.0. "
+                            "Please upgrade with 'pip install azure-identity>=1.15.0'."
+                        )
+                elif "client_id" in openai_config and "tenant_id" in openai_config:
+                    tenant_id = openai_config["tenant_id"]
+                    client_id = openai_config["client_id"]
 
-            # Set up Azure AD authentication
-            logger.info(
-                "Using Microsoft Entra ID (Azure AD) authentication for Azure OpenAI"
-            )
-
-            # Create credentials for authentication
-            if (
-                "auth_method" in openai_config
-                and openai_config["auth_method"] == "bearer_token"
-            ):
-                try:
-                    from azure.identity import get_bearer_token_provider
-
+                    if "client_secret" in openai_config:
+                        # Use service principal authentication
+                        client_secret = openai_config["client_secret"]
+                        credential = ClientSecretCredential(
+                            tenant_id=tenant_id,
+                            client_id=client_id,
+                            client_secret=client_secret,
+                        )
+                        scope = openai_config.get(
+                            "token_scope", "https://cognitiveservices.azure.com/.default"
+                        )
+                        token_provider = get_bearer_token_provider(credential, scope)
+                        
+                        logger.info(
+                            "Using service principal authentication with tenant, client ID and secret"
+                        )
+                        
+                        self.client = AzureOpenAI(
+                            azure_endpoint=endpoint,
+                            api_version=api_version,
+                            azure_ad_token_provider=token_provider,
+                        )
+                    else:
+                        # Use managed identity or default authentication
+                        credential = DefaultAzureCredential()
+                        scope = openai_config.get(
+                            "token_scope", "https://cognitiveservices.azure.com/.default"
+                        )
+                        token_provider = get_bearer_token_provider(credential, scope)
+                        
+                        logger.info(
+                            "Using DefaultAzureCredential (managed identity or environment)"
+                        )
+                        
+                        self.client = AzureOpenAI(
+                            azure_endpoint=endpoint,
+                            api_version=api_version,
+                            azure_ad_token_provider=token_provider,
+                        )
+                else:
+                    # Use default authentication methods
                     credential = DefaultAzureCredential()
                     scope = openai_config.get(
                         "token_scope", "https://cognitiveservices.azure.com/.default"
                     )
-
-                    base_config["azure_ad_token_provider"] = get_bearer_token_provider(
-                        credential, scope
-                    )
-                    logger.info(
-                        f"Using bearer token authentication with scope: {scope}"
-                    )
-                except (ImportError, AttributeError) as e:
-                    logger.error(
-                        f"Bearer token authentication requires newer azure-identity version: {e}"
-                    )
-                    raise ImportError(
-                        "Bearer token authentication requires azure-identity>=1.15.0. "
-                        "Please upgrade with 'pip install azure-identity>=1.15.0'."
-                    )
-            elif "client_id" in openai_config and "tenant_id" in openai_config:
-                tenant_id = openai_config["tenant_id"]
-                client_id = openai_config["client_id"]
-
-                if "client_secret" in openai_config:
-                    # Use service principal authentication
-                    client_secret = openai_config["client_secret"]
-                    base_config["azure_ad_token_provider"] = ClientSecretCredential(
-                        tenant_id=tenant_id,
-                        client_id=client_id,
-                        client_secret=client_secret,
-                    )
-                    logger.info(
-                        "Using service principal authentication with tenant, client ID and secret"
-                    )
-                else:
-                    # Use managed identity or default authentication
-                    base_config["azure_ad_token_provider"] = DefaultAzureCredential()
+                    token_provider = get_bearer_token_provider(credential, scope)
+                    
                     logger.info(
                         "Using DefaultAzureCredential (managed identity or environment)"
                     )
+                    
+                    self.client = AzureOpenAI(
+                        azure_endpoint=endpoint,
+                        api_version=api_version,
+                        azure_ad_token_provider=token_provider,
+                    )
             else:
-                # Use default authentication methods
-                base_config["azure_ad_token_provider"] = DefaultAzureCredential()
-                logger.info(
-                    "Using DefaultAzureCredential (managed identity or environment)"
-                )
+                # Use API key authentication for Azure
+                if not config.openai_api_key:
+                    raise ValueError(
+                        "OpenAI API key is required but not provided in configuration"
+                    )
 
-            # For Azure AD auth, we don't set api_key
-            self.config_list = [
-                {
-                    "model": openai_config.get("chat_model", default_chat_model),
-                    **base_config,
-                }
-            ]
+                logger.info("Using API key authentication for Azure OpenAI")
+                
+                self.client = AzureOpenAI(
+                    azure_endpoint=endpoint,
+                    api_version=api_version,
+                    api_key=config.openai_api_key,
+                )
         else:
-            # Use API key authentication
+            # Regular OpenAI API
             if not config.openai_api_key:
                 raise ValueError(
                     "OpenAI API key is required but not provided in configuration"
                 )
 
             logger.info("Using API key authentication for OpenAI")
-
-            if api_type == "azure":
-                self.config_list = [
-                    {
-                        "model": openai_config.get("chat_model", default_chat_model),
-                        "api_key": config.openai_api_key,
-                        **base_config,
-                    }
-                ]
-            else:
-                self.config_list = [
-                    {
-                        "model": config.openai_model or "gpt-4-turbo-preview",
-                        "api_key": config.openai_api_key,
-                        "api_type": "openai",
-                    }
-                ]
-
-        # Set the model based on configuration
+            
+            client_kwargs = {
+                "api_key": config.openai_api_key,
+            }
+            
+            # Add organization ID if available
+            if config.openai_org_id:
+                client_kwargs["organization"] = config.openai_org_id
+            
+            self.client = OpenAI(**client_kwargs)
+        
+        # Store model information
         if api_type == "azure":
             self.model = openai_config.get("chat_model", default_chat_model)
+            # For Azure, we set the deployment to the same value as the model by default
+            self.deployment = openai_config.get("deployment", self.model)
         else:
             self.model = config.openai_model or "gpt-4-turbo-preview"
-
-        # Add organization ID if available
-        if config.openai_org_id:
-            self.config_list[0]["organization"] = config.openai_org_id
-
-        logger.info(f"Initialized autogen-core OpenAI client with model {self.model}")
+            self.deployment = None  # Not used for regular OpenAI API
+        
+        logger.info(f"Initialized OpenAI client with model {self.model}")
 
     async def get_completion(
         self,
@@ -187,7 +216,7 @@ class OpenAIClient:
         max_tokens: Optional[int] = None,
         stop_sequences: Optional[List[str]] = None,
     ) -> str:
-        """Get a completion using autogen-core's chat client.
+        """Get a completion using the OpenAI API directly.
 
         Args:
             prompt: The prompt to send to the model
@@ -199,23 +228,18 @@ class OpenAIClient:
             The generated completion text
         """
         messages = [{"role": "user", "content": prompt}]
-        chat_client = autogen_core.ChatCompletionClient(
-            config_list=self.config_list, is_async=True
-        )
-        response = await chat_client.generate(
+        response = await self.chat_completion(
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
-            stop=stop_sequences,
+            stop_sequences=stop_sequences,
         )
-        if not response or not response.choices:
-            raise ValueError("No completion received from the model")
-        return response.choices[0].message["content"]
+        return response.get("content", "")
 
     async def get_embeddings(
         self, texts: List[str], model: Optional[str] = None
     ) -> List[List[float]]:
-        """Get embeddings for a list of texts using autogen-core.
+        """Get embeddings for a list of texts using the OpenAI embeddings API.
 
         Args:
             texts: List of texts to get embeddings for
@@ -224,17 +248,26 @@ class OpenAIClient:
         Returns:
             List of embedding vectors
         """
-        embeddings_config = self.config_list[0].copy()
-        embeddings_config["model"] = model or "text-embedding-ada-002"
-
+        embedding_model = model or "text-embedding-ada-002"
+        
         results = []
-        for text in texts:
-            response = await autogen_core.embeddings(
-                input=[text], is_async=True, config_list=[embeddings_config]
-            )
-            if response and response.get("data"):
-                results.append(response["data"][0]["embedding"])
-
+        # Process texts in batches of 10 to avoid overloading the API
+        batch_size = 10
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i+batch_size]
+            try:
+                response = await self.client.embeddings.create(
+                    input=batch,
+                    model=embedding_model,
+                )
+                
+                for embedding_data in response.data:
+                    results.append(embedding_data.embedding)
+            except Exception as e:
+                logger.error(f"Error getting embeddings: {e}")
+                # Add None for each failed embedding
+                results.extend([None] * len(batch))
+                
         return results
 
     async def chat_completion(
@@ -245,7 +278,7 @@ class OpenAIClient:
         max_tokens: Optional[int] = None,
         stop_sequences: Optional[List[str]] = None,
     ) -> Dict[str, str]:
-        """Get a chat completion using autogen-core's chat client.
+        """Get a chat completion using the OpenAI API directly.
 
         Args:
             messages: List of message dictionaries with role and content
@@ -257,47 +290,39 @@ class OpenAIClient:
             The response message as a dictionary with role and content
         """
         try:
-            chat_client = autogen_core.ChatCompletionClient(
-                config_list=self.config_list, is_async=True
-            )
-            response = await chat_client.generate(
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stop=stop_sequences,
-            )
+            # Prepare the arguments
+            kwargs = {
+                "messages": messages,
+                "temperature": temperature,
+            }
+            
+            # Add optional parameters if provided
+            if max_tokens is not None:
+                kwargs["max_tokens"] = max_tokens
+                
+            if stop_sequences is not None:
+                kwargs["stop"] = stop_sequences
+                
+            # For Azure OpenAI, we need to specify the deployment
+            if hasattr(self, 'deployment') and self.deployment:
+                kwargs["model"] = self.deployment
+            else:
+                kwargs["model"] = self.model
+                
+            # Make the API call
+            response = await self.client.chat.completions.create(**kwargs)
+            
             if not response or not response.choices:
                 raise ValueError("No completion received from the model")
             
-            # Handle different response formats based on autogen_core version
+            # Get the message and convert to dict with role and content
             message = response.choices[0].message
-            
-            # If message is already a dict with 'content', return it directly
-            if isinstance(message, dict) and "content" in message:
-                return message
+            return {"role": message.role, "content": message.content}
                 
-            # If message is an object with attributes, convert to dict
-            if hasattr(message, "content"):
-                return {"role": "assistant", "content": message.content}
-                
-            # If message is a string, wrap it in a dict
-            if isinstance(message, str):
-                return {"role": "assistant", "content": message}
-                
-            # If it's some other unexpected format, try to convert to dict
-            if hasattr(message, "__dict__"):
-                message_dict = dict(message.__dict__)
-                if "content" not in message_dict and "message" in message_dict:
-                    message_dict["content"] = message_dict["message"]
-                return message_dict
-                
-            # Last resort fallback
-            logger.warning(f"Unexpected message format from autogen_core: {type(message)}")
-            return {"role": "assistant", "content": str(message)}
-            
         except Exception as e:
             logger.error(f"Error in chat_completion: {e}")
-            raise
+            # Return a fallback response with error message
+            return {"role": "assistant", "content": f"Error: {str(e)}"}
 
 
 # Use a client registry instead of global instances

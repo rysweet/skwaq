@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
-import autogen
+from openai import AzureOpenAI, OpenAI
 
 from skwaq.core.openai_client import (
     OpenAIClient,
@@ -28,115 +28,144 @@ def mock_config():
     return config
 
 
-@patch("autogen.core.chat_complete_tokens")
-def test_openai_client_initialization(mock_chat_complete, mock_config):
+@patch("openai.OpenAI")
+def test_openai_client_initialization(mock_openai, mock_config):
     """Test OpenAI client initialization."""
+    mock_instance = MagicMock()
+    mock_openai.return_value = mock_instance
+    
     client = OpenAIClient(mock_config)
-    # The client now uses autogen.core, not OpenAI directly
-    assert hasattr(client, "config_list")
+    # The client now uses OpenAI directly
+    assert hasattr(client, "client")
     assert client.model == "gpt-4-turbo-preview"
-    assert len(client.config_list) == 1
-    assert client.config_list[0]["model"] == "gpt-4-turbo-preview"
+    assert client.deployment is None  # Not used for OpenAI API
+    
+    # Verify OpenAI was initialized with correct parameters
+    mock_openai.assert_called_once_with(api_key="test-key", organization="test-org")
 
 
-@patch("autogen.core.chat_complete_tokens")
-def test_openai_client_async_initialization(mock_chat_complete, mock_config):
+@patch("openai.OpenAI")
+def test_openai_client_async_initialization(mock_openai, mock_config):
     """Test async OpenAI client initialization."""
+    mock_instance = MagicMock()
+    mock_openai.return_value = mock_instance
+    
     client = OpenAIClient(mock_config, async_mode=True)
-    # The client uses same API for both sync and async, with is_async flag
-    assert hasattr(client, "config_list")
+    # Async mode doesn't affect initialization now, only usage
+    assert hasattr(client, "client")
     assert client.model == "gpt-4-turbo-preview"
+    
+    # Verify OpenAI was initialized with correct parameters
+    mock_openai.assert_called_once_with(api_key="test-key", organization="test-org")
 
 
 @pytest.mark.asyncio
 async def test_get_completion():
     """Test getting completions from OpenAI with proper mocking."""
-    # This is a more complex test because of autogen integration
-    # Rather than trying to mock the autogen core directly, which is complex,
-    # we'll patch the method on our client
-
-    with (
-        patch.object(OpenAIClient, "__init__", return_value=None) as mock_init,
-        patch.object(OpenAIClient, "get_completion") as mock_get_completion,
-    ):
-        # Make our mocked method return a simple response
-        mock_get_completion.return_value = "Test completion"
-
+    # Mock a client with chat_completion method
+    with patch("openai.OpenAI") as mock_openai_class:
+        # Setup the mock client
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+        
+        # Set up the return value for chat.completions.create
+        mock_completion = MagicMock()
+        mock_choice = MagicMock()
+        mock_message = MagicMock()
+        mock_message.content = "Test completion"
+        mock_message.role = "assistant"
+        mock_choice.message = mock_message
+        mock_completion.choices = [mock_choice]
+        
+        # Set up the completion method
+        mock_chat = MagicMock()
+        mock_chat.completions = MagicMock()
+        mock_chat.completions.create = AsyncMock(return_value=mock_completion)
+        mock_client.chat = mock_chat
+        
         # Create a config for the client
         config = Config(
             openai_api_key="test-key",
             openai_org_id="test-org",
             openai_model="gpt-4-turbo-preview",
-            # Add necessary Azure OpenAI config to prevent ValueError
             openai={
-                "endpoint": "https://test.openai.azure.com/",
-                "api_version": "2023-05-15",
-            },
+                "api_type": "openai",  # Regular OpenAI, not Azure
+            }
         )
 
-        # Create a client instance that will use our mocked method
+        # Create the client
         client = OpenAIClient(config, async_mode=True)
-
-        # Call the mocked method and verify
-        result = await mock_get_completion("Test prompt")
+        
+        # Test get_completion
+        result = await client.get_completion("Test prompt")
+        
+        # Verify the result
         assert result == "Test completion"
-        mock_get_completion.assert_called_once_with("Test prompt")
+        
+        # Verify the API was called with correct parameters
+        mock_chat.completions.create.assert_called_once()
+        call_args = mock_chat.completions.create.call_args
+        assert call_args[1]["messages"] == [{"role": "user", "content": "Test prompt"}]
+        assert call_args[1]["temperature"] == 0.7
+        assert call_args[1]["model"] == "gpt-4-turbo-preview"
 
 
 @pytest.mark.asyncio
 async def test_chat_completion_formats():
     """Test chat_completion method handles different response formats correctly."""
-    # Initialize mocked objects for testing different response formats
-    with (
-        patch.object(OpenAIClient, "__init__", return_value=None) as mock_init,
-        patch("autogen_core.ChatCompletionClient") as mock_client_class,
-    ):
-        # Create our client
-        client = OpenAIClient(MagicMock())
-        client.config_list = [{"model": "test-model", "api_key": "test-key"}]
+    with patch("openai.OpenAI") as mock_openai_class:
+        # Setup the mock client
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
         
-        # Setup the mock client instance
-        mock_client = AsyncMock()
-        mock_client_class.return_value = mock_client
-        
-        # Test cases with different response formats
+        # Create test cases with different message formats
         test_cases = [
-            # Case 1: Dictionary format with content key
+            # Standard response
             {
-                "response_format": MagicMock(
-                    choices=[MagicMock(message={"role": "assistant", "content": "Response 1"})]
-                ),
-                "expected": {"role": "assistant", "content": "Response 1"}
+                "message_content": "Standard response",
+                "message_role": "assistant",
+                "expected": {"role": "assistant", "content": "Standard response"}
             },
-            # Case 2: Object with content attribute
+            # Error handling test
             {
-                "response_format": MagicMock(
-                    choices=[MagicMock(message=MagicMock(content="Response 2"))]
-                ),
-                "expected": {"role": "assistant", "content": "Response 2"}
-            },
-            # Case 3: String format
-            {
-                "response_format": MagicMock(
-                    choices=[MagicMock(message="Response 3")]
-                ),
-                "expected": {"role": "assistant", "content": "Response 3"}
-            },
-            # Case 4: Object with __dict__ containing message
-            {
-                "response_format": MagicMock(
-                    choices=[MagicMock(
-                        message=MagicMock(__dict__={"message": "Response 4"})
-                    )]
-                ),
-                "expected": {"content": "Response 4"}
+                "raises_exception": True,
+                "exception_message": "API error",
+                "expected": {"role": "assistant", "content": "Error: API error"}
             }
         ]
         
-        # Run all test cases
         for i, test_case in enumerate(test_cases):
-            # Configure mock to return the specified response format
-            mock_client.generate.return_value = test_case["response_format"]
+            # Configure mock chat completions
+            mock_chat = MagicMock()
+            mock_client.chat = mock_chat
+            mock_completions = MagicMock()
+            mock_chat.completions = mock_completions
+            
+            if test_case.get("raises_exception", False):
+                # Set up the mock to raise an exception
+                mock_completions.create = AsyncMock(
+                    side_effect=Exception(test_case["exception_message"])
+                )
+            else:
+                # Set up a normal response
+                mock_completion = MagicMock()
+                mock_choice = MagicMock()
+                mock_message = MagicMock()
+                mock_message.content = test_case["message_content"]
+                mock_message.role = test_case["message_role"]
+                mock_choice.message = mock_message
+                mock_completion.choices = [mock_choice]
+                mock_completions.create = AsyncMock(return_value=mock_completion)
+            
+            # Create a test config
+            config = Config(
+                openai_api_key="test-key",
+                openai_model="gpt-4-turbo-preview",
+                openai={"api_type": "openai"}
+            )
+            
+            # Create the client
+            client = OpenAIClient(config)
             
             # Call the method
             result = await client.chat_completion(
@@ -144,15 +173,12 @@ async def test_chat_completion_formats():
             )
             
             # Verify the result matches expected format
-            assert "content" in result, f"Test case {i} missing 'content' key"
+            assert result["role"] == test_case["expected"]["role"]
             assert result["content"] == test_case["expected"]["content"]
-            
-            # If role is specified in expected, check it
-            if "role" in test_case["expected"]:
-                assert result["role"] == test_case["expected"]["role"]
 
 
-def test_azure_api_key_auth():
+@patch("openai.AzureOpenAI")
+def test_azure_api_key_auth(mock_azure_openai):
     """Test initialization with Azure API key authentication."""
     # Create a mock config with Azure settings
     config = Config(
@@ -165,14 +191,23 @@ def test_azure_api_key_auth():
         },
     )
 
+    # Setup the mock
+    mock_client = MagicMock()
+    mock_azure_openai.return_value = mock_client
+
     # Initialize client
     client = OpenAIClient(config)
 
-    # Verify configuration
-    assert client.config_list[0]["api_key"] == "test-api-key"
-    assert client.config_list[0]["api_type"] == "azure"
-    assert client.config_list[0]["base_url"] == "https://test.openai.azure.com/"
-    assert client.config_list[0]["api_version"] == "2023-05-15"
+    # Verify client was initialized correctly
+    assert client.client == mock_client
+    assert client.model is not None
+    
+    # Verify AzureOpenAI was initialized with correct parameters
+    mock_azure_openai.assert_called_once_with(
+        azure_endpoint="https://test.openai.azure.com/",
+        api_version="2023-05-15",
+        api_key="test-api-key",
+    )
 
 
 @pytest.mark.skipif(
@@ -180,35 +215,48 @@ def test_azure_api_key_auth():
     or not OpenAIClient.HAS_AZURE_IDENTITY,
     reason="Azure Identity package not installed",
 )
-def test_azure_entra_id_auth():
+@patch("openai.AzureOpenAI")
+@patch("azure.identity.DefaultAzureCredential")
+@patch("azure.identity.get_bearer_token_provider")
+def test_azure_entra_id_auth(mock_token_provider, mock_credential, mock_azure_openai):
     """Test initialization with Azure Entra ID authentication."""
-    # Mock DefaultAzureCredential
-    with patch("azure.identity.DefaultAzureCredential") as mock_credential:
-        # Mock credential instance
-        mock_credential.return_value = MagicMock()
+    # Mock credential instance
+    mock_credential.return_value = MagicMock(name="default_credential")
+    
+    # Mock token provider
+    token_provider_instance = MagicMock(name="token_provider")
+    mock_token_provider.return_value = token_provider_instance
+    
+    # Mock OpenAI client
+    mock_client = MagicMock(name="azure_openai_client")
+    mock_azure_openai.return_value = mock_client
 
-        # Create a mock config with Entra ID settings
-        config = Config(
-            openai_api_key="",  # Empty API key
-            openai_org_id="test-org-id",
-            openai={
-                "api_type": "azure",
-                "endpoint": "https://test.openai.azure.com/",
-                "api_version": "2023-05-15",
-                "use_entra_id": True,
-                "tenant_id": "test-tenant-id",
-                "client_id": "test-client-id",
-            },
-        )
+    # Create a mock config with Entra ID settings
+    config = Config(
+        openai_api_key="",  # Empty API key
+        openai_org_id="test-org-id",
+        openai={
+            "api_type": "azure",
+            "endpoint": "https://test.openai.azure.com/",
+            "api_version": "2023-05-15",
+            "use_entra_id": True,
+            "tenant_id": "test-tenant-id",
+            "client_id": "test-client-id",
+        },
+    )
 
-        # Initialize client
-        client = OpenAIClient(config)
+    # Initialize client
+    client = OpenAIClient(config)
 
-        # Verify configuration
-        assert "api_key" not in client.config_list[0]
-        assert client.config_list[0]["api_type"] == "azure"
-        assert client.config_list[0]["base_url"] == "https://test.openai.azure.com/"
-        assert "azure_ad_token_provider" in client.config_list[0]
+    # Verify client was initialized correctly
+    assert client.client == mock_client
+    
+    # Verify AzureOpenAI was initialized with token provider
+    mock_azure_openai.assert_called_once_with(
+        azure_endpoint="https://test.openai.azure.com/",
+        api_version="2023-05-15",
+        azure_ad_token_provider=token_provider_instance,
+    )
 
 
 @pytest.mark.skipif(
@@ -216,49 +264,61 @@ def test_azure_entra_id_auth():
     or not OpenAIClient.HAS_AZURE_IDENTITY,
     reason="Azure Identity package not installed",
 )
-def test_azure_bearer_token_auth():
+@patch("openai.AzureOpenAI")
+@patch("azure.identity.DefaultAzureCredential")
+@patch("azure.identity.get_bearer_token_provider")
+def test_azure_bearer_token_auth(mock_get_token_provider, mock_credential, mock_azure_openai):
     """Test initialization with Azure bearer token authentication."""
-    # Mock functionality needed for bearer token
-    with (
-        patch("azure.identity.DefaultAzureCredential") as mock_credential,
-        patch("azure.identity.get_bearer_token_provider") as mock_get_token_provider,
-    ):
-        # Mock credential and token provider instances
-        mock_credential.return_value = MagicMock()
-        mock_token_provider = MagicMock()
-        mock_get_token_provider.return_value = mock_token_provider
+    # Mock credential and token provider instances
+    mock_credential.return_value = MagicMock(name="default_credential")
+    mock_token_provider = MagicMock(name="token_provider")
+    mock_get_token_provider.return_value = mock_token_provider
+    
+    # Mock Azure OpenAI client
+    mock_client = MagicMock(name="azure_openai_client")
+    mock_azure_openai.return_value = mock_client
 
-        # Create a mock config with bearer token settings
-        config = Config(
-            openai_api_key="",  # Empty API key
-            openai_org_id="test-org-id",
-            openai={
-                "api_type": "azure",
-                "endpoint": "https://test.openai.azure.com/",
-                "api_version": "2023-05-15",
-                "use_entra_id": True,
-                "auth_method": "bearer_token",
-                "token_scope": "https://cognitiveservices.azure.com/.default",
-            },
-        )
+    # Create a mock config with bearer token settings
+    config = Config(
+        openai_api_key="",  # Empty API key
+        openai_org_id="test-org-id",
+        openai={
+            "api_type": "azure",
+            "endpoint": "https://test.openai.azure.com/",
+            "api_version": "2023-05-15",
+            "use_entra_id": True,
+            "auth_method": "bearer_token",
+            "token_scope": "https://cognitiveservices.azure.com/.default",
+        },
+    )
 
-        # Initialize client
-        client = OpenAIClient(config)
+    # Initialize client
+    client = OpenAIClient(config)
 
-        # Verify configuration
-        assert "api_key" not in client.config_list[0]
-        assert client.config_list[0]["api_type"] == "azure"
-        assert client.config_list[0]["base_url"] == "https://test.openai.azure.com/"
-        assert "azure_ad_token_provider" in client.config_list[0]
+    # Verify the client was initialized correctly
+    assert client.client == mock_client
+    
+    # Verify the AzureOpenAI client was initialized with token provider
+    mock_azure_openai.assert_called_once_with(
+        azure_endpoint="https://test.openai.azure.com/",
+        api_version="2023-05-15",
+        azure_ad_token_provider=mock_token_provider,
+    )
 
-        # Verify the token provider was created with the correct scope
-        mock_get_token_provider.assert_called_once_with(
-            mock_credential.return_value, "https://cognitiveservices.azure.com/.default"
-        )
+    # Verify the token provider was created with the correct scope
+    mock_get_token_provider.assert_called_once_with(
+        mock_credential.return_value, "https://cognitiveservices.azure.com/.default"
+    )
 
 
-def test_client_registry():
+@patch("openai.AzureOpenAI")
+def test_client_registry(mock_azure_openai):
     """Test the OpenAI client registry."""
+    # Setup mocks
+    mock_client1 = MagicMock(name="azure_client1")
+    mock_client2 = MagicMock(name="azure_client2")
+    mock_azure_openai.side_effect = [mock_client1, mock_client2]
+    
     # Reset registry to start with a clean state
     reset_client_registry()
 
@@ -277,18 +337,28 @@ def test_client_registry():
 
     # Verify it's the same instance
     assert client1 is client2
+    # Verify the Azure client was only created once
+    assert mock_azure_openai.call_count == 1
 
     # Get a client with a different registry key
     client3 = get_openai_client(config, registry_key="test")
 
     # Should be a different instance
     assert client1 is not client3
+    # Verify the Azure client was created again
+    assert mock_azure_openai.call_count == 2
 
     # Reset registry
     reset_client_registry()
 
+    # Mock one more client instance
+    mock_client3 = MagicMock(name="azure_client3")
+    mock_azure_openai.side_effect = [mock_client3]
+    
     # Get client again - should be a new instance
     client4 = get_openai_client(config)
 
     # Verify it's a different instance
     assert client1 is not client4
+    # Verify the Azure client was created again
+    assert mock_azure_openai.call_count == 3
