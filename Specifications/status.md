@@ -27,6 +27,13 @@ The Codebase Cleanup and Bug Fixes milestone is focused on addressing various te
   - Updated mocking approach for Git repository objects
   - Added proper PropertyMock implementation for Git objects
 
+- [x] Completed CLI refactoring
+  - Moved investigation commands to workflow_commands.py as they are more relevant to workflows
+  - Removed analyze_commands.py as analysis functionality is now handled by workflow commands
+  - Updated CLI command registration to reflect the new structure
+  - Made sure all tests pass with the refactored structure
+  - Removed redundant investigation_commands.py file after migration
+
 - [ ] Fix remaining integration tests
   - 5 remaining repository tests failing due to Git mocking issues
   - Need to improve approach for mocking Git repositories

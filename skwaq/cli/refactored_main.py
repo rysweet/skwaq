@@ -15,22 +15,20 @@ from .parser.commands import register_all_parsers
 from .ui.console import console, error, print_banner
 from .commands.base import CommandHandler
 
-from .commands.analyze_commands import AnalyzeCommandHandler
 from .commands.repository_commands import RepositoryCommandHandler
-from .commands.investigation_commands import InvestigationCommandHandler
 from .commands.system_commands import VersionCommandHandler, GuiCommandHandler
 from .commands.workflow_commands import (
     QACommandHandler,
     GuidedInquiryCommandHandler,
     ToolCommandHandler,
     VulnerabilityResearchCommandHandler,
+    InvestigationCommandHandler,  # Moved from investigation_commands.py
 )
 from .commands.ingest_commands import IngestCommandHandler
 from .commands.config_commands import ConfigCommandHandler
 
 # Map of commands to their handler classes
 COMMAND_HANDLERS: Dict[str, Type[CommandHandler]] = {
-    "analyze": AnalyzeCommandHandler,
     "repo": RepositoryCommandHandler,
     "investigations": InvestigationCommandHandler,
     "version": VersionCommandHandler,

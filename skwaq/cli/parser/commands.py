@@ -5,45 +5,7 @@ from typing import Optional
 
 from .base import SkwaqArgumentParser
 
-def register_analyze_parser(parser: SkwaqArgumentParser) -> None:
-    """Register the analyze command parser.
-    
-    Args:
-        parser: Main argument parser
-    """
-    analyze_parser = parser.create_command_parser(
-        "analyze",
-        "Analyze code for vulnerabilities"
-    )
-    
-    analyze_parser.add_argument(
-        "file",
-        help="File path to analyze"
-    )
-    
-    analyze_parser.add_argument(
-        "--strategy", "-s",
-        action="append",
-        choices=["pattern_matching", "semantic_analysis", "ast_analysis"],
-        help="Analysis strategy to use (can specify multiple)"
-    )
-    
-    analyze_parser.add_argument(
-        "--output", "-o",
-        choices=["text", "json", "html"],
-        help="Output format"
-    )
-    
-    analyze_parser.add_argument(
-        "--save",
-        action="store_true",
-        help="Save results to database"
-    )
-    
-    analyze_parser.add_argument(
-        "--investigation",
-        help="Investigation ID to associate findings with"
-    )
+# Analyze command removed
 
 def register_repository_parser(parser: SkwaqArgumentParser) -> None:
     """Register the repository command parser.
@@ -147,138 +109,7 @@ def register_repository_parser(parser: SkwaqArgumentParser) -> None:
         help="Force deletion without confirmation"
     )
 
-def register_investigation_parser(parser: SkwaqArgumentParser) -> None:
-    """Register the investigation command parser.
-    
-    Args:
-        parser: Main argument parser
-    """
-    investigation_parser = parser.create_command_parser(
-        "investigations",
-        "Manage vulnerability investigations"
-    )
-    
-    investigation_subparsers = investigation_parser.add_subparsers(
-        dest="investigation_command",
-        help="Investigation command"
-    )
-    
-    # List investigations
-    list_parser = investigation_subparsers.add_parser(
-        "list",
-        help="List all investigations"
-    )
-    
-    list_parser.add_argument(
-        "--format", "-f",
-        choices=["table", "json"],
-        default="table",
-        help="Output format"
-    )
-    
-    # Create investigation
-    create_parser = investigation_subparsers.add_parser(
-        "create",
-        help="Create a new investigation"
-    )
-    
-    create_parser.add_argument(
-        "title",
-        help="Investigation title"
-    )
-    
-    create_parser.add_argument(
-        "--repo", "-r",
-        help="Repository ID to associate with the investigation"
-    )
-    
-    create_parser.add_argument(
-        "--description", "-d",
-        help="Investigation description"
-    )
-    
-    # Show investigation details
-    show_parser = investigation_subparsers.add_parser(
-        "show",
-        help="Show investigation details"
-    )
-    
-    show_parser.add_argument(
-        "id",
-        help="Investigation ID"
-    )
-    
-    show_parser.add_argument(
-        "--format", "-f",
-        choices=["text", "json"],
-        default="text",
-        help="Output format"
-    )
-    
-    # Delete investigation
-    delete_parser = investigation_subparsers.add_parser(
-        "delete",
-        help="Delete an investigation"
-    )
-    
-    delete_parser.add_argument(
-        "id",
-        help="Investigation ID to delete"
-    )
-    
-    delete_parser.add_argument(
-        "--force", "-f",
-        action="store_true",
-        help="Force deletion without confirmation"
-    )
-    
-    # Visualize investigation
-    visualize_parser = investigation_subparsers.add_parser(
-        "visualize",
-        help="Generate visualization of an investigation"
-    )
-    
-    visualize_parser.add_argument(
-        "id",
-        help="Investigation ID to visualize"
-    )
-    
-    visualize_parser.add_argument(
-        "--format", "-f",
-        choices=["html", "json", "svg"],
-        default="html",
-        help="Visualization format"
-    )
-    
-    visualize_parser.add_argument(
-        "--output", "-o",
-        help="Output file path (default: investigation-{id}.{format})"
-    )
-    
-    visualize_parser.add_argument(
-        "--include-findings",
-        action="store_true",
-        help="Include finding nodes in visualization"
-    )
-    
-    visualize_parser.add_argument(
-        "--include-vulnerabilities",
-        action="store_true",
-        help="Include vulnerability nodes in visualization"
-    )
-    
-    visualize_parser.add_argument(
-        "--include-files",
-        action="store_true",
-        help="Include file nodes in visualization"
-    )
-    
-    visualize_parser.add_argument(
-        "--max-nodes",
-        type=int,
-        default=100,
-        help="Maximum number of nodes to include in visualization"
-    )
+# Investigation command moved to workflow commands
 
 def register_ingest_parser(parser: SkwaqArgumentParser) -> None:
     """Register the ingest command parser.
@@ -490,6 +321,134 @@ def register_workflow_parsers(parser: SkwaqArgumentParser) -> None:
         "--investigation", "-i",
         help="Investigation ID to associate with the workflow"
     )
+    
+    # Investigations workflow (moved from top-level command)
+    investigation_parser = parser.create_command_parser(
+        "investigations",
+        "Manage vulnerability investigations"
+    )
+    
+    investigation_subparsers = investigation_parser.add_subparsers(
+        dest="investigation_command",
+        help="Investigation command"
+    )
+    
+    # List investigations
+    list_parser = investigation_subparsers.add_parser(
+        "list",
+        help="List all investigations"
+    )
+    
+    list_parser.add_argument(
+        "--format", "-f",
+        choices=["table", "json"],
+        default="table",
+        help="Output format"
+    )
+    
+    # Create investigation
+    create_parser = investigation_subparsers.add_parser(
+        "create",
+        help="Create a new investigation"
+    )
+    
+    create_parser.add_argument(
+        "title",
+        help="Investigation title"
+    )
+    
+    create_parser.add_argument(
+        "--repo", "-r",
+        help="Repository ID to associate with the investigation"
+    )
+    
+    create_parser.add_argument(
+        "--description", "-d",
+        help="Investigation description"
+    )
+    
+    # Show investigation details
+    show_parser = investigation_subparsers.add_parser(
+        "show",
+        help="Show investigation details"
+    )
+    
+    show_parser.add_argument(
+        "id",
+        help="Investigation ID"
+    )
+    
+    show_parser.add_argument(
+        "--format", "-f",
+        choices=["text", "json"],
+        default="text",
+        help="Output format"
+    )
+    
+    # Delete investigation
+    delete_parser = investigation_subparsers.add_parser(
+        "delete",
+        help="Delete an investigation"
+    )
+    
+    delete_parser.add_argument(
+        "id",
+        help="Investigation ID to delete"
+    )
+    
+    delete_parser.add_argument(
+        "--force", "-f",
+        action="store_true",
+        help="Force deletion without confirmation"
+    )
+    
+    # Visualize investigation
+    visualize_parser = investigation_subparsers.add_parser(
+        "visualize",
+        help="Generate visualization of an investigation"
+    )
+    
+    visualize_parser.add_argument(
+        "id",
+        help="Investigation ID to visualize"
+    )
+    
+    visualize_parser.add_argument(
+        "--format", "-f",
+        choices=["html", "json", "svg"],
+        default="html",
+        help="Visualization format"
+    )
+    
+    visualize_parser.add_argument(
+        "--output", "-o",
+        help="Output file path (default: investigation-{id}.{format})"
+    )
+    
+    visualize_parser.add_argument(
+        "--include-findings",
+        action="store_true",
+        help="Include finding nodes in visualization"
+    )
+    
+    visualize_parser.add_argument(
+        "--include-vulnerabilities",
+        action="store_true",
+        help="Include vulnerability nodes in visualization"
+    )
+    
+    visualize_parser.add_argument(
+        "--include-files",
+        action="store_true",
+        help="Include file nodes in visualization"
+    )
+    
+    visualize_parser.add_argument(
+        "--max-nodes",
+        type=int,
+        default=100,
+        help="Maximum number of nodes to include in visualization"
+    )
 
 def register_all_parsers(parser: SkwaqArgumentParser) -> None:
     """Register all command parsers.
@@ -497,9 +456,7 @@ def register_all_parsers(parser: SkwaqArgumentParser) -> None:
     Args:
         parser: Main argument parser
     """
-    register_analyze_parser(parser)
     register_repository_parser(parser)
-    register_investigation_parser(parser)
     register_ingest_parser(parser)
     register_config_parser(parser)
     register_gui_parser(parser)
