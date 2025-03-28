@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
-from ...code_analysis.analyzer import CodeAnalyzer
 from ...shared.finding import Finding
 from ..ui.console import console, success, error, info
 from ..ui.progress import create_status_indicator
@@ -38,18 +37,32 @@ class AnalyzeCommandHandler(CommandHandler):
             error(f"File not found: {file_path}")
             return 1
         
-        # Create analyzer
-        analyzer = CodeAnalyzer()
-        
         # Use status indicator for analysis
         with create_status_indicator("[bold blue]Analyzing file for vulnerabilities...", spinner="dots") as status:
-            # Analyze file using the file path wrapper method
-            result = await analyzer.analyze_file_from_path(
-                file_path=file_path,
-                repository_id=None,  # No repository context for standalone files
-                strategy_names=strategy_names,
+            # For now, create a simplified result with mock findings
+            # This is a placeholder until we have a proper analyzer replacement
+            class AnalysisResult:
+                def __init__(self, findings):
+                    self.findings = findings
+            
+            # Create a mock finding for demonstration
+            mock_finding = Finding(
+                id=str(hash(file_path)),
+                vulnerability_type="SecurityIssue",
+                description="This is a mock finding as the code_analysis module is being refactored.",
+                severity="Info",
+                confidence=0.8,
+                file_path=str(file_path_obj),
+                line_number=1,
+                snippet="# mock code snippet",
+                remediation="No action needed - this is a placeholder."
             )
+            
+            result = AnalysisResult([mock_finding])
             status.update("[bold green]Analysis complete!")
+            
+            # Inform user about the refactoring
+            info("Note: The analysis module is currently being refactored.")
         
         # Display results based on output format
         if output_format == "json":
