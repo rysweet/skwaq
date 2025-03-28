@@ -55,12 +55,14 @@ class RelationshipTypes(str, Enum):
     DEFINES = "DEFINES"
     REFERENCES = "REFERENCES"
     INHERITS_FROM = "INHERITS_FROM"
+    HAS_SUMMARY = "HAS_SUMMARY"  # Relationship between file/function and summary
 
     # Knowledge relationships
     RELATES_TO = "RELATES_TO"
     PART_OF = "PART_OF"
     DESCRIBES = "DESCRIBES"
     EXAMPLE_OF = "EXAMPLE_OF"
+    DOCUMENTS = "DOCUMENTS"  # Relationship between documentation and code
 
     # Analysis relationships
     DETECTED_IN = "DETECTED_IN"
