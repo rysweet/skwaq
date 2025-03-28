@@ -2,6 +2,8 @@
 
 ## Overview
 
+Note: Consider this document apocryphal - it has been used to bootstrap a codebase that we are now iterating on. Consider all the milestones complete, however you may be working on content to reimplement some of the milestones in a more complete way.
+
 This document outlines a comprehensive implementation plan for the Vulnerability Assessment Copilot (codenamed "skwaq"), a multiagent AI system designed to assist vulnerability researchers in analyzing codebases to discover potential security vulnerabilities. The plan breaks down the system into manageable modules, provides implementation steps, and addresses technical requirements for each component.
 
 ### Project Name: Skwaq

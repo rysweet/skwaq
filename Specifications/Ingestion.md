@@ -9,10 +9,10 @@ The purpose of the ingestion module is to take in either a filesystem path to a 
 - **Git Branch**: The branch of the Git repository to ingest. This should be a valid branch name in the repository.
 - **Additional Documentation**: Any additional documentation that is available for the codebase. This should be a path to a folder containing the documentation files or to a URI. The documentation should be in a format that can be parsed into a graph (e.g., Markdown, HTML, etc.). The documentation should be related to the codebase graph.
 - **Optional documentation**: either a filesystem path or a URI to a location containing additional documentation for the codebase. 
--- **LLM Configuration**: a model client from AzureAIChatCompletionClient - should be passed in by the calling code. Do not worry about model client configuration - that will happen in the calling code. 
+-- **LLM Configuration**: a model client from AzureOpenAI class in the openai package - should be passed in by the calling code. Do not worry about model client configuration - that will happen in the calling code. 
 ```
 python
-from autogen_ext.models.azure import AzureAIChatCompletionClient
+from openai import AzureOpenAI
 ```
 
 ## Outcomes
@@ -81,6 +81,12 @@ if __name__ == "__main__":
   - If doc comments are available add a node for the doc comments and relate it to any nodes to which it refers. 
   - if the user supplied additional documentation, parse the documentation into a graph and relate it to the codebase graph. Use the LLM for this if needed. 
 
+## Dependencies
+- **Neo4j**: The ingestion module shall use the neo4j database to store the graph representation of the codebase.  The neo4j connection shall be managed by the skwaq db module. The ingestion module shall use the skwaq db module to connect to the neo4j database and store the graph representation of the codebase.
+- **Blarify**: The ingestion module shall use the blarify parser to generate a syntax tree for the codebase. The blarify parser shall be registered as one of the available syntax tree parsers in the ingestion module.
+- **Azure OpenAI**: The ingestion module shall use the Azure OpenAI model client to generate summaries of the code and the developer intent. The model client shall be passed in by the calling code. The ingestion module shall not be responsible for configuring the model client.
+- skwaq.utils: The ingestion module shall use the skwaq utils module to handle any utility functions that are needed during the ingestion process. This includes functions for logging, error handling, config, db initialization, and telemetry. 
+
 ## Documentation
 
 - The ingestion module shall be documented in the codebase using docstrings and comments.
@@ -110,15 +116,16 @@ if __name__ == "__main__":
 - The ingestion modules shall be able to establish relationships between the nodes in the graph representation of the codebase, the syntax tree, and the additional documentation.
 - The ingestion module shall be able to successfully relate the doc comments to the nodes to which they refer.
 - The ingestion module shall be able to successfully relate the additional documentation to the codebase graph.
-- there is a test for each of the acceptance criteria above.
 - there are docstrings for each of the functions in the ingestion module.
 - there are docstrings for each of the classes in the ingestion module.
 - there is documentation as described in the documentation section above.
 - there shall be a code example in the examples folder of the codebase that demonstrates how to use the ingestion module.
+- all tests shall pass.
 
 ## Testing
 
 - there shall be unit tests for each of the functions in the ingestion module. Unit tests may use mocks for the neo4j database and the LLM.
+- there shall be aspects of the tests to validate each of the acceptance criteria.
 - there shall be integration tests for the ingestion module that test the entire process from start to finish.
   - the integration tests shall use [eShop](https://github.com/dotnet/eShop) as the integration test codebase.
 - the integration tests shall use a not use a mock neo4j database to test the ingestion process.

@@ -1,6 +1,7 @@
-Please continue to implement the software described in the "/Specifications/Vulnerability Assessment Copilot.md" document by following the plan in the "/Specifications/ImplementationPlan.md" document. 
-The plan should be followed step by step, and the code should be implemented in the order specified in the plan.
-Keep the plan status up to date by updating a file called status.md in the root of the repository. You can check this file to find out the most recent status of the plan.
+Please consider the following instructions when implementing the software.
+
+We are working with a large codebase that was mostly developed with AI. The codebase has a number of errors and anti-patterns. Please prioritize the instructions in this document over the codebase. 
+Keep the plan status up to date by updating a file called /Specifications/status.md. You can check this file to find out the most recent status of the plan.
 
 ## Code Design Guidelines
 
@@ -57,7 +58,6 @@ Please follow these guidelines for code design and implementation:
 - Place interfaces in base.py files at the package root
 - Follow the established project structure:
   - skwaq.shared: Common utilities and data models
-  - skwaq.code_analysis: Code analysis functionality
   - skwaq.ingestion: Data ingestion pipelines
   - skwaq.utils: General utility functions
   - skwaq.db: Database access and schema
@@ -67,7 +67,6 @@ Please follow these guidelines for code design and implementation:
 You should also use the following resources to help you implement the software - If you think that a resource may be useful during a phase of the Implementation (eg Autogen Core Documentation when woring with Agents) please ensure that you add that document to the context during that phase. 
 
  - [Vulnerability Assessment Copilot.md](../Specifications/VulnerabilityAssessmentCopilot.md)
- - [ImplementationPlan.md](../Specifications/ImplementationPlan.md)
  - [AutoGen Core Docuementation and Examples](./autogen-doc.md)
  - [AutoGen Core Documentation Online](https://microsoft.github.io/autogen/stable/user-guide/core-user-guide/index.html)
  - [AutoGen API Documentation](https://microsoft.github.io/autogen/stable/api/index.html)
