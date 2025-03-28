@@ -168,14 +168,6 @@ def register_gui_parser(parser: SkwaqArgumentParser) -> None:
     )
 
     gui_parser.add_argument(
-        "--port", "-p", type=int, default=7800, help="Port to run the GUI server on"
-    )
-
-    gui_parser.add_argument(
-        "--host", default="localhost", help="Host to bind the GUI server to"
-    )
-
-    gui_parser.add_argument(
         "--no-browser", action="store_true", help="Don't open browser automatically"
     )
 

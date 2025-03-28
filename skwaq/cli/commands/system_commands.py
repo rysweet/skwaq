@@ -83,61 +83,57 @@ class GuiCommandHandler(CommandHandler):
         Returns:
             Exit code (0 for success, non-zero for errors)
         """
-        port = self.args.port
-        host = self.args.host
         no_browser = self.args.no_browser
 
-        # Check if required packages are installed
-        try:
-            import flask
-        except ImportError:
-            error("Flask is not installed. The GUI requires Flask to run.")
-            info("Install required packages with: pip install flask flask-cors")
+        # Find the run_gui.sh script
+        script_path = Path(__file__).resolve().parents[3] / "scripts" / "dev" / "run_gui.sh"
+        
+        if not script_path.exists():
+            error(f"GUI script not found at {script_path}")
             return 1
 
         # Launch GUI
         with create_status_indicator(
-            f"[bold blue]Starting GUI server on {host}:{port}...", spinner="dots"
+            "[bold blue]Starting GUI frontend...", spinner="dots"
         ) as status:
-            # Import here to avoid circular imports
             try:
-                from ...gui.server import create_app, start_server
-
-                # Create Flask app
-                app = create_app()
-
-                # Start server in a separate thread
-                server_thread = start_server(app, host=host, port=port)
-
-                status.update(f"[bold green]GUI server started on {host}:{port}!")
-
+                # Default React port is 3000
+                port = 3000
+                host = "localhost"
+                
+                status.update("[bold green]Launching GUI frontend...")
+                
+                # Use subprocess to run the shell script
+                # We don't wait for it to complete because npm start runs continuously
+                process = subprocess.Popen(
+                    [str(script_path)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                
+                # Wait a moment for the server to start
+                import time
+                time.sleep(2)
+                
                 # Open browser if requested
                 if not no_browser:
-                    webbrowser.open(f"http://{host}:{port}")
-                    console.print(
-                        f"Opening browser to [link=http://{host}:{port}]http://{host}:{port}[/link]"
-                    )
-
+                    url = f"http://{host}:{port}"
+                    status.update(f"[bold green]Opening browser to {url}")
+                    webbrowser.open(url)
+                
                 # Print instructions
                 console.print()
                 console.print(
-                    f"GUI is running at [link=http://{host}:{port}]http://{host}:{port}[/link]"
+                    f"GUI is starting and will be available at [link=http://{host}:{port}]http://{host}:{port}[/link]"
                 )
-                console.print("Press Ctrl+C to stop the server")
-
-                # Keep the main thread running
-                try:
-                    while True:
-                        import time
-
-                        time.sleep(1)
-                except KeyboardInterrupt:
-                    console.print("\n[yellow]Shutting down GUI server...[/yellow]")
-                    # Cleanup will happen automatically when the process exits
-
+                console.print("The React development server will open a browser window automatically")
+                console.print("Press Ctrl+C in the terminal where the server is running to stop it")
+                
+                # Return immediately so user can continue using CLI
                 return 0
-
+                
             except Exception as e:
-                status.update("[bold red]Failed to start GUI server!")
-                error(f"Failed to start GUI server: {str(e)}")
+                status.update("[bold red]Failed to start GUI!")
+                error(f"Failed to start GUI: {str(e)}")
                 return 1
