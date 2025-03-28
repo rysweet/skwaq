@@ -80,7 +80,9 @@ class Neo4jConnector:
             try:
                 # Verify connectivity
                 with self._driver.session(database=self._database) as session:
-                    result = session.run("RETURN 1 AS test")
+                    result = session.execute_read(
+                        lambda tx: tx.run("RETURN 1 AS test")
+                    )
                     if result.single()["test"] == 1:
                         self._connected = True
                         logger.info(f"Connected to Neo4j database at {self._uri}")
@@ -134,7 +136,9 @@ class Neo4jConnector:
         # Even if connected flag is True, verify with a quick test query
         try:
             with self._driver.session(database=self._database) as session:
-                result = session.run("RETURN 1 AS test")
+                result = session.execute_read(
+                    lambda tx: tx.run("RETURN 1 AS test")
+                )
                 return result.single()["test"] == 1
         except Exception:
             self._connected = False
@@ -151,8 +155,8 @@ class Neo4jConnector:
 
         try:
             with self._driver.session(database=self._database) as session:
-                result = session.run(
-                    "CALL dbms.components() YIELD name, versions, edition RETURN name, versions, edition"
+                result = session.execute_read(
+                    lambda tx: tx.run("CALL dbms.components() YIELD name, versions, edition RETURN name, versions, edition")
                 )
                 record = result.single()
                 if record:
@@ -185,7 +189,12 @@ class Neo4jConnector:
         results = []
         with self._driver.session(database=self._database) as session:
             try:
-                result = session.run(query, parameters or {})
+                result = session.execute_read(
+                    lambda tx: tx.run(query, parameters or {})
+                ) if query.strip().upper().startswith(("MATCH", "RETURN", "CALL", "SHOW")) else session.execute_write(
+                    lambda tx: tx.run(query, parameters or {})
+                )
+                
                 for record in result:
                     results.append(dict(record))
             except Exception as e:

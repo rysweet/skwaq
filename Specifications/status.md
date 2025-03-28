@@ -1,6 +1,21 @@
 # Skwaq Project Status
 
-## Current Milestone: CLI Refactoring - Completed ✅
+## Current Milestone: Ingestion Module Refinement - In Progress 🚧
+
+The Ingestion Module refinement is currently in progress, focusing on improving Neo4j compatibility, relationship validation, and test coverage:
+
+- [x] Fixed Neo4j deprecation warnings
+  - Updated connector to use execute_read and execute_write methods
+  - Replaced direct session.run calls with transaction functions
+  - Ensured compatibility with latest Neo4j driver versions
+
+- [x] Enhanced graph relationship verification
+  - Added test for AST, file, and summary relationship linking
+  - Implemented test for documentation node relationships
+  - Verified traversal paths between different node types
+  - Improved relationship creation procedures
+
+## Previous Milestone: CLI Refactoring - Completed ✅
 
 The CLI Refactoring effort has been fully completed, significantly restructuring the CLI implementation to follow better separation of concerns and improve maintainability:
 

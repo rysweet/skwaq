@@ -206,7 +206,9 @@ def test_neo4j_direct_query():
         with GraphDatabase.driver(uri, auth=(user, password)) as driver:
             with driver.session() as session:
                 # Run a simple test query
-                result = session.run("RETURN 42 as answer")
+                result = session.execute_read(
+                    lambda tx: tx.run("RETURN 42 as answer")
+                )
                 record = result.single()
                 answer = record["answer"]
                 
@@ -221,13 +223,17 @@ def test_neo4j_direct_query():
                 )
                 
                 # Run the query
-                result = session.run(create_query, {"id": test_id})
+                result = session.execute_write(
+                    lambda tx: tx.run(create_query, {"id": test_id})
+                )
                 record = result.single()
                 node_id = record["node_id"]
                 
                 # Verify the node exists
                 verify_query = "MATCH (n:TestNode) WHERE n.id = $id RETURN n.name as name"
-                result = session.run(verify_query, {"id": test_id})
+                result = session.execute_read(
+                    lambda tx: tx.run(verify_query, {"id": test_id})
+                )
                 record = result.single()
                 
                 # Verify the result
@@ -235,11 +241,15 @@ def test_neo4j_direct_query():
                 
                 # Clean up the test node
                 cleanup_query = "MATCH (n:TestNode) WHERE n.id = $id DELETE n"
-                session.run(cleanup_query, {"id": test_id})
+                session.execute_write(
+                    lambda tx: tx.run(cleanup_query, {"id": test_id})
+                )
                 
                 # Verify node is gone
                 verify_query = "MATCH (n:TestNode) WHERE n.id = $id RETURN count(n) as count"
-                result = session.run(verify_query, {"id": test_id})
+                result = session.execute_read(
+                    lambda tx: tx.run(verify_query, {"id": test_id})
+                )
                 record = result.single()
                 assert record["count"] == 0, "Test node should have been deleted"
                 
@@ -325,3 +335,342 @@ async def test_ingestion_git_repo(test_openai_client):
     """
     summary_result = db_connector.run_query(summary_query, {"ingestion_id": ingestion_id})
     assert summary_result and summary_result[0]["summary_count"] > 0, "Expected file summaries in the database"
+
+
+@pytest.mark.integration
+@pytest.mark.neo4j
+@pytest.mark.asyncio
+async def test_graph_relationship_linking():
+    """Test that filesystem nodes, AST nodes, and summaries are properly linked.
+    
+    This test verifies that the three main types of graph entries created during
+    ingestion (filesystem entries, AST entries, and summary entries) are properly
+    linked together with the appropriate relationships.
+    """
+    # Create a test repository with files, AST nodes, and summaries
+    db_connector = get_connector()
+    assert db_connector.is_connected(), "Should be connected to Neo4j database"
+    
+    # Generate a unique test ID
+    test_id = f"test-link-{uuid.uuid4()}"
+    
+    # Create a repository node
+    repo_props = {
+        "name": "Test Linking Repository",
+        "test_id": test_id,
+        "ingestion_id": test_id,
+        "path": "/test/repo-linking",
+        "url": "https://github.com/test/repo-linking",
+        "state": "completed",
+    }
+    
+    repo_id = db_connector.create_node(NodeLabels.REPOSITORY, repo_props)
+    assert repo_id is not None, "Failed to create test repository node"
+    
+    # Create a file node
+    file_props = {
+        "name": "test_file.py",
+        "path": "src/test_file.py",
+        "test_id": test_id,
+        "language": "python",
+        "repository_id": test_id
+    }
+    
+    file_id = db_connector.create_node(NodeLabels.FILE, file_props)
+    assert file_id is not None, "Failed to create test file node"
+    
+    # Link file to repository
+    file_repo_link = db_connector.create_relationship(
+        repo_id, file_id, RelationshipTypes.CONTAINS
+    )
+    assert file_repo_link, "Failed to link file to repository"
+    
+    # Create an AST node (class)
+    class_props = {
+        "name": "TestClass",
+        "file_path": "src/test_file.py",
+        "test_id": test_id,
+        "type": "class"
+    }
+    
+    class_id = db_connector.create_node("Class", class_props)
+    assert class_id is not None, "Failed to create test class node"
+    
+    # Link file to AST node
+    file_ast_link = db_connector.create_relationship(
+        file_id, class_id, RelationshipTypes.DEFINES
+    )
+    assert file_ast_link, "Failed to link file to AST node"
+    
+    # Create a summary node
+    summary_props = {
+        "summary": "This is a test class for testing relationship linking.",
+        "test_id": test_id,
+        "file_name": "test_file.py"
+    }
+    
+    summary_id = db_connector.create_node("CodeSummary", summary_props)
+    assert summary_id is not None, "Failed to create test summary node"
+    
+    # Link file to summary node
+    file_summary_link = db_connector.create_relationship(
+        file_id, summary_id, RelationshipTypes.HAS_SUMMARY
+    )
+    assert file_summary_link, "Failed to link file to summary node"
+    
+    # Link AST to summary (for completeness)
+    ast_summary_link = db_connector.create_relationship(
+        class_id, summary_id, RelationshipTypes.DESCRIBES
+    )
+    assert ast_summary_link, "Failed to link AST to summary node"
+    
+    try:
+        # Now verify that we can follow the relationships properly
+        
+        # First, test that we can navigate from repository to file
+        repo_file_query = """
+        MATCH (r:Repository)-[:CONTAINS]->(f:File)
+        WHERE r.test_id = $test_id
+        RETURN f.name as file_name
+        """
+        
+        result = db_connector.run_query(repo_file_query, {"test_id": test_id})
+        assert result and len(result) == 1, "Expected to find file from repository"
+        assert result[0]["file_name"] == "test_file.py", "File name should match"
+        
+        # Test that we can navigate from file to AST
+        file_ast_query = """
+        MATCH (f:File)-[:DEFINES]->(a:Class)
+        WHERE f.test_id = $test_id
+        RETURN a.name as class_name
+        """
+        
+        result = db_connector.run_query(file_ast_query, {"test_id": test_id})
+        assert result and len(result) == 1, "Expected to find AST from file"
+        assert result[0]["class_name"] == "TestClass", "Class name should match"
+        
+        # Test that we can navigate from file to summary
+        file_summary_query = """
+        MATCH (f:File)-[:HAS_SUMMARY]->(s:CodeSummary)
+        WHERE f.test_id = $test_id
+        RETURN s.summary as summary
+        """
+        
+        result = db_connector.run_query(file_summary_query, {"test_id": test_id})
+        assert result and len(result) == 1, "Expected to find summary from file"
+        assert "test class" in result[0]["summary"], "Summary should contain expected text"
+        
+        # Test that we can navigate from AST to summary
+        ast_summary_query = """
+        MATCH (a:Class)-[:DESCRIBES]->(s:CodeSummary)
+        WHERE a.test_id = $test_id
+        RETURN s.summary as summary
+        """
+        
+        result = db_connector.run_query(ast_summary_query, {"test_id": test_id})
+        assert result and len(result) == 1, "Expected to find summary from AST"
+        assert "test class" in result[0]["summary"], "Summary should contain expected text"
+        
+        # Test the full path from repository to summary
+        repo_to_summary_query = """
+        MATCH (r:Repository)-[:CONTAINS]->(f:File)-[:HAS_SUMMARY]->(s:CodeSummary)
+        WHERE r.test_id = $test_id
+        RETURN s.summary as summary, f.name as file_name
+        """
+        
+        result = db_connector.run_query(repo_to_summary_query, {"test_id": test_id})
+        assert result and len(result) == 1, "Expected to find summary from repository"
+        assert "test class" in result[0]["summary"], "Summary should contain expected text"
+        assert result[0]["file_name"] == "test_file.py", "File name should match"
+        
+        # Test repository to AST path
+        repo_to_ast_query = """
+        MATCH (r:Repository)-[:CONTAINS]->(f:File)-[:DEFINES]->(a:Class)
+        WHERE r.test_id = $test_id
+        RETURN a.name as class_name, f.name as file_name
+        """
+        
+        result = db_connector.run_query(repo_to_ast_query, {"test_id": test_id})
+        assert result and len(result) == 1, "Expected to find AST from repository"
+        assert result[0]["class_name"] == "TestClass", "Class name should match"
+        assert result[0]["file_name"] == "test_file.py", "File name should match"
+        
+        # Test full path from repository to AST to summary
+        full_path_query = """
+        MATCH (r:Repository)-[:CONTAINS]->(f:File)-[:DEFINES]->(a:Class)-[:DESCRIBES]->(s:CodeSummary)
+        WHERE r.test_id = $test_id
+        RETURN s.summary as summary, a.name as class_name, f.name as file_name
+        """
+        
+        result = db_connector.run_query(full_path_query, {"test_id": test_id})
+        assert result and len(result) == 1, "Expected to find full path from repository to summary"
+        assert "test class" in result[0]["summary"], "Summary should contain expected text"
+        assert result[0]["class_name"] == "TestClass", "Class name should match"
+        assert result[0]["file_name"] == "test_file.py", "File name should match"
+        
+    finally:
+        # Clean up test nodes
+        cleanup_query = "MATCH (n) WHERE n.test_id = $test_id DETACH DELETE n"
+        db_connector.run_query(cleanup_query, {"test_id": test_id})
+
+
+@pytest.mark.integration
+@pytest.mark.neo4j
+@pytest.mark.asyncio
+async def test_documentation_integration():
+    """Test that documentation nodes are properly linked to code nodes.
+    
+    This test verifies that documentation nodes are properly created and linked
+    to the corresponding code nodes in the graph database.
+    """
+    # Create a test repository with files, AST nodes, and documentation
+    db_connector = get_connector()
+    assert db_connector.is_connected(), "Should be connected to Neo4j database"
+    
+    # Generate a unique test ID
+    test_id = f"test-doc-{uuid.uuid4()}"
+    
+    # Create a repository node
+    repo_props = {
+        "name": "Test Documentation Repository",
+        "test_id": test_id,
+        "ingestion_id": test_id,
+        "path": "/test/repo-docs",
+        "url": "https://github.com/test/repo-docs",
+        "state": "completed",
+    }
+    
+    repo_id = db_connector.create_node(NodeLabels.REPOSITORY, repo_props)
+    assert repo_id is not None, "Failed to create test repository node"
+    
+    # Create a file node
+    file_props = {
+        "name": "test_api.py",
+        "path": "src/test_api.py",
+        "test_id": test_id,
+        "language": "python",
+        "repository_id": test_id
+    }
+    
+    file_id = db_connector.create_node(NodeLabels.FILE, file_props)
+    assert file_id is not None, "Failed to create test file node"
+    
+    # Link file to repository
+    file_repo_link = db_connector.create_relationship(
+        repo_id, file_id, RelationshipTypes.CONTAINS
+    )
+    assert file_repo_link, "Failed to link file to repository"
+    
+    # Create a function node
+    function_props = {
+        "name": "get_user",
+        "file_path": "src/test_api.py",
+        "test_id": test_id,
+        "signature": "get_user(user_id: int) -> Dict[str, Any]",
+        "type": "function"
+    }
+    
+    function_id = db_connector.create_node(NodeLabels.FUNCTION, function_props)
+    assert function_id is not None, "Failed to create test function node"
+    
+    # Link file to function node
+    file_function_link = db_connector.create_relationship(
+        file_id, function_id, RelationshipTypes.DEFINES
+    )
+    assert file_function_link, "Failed to link file to function node"
+    
+    # Create a documentation node for the file
+    file_doc_props = {
+        "content": "The test_api module provides API functionality for the test system.",
+        "test_id": test_id,
+        "type": "module_docstring"
+    }
+    
+    file_doc_id = db_connector.create_node(NodeLabels.DOCUMENT, file_doc_props)
+    assert file_doc_id is not None, "Failed to create file documentation node"
+    
+    # Link file to its documentation
+    file_doc_link = db_connector.create_relationship(
+        file_id, file_doc_id, RelationshipTypes.DESCRIBES
+    )
+    assert file_doc_link, "Failed to link file to its documentation"
+    
+    # Create a documentation node for the function
+    function_doc_props = {
+        "content": """Get user data by ID.
+        
+        Args:
+            user_id: The ID of the user to retrieve
+            
+        Returns:
+            Dictionary containing user data or None if not found
+        """,
+        "test_id": test_id,
+        "type": "function_docstring"
+    }
+    
+    function_doc_id = db_connector.create_node(NodeLabels.DOCUMENT, function_doc_props)
+    assert function_doc_id is not None, "Failed to create function documentation node"
+    
+    # Link function to its documentation
+    function_doc_link = db_connector.create_relationship(
+        function_id, function_doc_id, RelationshipTypes.DESCRIBES
+    )
+    assert function_doc_link, "Failed to link function to its documentation"
+    
+    try:
+        # Now verify that we can follow the documentation relationships
+        
+        # Test file to documentation link
+        file_doc_query = """
+        MATCH (f:File)-[:DESCRIBES]->(d:Document)
+        WHERE f.test_id = $test_id
+        RETURN d.content as doc, d.type as doc_type
+        """
+        
+        result = db_connector.run_query(file_doc_query, {"test_id": test_id})
+        assert result and len(result) == 1, "Expected to find documentation from file"
+        assert "test_api module" in result[0]["doc"], "Documentation should contain expected text"
+        assert result[0]["doc_type"] == "module_docstring", "Documentation type should match"
+        
+        # Test function to documentation link
+        function_doc_query = """
+        MATCH (f:Function)-[:DESCRIBES]->(d:Document)
+        WHERE f.test_id = $test_id
+        RETURN d.content as doc, d.type as doc_type
+        """
+        
+        result = db_connector.run_query(function_doc_query, {"test_id": test_id})
+        assert result and len(result) == 1, "Expected to find documentation from function"
+        assert "Get user data by ID" in result[0]["doc"], "Documentation should contain expected text"
+        assert result[0]["doc_type"] == "function_docstring", "Documentation type should match"
+        
+        # Test repository to documentation path
+        repo_doc_query = """
+        MATCH (r:Repository)-[:CONTAINS]->(f:File)-[:DESCRIBES]->(d:Document)
+        WHERE r.test_id = $test_id
+        RETURN d.type as doc_type, f.name as file_name
+        """
+        
+        result = db_connector.run_query(repo_doc_query, {"test_id": test_id})
+        assert result and len(result) == 1, "Expected to find documentation from repository"
+        assert result[0]["doc_type"] == "module_docstring", "Documentation type should match"
+        assert result[0]["file_name"] == "test_api.py", "File name should match"
+        
+        # Test complete path from repository to function to documentation
+        full_doc_path_query = """
+        MATCH (r:Repository)-[:CONTAINS]->(f:File)-[:DEFINES]->(func:Function)-[:DESCRIBES]->(d:Document)
+        WHERE r.test_id = $test_id
+        RETURN d.type as doc_type, func.name as function_name, f.name as file_name
+        """
+        
+        result = db_connector.run_query(full_doc_path_query, {"test_id": test_id})
+        assert result and len(result) == 1, "Expected to find full documentation path"
+        assert result[0]["doc_type"] == "function_docstring", "Documentation type should match"
+        assert result[0]["function_name"] == "get_user", "Function name should match"
+        assert result[0]["file_name"] == "test_api.py", "File name should match"
+        
+    finally:
+        # Clean up test nodes
+        cleanup_query = "MATCH (n) WHERE n.test_id = $test_id DETACH DELETE n"
+        db_connector.run_query(cleanup_query, {"test_id": test_id})
