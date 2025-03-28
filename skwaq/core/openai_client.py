@@ -293,28 +293,49 @@ class OpenAIClient:
             # Prepare the arguments
             kwargs = {
                 "messages": messages,
-                "temperature": temperature,
             }
             
-            # Add optional parameters if provided
-            if max_tokens is not None:
-                # Azure OpenAI API uses max_completion_tokens instead of max_tokens
-                if hasattr(self, 'deployment') and self.deployment:
-                    kwargs["max_completion_tokens"] = max_tokens
-                else:
+            # Handle Azure vs regular OpenAI API parameters
+            is_azure = hasattr(self, 'deployment') and self.deployment is not None
+            
+            # For Azure OpenAI, we need to specify the deployment
+            if is_azure:
+                kwargs["model"] = self.deployment
+                
+                # Azure OpenAI API uses different parameter names
+                if max_tokens is not None:
                     kwargs["max_tokens"] = max_tokens
                 
+                # Temperature is supported for Azure OpenAI as well, but with some models
+                # it might use a different name or not be supported
+                # We include it by default but log any errors it might cause
+                kwargs["temperature"] = temperature
+            else:
+                # Regular OpenAI
+                kwargs["model"] = self.model
+                
+                if max_tokens is not None:
+                    kwargs["max_tokens"] = max_tokens
+                
+                kwargs["temperature"] = temperature
+            
+            # Stop sequences work the same for both APIs
             if stop_sequences is not None:
                 kwargs["stop"] = stop_sequences
                 
-            # For Azure OpenAI, we need to specify the deployment
-            if hasattr(self, 'deployment') and self.deployment:
-                kwargs["model"] = self.deployment
-            else:
-                kwargs["model"] = self.model
-                
+            logger.debug(f"Chat completion parameters: {kwargs}")
+            
             # Make the API call
-            response = await self.client.chat.completions.create(**kwargs)
+            try:
+                response = await self.client.chat.completions.create(**kwargs)
+            except Exception as api_error:
+                # If there's an error with temperature in Azure, retry without it
+                if is_azure and "temperature" in str(api_error).lower():
+                    logger.warning(f"Temperature parameter issue detected: {api_error}. Retrying without temperature parameter.")
+                    kwargs.pop("temperature", None)
+                    response = await self.client.chat.completions.create(**kwargs)
+                else:
+                    raise  # Re-raise if it's not a temperature issue or not Azure
             
             if not response or not response.choices:
                 raise ValueError("No completion received from the model")
