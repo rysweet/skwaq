@@ -8,6 +8,7 @@ import VulnerabilityAssessment from './pages/VulnerabilityAssessment';
 import Workflows from './pages/Workflows';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
+import InvestigationVisualization from './pages/InvestigationVisualization';
 import HelpOverlay from './components/HelpOverlay';
 import './styles/App.css';
 
@@ -93,11 +94,12 @@ function App() {
       <Layout darkMode={darkMode} toggleDarkMode={() => setDarkMode(prev => !prev)}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/knowledge" element={<KnowledgeGraph />} />
+          <Route path="/knowledge" element={<KnowledgeGraph darkMode={darkMode} />} />
           <Route path="/code-analysis" element={<CodeAnalysis />} />
           <Route path="/assessment" element={<VulnerabilityAssessment />} />
           <Route path="/workflows" element={<Workflows />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/investigations/:investigationId/visualization" element={<InvestigationVisualization darkMode={darkMode} />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Layout>

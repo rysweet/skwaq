@@ -1,6 +1,7 @@
 """API routes for knowledge graph visualization and interaction."""
 
 from flask import Blueprint, jsonify, request, abort
+from skwaq.db.graph_visualization import GraphVisualizer
 
 bp = Blueprint("knowledge_graph", __name__, url_prefix="/api/knowledge-graph")
 
@@ -170,3 +171,76 @@ def get_node_details(node_id):
     node_details["relatedNodes"] = related_nodes
 
     return jsonify(node_details)
+
+
+@bp.route("/investigation/<investigation_id>", methods=["GET"])
+def get_investigation_graph(investigation_id):
+    """Get the graph data for a specific investigation.
+    
+    This endpoint retrieves the graph visualization data for a specific investigation,
+    including related nodes like findings, vulnerabilities, and files.
+    
+    Args:
+        investigation_id: The ID of the investigation
+        
+    Query Parameters:
+        include_findings: Whether to include Finding nodes (default: true)
+        include_vulnerabilities: Whether to include Vulnerability nodes (default: true)
+        include_files: Whether to include File nodes (default: true)
+        max_nodes: Maximum number of nodes to include (default: 100)
+        
+    Returns:
+        A JSON object with nodes and links arrays for visualization
+    """
+    # Extract query parameters
+    include_findings = request.args.get("include_findings", "true").lower() == "true"
+    include_vulnerabilities = request.args.get("include_vulnerabilities", "true").lower() == "true"
+    include_files = request.args.get("include_files", "true").lower() == "true"
+    max_nodes = int(request.args.get("max_nodes", "100"))
+    
+    # Create graph visualizer and get investigation graph
+    try:
+        graph_visualizer = GraphVisualizer()
+        graph_data = graph_visualizer.get_investigation_graph(
+            investigation_id=investigation_id,
+            include_findings=include_findings,
+            include_vulnerabilities=include_vulnerabilities,
+            include_files=include_files,
+            max_nodes=max_nodes
+        )
+        
+        # Transform the data format to be compatible with 3d-force-graph
+        # GraphVisualizer returns nodes with "id" and "label", but we need "id" and "name"
+        nodes = []
+        for node in graph_data["nodes"]:
+            formatted_node = {
+                "id": node["id"],
+                "name": node.get("label", ""),
+                "type": node.get("type", "unknown"),
+                "group": {
+                    "investigation": 1,
+                    "repository": 2,
+                    "finding": 3,
+                    "vulnerability": 4,
+                    "file": 5,
+                }.get(node.get("type", ""), 6),
+                "properties": node.get("properties", {})
+            }
+            nodes.append(formatted_node)
+        
+        # Links should have source, target and type
+        links = []
+        for link in graph_data["links"]:
+            formatted_link = {
+                "source": link["source"],
+                "target": link["target"],
+                "type": link.get("type", "related")
+            }
+            links.append(formatted_link)
+        
+        return jsonify({"nodes": nodes, "links": links})
+    
+    except Exception as e:
+        # Log the error and return a 500 error
+        print(f"Error retrieving investigation graph: {str(e)}")
+        abort(500, description=f"Error retrieving investigation graph: {str(e)}")

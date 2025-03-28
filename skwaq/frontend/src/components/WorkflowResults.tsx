@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { WorkflowResult } from '../services/workflowService';
 import '../styles/WorkflowResults.css';
 
@@ -18,6 +19,21 @@ const WorkflowResults: React.FC<WorkflowResultsProps> = ({
   onExport
 }) => {
   const [activeStep, setActiveStep] = useState<string | null>(null);
+  const navigate = useNavigate();
+  
+  // Look for investigation ID in the results
+  const getInvestigationId = (): string | null => {
+    for (const result of results) {
+      if (result.data && typeof result.data === 'object') {
+        if ('investigation_id' in result.data) {
+          return result.data.investigation_id as string;
+        }
+      }
+    }
+    return null;
+  };
+  
+  const investigationId = getInvestigationId();
   
   if (!workflowId) {
     return null;
@@ -101,6 +117,14 @@ const WorkflowResults: React.FC<WorkflowResultsProps> = ({
             <button onClick={() => onExport('markdown')} className="export-button markdown">
               Export Markdown
             </button>
+            {investigationId && (
+              <button 
+                onClick={() => navigate(`/investigations/${investigationId}/visualization`)} 
+                className="export-button visualize"
+              >
+                Visualize Graph
+              </button>
+            )}
           </div>
           <button onClick={onClose} className="close-button">
             Close

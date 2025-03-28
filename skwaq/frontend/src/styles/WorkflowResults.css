@@ -65,6 +65,10 @@
   content: "📝";
 }
 
+.export-button.visualize::before {
+  content: "🔍";
+}
+
 .close-button {
   padding: 0.5rem 1rem;
   background-color: var(--error-color-bg);
