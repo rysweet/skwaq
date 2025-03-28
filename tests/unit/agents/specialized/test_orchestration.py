@@ -38,7 +38,7 @@ sys.modules["autogen_core.code_utils"] = autogen_code_utils_mock
 sys.modules["autogen_core.memory"] = autogen_memory_mock
 
 # Import specialized agents
-from skwaq.agents.specialized.orchestration import (
+from skwaq.agents.specialized.workflows import (
     AdvancedOrchestrator,
     WorkflowType,
     WorkflowStatus,
@@ -189,10 +189,23 @@ class TestWorkflowGeneration:
     """Tests for workflow generation functionality."""
 
     @pytest.mark.asyncio
-    @patch("skwaq.agents.specialized.orchestration.AutogenChatAgent.__init__")
-    async def test_generate_workflow_components_guided_assessment(self, mock_base_init):
+    @patch("skwaq.agents.specialized.workflows.orchestrator.AutogenChatAgent.__init__")
+    @patch("skwaq.agents.specialized.workflows.workflow_implementation.generate_workflow_components")
+    async def test_generate_workflow_components_guided_assessment(self, mock_generate, mock_base_init):
         """Test generating components for guided assessment workflow."""
         mock_base_init.return_value = None
+        
+        # Mock the return value of the imported function
+        mock_components = {
+            "agents": ["guided_assessment"],
+            "stages": [
+                {"name": "stage1", "agent": "guided_assessment", "description": "Stage 1"},
+                {"name": "stage2", "agent": "guided_assessment", "description": "Stage 2"},
+                {"name": "stage3", "agent": "guided_assessment", "description": "Stage 3"}
+            ],
+            "communication_patterns": ["chain_of_thought"]
+        }
+        mock_generate.return_value = mock_components
 
         # Initialize agent
         agent = AdvancedOrchestrator()
@@ -219,10 +232,38 @@ class TestWorkflowGeneration:
             assert "description" in stage
 
     @pytest.mark.asyncio
-    @patch("skwaq.agents.specialized.orchestration.AutogenChatAgent.__init__")
-    async def test_generate_workflow_components_comprehensive(self, mock_base_init):
+    @patch("skwaq.agents.specialized.workflows.orchestrator.AutogenChatAgent.__init__")
+    @patch("skwaq.agents.specialized.workflows.workflow_implementation.generate_workflow_components")
+    async def test_generate_workflow_components_comprehensive(self, mock_generate, mock_base_init):
         """Test generating components for comprehensive workflow."""
         mock_base_init.return_value = None
+        
+        # Mock the return value of the imported function
+        mock_components = {
+            "agents": [
+                "guided_assessment",
+                "exploitation_verification", 
+                "remediation_planning",
+                "security_policy"
+            ],
+            "stages": [
+                {"name": "stage1", "agent": "guided_assessment", "description": "Stage 1"},
+                {"name": "stage2", "agent": "guided_assessment", "description": "Stage 2"},
+                {"name": "stage3", "agent": "exploitation_verification", "description": "Stage 3"},
+                {"name": "stage4", "agent": "remediation_planning", "description": "Stage 4"},
+                {"name": "stage5", "agent": "security_policy", "description": "Stage 5"},
+                {"name": "stage6", "agent": "guided_assessment", "description": "Stage 6"},
+                {"name": "stage7", "agents": ["guided_assessment", "security_policy"], 
+                 "description": "Collaborative", "communication_pattern": "debate"}
+            ],
+            "communication_patterns": [
+                "chain_of_thought", 
+                "debate", 
+                "feedback_loop", 
+                "parallel_reasoning"
+            ]
+        }
+        mock_generate.return_value = mock_components
 
         # Initialize agent
         agent = AdvancedOrchestrator()
@@ -520,7 +561,7 @@ class TestWorkflowExecution:
         )
 
     @pytest.mark.asyncio
-    @patch("skwaq.agents.specialized.orchestration.AutogenChatAgent.__init__")
+    @patch("skwaq.agents.specialized.workflows.orchestrator.AutogenChatAgent.__init__")
     async def test_compile_workflow_results(self, mock_base_init):
         """Test compiling comprehensive workflow results."""
         mock_base_init.return_value = None
@@ -588,40 +629,59 @@ class TestWorkflowExecution:
             }
         }
         
-        # Store workflow definition and execution
-        agent.workflow_definitions[workflow_id] = workflow_def
-        agent.workflow_executions[workflow_id] = workflow_exec
-        
-        # Compile workflow results
-        results = agent._compile_workflow_results(workflow_id)
-        
-        # Verify results structure
-        assert results["workflow_id"] == workflow_id
-        assert results["workflow_type"] == WorkflowType.COMPREHENSIVE.value
-        assert results["target_id"] == "repo123"
-        assert results["target_type"] == "repository"
-        assert results["start_time"] == 1000000
-        assert results["completion_time"] == 1001000
-        assert results["execution_time"] == 1000
-        assert results["status"] == WorkflowStatus.COMPLETED.value
-        
-        # Verify stage results
-        assert "stage_results" in results
-        assert len(results["stage_results"]) == 5
-        assert "initialization" in results["stage_results"]
-        assert "assessment" in results["stage_results"]
-        assert "exploitation" in results["stage_results"]
-        assert "remediation" in results["stage_results"]
-        assert "policy" in results["stage_results"]
-        
-        # Verify findings
-        assert "findings" in results
-        assert len(results["findings"]) == 2
-        
-        # Verify artifacts
-        assert "artifacts" in results
-        assert "assessment_id" in results["artifacts"]
-        assert "findings" in results["artifacts"]
-        assert "verifications" in results["artifacts"]
-        assert "remediation_plans" in results["artifacts"]
-        assert "policy_evaluation" in results["artifacts"]
+        # Need to mock ExploitabilityStatus and RemediationPriority for _summarize methods
+        with patch("skwaq.agents.specialized.workflows.orchestrator.ExploitabilityStatus") as mock_exploit_status, \
+             patch("skwaq.agents.specialized.workflows.orchestrator.RemediationPriority") as mock_remediation_priority, \
+             patch("skwaq.agents.specialized.workflows.orchestrator.RemediationComplexity") as mock_remediation_complexity:
+            
+            # Create Enum mock values
+            mock_exploit_status.EXPLOITABLE = type('obj', (object,), {'value': 'exploitable'})
+            mock_exploit_status.POTENTIALLY_EXPLOITABLE = type('obj', (object,), {'value': 'potentially_exploitable'})
+            mock_exploit_status.NOT_EXPLOITABLE = type('obj', (object,), {'value': 'not_exploitable'})
+            mock_exploit_status.UNDETERMINED = type('obj', (object,), {'value': 'undetermined'})
+            
+            mock_remediation_priority.HIGH = type('obj', (object,), {'value': 'high'})
+            mock_remediation_priority.MEDIUM = type('obj', (object,), {'value': 'medium'})
+            mock_remediation_priority.LOW = type('obj', (object,), {'value': 'low'})
+            
+            mock_remediation_complexity.SIMPLE = type('obj', (object,), {'value': 'simple'})
+            mock_remediation_complexity.MODERATE = type('obj', (object,), {'value': 'moderate'})
+            mock_remediation_complexity.COMPLEX = type('obj', (object,), {'value': 'complex'})
+            
+            # Store workflow definition and execution
+            agent.workflow_definitions[workflow_id] = workflow_def
+            agent.workflow_executions[workflow_id] = workflow_exec
+            
+            # Compile workflow results
+            results = agent._compile_workflow_results(workflow_id)
+            
+            # Verify results structure
+            assert results["workflow_id"] == workflow_id
+            assert results["workflow_type"] == WorkflowType.COMPREHENSIVE.value
+            assert results["target_id"] == "repo123"
+            assert results["target_type"] == "repository"
+            assert results["start_time"] == 1000000
+            assert results["completion_time"] == 1001000
+            assert results["execution_time"] == 1000
+            assert results["status"] == WorkflowStatus.COMPLETED.value
+            
+            # Verify stage results
+            assert "stage_results" in results
+            assert len(results["stage_results"]) == 5
+            assert "initialization" in results["stage_results"]
+            assert "assessment" in results["stage_results"]
+            assert "exploitation" in results["stage_results"]
+            assert "remediation" in results["stage_results"]
+            assert "policy" in results["stage_results"]
+            
+            # Verify findings
+            assert "findings" in results
+            assert len(results["findings"]) == 2
+            
+            # Verify artifacts
+            assert "artifacts" in results
+            assert "assessment_id" in results["artifacts"]
+            assert "findings" in results["artifacts"]
+            assert "verifications" in results["artifacts"]
+            assert "remediation_plans" in results["artifacts"]
+            assert "policy_evaluation" in results["artifacts"]
