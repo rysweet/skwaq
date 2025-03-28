@@ -189,7 +189,7 @@ Investigation visualization saved to: investigation-inv-c4e062ca.html
 Graph statistics: 1 nodes, 0 relationships
 ```
 
-The visualization currently shows a simple graph with just the investigation node. While potential sources and sinks were identified, they weren't confirmed by the LLM analyzer due to an integration issue, so they're not reflected in the visualization yet. In a fully working system, the visualization would show:
+The [visualization](./investigation-inv-c4e062ca.html) currently shows a simple graph with just the investigation node. While potential sources and sinks were identified, they weren't confirmed by the LLM analyzer due to an integration issue, so they're not reflected in the visualization yet. In a fully working system, the visualization would show:
 
 1. The investigation node (blue)
 2. Source nodes (green) for functions like `get_user_input`
