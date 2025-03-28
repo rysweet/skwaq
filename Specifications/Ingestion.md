@@ -41,7 +41,8 @@ from openai import AzureOpenAI
   - Create an abstraction for syntax tree parsers
   - register [blarify](https://github.com/blarApp/blarify/blob/main/docs/quickstart.md) as one of the available syntax tree parsers 
   - use blarify to create an AST in the graph database (example only):
-  ```python
+
+ ```python
 from blarify.prebuilt.graph_builder import GraphBuilder
 from blarify.db_managers.neo4j_manager import Neo4jManager
 
@@ -75,9 +76,10 @@ if __name__ == "__main__":
     root_path = os.getenv("ROOT_PATH")
     build(root_path=root_path)
 ```
-
   - map the nodes from the blarify graph into the nodes from the filesystem graph using edges to associate ndoes from the blarify graph with the files that contain the code for the objects in the blarify graph.
-  - For each module and file in the codebase, build a queue containing all the entries, and use the LLM to generate a summary of the module and the developer intent. This should be done in separate parallel threads (number of threads configurable but default to 3) to avoid blocking the ingestion process. The summary should be stored in the graph as a node related to the file node and the AST node for that module. When each summary is stored successfully remove the item from the queue. Add the summary and metadata to the context for subsequent prompts so that the deeper into the code the processing goes the more the LLM has context to understand what the code does. Trim the context as needed to keep it under a configurable number of tokens, 20000 by default.  Keep track of the total time taken for the LLM to generate the summaries and the number of threads used, the total files processed and the number of files remaining in the queue. Update the status message in the database with the progress of the ingestion process. If there are errors during the LLM processing, log them and update the status message in the database, keep track of the number of errors for each item - use a configurable number of retries on error. Run until the queue is empty or the maximum number of retries for each file is reached.  
+  - create an abstraction for code summarizers
+  - register an LLM Code Summarizer as one of the available code summarizers
+  - user the LLM code summarizer to create graph nodes for code summaries - For each module and file in the codebase being ingested, build a queue containing all the entries, and use the LLM to generate a summary of the module and the developer intent. This should be done in separate parallel threads (number of threads configurable but default to 3) to avoid blocking the ingestion process. The summary should be stored in the graph as a node related to the file node and the AST node for that module. When each summary is stored successfully remove the item from the queue. Add the summary and metadata to the context for subsequent prompts so that the deeper into the code the processing goes the more the LLM has context to understand what the code does. Trim the context as needed to keep it under a configurable number of tokens, 20000 by default.  Keep track of the total time taken for the LLM to generate the summaries and the number of threads used, the total files processed and the number of files remaining in the queue. Update the status message in the database with the progress of the ingestion process. If there are errors during the LLM processing, log them and update the status message in the database, keep track of the number of errors for each item - use a configurable number of retries on error. Run until the queue is empty or the maximum number of retries for each file is reached.  
   - If doc comments are available add a node for the doc comments and relate it to any nodes to which it refers. 
   - if the user supplied additional documentation, parse the documentation into a graph and relate it to the codebase graph. Use the LLM for this if needed. 
 
@@ -121,6 +123,18 @@ if __name__ == "__main__":
 - there is documentation as described in the documentation section above.
 - there shall be a code example in the examples folder of the codebase that demonstrates how to use the ingestion module.
 - all tests shall pass.
+
+## Code organization
+
+consider having modules for:
+ - the inestion logic (api, input validation, graph construction, LLM processing, status tracking, error handling, logging)
+ - the abstractions for the syntax tree parsers
+    - the blarify parser
+ - the code summarizer abstraction
+    - the LLM code summarizer
+ - the filesystem graph creation
+ - the documentation graph creation
+ 
 
 ## Testing
 
