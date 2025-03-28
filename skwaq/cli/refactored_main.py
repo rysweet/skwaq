@@ -10,6 +10,7 @@ import asyncio
 import argparse
 from typing import Dict, Optional, Type, List, Any
 
+from .. import __version__
 from .parser.base import create_parser
 from .parser.commands import register_all_parsers
 from .ui.console import console, error, print_banner
@@ -53,6 +54,14 @@ async def main(args: Optional[List[str]] = None) -> int:
     Returns:
         Exit code (0 for success, non-zero for errors)
     """
+    # Get CLI arguments
+    if args is None:
+        args = sys.argv[1:]
+        
+    # Check if help is requested and show banner
+    if not args or "-h" in args or "--help" in args:
+        print_banner(version=__version__)
+        
     # Create and configure the argument parser
     parser = create_parser()
     register_all_parsers(parser)
@@ -65,9 +74,13 @@ async def main(args: Optional[List[str]] = None) -> int:
         version_handler = VersionCommandHandler(parsed_args)
         return await version_handler.handle()
 
-    # Show banner for non-json output
-    if not (hasattr(parsed_args, "output") and parsed_args.output == "json"):
-        print_banner()
+    # Show banner for non-json output and non-help commands
+    show_banner = (not hasattr(parsed_args, "output") or parsed_args.output != "json")
+    
+    # Only show banner for normal commands (not help or version)
+    help_requested = (len(args) > 0 and (args[0] == '-h' or args[0] == '--help' or args[0] == '--version'))
+    if show_banner and not help_requested:
+        print_banner(version=__version__)
 
     # Check if a command was specified
     if not hasattr(parsed_args, "command") or not parsed_args.command:
