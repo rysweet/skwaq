@@ -183,6 +183,28 @@ This file maintains a running history of user prompts and a brief summary of Cla
 
 **Response**:
 - Updated prompt-history.md with recent conversations
-- Investigated LLM summarization process using Neo4j queries
-- Examined sources and sinks identification logic
-- Analyzed why user inputs in AI samples weren't detected as sources/sinks
+- Used Neo4j queries to confirm 30 CodeSummary nodes were generated
+- Found summaries containing user input and SQL query references
+- Identified missing repository-investigation relationship
+- Discovered query issues in sources and sinks workflow
+
+## Prompt 19 (2025-03-28)
+
+**Prompt**: "Proceed with the fixes."
+
+**Response**:
+- Connected investigation to repository with HAS_REPOSITORY relationship
+- Rewrote Cypher queries in CodeSummaryFunnel to be more flexible
+- Made queries work without requiring DEFINED_IN and PART_OF relationships
+- Successfully found 15 potential source nodes and 5 potential sink nodes
+- Identified issues with LLM analyzer and visualization
+
+## Prompt 20 (2025-03-28)
+
+**Prompt**: "Great, can you update everything and then remove any of the temp files you created. don't forget you are supposed to be updating the Specifications/prompt-history.md. Then revisit the cli_demo and recreate it now with the new code."
+
+**Response**:
+- Updated prompt-history.md with complete conversation history
+- Removed temporary debugging files
+- Recreated CLI demo documentation with the improved sources and sinks workflow
+- Updated demo to show successful source and sink identification

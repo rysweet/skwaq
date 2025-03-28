@@ -83,6 +83,75 @@ async def test_get_completion():
         mock_get_completion.assert_called_once_with("Test prompt")
 
 
+@pytest.mark.asyncio
+async def test_chat_completion_formats():
+    """Test chat_completion method handles different response formats correctly."""
+    # Initialize mocked objects for testing different response formats
+    with (
+        patch.object(OpenAIClient, "__init__", return_value=None) as mock_init,
+        patch("autogen_core.ChatCompletionClient") as mock_client_class,
+    ):
+        # Create our client
+        client = OpenAIClient(MagicMock())
+        client.config_list = [{"model": "test-model", "api_key": "test-key"}]
+        
+        # Setup the mock client instance
+        mock_client = AsyncMock()
+        mock_client_class.return_value = mock_client
+        
+        # Test cases with different response formats
+        test_cases = [
+            # Case 1: Dictionary format with content key
+            {
+                "response_format": MagicMock(
+                    choices=[MagicMock(message={"role": "assistant", "content": "Response 1"})]
+                ),
+                "expected": {"role": "assistant", "content": "Response 1"}
+            },
+            # Case 2: Object with content attribute
+            {
+                "response_format": MagicMock(
+                    choices=[MagicMock(message=MagicMock(content="Response 2"))]
+                ),
+                "expected": {"role": "assistant", "content": "Response 2"}
+            },
+            # Case 3: String format
+            {
+                "response_format": MagicMock(
+                    choices=[MagicMock(message="Response 3")]
+                ),
+                "expected": {"role": "assistant", "content": "Response 3"}
+            },
+            # Case 4: Object with __dict__ containing message
+            {
+                "response_format": MagicMock(
+                    choices=[MagicMock(
+                        message=MagicMock(__dict__={"message": "Response 4"})
+                    )]
+                ),
+                "expected": {"content": "Response 4"}
+            }
+        ]
+        
+        # Run all test cases
+        for i, test_case in enumerate(test_cases):
+            # Configure mock to return the specified response format
+            mock_client.generate.return_value = test_case["response_format"]
+            
+            # Call the method
+            result = await client.chat_completion(
+                messages=[{"role": "user", "content": f"Test message {i}"}]
+            )
+            
+            # Verify the result matches expected format
+            assert "content" in result, f"Test case {i} missing 'content' key"
+            assert result["content"] == test_case["expected"]["content"]
+            
+            # If role is specified in expected, check it
+            if "role" in test_case["expected"]:
+                assert result["role"] == test_case["expected"]["role"]
+
+
 def test_azure_api_key_auth():
     """Test initialization with Azure API key authentication."""
     # Create a mock config with Azure settings

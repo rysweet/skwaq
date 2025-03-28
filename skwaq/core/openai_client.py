@@ -256,18 +256,48 @@ class OpenAIClient:
         Returns:
             The response message as a dictionary with role and content
         """
-        chat_client = autogen_core.ChatCompletionClient(
-            config_list=self.config_list, is_async=True
-        )
-        response = await chat_client.generate(
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stop=stop_sequences,
-        )
-        if not response or not response.choices:
-            raise ValueError("No completion received from the model")
-        return response.choices[0].message
+        try:
+            chat_client = autogen_core.ChatCompletionClient(
+                config_list=self.config_list, is_async=True
+            )
+            response = await chat_client.generate(
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stop=stop_sequences,
+            )
+            if not response or not response.choices:
+                raise ValueError("No completion received from the model")
+            
+            # Handle different response formats based on autogen_core version
+            message = response.choices[0].message
+            
+            # If message is already a dict with 'content', return it directly
+            if isinstance(message, dict) and "content" in message:
+                return message
+                
+            # If message is an object with attributes, convert to dict
+            if hasattr(message, "content"):
+                return {"role": "assistant", "content": message.content}
+                
+            # If message is a string, wrap it in a dict
+            if isinstance(message, str):
+                return {"role": "assistant", "content": message}
+                
+            # If it's some other unexpected format, try to convert to dict
+            if hasattr(message, "__dict__"):
+                message_dict = dict(message.__dict__)
+                if "content" not in message_dict and "message" in message_dict:
+                    message_dict["content"] = message_dict["message"]
+                return message_dict
+                
+            # Last resort fallback
+            logger.warning(f"Unexpected message format from autogen_core: {type(message)}")
+            return {"role": "assistant", "content": str(message)}
+            
+        except Exception as e:
+            logger.error(f"Error in chat_completion: {e}")
+            raise
 
 
 # Use a client registry instead of global instances
