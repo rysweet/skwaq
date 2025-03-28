@@ -32,24 +32,12 @@ This verifies:
 2. Check your configuration:
 
 ```bash
-skwaq config --show
+skwaq config show
 ```
 
 ## Your First Vulnerability Assessment
 
-### Option 1: Analyze a Single File
-
-```bash
-# Analyze a single file
-skwaq analyze --file path/to/file.py --interactive
-```
-
-This will:
-- Analyze the file for vulnerabilities
-- Show detailed findings
-- Provide remediation guidance in interactive mode
-
-### Option 2: Analyze a Local Repository
+### Option 1: Interactive Q&A Analysis
 
 ```bash
 # Add a local repository
@@ -58,11 +46,16 @@ skwaq repo add --path /path/to/repo
 # List repositories to get the ID
 skwaq repo list
 
-# Run comprehensive vulnerability research
-skwaq vulnerability-research --repository-id 1
+# Run interactive Q&A to analyze specific files
+skwaq qa --repo 1
 ```
 
-### Option 3: Analyze a GitHub Repository
+This will:
+- Ingest the repository code
+- Allow you to ask questions about specific files
+- Provide detailed analysis through an interactive session
+
+### Option 2: Analyze a GitHub Repository
 
 ```bash
 # Add a GitHub repository
@@ -72,7 +65,7 @@ skwaq repo github --url https://github.com/example/repo
 skwaq repo list
 
 # Run comprehensive vulnerability research
-skwaq vulnerability-research --repository-id 1
+skwaq research --repo 1
 ```
 
 ## Working with Investigations
@@ -83,8 +76,11 @@ After running an analysis, you can manage the resulting investigations:
 # List investigations
 skwaq investigations list
 
-# Export an investigation to markdown
-skwaq investigations export --id inv-12345 --format markdown
+# Show investigation details
+skwaq investigations show --id inv-12345
+
+# Visualize the investigation as HTML
+skwaq investigations visualize --id inv-12345 --format html
 ```
 
 ## Getting Help with Security Concepts
@@ -92,11 +88,8 @@ skwaq investigations export --id inv-12345 --format markdown
 Use the Q&A workflow to learn about security concepts:
 
 ```bash
-# Ask a security question
-skwaq qa ask "What is Cross-Site Scripting (XSS)?"
-
-# Start an interactive conversation
-skwaq qa conversation
+# Start an interactive Q&A session
+skwaq qa
 ```
 
 ## Using External Security Tools
@@ -104,11 +97,8 @@ skwaq qa conversation
 Integrate with external security tools:
 
 ```bash
-# List available tools
-skwaq tool list
-
 # Run a specific tool
-skwaq tool run bandit --path /path/to/repo
+skwaq tool bandit --repo 1
 ```
 
 ## Guided Assessment
@@ -117,7 +107,7 @@ For a step-by-step assessment approach:
 
 ```bash
 # Run guided assessment on a repository
-skwaq guided --repository-id 1
+skwaq inquiry --repo 1
 ```
 
 ## Formatting Options
@@ -126,10 +116,10 @@ Control the output format:
 
 ```bash
 # Get JSON output for integration with other tools
-skwaq analyze --file path/to/file.py --output json > results.json
+skwaq investigations list --format json > investigations.json
 
 # Get detailed text output
-skwaq analyze --file path/to/file.py --output text
+skwaq investigations show --id inv-12345 --format text
 ```
 
 ## Next Steps
@@ -142,7 +132,7 @@ skwaq analyze --file path/to/file.py --output text
 ## Tips for Effective Use
 
 - Use `--include` and `--exclude` patterns to focus on relevant files
-- Try different analysis strategies for varied results
-- Export findings to markdown for readable reports
+- Export visualizations to HTML for interactive exploration
+- Use the research workflow for comprehensive vulnerability assessment
 - Use interactive mode for guidance on fixing vulnerabilities
-- Start with guided workflow if you're new to security assessment
+- Start with guided inquiry if you're new to security assessment

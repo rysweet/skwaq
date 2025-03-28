@@ -19,47 +19,45 @@ This document provides a quick reference of all available commands in the Skwaq 
 | `skwaq repo list` | List ingested repositories | `--interactive`, `-i` |
 | `skwaq repo add` | Add a local repository | `--path` (required), `--name`, `--include`, `--exclude` |
 | `skwaq repo github` | Add a GitHub repository | `--url` (required), `--token`, `--branch`, `--include`, `--exclude` |
+| `skwaq repo delete` | Delete a repository | `--id` (required), `--force` |
 
-## Analysis Commands
-
-| Command | Description | Options |
-|---------|-------------|---------|
-| `skwaq analyze` | Analyze a file for vulnerabilities | `--file` (required), `--strategy`, `--output`, `--interactive`, `-i` |
-| `skwaq ingest` | Ingest a repository or knowledge source | `source` (required), `--type` (repo, cve, kb) |
-| `skwaq query` | Run a query in the knowledge base | `query` (required) |
-
-## Investigation Management
+## Ingest Commands
 
 | Command | Description | Options |
 |---------|-------------|---------|
-| `skwaq investigations list` | List active investigations | |
-| `skwaq investigations export` | Export investigation results | `--id` (required), `--format` (json, markdown, html), `--output` |
-| `skwaq investigations delete` | Delete an investigation | `--id` (required), `--force` |
+| `skwaq ingest` | Ingest a repository or knowledge source | `type` (repo, kb, cve), `source` (required) |
 
 ## Workflow Commands
 
 | Command | Description | Options |
 |---------|-------------|---------|
-| `skwaq qa ask` | Ask a single security question | `question` (required), `--repository-id` |
-| `skwaq qa conversation` | Start interactive Q&A session | `--repository-id` |
-| `skwaq guided` | Run guided vulnerability assessment | `--repository-id` (required) |
-| `skwaq tool list` | List available security tools | |
-| `skwaq tool run` | Run a security tool | `tool` (required), `--path` (required), `--repository-id`, `--args` |
-| `skwaq vulnerability-research` | Run comprehensive vulnerability research | `--repository-id` (required), `--focus`, `--id`, `--no-persistence`, `--output-dir` |
+| `skwaq qa` | Start interactive Q&A session | `--repo`, `--investigation` |
+| `skwaq inquiry` | Run guided inquiry workflow | `--repo`, `--investigation`, `--prompt` |
+| `skwaq tool` | Run external tool workflow | `tool_name` (required), `--repo`, `--args` |
+| `skwaq research` | Run vulnerability research workflow | `--repo` (required), `--cve`, `--investigation` |
+| `skwaq investigations` | Manage vulnerability investigations | See Investigation Management section |
+
+## Investigation Management (part of Workflow Commands)
+
+| Command | Description | Options |
+|---------|-------------|---------|
+| `skwaq investigations list` | List active investigations | `--format` (table, json) |
+| `skwaq investigations create` | Create a new investigation | `title` (required), `--repo`, `--description` |
+| `skwaq investigations show` | Show investigation details | `--id` (required), `--format` (text, json) |
+| `skwaq investigations delete` | Delete an investigation | `--id` (required), `--force` |
+| `skwaq investigations visualize` | Generate visualization | `--id` (required), `--format` (html, json, svg), various include options |
 
 ## Common Options Explained
 
 | Option | Description | Examples |
 |--------|-------------|----------|
-| `--repository-id` | ID of repository to analyze | `--repository-id 1` |
+| `--repo`, `-r` | ID of repository to analyze | `--repo 1` |
+| `--investigation`, `-i` | Investigation ID | `--investigation inv-12345678` |
 | `--include` | Glob patterns to include | `--include "**/*.py" "**/*.js"` |
 | `--exclude` | Glob patterns to exclude | `--exclude "tests/**" "docs/**"` |
-| `--strategy` | Analysis strategies to use | `--strategy pattern_matching semantic_analysis ast_analysis` |
-| `--output` | Output format | `--output json` |
-| `--format` | Export format | `--format markdown` |
-| `--interactive`, `-i` | Enable interactive mode | `-i` |
+| `--output`, `-o` | Output file path | `--output report.html` |
+| `--format`, `-f` | Format for output | `--format json` |
 | `--force` | Bypass confirmation | `--force` |
-| `--focus` | Security focus areas | `--focus "SQL Injection" "XSS"` |
 
 ## Option Value Types
 
@@ -71,7 +69,6 @@ This document provides a quick reference of all available commands in the Skwaq 
 | URL | GitHub repository URL | `https://github.com/username/repo` |
 | Token | GitHub access token | `ghp_1234abcd...` |
 | Format | Output format | `json`, `markdown`, `html` |
-| Strategy | Analysis strategy | `pattern_matching`, `semantic_analysis`, `ast_analysis` |
 | Glob Pattern | File matching pattern | `**/*.py`, `src/**/*.js`, `!tests/**` |
 
 ## Examples
@@ -84,20 +81,20 @@ skwaq init
 skwaq repo github --url https://github.com/example/vulnerable-app
 skwaq repo list
 # Note the repository ID (e.g., 1)
-skwaq vulnerability-research --repository-id 1 --focus "SQL Injection" "XSS"
+skwaq research --repo 1 --cve "CVE-2023-12345"
 
-# Export findings
+# Working with investigations
 skwaq investigations list
 # Note the investigation ID (e.g., inv-12345)
-skwaq investigations export --id inv-12345 --format markdown --output report.md
+skwaq investigations show --id inv-12345
+skwaq investigations visualize --id inv-12345 --format html --output report.html
 
 # Ask security questions
-skwaq qa ask "What is a SQL injection vulnerability?"
-skwaq qa conversation --repository-id 1
+skwaq qa --repo 1
+# Then interact with the Q&A session
 
 # Run external tools
-skwaq tool list
-skwaq tool run bandit --path /path/to/repo
+skwaq tool tool_name --repo 1 --args '{"param": "value"}' 
 
 # Delete an investigation
 skwaq investigations delete --id inv-12345 --force
