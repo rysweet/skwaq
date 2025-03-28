@@ -27,6 +27,15 @@ Before you are finished make sure that you have added unit tests for all new fun
 
 We are going to add a new feature: as a user of the CLI, I want to be able to export a visualization of the Investigation graph in a format that can be easily shared with others, so that I can communicate my findings effectively.
 
+We have enhanced the graph visualization to better highlight source and sink nodes identified by the sources_and_sinks workflow. The enhanced visualization includes:
+1. Special styling for funnel-identified nodes (gold borders, pulsing animation)
+2. Distinct colors for Source, Sink, and DataFlowPath nodes
+3. Filtering controls to show/hide specific node types
+4. Enhanced tooltips with detailed information
+5. Clear indication of potential data flow paths between sources and sinks
+
+This enhancement makes it easier for users to understand the results of security analysis and identify potential vulnerabilities in their codebase.
+
 We want to add a command to the CLI that will start the GUI using the existing scripts. Please updat the help, documentation, tests, and examples to include this new command. 
 
 We want to add a demo mode to the CLI which walks through the CLI commands and demonstrates their using with the eShop Repository (https://github.com/dotnet/eShop). Update the documentation to include the demo mode and provide examples of how to use it. The demo mode should include the following features:

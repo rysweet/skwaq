@@ -758,6 +758,7 @@ class InvestigationCommandHandler(CommandHandler):
                     include_findings=include_findings,
                     include_vulnerabilities=include_vulnerabilities,
                     include_files=include_files,
+                    include_sources_sinks=True,  # Always include sources and sinks for better visualization
                     max_nodes=max_nodes,
                 )
 
