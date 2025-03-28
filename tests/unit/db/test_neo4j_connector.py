@@ -88,6 +88,10 @@ def test_connect_success(mock_neo4j_driver):
         uri="bolt://localhost:7687", user="neo4j", password="password"
     )
 
+    # Mock execute_read to return a valid result
+    mock_session = mock_neo4j_driver["session"]
+    mock_session.execute_read.return_value = [{"test": 1}]
+
     # Set up mock for server info
     with mock.patch.object(connector, "get_server_info") as mock_server_info:
         mock_server_info.return_value = {"version": "5.0.0"}
@@ -101,8 +105,7 @@ def test_connect_success(mock_neo4j_driver):
 
         # Verify driver's session was used
         mock_neo4j_driver["driver"].session.assert_called_once()
-        mock_neo4j_driver["session"].run.assert_called_once_with("RETURN 1 AS test")
-        mock_neo4j_driver["result"].single.assert_called_once()
+        mock_session.execute_read.assert_called_once()
 
 
 def test_connect_failure(mock_neo4j_driver):
@@ -137,6 +140,11 @@ def test_is_connected(mock_neo4j_driver):
     connector._connected = True
     # Reset the session side effect to not raise exceptions
     mock_neo4j_driver["driver"].session.side_effect = None
+    
+    # Mock execute_read to return a valid result
+    mock_session = mock_neo4j_driver["session"]
+    mock_session.execute_read.return_value = [{"test": 1}]
+    
     result = connector.is_connected()
     assert result is True
     
@@ -173,34 +181,25 @@ def test_run_query(mock_neo4j_driver):
     # Set up connection status
     connector._connected = True
 
-    # Mock records for Neo4j result
-    mock_record1 = mock.MagicMock()
-    mock_record1.__iter__.return_value = [("name", "node1"), ("value", 42)]
-    mock_record1.keys.return_value = ["name", "value"]
-    mock_record1.items.return_value = [("name", "node1"), ("value", 42)]
+    # Create test records
+    test_records = [
+        {"name": "node1", "value": 42},
+        {"name": "node2", "value": 43}
+    ]
 
-    mock_record2 = mock.MagicMock()
-    mock_record2.__iter__.return_value = [("name", "node2"), ("value", 43)]
-    mock_record2.keys.return_value = ["name", "value"]
-    mock_record2.items.return_value = [("name", "node2"), ("value", 43)]
+    # Mock session's execute_read/execute_write methods
+    mock_session = mock_neo4j_driver["session"]
+    mock_session.execute_read.return_value = test_records
+    mock_session.execute_write.return_value = test_records
 
-    # Override the dict() function behavior for mock_record objects
-    mock_record1.__getitem__.side_effect = lambda key: "node1" if key == "name" else 42
-    mock_record2.__getitem__.side_effect = lambda key: "node2" if key == "name" else 43
-
-    # Configure the mock to return our mock records
-    mock_neo4j_driver["result"].__iter__.return_value = [mock_record1, mock_record2]
-
-    # Run query
+    # Run a read query
     result = connector.run_query(
         "MATCH (n) WHERE n.name = $name RETURN n.name, n.value", {"name": "test"}
     )
 
-    # Verify query was run
+    # Verify query was run with execute_read for a SELECT query
     mock_neo4j_driver["driver"].session.assert_called_once()
-    mock_neo4j_driver["session"].run.assert_called_once_with(
-        "MATCH (n) WHERE n.name = $name RETURN n.name, n.value", {"name": "test"}
-    )
+    mock_session.execute_read.assert_called_once()
 
     # Verify results
     assert len(result) == 2
@@ -208,6 +207,19 @@ def test_run_query(mock_neo4j_driver):
     assert result[0]["value"] == 42
     assert result[1]["name"] == "node2"
     assert result[1]["value"] == 43
+    
+    # Reset mocks for testing a write query
+    mock_neo4j_driver["driver"].session.reset_mock()
+    mock_session.execute_read.reset_mock()
+    
+    # Run a write query
+    result = connector.run_query(
+        "CREATE (n:Node {name: $name}) RETURN n", {"name": "test"}
+    )
+    
+    # Verify execute_write was used for CREATE query
+    mock_neo4j_driver["driver"].session.assert_called_once()
+    mock_session.execute_write.assert_called_once()
 
 
 def test_create_node(mock_neo4j_driver):

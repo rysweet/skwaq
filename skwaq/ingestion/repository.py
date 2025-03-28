@@ -280,17 +280,30 @@ class RepositoryHandler:
         """Clean up temporary directories created for repository cloning."""
         for temp_dir in self._temp_dirs:
             try:
-                # Call cleanup on the TemporaryDirectory object
-                temp_dir.cleanup()
-                logger.debug(f"Cleaned up temporary directory: {temp_dir.name}")
+                # Handle both TemporaryDirectory objects and string paths
+                if hasattr(temp_dir, 'cleanup'):
+                    # It's a TemporaryDirectory object
+                    temp_dir.cleanup()
+                    logger.debug(f"Cleaned up temporary directory: {temp_dir.name}")
+                else:
+                    # It's a string path
+                    import shutil
+                    shutil.rmtree(temp_dir)
+                    logger.debug(f"Cleaned up temporary directory: {temp_dir}")
             except Exception as e:
-                logger.error(f"Failed to clean up temporary directory {temp_dir.name}: {str(e)}")
+                # Safely get the directory name for logging
+                dir_name = temp_dir.name if hasattr(temp_dir, 'name') else temp_dir
+                logger.error(f"Failed to clean up temporary directory {dir_name}: {str(e)}")
         
         self._temp_dirs = []
 
     def __del__(self):
         """Clean up resources when the object is garbage collected."""
-        self.cleanup()
+        try:
+            self.cleanup()
+        except Exception:
+            # Silent cleanup in destructor - we can't rely on logger in __del__
+            pass
 
 
 class RepositoryManager:

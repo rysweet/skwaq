@@ -2,7 +2,7 @@
 
 import os
 import pytest
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch, mock_open, PropertyMock
 import tempfile
 import git
 
@@ -46,8 +46,8 @@ def test_clone_repository(branch, monkeypatch):
         # Check result path
         assert path == expected_path
         
-        # Check that temp directory was recorded
-        assert temp_dir in handler._temp_dirs
+        # Check that temp directory was recorded (the mock object, not the path)
+        assert mock_temp_dir_instance in handler._temp_dirs
         
         # Check git.Repo.clone_from was called with correct parameters
         expected_kwargs = {
@@ -97,69 +97,73 @@ def test_clone_repository_other_error(monkeypatch):
     """Test handling other errors during repository cloning."""
     handler = RepositoryHandler()
     
-    # Use a real temporary directory
-    with tempfile.TemporaryDirectory() as temp_dir:
-        # Mock TemporaryDirectory to return a controlled instance
-        mock_temp_dir_class = MagicMock()
-        mock_temp_dir_instance = MagicMock()
-        mock_temp_dir_instance.name = temp_dir
-        mock_temp_dir_class.return_value = mock_temp_dir_instance
-        monkeypatch.setattr('tempfile.TemporaryDirectory', mock_temp_dir_class)
-        
-        # Make git.Repo.clone_from raise a generic exception
-        generic_error = Exception("Random error")
-        mock_clone_from = MagicMock(side_effect=generic_error)
-        monkeypatch.setattr(git.Repo, 'clone_from', mock_clone_from)
-        
-        # Test that RepositoryError is raised
-        with pytest.raises(RepositoryError) as excinfo:
-            handler.clone_repository("https://github.com/user/repo.git")
-        
-        # Check error message and properties
-        assert "Failed to clone repository" in str(excinfo.value)
-        assert excinfo.value.repo_url == "https://github.com/user/repo.git"
-        assert excinfo.value.branch is None
-        assert "error_type" in excinfo.value.details
-        assert excinfo.value.details["error_type"] == "Exception"
+    # Mock TemporaryDirectory to return a controlled instance
+    mock_temp_dir_class = MagicMock()
+    mock_temp_dir_instance = MagicMock()
+    mock_temp_dir_instance.name = "/mock/temp/dir"
+    mock_temp_dir_class.return_value = mock_temp_dir_instance
+    monkeypatch.setattr('tempfile.TemporaryDirectory', mock_temp_dir_class)
+    
+    # Make git.Repo.clone_from raise a generic exception
+    generic_error = Exception("Random error")
+    mock_clone_from = MagicMock(side_effect=generic_error)
+    monkeypatch.setattr(git.Repo, 'clone_from', mock_clone_from)
+    
+    # Test that RepositoryError is raised
+    with pytest.raises(RepositoryError) as excinfo:
+        handler.clone_repository("https://github.com/user/repo.git")
+    
+    # Check error message and properties
+    assert "Failed to clone repository" in str(excinfo.value)
+    assert excinfo.value.repo_url == "https://github.com/user/repo.git"
+    assert excinfo.value.branch is None
+    assert "error_type" in excinfo.value.details
+    assert excinfo.value.details["error_type"] == "Exception"
 
 
 def test_get_repository_metadata_with_git(monkeypatch):
     """Test extracting metadata from a Git repository."""
     handler = RepositoryHandler()
     
-    # Create a mock repository
-    mock_repo = MagicMock()
+    # Create a mock repository with all required properties
+    mock_repo = MagicMock(spec=git.Repo)
     
     # Configure active branch
     mock_branch = MagicMock()
-    mock_branch.name = "main"
-    mock_repo.active_branch = mock_branch
+    type(mock_branch).name = PropertyMock(return_value="main")
+    type(mock_repo).active_branch = PropertyMock(return_value=mock_branch)
     
     # Configure head commit
     mock_commit = MagicMock()
-    mock_commit.hexsha = "abc123"
-    mock_author = MagicMock()
-    mock_author.name = "Test User"
-    mock_author.email = "test@example.com"
-    mock_commit.author = mock_author
-    mock_commit.committed_date = 1646834400  # 2022-03-09 12:00:00 UTC
-    mock_commit.message = "Test commit message"
+    type(mock_commit).hexsha = PropertyMock(return_value="abc123")
     
+    # Configure author
+    mock_author = MagicMock()
+    type(mock_author).name = PropertyMock(return_value="Test User")
+    type(mock_author).email = PropertyMock(return_value="test@example.com")
+    type(mock_commit).author = PropertyMock(return_value=mock_author)
+    
+    # Other commit properties
+    type(mock_commit).committed_date = PropertyMock(return_value=1646834400)  # 2022-03-09 12:00:00 UTC
+    type(mock_commit).message = PropertyMock(return_value="Test commit message")
+    
+    # Configure head
     mock_head = MagicMock()
-    mock_head.commit = mock_commit
+    type(mock_head).commit = PropertyMock(return_value=mock_commit)
     mock_head.is_valid.return_value = True
-    mock_repo.head = mock_head
+    type(mock_repo).head = PropertyMock(return_value=mock_head)
     
     # Configure remotes
     mock_origin = MagicMock()
-    mock_origin.url = "https://github.com/user/repo.git"
+    type(mock_origin).url = PropertyMock(return_value="https://github.com/user/repo.git")
+    mock_remotes_dict = {'origin': mock_origin}
     mock_remotes = MagicMock()
-    mock_remotes.origin = mock_origin
-    mock_repo.remotes = mock_remotes
+    mock_remotes.__getitem__.side_effect = mock_remotes_dict.__getitem__
+    mock_remotes.__contains__.side_effect = mock_remotes_dict.__contains__
+    type(mock_repo).remotes = PropertyMock(return_value=mock_remotes)
     
     # Mock git.Repo to return our prepared mock
-    mock_repo_constructor = MagicMock(return_value=mock_repo)
-    monkeypatch.setattr(git, 'Repo', mock_repo_constructor)
+    monkeypatch.setattr(git, 'Repo', lambda path: mock_repo)
     
     # Test getting metadata
     metadata = handler.get_repository_metadata("/path/to/repo")
@@ -192,42 +196,40 @@ def test_get_repository_metadata_no_git():
         assert "branch" not in metadata
 
 
-def test_get_repository_metadata_detached_head():
+def test_get_repository_metadata_detached_head(monkeypatch):
     """Test extracting metadata from a Git repository with a detached HEAD."""
     handler = RepositoryHandler()
     
-    with patch("git.Repo") as mock_repo_cls:
-        # Create a mock repository
-        mock_repo = MagicMock()
-        mock_repo_cls.return_value = mock_repo
-        
-        # Configure active branch to raise TypeError (detached HEAD)
-        # This is tricky - we need to patch the property to raise an exception
-        mock_active_branch = MagicMock()
-        # Define a property that raises TypeError when accessed
-        
-        def name_property_raiser(self):
+    # Create a mock repository with all required properties
+    mock_repo = MagicMock(spec=git.Repo)
+    
+    # Configure active branch to raise TypeError (detached HEAD)
+    # Set up accessor to raise TypeError when active_branch is accessed
+    def getattr_with_TypeError(obj, name):
+        if name == 'active_branch':
             raise TypeError("detached HEAD")
-        
-        # Apply the property to the mock
-        type(mock_active_branch).__getattribute__ = MagicMock(side_effect=lambda x: 
-                                                               name_property_raiser(None) if x == 'name' else MagicMock())
-        
-        mock_repo.active_branch = mock_active_branch
-        
-        # Configure head commit
-        mock_commit = MagicMock()
-        mock_commit.hexsha = "abc123"
-        mock_head = MagicMock()
-        mock_head.commit = mock_commit
-        mock_head.is_valid.return_value = True
-        mock_repo.head = mock_head
-        
-        # Test getting metadata
-        metadata = handler.get_repository_metadata("/path/to/repo")
-        
-        # Check the branch is reported as detached
-        assert metadata["branch"] == "HEAD detached"
+        return MagicMock()
+    
+    mock_repo.__getattribute__ = MagicMock(side_effect=getattr_with_TypeError)
+    
+    # Configure head commit
+    mock_commit = MagicMock()
+    type(mock_commit).hexsha = PropertyMock(return_value="abc123")
+    
+    # Configure head
+    mock_head = MagicMock()
+    type(mock_head).commit = PropertyMock(return_value=mock_commit)
+    mock_head.is_valid.return_value = True
+    type(mock_repo).head = PropertyMock(return_value=mock_head)
+    
+    # Mock git.Repo to return our prepared mock
+    monkeypatch.setattr(git, 'Repo', lambda path: mock_repo)
+    
+    # Test getting metadata
+    metadata = handler.get_repository_metadata("/path/to/repo")
+    
+    # Check the branch is reported as detached
+    assert metadata["branch"] == "HEAD detached"
 
 
 def test_cleanup():

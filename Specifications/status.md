@@ -15,10 +15,22 @@ The Codebase Cleanup and Bug Fixes milestone is focused on addressing various te
   - Updated imports in integration module  
   - Added appropriate logging for removed functionality
 
-- [ ] Fix remaining test failures
-  - Neo4j connector tests failing due to authentication issues
-  - Repository tests failing due to mocking issues
-  - Documentation processing test failures
+- [x] Fixed Neo4j connector tests
+  - Updated tests to work with execute_read and execute_write methods
+  - Modified test_connect_success to use mock_session.execute_read
+  - Updated test_run_query to handle query detection logic
+  - Fixed test assertions for run_query parameters
+
+- [x] Fixed repository.py tests
+  - Improved repository test_cleanup to handle different temp directory types
+  - Fixed test_repository_manager to correctly access positional arguments
+  - Updated mocking approach for Git repository objects
+  - Added proper PropertyMock implementation for Git objects
+
+- [ ] Fix remaining integration tests
+  - 5 remaining repository tests failing due to Git mocking issues
+  - Need to improve approach for mocking Git repositories
+  - Documentation processing test failures to be addressed
 
 ## Previous Milestone: Ingestion Module Refinement - Completed ✅
 
