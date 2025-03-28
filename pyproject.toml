@@ -173,7 +173,7 @@ convention = "google"
 add_ignore = ["D100", "D104"]
 
 [tool.poetry.scripts]
-skwaq = "skwaq.cli.main:main"
+skwaq = "skwaq.cli.main:run"
 
 [tool.poe.tasks]
 test = "pytest"
