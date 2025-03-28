@@ -28,6 +28,7 @@ from skwaq.agents.autogen_compat import (
     memory,
     GroupChat,
     __version__,
+    ChatCompletionClient,
 )
 
 
@@ -42,6 +43,9 @@ class AutogenProxy(types.ModuleType):
 
         # Add our GroupChat class
         self.GroupChat = GroupChat
+        
+        # Add ChatCompletionClient class
+        self.ChatCompletionClient = ChatCompletionClient
 
         # Add our submodules
         self.agent = agent
