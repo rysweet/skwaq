@@ -228,7 +228,7 @@ def test_create_node(mock_neo4j_driver):
 
         # Verify query was constructed correctly
         mock_run_query.assert_called_once_with(
-            "CREATE (n:Person:Employee $properties) RETURN id(n) AS node_id",
+            "CREATE (n:Person:Employee $properties) RETURN elementId(n) AS node_id",
             {"properties": {"name": "John", "age": 30}},
         )
 
