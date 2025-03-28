@@ -76,32 +76,41 @@ class ApiService {
    * Make a GET request to the API
    */
   public async get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    const response = await this.api.get<{ data: T }>(url, config);
-    return response.data as T;
+    const response = await this.api.get<T>(url, config);
+    // The API can return either directly serialized data or a { data: T } wrapper
+    return (response.data && response.data.hasOwnProperty('data')) 
+      ? (response.data as any).data 
+      : response.data;
   }
   
   /**
    * Make a POST request to the API
    */
   public async post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    const response = await this.api.post<{ data: T }>(url, data, config);
-    return response.data as T;
+    const response = await this.api.post<T>(url, data, config);
+    return (response.data && response.data.hasOwnProperty('data')) 
+      ? (response.data as any).data 
+      : response.data;
   }
   
   /**
    * Make a PUT request to the API
    */
   public async put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    const response = await this.api.put<{ data: T }>(url, data, config);
-    return response.data as T;
+    const response = await this.api.put<T>(url, data, config);
+    return (response.data && response.data.hasOwnProperty('data')) 
+      ? (response.data as any).data 
+      : response.data;
   }
   
   /**
    * Make a DELETE request to the API
    */
   public async delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    const response = await this.api.delete<{ data: T }>(url, config);
-    return response.data as T;
+    const response = await this.api.delete<T>(url, config);
+    return (response.data && response.data.hasOwnProperty('data')) 
+      ? (response.data as any).data 
+      : response.data;
   }
 }
 

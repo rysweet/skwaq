@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GraphData, GraphNode, GraphLink } from '../hooks/useKnowledgeGraph';
 import { createForceGraph } from '../utils/forceGraphUtils';
+import * as THREE from 'three';
 import '../styles/KnowledgeGraphVisualization.css';
 
 interface InvestigationGraphVisualizationProps {
@@ -38,6 +39,13 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
     chargeStrength: -60
   });
   
+  // Add filter states for node types
+  const [showSources, setShowSources] = useState<boolean>(true);
+  const [showSinks, setShowSinks] = useState<boolean>(true);
+  const [showDataFlowPaths, setShowDataFlowPaths] = useState<boolean>(true);
+  const [showMethods, setShowMethods] = useState<boolean>(true);
+  const [highlightFunnel, setHighlightFunnel] = useState<boolean>(true);
+  
   // Track data loading state separately from prop 
   const [isDataLoading, setIsDataLoading] = useState<boolean>(false);
   
@@ -48,8 +56,8 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
     setIsDataLoading(true);
     setError(null);
     
-    // Fetch graph data from the investigation endpoint
-    fetch(`/api/knowledge-graph/investigation/${investigationId}`)
+    // Fetch graph data from the investigation endpoint with sources and sinks
+    fetch(`/api/knowledge-graph/investigation/${investigationId}?include_sources_sinks=true`)
       .then(async response => {
         if (!response.ok) {
           // Try to get detailed error message from response
@@ -105,6 +113,41 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
   };
   
   // Function to initialize the 3D force graph
+  // Function to filter nodes based on filter settings
+  const getFilteredGraphData = useCallback(() => {
+    // Start with all nodes
+    let filteredNodes = [...graphData.nodes];
+    
+    // Apply filters
+    if (!showSources) {
+      filteredNodes = filteredNodes.filter(node => node.type !== 'source');
+    }
+    
+    if (!showSinks) {
+      filteredNodes = filteredNodes.filter(node => node.type !== 'sink');
+    }
+    
+    if (!showDataFlowPaths) {
+      filteredNodes = filteredNodes.filter(node => node.type !== 'dataFlowPath');
+    }
+    
+    if (!showMethods) {
+      filteredNodes = filteredNodes.filter(node => node.type !== 'method');
+    }
+    
+    // Get IDs of remaining nodes
+    const nodeIds = new Set(filteredNodes.map(node => node.id));
+    
+    // Filter links where both source and target exist in filtered nodes
+    const filteredLinks = graphData.links.filter(link => {
+      const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+      const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+      return nodeIds.has(sourceId) && nodeIds.has(targetId);
+    });
+    
+    return { nodes: filteredNodes, links: filteredLinks };
+  }, [graphData, showSources, showSinks, showDataFlowPaths, showMethods]);
+  
   useEffect(() => {
     if (!graphContainerRef.current || isLoading || isDataLoading) return;
     
@@ -119,9 +162,12 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
         return;
       }
       
+      // Get filtered data based on current filter settings
+      const filteredData = getFilteredGraphData();
+      
       // Node sizing based on connections
       const nodeDegrees: Record<string, number> = {};
-      graphData.links.forEach(link => {
+      filteredData.links.forEach((link: GraphLink) => {
         const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
         const targetId = typeof link.target === 'object' ? link.target.id : link.target;
         
@@ -132,22 +178,41 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
       // Initialize new graph
       // Create the ForceGraph3D instance
       const graph = createForceGraph(graphContainerRef.current as HTMLElement)
-        .graphData(graphData)
+        .graphData(filteredData)
         .backgroundColor(darkMode ? '#1a1a1a' : '#ffffff')
         .nodeLabel((node: GraphNode) => `${node.name} (${node.type})`)
         .nodeColor((node: GraphNode) => {
           // Color nodes based on type
           switch (node.type) {
-            case 'investigation': return 'rgba(52, 152, 219, 0.8)';  // blue
-            case 'repository': return 'rgba(46, 204, 113, 0.8)';     // green
-            case 'finding': return 'rgba(231, 76, 60, 0.8)';         // red
-            case 'vulnerability': return 'rgba(155, 89, 182, 0.8)';  // purple
-            case 'file': return 'rgba(243, 156, 18, 0.8)';           // orange
-            case 'function': return 'rgba(26, 188, 156, 0.8)';       // turquoise
-            case 'source': return 'rgba(241, 196, 15, 0.8)';         // yellow
-            case 'sink': return 'rgba(211, 84, 0, 0.8)';             // dark orange
+            case 'investigation': return 'rgba(75, 118, 232, 0.8)';  // #4b76e8
+            case 'repository': return 'rgba(102, 16, 242, 0.8)';     // #6610f2
+            case 'finding': return 'rgba(249, 65, 68, 0.8)';         // #f94144
+            case 'vulnerability': return 'rgba(155, 89, 182, 0.8)';  // #9b59b6
+            case 'file': return 'rgba(32, 201, 151, 0.8)';           // #20c997
+            case 'source': return 'rgba(2, 204, 250, 0.8)';          // #02ccfa
+            case 'sink': return 'rgba(250, 118, 2, 0.8)';            // #fa7602
+            case 'dataFlowPath': return 'rgba(250, 2, 144, 0.8)';    // #fa0290
+            case 'method': return 'rgba(147, 112, 219, 0.8)';        // #9370db
             default: return 'rgba(158, 158, 158, 0.8)';              // gray
           }
+        })
+        // Special effect for funnel-identified nodes
+        .nodeThreeObject((node: GraphNode) => {
+          if (highlightFunnel && node.is_funnel_identified) {
+            // Create a glowing effect for funnel-identified nodes
+            const sprite = new THREE.Sprite(
+              new THREE.SpriteMaterial({
+                map: new THREE.TextureLoader().load('/glow.png'),
+                color: 0xFFD700, // Gold color
+                transparent: true,
+                blending: THREE.AdditiveBlending
+              })
+            );
+            sprite.scale.set(12, 12, 1);
+            return sprite;
+          }
+          // Use default rendering for non-funnel nodes
+          return false;
         })
         .nodeRelSize(6)
         .nodeVal((node: GraphNode) => {
@@ -249,7 +314,8 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
         graph._destructor();
       };
     });
-  }, [graphData, onNodeSelected, isLoading, isDataLoading, darkMode, physicsSettings]);
+  }, [graphData, onNodeSelected, isLoading, isDataLoading, darkMode, physicsSettings, 
+     showSources, showSinks, showDataFlowPaths, showMethods, highlightFunnel, getFilteredGraphData]);
   
   return (
     <div className="knowledge-graph-visualization" ref={graphContainerRef}>
@@ -352,6 +418,84 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
               />
             </div>
             
+            <h3>Filter Nodes</h3>
+            <div className="control-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={highlightFunnel}
+                  onChange={(e) => {
+                    setHighlightFunnel(e.target.checked);
+                    if (graphInstanceRef.current) {
+                      // Force redraw of nodes when changing highlight setting
+                      graphInstanceRef.current.refresh();
+                    }
+                  }}
+                />
+                Highlight Funnel Identified Nodes
+              </label>
+            </div>
+            <div className="control-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={showSources}
+                  onChange={(e) => {
+                    setShowSources(e.target.checked);
+                    if (graphInstanceRef.current) {
+                      graphInstanceRef.current.refresh();
+                    }
+                  }}
+                />
+                Show Sources
+              </label>
+            </div>
+            <div className="control-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={showSinks}
+                  onChange={(e) => {
+                    setShowSinks(e.target.checked);
+                    if (graphInstanceRef.current) {
+                      graphInstanceRef.current.refresh();
+                    }
+                  }}
+                />
+                Show Sinks
+              </label>
+            </div>
+            <div className="control-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={showDataFlowPaths}
+                  onChange={(e) => {
+                    setShowDataFlowPaths(e.target.checked);
+                    if (graphInstanceRef.current) {
+                      graphInstanceRef.current.refresh();
+                    }
+                  }}
+                />
+                Show Data Flow Paths
+              </label>
+            </div>
+            <div className="control-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={showMethods}
+                  onChange={(e) => {
+                    setShowMethods(e.target.checked);
+                    if (graphInstanceRef.current) {
+                      graphInstanceRef.current.refresh();
+                    }
+                  }}
+                />
+                Show Methods
+              </label>
+            </div>
+            
             <h3>Legend</h3>
             <div className="graph-legend">
               <div className="legend-item">
@@ -375,10 +519,6 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
                 <span className="legend-label">File</span>
               </div>
               <div className="legend-item">
-                <span className="legend-color function"></span>
-                <span className="legend-label">Function</span>
-              </div>
-              <div className="legend-item">
                 <span className="legend-color source"></span>
                 <span className="legend-label">Source</span>
               </div>
@@ -386,6 +526,21 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
                 <span className="legend-color sink"></span>
                 <span className="legend-label">Sink</span>
               </div>
+              <div className="legend-item">
+                <span className="legend-color dataFlowPath"></span>
+                <span className="legend-label">Data Flow Path</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-color method"></span>
+                <span className="legend-label">Method</span>
+              </div>
+              
+              {highlightFunnel && (
+                <div className="funnel-section">
+                  <h4>Funnel Identified Nodes</h4>
+                  <p className="legend-hint">Funnel identified nodes have a gold glow</p>
+                </div>
+              )}
             </div>
             
             <h3>Interaction Help</h3>

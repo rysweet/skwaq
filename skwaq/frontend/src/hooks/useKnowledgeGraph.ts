@@ -14,6 +14,7 @@ export interface GraphNode {
   type: string;
   group: number;
   properties?: Record<string, any>;
+  is_funnel_identified?: boolean;
   // Force Graph specific fields
   x?: number;
   y?: number;
@@ -21,6 +22,7 @@ export interface GraphNode {
   fx?: number | null;
   fy?: number | null;
   fz?: number | null;
+  color?: string;
   // Add the position fields to avoid type issues
   __force?: any;
 }

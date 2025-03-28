@@ -202,6 +202,7 @@ def get_investigation_graph(investigation_id):
     include_findings = request.args.get("include_findings", "true").lower() == "true"
     include_vulnerabilities = request.args.get("include_vulnerabilities", "true").lower() == "true"
     include_files = request.args.get("include_files", "true").lower() == "true"
+    include_sources_sinks = request.args.get("include_sources_sinks", "true").lower() == "true"
     max_nodes = int(request.args.get("max_nodes", "100"))
     
     # Create graph visualizer and get investigation graph
@@ -212,6 +213,7 @@ def get_investigation_graph(investigation_id):
             include_findings=include_findings,
             include_vulnerabilities=include_vulnerabilities,
             include_files=include_files,
+            include_sources_sinks=include_sources_sinks,
             max_nodes=max_nodes
         )
         
@@ -223,17 +225,27 @@ def get_investigation_graph(investigation_id):
         # GraphVisualizer returns nodes with "id" and "label", but we need "id" and "name"
         nodes = []
         for node in graph_data["nodes"]:
+            # Determine the group number based on the node type
+            group_number = {
+                "investigation": 1,
+                "repository": 2,
+                "finding": 3,
+                "vulnerability": 4,
+                "file": 5,
+                "source": 6,
+                "sink": 7,
+                "dataFlowPath": 8,
+                "method": 9,
+                "class": 10,
+            }.get(node.get("type", ""), 11)
+            
+            # Create formatted node with all required attributes
             formatted_node = {
                 "id": node["id"],
                 "name": node.get("label", ""),
                 "type": node.get("type", "unknown"),
-                "group": {
-                    "investigation": 1,
-                    "repository": 2,
-                    "finding": 3,
-                    "vulnerability": 4,
-                    "file": 5,
-                }.get(node.get("type", ""), 6),
+                "group": group_number,
+                "is_funnel_identified": node.get("is_funnel_identified", False),
                 "properties": node.get("properties", {})
             }
             nodes.append(formatted_node)
