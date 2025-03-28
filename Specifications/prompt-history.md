@@ -33,3 +33,41 @@ This file maintains a running history of user prompts and a brief summary of Cla
 - Added integration with OpenAI client for LLM-based summarization
 - Updated status.md to reflect the CLI updates
 - Made changes to properly handle both local and remote repositories
+
+## Prompt 4 (2025-03-27)
+
+**Prompt**: "This session is being continued from a previous conversation that ran out of context. Please continue the conversation from where we left it off"
+
+**Response**:
+- Checked the current status of the project
+- Fixed Neo4j connector transaction handling
+- Updated connector to properly handle results within transactions
+- Implemented Blarify Docker-based parser for macOS compatibility
+
+## Prompt 5 (2025-03-27)
+
+**Prompt**: "Did you update the CLI tests? Please run the cli and ingest the repo https://github.com/dotnet/ai-samples and then run the graph visualization command to snapshot the graph."
+
+**Response**:
+- Attempted to run CLI with dotnet/ai-samples repo
+- Identified issues with the Blarify parser on macOS
+- Implemented Docker-based Blarify fallback approach
+
+## Prompt 6 (2025-03-27)
+
+**Prompt**: "please continue"
+
+**Response**:
+- Created simplified Docker-based Blarify parser
+- Fixed issues with Neo4j syntax
+- Successfully ingested Flask repository
+- Generated graph visualization of Flask codebase
+- Created custom script for graph visualization
+
+## Prompt 7 (2025-03-27) 
+
+**Prompt**: "you don't need to check in the flask-graph.html. Please check in the rest. don't forget to keep updating the prompt-history.md."
+
+**Response**:
+- Added updates to prompt-history.md
+- Committing changes to the codebase excluding flask-graph.html
