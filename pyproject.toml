@@ -144,7 +144,11 @@ asyncio_default_fixture_loop_scope = "function"
 asyncio_default_test_loop_scope = "function"
 markers = [
     "isolated: tests that need to run in isolation and are not part of the main test suite",
-    "asyncio: mark test functions as asyncio tests"
+    "asyncio: mark test functions as asyncio tests",
+    "integration: integration tests that connect to external systems",
+    "neo4j: tests that require a Neo4j database connection",
+    "github: tests that require a GitHub connection",
+    "openai: tests that require an OpenAI API connection"
 ]
 
 [tool.coverage.run]

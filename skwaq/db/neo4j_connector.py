@@ -212,7 +212,7 @@ class Neo4jConnector:
 
         # Construct the Cypher query
         label_str = ":".join(labels)
-        query = f"CREATE (n:{label_str} $properties) RETURN id(n) AS node_id"
+        query = f"CREATE (n:{label_str} $properties) RETURN elementId(n) AS node_id"
 
         try:
             result = self.run_query(query, {"properties": properties})
@@ -254,7 +254,7 @@ class Neo4jConnector:
         else:
             params = {}
 
-        query += " RETURN id(n) AS node_id"
+        query += " RETURN elementId(n) AS node_id"
 
         try:
             result = self.run_query(query, params)
@@ -289,9 +289,9 @@ class Neo4jConnector:
 
         query = (
             "MATCH (a), (b) "
-            "WHERE id(a) = $start_id AND id(b) = $end_id "
+            "WHERE elementId(a) = $start_id AND elementId(b) = $end_id "
             f"CREATE (a)-[r:{rel_type} $properties]->(b) "
-            "RETURN id(r) AS rel_id"
+            "RETURN elementId(r) AS rel_id"
         )
 
         params = {
@@ -321,7 +321,7 @@ class Neo4jConnector:
         Returns:
             Node data if found, None otherwise
         """
-        query = "MATCH (n) WHERE id(n) = $node_id " "RETURN n, labels(n) AS labels"
+        query = "MATCH (n) WHERE elementId(n) = $node_id " "RETURN n, labels(n) AS labels"
 
         result = self.run_query(query, {"node_id": node_id})
         if result:

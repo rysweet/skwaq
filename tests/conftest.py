@@ -90,22 +90,43 @@ def reset_registries_and_modules(monkeypatch):
     # Import the modules that have registries
     neo4j_connector_module = importlib.import_module("skwaq.db.neo4j_connector")
     openai_client_module = importlib.import_module("skwaq.core.openai_client")
-    patterns_registry_module = importlib.import_module("skwaq.code_analysis.patterns.registry")
+    
+    # Try to import the code_analysis module (which might not exist in all test scenarios)
+    try:
+        patterns_registry_module = importlib.import_module("skwaq.code_analysis.patterns.registry")
+    except ModuleNotFoundError:
+        patterns_registry_module = None
     
     # Import all critical modules that need to be reset between tests
     # These modules often contain singleton patterns or global state
     modules_to_reset = [
-        "skwaq.ingestion.code_ingestion",
-        "skwaq.code_analysis.analyzer",
+        "skwaq.ingestion.ingestion",
+        "skwaq.ingestion.repository",
+        "skwaq.ingestion.filesystem",
+        "skwaq.ingestion.documentation",
+        "skwaq.ingestion.ast_mapper",
         "skwaq.db.neo4j_connector",
         "skwaq.core.openai_client",
         "skwaq.utils.config",
-        "skwaq.utils.logging",
+        "skwaq.utils.logging"
+    ]
+    
+    # Add code_analysis modules if they exist (they might not in all test configurations)
+    code_analysis_modules = [
+        "skwaq.code_analysis.analyzer",
         "skwaq.code_analysis.summarization.architecture_reconstruction",
         "skwaq.code_analysis.summarization.code_summarizer",
         "skwaq.code_analysis.summarization.cross_referencer",
         "skwaq.code_analysis.summarization.intent_inference"
     ]
+    
+    # Only include modules that actually exist
+    for module_path in code_analysis_modules:
+        try:
+            importlib.import_module(module_path)
+            modules_to_reset.append(module_path)
+        except ImportError:
+            pass
     
     module_cache = {}
     
@@ -117,8 +138,10 @@ def reset_registries_and_modules(monkeypatch):
         except (ImportError, ModuleNotFoundError):
             module_cache[module_path] = None
             
-    # Create a reference to code_ingestion_module for backward compatibility
-    code_ingestion_module = module_cache.get("skwaq.ingestion.code_ingestion")
+    # Get references to important modules
+    ingestion_module = module_cache.get("skwaq.ingestion.ingestion")
+    # Legacy module reference for backward compatibility with existing tests
+    code_ingestion_module = None
     
     # Reset critical modules state
     # We'll patch the modules directly rather than trying to replace them,
@@ -253,7 +276,7 @@ def reset_registries_and_modules(monkeypatch):
     openai_client_module.reset_client_registry()
     
     # Reset any global state in other modules
-    if hasattr(patterns_registry_module, "reset_registry"):
+    if patterns_registry_module is not None and hasattr(patterns_registry_module, "reset_registry"):
         patterns_registry_module.reset_registry()
     
     # Create mock objects for global usage
@@ -331,7 +354,7 @@ def reset_registries_and_modules(monkeypatch):
         openai_client_module.reset_client_registry()
         
         # Reset other global state as needed
-        if hasattr(patterns_registry_module, "reset_registry"):
+        if patterns_registry_module is not None and hasattr(patterns_registry_module, "reset_registry"):
             patterns_registry_module.reset_registry()
             
         # Reset all singleton instances and global state in our modules

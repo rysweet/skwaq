@@ -53,7 +53,7 @@ class GraphVisualizer:
         # Start with the Investigation node
         query = """
         MATCH (i:Investigation {id: $investigation_id})
-        RETURN id(i) as id, i.workflow_id as workflow_id, i.repository_id as repository_id,
+        RETURN elementId(i) as id, i.workflow_id as workflow_id, i.repository_id as repository_id,
                i.created_at as created_at, i.updated_at as updated_at
         """
         
@@ -88,7 +88,7 @@ class GraphVisualizer:
         if repository_id:
             repo_query = """
             MATCH (r:Repository {id: $repository_id})
-            RETURN id(r) as id, r.name as name, r.url as url, r.description as description
+            RETURN elementId(r) as id, r.name as name, r.url as url, r.description as description
             """
             
             repo_result = self.connector.run_query(repo_query, {"repository_id": repository_id})
@@ -117,7 +117,7 @@ class GraphVisualizer:
         if include_findings:
             findings_query = """
             MATCH (i:Investigation {id: $investigation_id})-[r:HAS_FINDING]->(f:Finding)
-            RETURN id(f) as id, f.vulnerability_type as type, f.severity as severity, 
+            RETURN elementId(f) as id, f.vulnerability_type as type, f.severity as severity, 
                   f.confidence as confidence, f.description as description,
                   f.remediation as remediation, f.file_path as file_path
             LIMIT $max_nodes
@@ -154,8 +154,8 @@ class GraphVisualizer:
                 if include_vulnerabilities:
                     vuln_query = """
                     MATCH (f:Finding)-[r:IDENTIFIES]->(v:Vulnerability)
-                    WHERE id(f) = $finding_id
-                    RETURN id(v) as id, v.type as type, v.severity as severity, 
+                    WHERE elementId(f) = $finding_id
+                    RETURN elementId(v) as id, v.type as type, v.severity as severity, 
                           v.cwe_id as cwe_id, v.description as description
                     """
                     
@@ -187,7 +187,7 @@ class GraphVisualizer:
                     file_query = """
                     MATCH (f:File)
                     WHERE f.path = $file_path
-                    RETURN id(f) as id, f.path as path, f.name as name, f.language as language
+                    RETURN elementId(f) as id, f.path as path, f.name as name, f.language as language
                     """
                     
                     file_result = self.connector.run_query(file_query, {"file_path": finding.get("file_path")})
