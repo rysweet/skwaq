@@ -71,3 +71,32 @@ This file maintains a running history of user prompts and a brief summary of Cla
 **Response**:
 - Added updates to prompt-history.md
 - Committing changes to the codebase excluding flask-graph.html
+
+## Prompt 8 (2025-03-28)
+
+**Prompt**: "The CLI banner prints 'Skwaq' However the 'q' looks like a 'g'. Please fix this. Please also make sure that 's' is lowercase. To really make me happy, see if you can make an ascii art depiction of a raven as part of the banner."
+
+**Response**:
+- Updated the CLI banner to display "skwaq" with proper lowercase "s"
+- Fixed the "q" character to properly display with its tail pointing to the right
+- Added ASCII art of a raven to the banner
+- Updated the styling of the banner for better appearance
+
+## Prompt 9 (2025-03-28)
+
+**Prompt**: "This session is being continued from a previous conversation that ran out of context. Please continue the conversation from where we left it off"
+
+**Response**:
+- Fixed SyntaxWarnings in console.py and blarify_parser.py
+- Fixed references to deleted code_analysis module in system_integration.py and e2e_testing.py
+- Updated Neo4j connector tests to work with the new transaction-based API
+- Improved repository tests for temp directory handling and Git operations
+
+## Prompt 10 (2025-03-28)
+
+**Prompt**: "I think we can rely upon the underlying repo and that we can remove these tests. what we care about is that the methods in the ingestion.py are tested successfully. I also notice that you are not updating the prompt-history.md as instructed. Please update it. Then remove these tests. Then Let's proceed to an overview of the CLI functionality."
+
+**Response**:
+- Updated prompt-history.md with recent conversation history
+- Will remove the failing Git repository-related tests
+- Will provide an overview of CLI functionality
