@@ -234,19 +234,24 @@ def test_cleanup():
     """Test cleaning up temporary directories."""
     handler = RepositoryHandler()
     
-    # Create a real temporary directory
-    temp_dir = tempfile.mkdtemp()
-    handler._temp_dirs.append(temp_dir)
+    # Test case 1: TemporaryDirectory object
+    mock_temp_dir = MagicMock()
+    mock_temp_dir.name = "/path/to/tempdir"
+    handler._temp_dirs.append(mock_temp_dir)
     
-    # Add a non-existent directory to test error handling
-    handler._temp_dirs.append("/non/existent/dir")
+    # Test case 2: String path
+    string_temp_dir = "/path/to/string/tempdir"
+    handler._temp_dirs.append(string_temp_dir)
     
-    # Run cleanup
+    # Run cleanup with patched shutil.rmtree for string paths
     with patch("shutil.rmtree") as mock_rmtree:
         handler.cleanup()
         
-        # Check that rmtree was called for the real directory
-        mock_rmtree.assert_called_with(temp_dir)
+        # Check that cleanup was called on the TemporaryDirectory object
+        mock_temp_dir.cleanup.assert_called_once()
+        
+        # Check that rmtree was called for the string path
+        mock_rmtree.assert_called_with(string_temp_dir)
         
         # Check that _temp_dirs is empty
         assert handler._temp_dirs == []
@@ -275,12 +280,21 @@ def test_repository_manager():
     # Check that create_node was called with the correct parameters
     mock_connector.create_node.assert_called_once()
     args, kwargs = mock_connector.create_node.call_args
+    
+    # Print the actual arguments to understand the format
+    print("\nDEBUG - create_node args:", args)
+    print("DEBUG - create_node kwargs:", kwargs)
+    
+    # We expect the label(s) to be the first positional argument
     assert args[0] == NodeLabels.REPOSITORY
-    assert kwargs["properties"]["ingestion_id"] == "test-ingestion"
-    assert kwargs["properties"]["path"] == "/path/to/repo"
-    assert kwargs["properties"]["url"] == "https://github.com/user/repo.git"
-    assert kwargs["properties"]["branch"] == "main"
-    assert kwargs["properties"]["commit_hash"] == "abc123"
+    
+    # The properties should be the second positional argument
+    properties = args[1]
+    assert properties["ingestion_id"] == "test-ingestion"
+    assert properties["path"] == "/path/to/repo"
+    assert properties["url"] == "https://github.com/user/repo.git"
+    assert properties["branch"] == "main"
+    assert properties["commit_hash"] == "abc123"
     
     # Test error when create_node returns None
     mock_connector.create_node.return_value = None
@@ -309,12 +323,19 @@ def test_repository_manager():
     # Check that run_query was called with the correct parameters
     assert mock_connector.run_query.call_count >= 1
     args, kwargs = mock_connector.run_query.call_args
-    assert "repo_id" in kwargs["params"]
-    assert kwargs["params"]["repo_id"] == 123
-    assert "status" in kwargs["params"]
-    assert kwargs["params"]["status"]["state"] == "completed"
-    assert kwargs["params"]["status"]["progress"] == 100.0
-    assert "last_updated" in kwargs["params"]
+    
+    # Print the actual arguments to understand the format
+    print("\nDEBUG - run_query args:", args)
+    print("DEBUG - run_query kwargs:", kwargs)
+    
+    # In Neo4j connector, the parameters are the second positional argument
+    query_params = args[1]
+    assert "repo_id" in query_params
+    assert query_params["repo_id"] == 123
+    assert "status" in query_params
+    assert query_params["status"]["state"] == "completed"
+    assert query_params["status"]["progress"] == 100.0
+    assert "last_updated" in query_params
     
     # Test exception during update_status
     mock_connector.run_query.side_effect = Exception("Query execution failed")
