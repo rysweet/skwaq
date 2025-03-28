@@ -112,79 +112,75 @@ class IngestCommandHandler(CommandHandler):
                 max_parallel=getattr(self.args, "threads", 3),
             )
 
-        # Start ingestion and track progress
-        with create_status_indicator(
-            "[bold blue]Starting ingestion...", spinner="dots"
-        ) as status:
-            try:
-                # Start the ingestion process
-                ingestion_id = await ingestion.ingest()
-                status.update(f"[bold blue]Ingestion started with ID: {ingestion_id}")
+        # Start ingestion process
+        try:
+            # Show starting message
+            info("[bold blue]Starting ingestion...")
 
-                # Create progress tracking
-                with create_progress_bar(
-                    description="Ingesting files", unit="files"
-                ) as progress:
-                    task = progress.add_task("Ingesting", total=100)
+            # Start the ingestion process
+            ingestion_id = await ingestion.ingest()
+            info(f"[bold blue]Ingestion started with ID: {ingestion_id}")
 
-                    # Poll for status updates
-                    completed = False
-                    while not completed:
-                        # Get current status
-                        status_obj = await ingestion.get_status(ingestion_id)
+            # Create a single progress bar for tracking
+            with create_progress_bar(
+                description="Ingesting files", unit="files"
+            ) as progress:
+                task = progress.add_task("Ingesting", total=100)
 
-                        # Update progress bar
-                        if status_obj.total_files > 0:
+                # Poll for status updates
+                completed = False
+                while not completed:
+                    # Get current status
+                    status_obj = await ingestion.get_status(ingestion_id)
+
+                    # Update progress bar
+                    if status_obj.total_files > 0:
+                        progress.update(
+                            task,
+                            completed=status_obj.files_processed,
+                            total=status_obj.total_files,
+                            description=f"[cyan]{status_obj.message}",
+                        )
+                    else:
+                        progress.update(
+                            task,
+                            completed=status_obj.progress,
+                            total=100,
+                            description=f"[cyan]{status_obj.message}",
+                        )
+
+                    # Check if completed or failed
+                    if status_obj.state in ["completed", "failed"]:
+                        completed = True
+                        if status_obj.state == "completed":
                             progress.update(
                                 task,
-                                completed=status_obj.files_processed,
-                                total=status_obj.total_files,
-                                description=f"[cyan]{status_obj.message}",
-                            )
-                        else:
-                            progress.update(
-                                task,
-                                completed=status_obj.progress,
+                                completed=100,
                                 total=100,
-                                description=f"[cyan]{status_obj.message}",
+                                description="[green]Completed",
                             )
-
-                        # Check if completed or failed
-                        if status_obj.state in ["completed", "failed"]:
-                            completed = True
-                            if status_obj.state == "completed":
-                                progress.update(
-                                    task,
-                                    completed=100,
-                                    total=100,
-                                    description="[green]Completed",
-                                )
-                            else:
-                                progress.update(
-                                    task, description=f"[red]Failed: {status_obj.error}"
-                                )
                         else:
-                            # Wait before polling again
-                            await asyncio.sleep(1)
+                            progress.update(
+                                task, description=f"[red]Failed: {status_obj.error}"
+                            )
+                    else:
+                        # Wait before polling again
+                        await asyncio.sleep(1)
 
-                # Get final status
-                final_status = await ingestion.get_status(ingestion_id)
+            # Get final status
+            final_status = await ingestion.get_status(ingestion_id)
 
-                # Show results
-                if final_status.state == "completed":
-                    status.update(
-                        "[bold green]Repository ingestion completed successfully!"
-                    )
-                    success(f"Repository ingestion completed (ID: {ingestion_id})")
-                    info(f"Files processed: {final_status.files_processed}")
-                    info(f"Time elapsed: {final_status.time_elapsed:.2f} seconds")
-                    return 0
-                else:
-                    status.update("[bold red]Repository ingestion failed!")
-                    error(f"Ingestion failed: {final_status.error}")
-                    return 1
-
-            except Exception as e:
-                status.update(f"[bold red]Repository ingestion failed: {str(e)}")
-                error(f"Failed to ingest repository: {str(e)}")
+            # Show results
+            if final_status.state == "completed":
+                info("[bold green]Repository ingestion completed successfully!")
+                success(f"Repository ingestion completed (ID: {ingestion_id})")
+                info(f"Files processed: {final_status.files_processed}")
+                info(f"Time elapsed: {final_status.time_elapsed:.2f} seconds")
+                return 0
+            else:
+                error(f"Ingestion failed: {final_status.error}")
                 return 1
+
+        except Exception as e:
+            error(f"Failed to ingest repository: {str(e)}")
+            return 1

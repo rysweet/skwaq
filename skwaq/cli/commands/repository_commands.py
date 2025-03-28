@@ -54,44 +54,41 @@ class RepositoryCommandHandler(CommandHandler):
         output_format = getattr(self.args, "format", "table")
 
         # Query Neo4j for repositories
-        with create_status_indicator(
-            "[bold blue]Fetching repository list...", spinner="dots"
-        ) as status:
-            # Get database connector
-            db = get_connector()
+        info("[bold blue]Fetching repository list...")
+        
+        # Get database connector
+        db = get_connector()
 
-            # Query repositories
-            query = f"""
-            MATCH (r:{NodeLabels.REPOSITORY})
-            RETURN r.name as name, 
-                   r.url as url,
-                   r.ingestion_id as id,
-                   r.state as state,
-                   r.files_processed as file_count,
-                   r.start_time as created,
-                   r.end_time as completed
-            """
+        # Query repositories
+        query = """
+        MATCH (r:Repository)
+        RETURN r.name as name, 
+               r.url as url,
+               r.ingestion_id as id,
+               r.state as state,
+               r.files_processed as file_count,
+               r.start_time as created,
+               r.end_time as completed
+        """
 
-            # Execute the query
-            results = db.run_query(query)
+        # Execute the query
+        results = db.run_query(query)
 
-            # Format repositories
-            repos = []
-            for repo in results:
-                # Convert to standard format
-                repos.append(
-                    {
-                        "name": repo.get("name", "Unknown"),
-                        "url": repo.get("url", ""),
-                        "id": repo.get("id", ""),
-                        "status": repo.get("state", "Unknown"),
-                        "file_count": repo.get("file_count", 0),
-                        "created": repo.get("created"),
-                        "completed": repo.get("completed"),
-                    }
-                )
-
-            status.update("[bold green]Repositories retrieved!")
+        # Format repositories
+        repos = []
+        for repo in results:
+            # Convert to standard format
+            repos.append(
+                {
+                    "name": repo.get("name", "Unknown"),
+                    "url": repo.get("url", ""),
+                    "id": repo.get("id", ""),
+                    "status": repo.get("state", "Unknown"),
+                    "file_count": repo.get("file_count", 0),
+                    "created": repo.get("created"),
+                    "completed": repo.get("completed"),
+                }
+            )
 
         if not repos:
             info("No repositories found.")
@@ -140,82 +137,78 @@ class RepositoryCommandHandler(CommandHandler):
             max_parallel=getattr(self.args, "threads", 3),
         )
 
-        # Start ingestion and track progress
-        with create_status_indicator(
-            f"[bold blue]Preparing repository: {Path(path).name}...", spinner="dots"
-        ) as status:
-            try:
-                # Start the ingestion process
-                ingestion_id = await ingestion.ingest()
-                status.update(f"[bold blue]Ingestion started with ID: {ingestion_id}")
+        # Start ingestion process
+        try:
+            # Show starting message
+            info(f"[bold blue]Preparing repository: {Path(path).name}...")
 
-                # Create progress tracking
-                with create_progress_bar(
-                    description=f"Ingesting {Path(path).name}", unit="files"
-                ) as progress:
-                    task = progress.add_task("Ingesting", total=100)
+            # Start the ingestion process
+            ingestion_id = await ingestion.ingest()
+            info(f"[bold blue]Ingestion started with ID: {ingestion_id}")
 
-                    # Poll for status updates
-                    completed = False
-                    while not completed:
-                        # Get current status
-                        status_obj = await ingestion.get_status(ingestion_id)
+            # Create progress tracking
+            with create_progress_bar(
+                description=f"Ingesting {Path(path).name}", unit="files"
+            ) as progress:
+                task = progress.add_task("Ingesting", total=100)
 
-                        # Update progress bar
-                        if status_obj.total_files > 0:
+                # Poll for status updates
+                completed = False
+                while not completed:
+                    # Get current status
+                    status_obj = await ingestion.get_status(ingestion_id)
+
+                    # Update progress bar
+                    if status_obj.total_files > 0:
+                        progress.update(
+                            task,
+                            completed=status_obj.files_processed,
+                            total=status_obj.total_files,
+                            description=f"[cyan]{status_obj.message}",
+                        )
+                    else:
+                        progress.update(
+                            task,
+                            completed=status_obj.progress,
+                            total=100,
+                            description=f"[cyan]{status_obj.message}",
+                        )
+
+                    # Check if completed or failed
+                    if status_obj.state in ["completed", "failed"]:
+                        completed = True
+                        if status_obj.state == "completed":
                             progress.update(
                                 task,
-                                completed=status_obj.files_processed,
-                                total=status_obj.total_files,
-                                description=f"[cyan]{status_obj.message}",
-                            )
-                        else:
-                            progress.update(
-                                task,
-                                completed=status_obj.progress,
+                                completed=100,
                                 total=100,
-                                description=f"[cyan]{status_obj.message}",
+                                description="[green]Completed",
                             )
-
-                        # Check if completed or failed
-                        if status_obj.state in ["completed", "failed"]:
-                            completed = True
-                            if status_obj.state == "completed":
-                                progress.update(
-                                    task,
-                                    completed=100,
-                                    total=100,
-                                    description="[green]Completed",
-                                )
-                            else:
-                                progress.update(
-                                    task, description=f"[red]Failed: {status_obj.error}"
-                                )
                         else:
-                            # Wait before polling again
-                            await asyncio.sleep(1)
+                            progress.update(
+                                task, description=f"[red]Failed: {status_obj.error}"
+                            )
+                    else:
+                        # Wait before polling again
+                        await asyncio.sleep(1)
 
-                # Get final status
-                final_status = await ingestion.get_status(ingestion_id)
+            # Get final status
+            final_status = await ingestion.get_status(ingestion_id)
 
-                # Show results
-                if final_status.state == "completed":
-                    status.update(
-                        "[bold green]Repository ingestion completed successfully!"
-                    )
-                    success(f"Repository ingestion completed (ID: {ingestion_id})")
-                    info(f"Files processed: {final_status.files_processed}")
-                    info(f"Time elapsed: {final_status.time_elapsed:.2f} seconds")
-                    return 0
-                else:
-                    status.update("[bold red]Repository ingestion failed!")
-                    error(f"Ingestion failed: {final_status.error}")
-                    return 1
-
-            except Exception as e:
-                status.update(f"[bold red]Repository ingestion failed: {str(e)}")
-                error(f"Failed to ingest repository: {str(e)}")
+            # Show results
+            if final_status.state == "completed":
+                info("[bold green]Repository ingestion completed successfully!")
+                success(f"Repository ingestion completed (ID: {ingestion_id})")
+                info(f"Files processed: {final_status.files_processed}")
+                info(f"Time elapsed: {final_status.time_elapsed:.2f} seconds")
+                return 0
+            else:
+                error(f"Ingestion failed: {final_status.error}")
                 return 1
+
+        except Exception as e:
+            error(f"Failed to ingest repository: {str(e)}")
+            return 1
 
     async def _handle_github(self) -> int:
         """Handle the github command.
@@ -250,82 +243,78 @@ class RepositoryCommandHandler(CommandHandler):
             max_parallel=getattr(self.args, "threads", 3),
         )
 
-        # Start ingestion and track progress
-        with create_status_indicator(
-            f"[bold blue]Cloning repository: {url}...", spinner="dots"
-        ) as status:
-            try:
-                # Start the ingestion process
-                ingestion_id = await ingestion.ingest()
-                status.update(f"[bold blue]Ingestion started with ID: {ingestion_id}")
+        # Start ingestion process
+        try:
+            # Show starting message
+            info(f"[bold blue]Cloning repository: {url}...")
 
-                # Create progress tracking
-                with create_progress_bar(
-                    description=f"Ingesting {url}", unit="files"
-                ) as progress:
-                    task = progress.add_task("Ingesting", total=100)
+            # Start the ingestion process
+            ingestion_id = await ingestion.ingest()
+            info(f"[bold blue]Ingestion started with ID: {ingestion_id}")
 
-                    # Poll for status updates
-                    completed = False
-                    while not completed:
-                        # Get current status
-                        status_obj = await ingestion.get_status(ingestion_id)
+            # Create progress tracking
+            with create_progress_bar(
+                description=f"Ingesting {url}", unit="files"
+            ) as progress:
+                task = progress.add_task("Ingesting", total=100)
 
-                        # Update progress bar
-                        if status_obj.total_files > 0:
+                # Poll for status updates
+                completed = False
+                while not completed:
+                    # Get current status
+                    status_obj = await ingestion.get_status(ingestion_id)
+
+                    # Update progress bar
+                    if status_obj.total_files > 0:
+                        progress.update(
+                            task,
+                            completed=status_obj.files_processed,
+                            total=status_obj.total_files,
+                            description=f"[cyan]{status_obj.message}",
+                        )
+                    else:
+                        progress.update(
+                            task,
+                            completed=status_obj.progress,
+                            total=100,
+                            description=f"[cyan]{status_obj.message}",
+                        )
+
+                    # Check if completed or failed
+                    if status_obj.state in ["completed", "failed"]:
+                        completed = True
+                        if status_obj.state == "completed":
                             progress.update(
                                 task,
-                                completed=status_obj.files_processed,
-                                total=status_obj.total_files,
-                                description=f"[cyan]{status_obj.message}",
-                            )
-                        else:
-                            progress.update(
-                                task,
-                                completed=status_obj.progress,
+                                completed=100,
                                 total=100,
-                                description=f"[cyan]{status_obj.message}",
+                                description="[green]Completed",
                             )
-
-                        # Check if completed or failed
-                        if status_obj.state in ["completed", "failed"]:
-                            completed = True
-                            if status_obj.state == "completed":
-                                progress.update(
-                                    task,
-                                    completed=100,
-                                    total=100,
-                                    description="[green]Completed",
-                                )
-                            else:
-                                progress.update(
-                                    task, description=f"[red]Failed: {status_obj.error}"
-                                )
                         else:
-                            # Wait before polling again
-                            await asyncio.sleep(1)
+                            progress.update(
+                                task, description=f"[red]Failed: {status_obj.error}"
+                            )
+                    else:
+                        # Wait before polling again
+                        await asyncio.sleep(1)
 
-                # Get final status
-                final_status = await ingestion.get_status(ingestion_id)
+            # Get final status
+            final_status = await ingestion.get_status(ingestion_id)
 
-                # Show results
-                if final_status.state == "completed":
-                    status.update(
-                        "[bold green]Repository ingestion completed successfully!"
-                    )
-                    success(f"Repository ingestion completed (ID: {ingestion_id})")
-                    info(f"Files processed: {final_status.files_processed}")
-                    info(f"Time elapsed: {final_status.time_elapsed:.2f} seconds")
-                    return 0
-                else:
-                    status.update("[bold red]Repository ingestion failed!")
-                    error(f"Ingestion failed: {final_status.error}")
-                    return 1
-
-            except Exception as e:
-                status.update(f"[bold red]Repository ingestion failed: {str(e)}")
-                error(f"Failed to ingest repository: {str(e)}")
+            # Show results
+            if final_status.state == "completed":
+                info("[bold green]Repository ingestion completed successfully!")
+                success(f"Repository ingestion completed (ID: {ingestion_id})")
+                info(f"Files processed: {final_status.files_processed}")
+                info(f"Time elapsed: {final_status.time_elapsed:.2f} seconds")
+                return 0
+            else:
+                error(f"Ingestion failed: {final_status.error}")
                 return 1
+
+        except Exception as e:
+            error(f"Failed to ingest repository: {str(e)}")
+            return 1
 
     async def _handle_delete(self) -> int:
         """Handle the delete command.
@@ -377,19 +366,18 @@ class RepositoryCommandHandler(CommandHandler):
                 return 0
 
         # Delete repository
-        with create_status_indicator(
-            f"[bold blue]Deleting repository '{repo_name}'...", spinner="dots"
-        ) as status:
-            # Delete all connected nodes recursively
-            delete_query = """
-            MATCH (r:Repository)
-            WHERE r.ingestion_id = $id
-            OPTIONAL MATCH (r)-[*]-(connected)
-            DETACH DELETE connected, r
-            """
+        info(f"[bold blue]Deleting repository '{repo_name}'...")
+        
+        # Delete all connected nodes recursively
+        delete_query = """
+        MATCH (r:Repository)
+        WHERE r.ingestion_id = $id
+        OPTIONAL MATCH (r)-[*]-(connected)
+        DETACH DELETE connected, r
+        """
 
-            connector.run_query(delete_query, {"id": ingestion_id})
-            status.update(f"[bold green]Repository '{repo_name}' deleted!")
+        connector.run_query(delete_query, {"id": ingestion_id})
+        info(f"[bold green]Repository '{repo_name}' deleted!")
 
         success(f"Repository '{repo_name}' deleted successfully.")
         return 0
