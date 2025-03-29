@@ -4,11 +4,16 @@ import uuid
 import json
 import time
 import queue
+import datetime
 from typing import Dict, Any, List, Optional, Callable
 
 from skwaq.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Store recent events for dashboard
+recent_events: List[Dict[str, Any]] = []
+MAX_RECENT_EVENTS = 50  # Maximum number of events to keep in memory
 
 # Event queues for different channels
 event_queues: Dict[str, Dict[str, queue.Queue]] = {
@@ -38,25 +43,49 @@ def get_client_queue(channel: str, client_id: str) -> queue.Queue:
     return event_queues[channel][client_id]
 
 
-def publish_event(channel: str, event_type: str, data: Any) -> None:
+def publish_event(channel: str, event_type: str, data: Any, title: Optional[str] = None) -> None:
     """Publish an event to all clients subscribed to a channel.
 
     Args:
         channel: Event channel
         event_type: Type of event
         data: Event data
+        title: Optional event title for display
     """
     if channel not in event_queues:
         logger.warning(f"Invalid channel: {channel}")
         return
 
+    # Generate event ID
+    event_id = str(uuid.uuid4())
+    timestamp = int(time.time() * 1000)
+    
+    # Create the event object
     event = {
-        "id": str(uuid.uuid4()),
+        "id": event_id,
         "type": event_type,
         "data": data,
-        "timestamp": int(time.time() * 1000),
+        "timestamp": timestamp,
     }
-
+    
+    # Add title if provided
+    if title:
+        event["title"] = title
+    
+    # Add event to recent events list for dashboard
+    dashboard_event = {
+        "id": event_id,
+        "type": event_type,
+        "title": title or event_type,
+        "description": data.get("message", str(data)) if isinstance(data, dict) else str(data),
+        "timestamp": datetime.datetime.fromtimestamp(timestamp / 1000).isoformat(),
+    }
+    recent_events.insert(0, dashboard_event)
+    
+    # Trim recent events list if it's too long
+    if len(recent_events) > MAX_RECENT_EVENTS:
+        recent_events.pop()
+    
     # Add to all client queues for this channel
     for client_id, q in event_queues[channel].items():
         q.put(event)
@@ -109,11 +138,24 @@ def publish_chat_event(event_type: str, data: Any) -> None:
     publish_event("chat", event_type, data)
 
 
-def publish_system_event(event_type: str, data: Any) -> None:
+def publish_system_event(event_type: str, data: Any, title: Optional[str] = None) -> None:
     """Publish system event.
 
     Args:
         event_type: Type of event
         data: Event data
+        title: Optional event title for display
     """
-    publish_event("system", event_type, data)
+    publish_event("system", event_type, data, title)
+
+
+def get_recent_events(limit: int = 10) -> List[Dict[str, Any]]:
+    """Get recent events for the dashboard.
+    
+    Args:
+        limit: Maximum number of events to return
+        
+    Returns:
+        List of recent events
+    """
+    return recent_events[:limit]

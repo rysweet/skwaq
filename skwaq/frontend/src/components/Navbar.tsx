@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import ApiStatusIndicator from './ApiStatusIndicator';
 import '../styles/Navbar.css';
 
 interface NavbarProps {
@@ -43,6 +44,9 @@ const Navbar: React.FC<NavbarProps> = ({ darkMode = false, toggleDarkMode }) => 
       </form>
       
       <div className="navbar-actions">
+        {/* API Status Indicator */}
+        <ApiStatusIndicator />
+
         {toggleDarkMode && (
           <button 
             className="theme-toggle-btn" 

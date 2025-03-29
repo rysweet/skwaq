@@ -8,6 +8,28 @@
   color: var(--text-primary);
 }
 
+.error-banner {
+  background-color: #fdecea;
+  border-left: 4px solid #f44336;
+  color: #721c24;
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  border-radius: var(--border-radius-sm);
+}
+
+.loading-indicator {
+  padding: var(--spacing-md);
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.empty-state {
+  padding: var(--spacing-lg);
+  text-align: center;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
 .dashboard-summary {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));

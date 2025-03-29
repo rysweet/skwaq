@@ -4,9 +4,10 @@ import uuid
 import json
 import queue
 import time
-from typing import Dict, Any, Generator, Optional
+import datetime
+from typing import Dict, Any, Generator, Optional, List
 
-from flask import Blueprint, Response, request, stream_with_context
+from flask import Blueprint, Response, request, stream_with_context, jsonify
 
 from skwaq.api.middleware.auth import login_required
 from skwaq.api.middleware.error_handling import BadRequestError
@@ -53,7 +54,7 @@ def event_stream(channel: str, client_id: str) -> Generator[str, None, None]:
         logger.debug(f"Client disconnected: {client_id} from {channel}")
 
 
-@bp.route("/<channel>/connect", methods=["GET"])
+@bp.route("/<channel>", methods=["GET"])
 @login_required
 def connect(channel: str) -> Response:
     """Connect to an event stream.
@@ -70,7 +71,10 @@ def connect(channel: str) -> Response:
     # Check if channel exists
     if channel not in ["repository", "analysis", "chat", "system"]:
         raise BadRequestError(f"Invalid channel: {channel}")
-
+        
+    # Check for token in query param (for browsers that don't support headers in EventSource)
+    # The auth middleware already handled the main token validation
+    
     # Generate a unique client ID
     client_id = str(uuid.uuid4())
 
@@ -89,3 +93,53 @@ def connect(channel: str) -> Response:
             "X-Accel-Buffering": "no",  # Disable buffering for nginx
         },
     )
+    
+    
+# Alias the old connect endpoint for backwards compatibility
+@bp.route("/<channel>/connect", methods=["GET"])
+@login_required
+def connect_old(channel: str) -> Response:
+    """Legacy endpoint for connecting to an event stream."""
+    return connect(channel)
+
+
+@bp.route("/recent", methods=["GET"])
+@login_required
+def get_recent_events() -> Response:
+    """Get recent events for the dashboard.
+    
+    Returns:
+        A list of recent events
+    """
+    # Get recent events from the service
+    recent_events = event_service.get_recent_events(limit=10)
+    
+    # If no events are available, create placeholder events
+    if not recent_events:
+        # Create sample events for the dashboard
+        now = datetime.datetime.now()
+        recent_events = [
+            {
+                "id": "event-1",
+                "type": "system",
+                "title": "API Server Active",
+                "description": "The API server is running and ready for requests",
+                "timestamp": now.isoformat()
+            },
+            {
+                "id": "event-2",
+                "type": "repository",
+                "title": "Ready for Analysis",
+                "description": "Add a repository to start vulnerability assessment",
+                "timestamp": (now - datetime.timedelta(hours=1)).isoformat()
+            },
+            {
+                "id": "event-3",
+                "type": "workflow",
+                "title": "Workflows Available",
+                "description": "Security assessment workflows are ready to use",
+                "timestamp": (now - datetime.timedelta(days=1)).isoformat()
+            }
+        ]
+    
+    return jsonify(recent_events)
