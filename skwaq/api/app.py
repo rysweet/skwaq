@@ -74,8 +74,12 @@ def create_app(test_config=None):
         return jsonify({"status": "healthy"})
     
     # Register blueprints
-    from skwaq.api.routes import auth
+    from skwaq.api.routes import auth, repositories, events, workflows, chat
     app.register_blueprint(auth.bp)
+    app.register_blueprint(repositories.bp)
+    app.register_blueprint(events.bp)
+    app.register_blueprint(workflows.bp)
+    app.register_blueprint(chat.bp)
     
     # Additional blueprints will be registered as they are implemented
     

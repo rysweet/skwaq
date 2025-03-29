@@ -2,9 +2,7 @@
 
 import pytest
 import json
-import asyncio
-from unittest.mock import patch, MagicMock, Mock
-from typing import Dict, Any, List
+from unittest.mock import patch, MagicMock
 
 from skwaq.api import create_app
 
@@ -98,85 +96,33 @@ MOCK_VULNERABILITIES = [
     },
 ]
 
-
-# Mock asyncio.run
-@pytest.fixture(autouse=True)
-def mock_asyncio_run():
-    """Mock asyncio.run to handle the async service functions."""
-    with patch('asyncio.run') as mock:
-        # Make mock return the coroutine's result
-        mock.side_effect = lambda coroutine: coroutine
-        yield mock
-
-
-# Mock get_all_repositories function
-@pytest.fixture
-def mock_get_all_repositories():
-    """Mock the get_all_repositories function."""
-    with patch('skwaq.api.services.repository_service.get_all_repositories') as mock:
-        mock.return_value = MOCK_REPOSITORIES
-        yield mock
+# Add repository response
+MOCK_NEW_REPOSITORY = {
+    "id": "new-repo-123",
+    "name": "new-repo",
+    "description": "Repository from https://github.com/test/new-repo",
+    "status": "Initializing",
+    "progress": 0,
+    "vulnerabilities": None,
+    "lastAnalyzed": None,
+    "url": "https://github.com/test/new-repo",
+}
 
 
-# Mock get_repository_by_id function
-@pytest.fixture
-def mock_get_repository_by_id():
-    """Mock the get_repository_by_id function."""
-    with patch('skwaq.api.services.repository_service.get_repository_by_id') as mock:
-        mock.return_value = MOCK_REPOSITORY
-        yield mock
-
-
-# Mock get_repository_vulnerabilities function
-@pytest.fixture
-def mock_get_repository_vulnerabilities():
-    """Mock the get_repository_vulnerabilities function."""
-    with patch('skwaq.api.services.repository_service.get_repository_vulnerabilities') as mock:
-        mock.return_value = MOCK_VULNERABILITIES
-        yield mock
-
-
-# Mock add_repository function
-@pytest.fixture
-def mock_add_repository():
-    """Mock the add_repository function."""
-    with patch('skwaq.api.services.repository_service.add_repository') as mock:
-        mock.return_value = {
-            "id": "new-repo-123",
-            "name": "new-repo",
-            "description": "Repository from https://github.com/test/new-repo",
-            "status": "Initializing",
-            "progress": 0,
-            "vulnerabilities": None,
-            "lastAnalyzed": None,
-            "url": "https://github.com/test/new-repo",
-        }
-        yield mock
-
-
-# Mock delete_repository function
-@pytest.fixture
-def mock_delete_repository():
-    """Mock the delete_repository function."""
-    with patch('skwaq.api.services.repository_service.delete_repository') as mock:
-        mock.return_value = True
-        yield mock
-
-
-# Helper class for creating async mocks
-class AsyncMock(MagicMock):
-    """Mock class that works with async/await."""
-    
-    async def __call__(self, *args, **kwargs):
-        return super(AsyncMock, self).__call__(*args, **kwargs)
-
-
-def test_get_repositories(client, auth_token, mock_get_all_repositories):
+@patch('skwaq.api.services.repository_service.get_all_repositories')
+def test_get_repositories(mock_repos, client, auth_token):
     """Test getting all repositories."""
-    response = client.get(
-        '/api/repositories',
-        headers={'Authorization': f'Bearer {auth_token}'}
-    )
+    # Setup the mock
+    mock_repos.return_value = MOCK_REPOSITORIES
+    
+    # Call the route that uses asyncio.run(repository_service.get_all_repositories())
+    with patch('skwaq.api.routes.repositories.asyncio.run', return_value=MOCK_REPOSITORIES):
+        response = client.get(
+            '/api/repositories',
+            headers={'Authorization': f'Bearer {auth_token}'}
+        )
+    
+    # Check the response
     assert response.status_code == 200
     data = json.loads(response.data)
     assert isinstance(data, list)
@@ -185,12 +131,20 @@ def test_get_repositories(client, auth_token, mock_get_all_repositories):
     assert data[1]['id'] == 'repo-456'
 
 
-def test_get_repository(client, auth_token, mock_get_repository_by_id):
+@patch('skwaq.api.services.repository_service.get_repository_by_id')
+def test_get_repository(mock_repo, client, auth_token):
     """Test getting a repository by ID."""
-    response = client.get(
-        '/api/repositories/repo-123',
-        headers={'Authorization': f'Bearer {auth_token}'}
-    )
+    # Setup the mock
+    mock_repo.return_value = MOCK_REPOSITORY
+    
+    # Call the route
+    with patch('skwaq.api.routes.repositories.asyncio.run', return_value=MOCK_REPOSITORY):
+        response = client.get(
+            '/api/repositories/repo-123',
+            headers={'Authorization': f'Bearer {auth_token}'}
+        )
+    
+    # Check the response
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data['id'] == 'repo-123'
@@ -198,34 +152,46 @@ def test_get_repository(client, auth_token, mock_get_repository_by_id):
     assert data['status'] == 'Analyzed'
 
 
-def test_get_repository_not_found(client, auth_token, mock_get_repository_by_id):
+@patch('skwaq.api.services.repository_service.get_repository_by_id')
+def test_get_repository_not_found(mock_repo, client, auth_token):
     """Test getting a repository that doesn't exist."""
     # Configure mock to return None
-    mock_get_repository_by_id.return_value = asyncio.Future()
-    mock_get_repository_by_id.return_value.set_result(None)
+    mock_repo.return_value = None
     
-    response = client.get(
-        '/api/repositories/nonexistent',
-        headers={'Authorization': f'Bearer {auth_token}'}
-    )
+    # Call the route
+    with patch('skwaq.api.routes.repositories.asyncio.run', return_value=None):
+        response = client.get(
+            '/api/repositories/nonexistent',
+            headers={'Authorization': f'Bearer {auth_token}'}
+        )
+    
+    # Check the response
     assert response.status_code == 404
     data = json.loads(response.data)
     assert 'error' in data
 
 
-def test_add_repository(client, auth_token, mock_add_repository):
+@patch('skwaq.api.services.repository_service.add_repository')
+def test_add_repository(mock_add, client, auth_token):
     """Test adding a new repository."""
-    response = client.post(
-        '/api/repositories',
-        headers={'Authorization': f'Bearer {auth_token}'},
-        json={
-            'url': 'https://github.com/test/new-repo',
-            'options': {
-                'deepAnalysis': True,
-                'includeDependencies': False
+    # Setup the mock
+    mock_add.return_value = MOCK_NEW_REPOSITORY
+    
+    # Call the route
+    with patch('skwaq.api.routes.repositories.asyncio.run', return_value=MOCK_NEW_REPOSITORY):
+        response = client.post(
+            '/api/repositories',
+            headers={'Authorization': f'Bearer {auth_token}'},
+            json={
+                'url': 'https://github.com/test/new-repo',
+                'options': {
+                    'deepAnalysis': True,
+                    'includeDependencies': False
+                }
             }
-        }
-    )
+        )
+    
+    # Check the response
     assert response.status_code == 201
     data = json.loads(response.data)
     assert data['id'] == 'new-repo-123'
@@ -249,37 +215,61 @@ def test_add_repository_missing_url(client, auth_token):
     assert 'error' in data
 
 
-def test_delete_repository(client, auth_token, mock_get_repository_by_id, mock_delete_repository):
+@patch('skwaq.api.services.repository_service.get_repository_by_id')
+@patch('skwaq.api.services.repository_service.delete_repository')
+def test_delete_repository(mock_delete, mock_get, client, auth_token):
     """Test deleting a repository."""
-    response = client.delete(
-        '/api/repositories/repo-123',
-        headers={'Authorization': f'Bearer {auth_token}'}
-    )
+    # Setup the mocks
+    mock_get.return_value = MOCK_REPOSITORY
+    mock_delete.return_value = True
+    
+    # Call the route
+    with patch('skwaq.api.routes.repositories.asyncio.run', side_effect=[MOCK_REPOSITORY, True]):
+        response = client.delete(
+            '/api/repositories/repo-123',
+            headers={'Authorization': f'Bearer {auth_token}'}
+        )
+    
+    # Check the response
     assert response.status_code == 204
     assert response.data == b''
 
 
-def test_delete_repository_not_found(client, auth_token, mock_get_repository_by_id):
+@patch('skwaq.api.services.repository_service.get_repository_by_id')
+def test_delete_repository_not_found(mock_get, client, auth_token):
     """Test deleting a repository that doesn't exist."""
     # Configure mock to return None
-    mock_get_repository_by_id.return_value = asyncio.Future()
-    mock_get_repository_by_id.return_value.set_result(None)
+    mock_get.return_value = None
     
-    response = client.delete(
-        '/api/repositories/nonexistent',
-        headers={'Authorization': f'Bearer {auth_token}'}
-    )
+    # Call the route
+    with patch('skwaq.api.routes.repositories.asyncio.run', return_value=None):
+        response = client.delete(
+            '/api/repositories/nonexistent',
+            headers={'Authorization': f'Bearer {auth_token}'}
+        )
+    
+    # Check the response
     assert response.status_code == 404
     data = json.loads(response.data)
     assert 'error' in data
 
 
-def test_get_vulnerabilities(client, auth_token, mock_get_repository_by_id, mock_get_repository_vulnerabilities):
+@patch('skwaq.api.services.repository_service.get_repository_by_id')
+@patch('skwaq.api.services.repository_service.get_repository_vulnerabilities')
+def test_get_vulnerabilities(mock_vulns, mock_repo, client, auth_token):
     """Test getting vulnerabilities for a repository."""
-    response = client.get(
-        '/api/repositories/repo-123/vulnerabilities',
-        headers={'Authorization': f'Bearer {auth_token}'}
-    )
+    # Setup the mocks
+    mock_repo.return_value = MOCK_REPOSITORY
+    mock_vulns.return_value = MOCK_VULNERABILITIES
+    
+    # Call the route
+    with patch('skwaq.api.routes.repositories.asyncio.run', side_effect=[MOCK_REPOSITORY, MOCK_VULNERABILITIES]):
+        response = client.get(
+            '/api/repositories/repo-123/vulnerabilities',
+            headers={'Authorization': f'Bearer {auth_token}'}
+        )
+    
+    # Check the response
     assert response.status_code == 200
     data = json.loads(response.data)
     assert isinstance(data, list)
@@ -290,22 +280,26 @@ def test_get_vulnerabilities(client, auth_token, mock_get_repository_by_id, mock
     assert data[1]['name'] == 'Cross-Site Scripting'
 
 
-def test_analyze_repository(client, auth_token, mock_get_repository_by_id):
+@patch('skwaq.api.services.repository_service.get_repository_by_id')
+def test_analyze_repository(mock_repo, client, auth_token):
     """Test starting analysis for a repository."""
     # Set up mock to return a repository with status not "Analyzing"
     repository = MOCK_REPOSITORY.copy()
     repository['status'] = 'Analyzed'
-    mock_get_repository_by_id.return_value = asyncio.Future()
-    mock_get_repository_by_id.return_value.set_result(repository)
+    mock_repo.return_value = repository
     
-    response = client.post(
-        '/api/repositories/repo-123/analyze',
-        headers={'Authorization': f'Bearer {auth_token}'},
-        json={
-            'deepAnalysis': True,
-            'includeDependencies': False
-        }
-    )
+    # Call the route
+    with patch('skwaq.api.routes.repositories.asyncio.run', return_value=repository):
+        response = client.post(
+            '/api/repositories/repo-123/analyze',
+            headers={'Authorization': f'Bearer {auth_token}'},
+            json={
+                'deepAnalysis': True,
+                'includeDependencies': False
+            }
+        )
+    
+    # Check the response
     assert response.status_code == 200
     data = json.loads(response.data)
     assert 'repository' in data
@@ -314,63 +308,80 @@ def test_analyze_repository(client, auth_token, mock_get_repository_by_id):
     assert data['task']['status'] == 'running'
 
 
-def test_analyze_repository_already_analyzing(client, auth_token, mock_get_repository_by_id):
+@patch('skwaq.api.services.repository_service.get_repository_by_id')
+def test_analyze_repository_already_analyzing(mock_repo, client, auth_token):
     """Test starting analysis for a repository that's already being analyzed."""
     # Set up mock to return a repository with status "Analyzing"
     repository = MOCK_REPOSITORY.copy()
     repository['status'] = 'Analyzing'
-    mock_get_repository_by_id.return_value = asyncio.Future()
-    mock_get_repository_by_id.return_value.set_result(repository)
+    mock_repo.return_value = repository
     
-    response = client.post(
-        '/api/repositories/repo-123/analyze',
-        headers={'Authorization': f'Bearer {auth_token}'},
-        json={}
-    )
+    # Call the route
+    with patch('skwaq.api.routes.repositories.asyncio.run', return_value=repository):
+        response = client.post(
+            '/api/repositories/repo-123/analyze',
+            headers={'Authorization': f'Bearer {auth_token}'},
+            json={}
+        )
+    
+    # Check the response
     assert response.status_code == 400
     data = json.loads(response.data)
     assert 'error' in data
 
 
-def test_cancel_analysis(client, auth_token, mock_get_repository_by_id):
+@patch('skwaq.api.services.repository_service.get_repository_by_id')
+def test_cancel_analysis(mock_repo, client, auth_token):
     """Test cancelling analysis for a repository."""
     # Set up mock to return a repository with status "Analyzing"
     repository = MOCK_REPOSITORY.copy()
     repository['status'] = 'Analyzing'
-    mock_get_repository_by_id.return_value = asyncio.Future()
-    mock_get_repository_by_id.return_value.set_result(repository)
+    mock_repo.return_value = repository
     
-    response = client.post(
-        '/api/repositories/repo-123/cancel',
-        headers={'Authorization': f'Bearer {auth_token}'}
-    )
+    # Call the route
+    with patch('skwaq.api.routes.repositories.asyncio.run', return_value=repository):
+        response = client.post(
+            '/api/repositories/repo-123/cancel',
+            headers={'Authorization': f'Bearer {auth_token}'}
+        )
+    
+    # Check the response
     assert response.status_code == 204
     assert response.data == b''
 
 
-def test_cancel_analysis_not_analyzing(client, auth_token, mock_get_repository_by_id):
+@patch('skwaq.api.services.repository_service.get_repository_by_id')
+def test_cancel_analysis_not_analyzing(mock_repo, client, auth_token):
     """Test cancelling analysis for a repository that's not being analyzed."""
     # Set up mock to return a repository with status not "Analyzing"
     repository = MOCK_REPOSITORY.copy()
     repository['status'] = 'Analyzed'
-    mock_get_repository_by_id.return_value = asyncio.Future()
-    mock_get_repository_by_id.return_value.set_result(repository)
+    mock_repo.return_value = repository
     
-    response = client.post(
-        '/api/repositories/repo-123/cancel',
-        headers={'Authorization': f'Bearer {auth_token}'}
-    )
+    # Call the route
+    with patch('skwaq.api.routes.repositories.asyncio.run', return_value=repository):
+        response = client.post(
+            '/api/repositories/repo-123/cancel',
+            headers={'Authorization': f'Bearer {auth_token}'}
+        )
+    
+    # Check the response
     assert response.status_code == 400
     data = json.loads(response.data)
     assert 'error' in data
 
 
-def test_get_analysis_status(client, auth_token, mock_get_repository_by_id):
+@patch('skwaq.api.services.repository_service.get_repository_by_id')
+def test_get_analysis_status(mock_repo, client, auth_token):
     """Test getting analysis status for a repository."""
-    response = client.get(
-        '/api/repositories/repo-123/analysis/status',
-        headers={'Authorization': f'Bearer {auth_token}'}
-    )
+    # Call the route
+    with patch('skwaq.api.routes.repositories.asyncio.run', return_value=MOCK_REPOSITORY):
+        response = client.get(
+            '/api/repositories/repo-123/analysis/status',
+            headers={'Authorization': f'Bearer {auth_token}'}
+        )
+    
+    # Check the response
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data['repoId'] == 'repo-123'
