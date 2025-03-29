@@ -287,9 +287,18 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
           // When a node is clicked, call the callback
           onNodeSelected(node as GraphNode);
           
-          // Focus on the selected node
-          graph.centerAt(node.x, node.y, node.z, 1000);
-          graph.zoom(1.5, 1000);
+          // Focus on the selected node if it has position coordinates
+          if (node.x !== undefined && node.y !== undefined && node.z !== undefined) {
+            // Safety check for centerAt method
+            if (typeof graph.centerAt === 'function') {
+              graph.centerAt(node.x, node.y, node.z, 1000);
+            }
+            
+            // Safety check for zoom method
+            if (typeof graph.zoom === 'function') {
+              graph.zoom(1.5, 1000);
+            }
+          }
         })
         .onNodeDragEnd((node: GraphNode) => {
           // Pin the node on drag (fx, fy, fz are fixed coordinates)
