@@ -5,6 +5,7 @@ from datetime import datetime
 import neo4j.time
 from flask import Blueprint, jsonify, request, g
 from uuid import uuid4
+import traceback
 
 from skwaq.db.neo4j_connector import get_connector
 from skwaq.api.middleware.error_handling import APIError, NotFoundError, BadRequestError
@@ -275,3 +276,124 @@ def delete_investigation(investigation_id):
     except Exception as e:
         logger.error(f"Error deleting investigation {investigation_id}: {str(e)}")
         raise APIError(f"Failed to delete investigation: {str(e)}")
+
+
+@bp.route('/<investigation_id>/visualization', methods=['GET'])
+def get_investigation_visualization(investigation_id):
+    """Get visualization data for an investigation.
+    
+    Args:
+        investigation_id: ID of the investigation
+        
+    Returns:
+        JSON response with graph data (nodes and links)
+    """
+    try:
+        connector = get_connector()
+        
+        # Check if investigation exists
+        exists_query = "MATCH (i:Investigation {id: $id}) RETURN i"
+        results = connector.run_query(exists_query, {"id": investigation_id})
+        
+        if not results:
+            raise NotFoundError(f"Investigation {investigation_id} not found")
+        
+        # Query to get investigation graph data
+        query = """
+        MATCH (i:Investigation {id: $id})
+        OPTIONAL MATCH (i)-[r1]->(n1)
+        OPTIONAL MATCH (n1)-[r2]->(n2)
+        RETURN i, r1, n1, r2, n2
+        """
+        
+        # Execute the query
+        result = connector.run_query(query, {"id": investigation_id})
+        
+        # Transform the result into a graph data structure
+        nodes = {}
+        links = []
+        
+        # Helper function to add a node
+        def add_node(node_data):
+            if not node_data:
+                return None
+                
+            node_id = node_data.get("id")
+            if not node_id:
+                return None
+                
+            if node_id not in nodes:
+                # Get node type from labels
+                node_labels = getattr(node_data, 'labels', [])
+                node_type = next((label.lower() for label in node_labels if label != 'Resource'), 'unknown')
+                
+                # Create node object
+                node_name = node_data.get("name", node_data.get("title", f"Node {node_id}"))
+                node_obj = {
+                    "id": node_id,
+                    "name": node_name,
+                    "type": node_type,
+                    "properties": {}
+                }
+                
+                # Add properties
+                for key, value in dict(node_data).items():
+                    if key not in ['id', 'name', 'title']:
+                        node_obj["properties"][key] = value
+                
+                nodes[node_id] = node_obj
+            
+            return node_id
+        
+        # Helper function to add a link
+        def add_link(source_id, target_id, rel_data):
+            if not source_id or not target_id or not rel_data:
+                return
+            
+            # Create link object
+            link_obj = {
+                "source": source_id,
+                "target": target_id,
+                "type": rel_data.type,
+                "value": 1,
+                "properties": {}
+            }
+            
+            # Add relationship properties
+            for key, value in dict(rel_data).items():
+                if key != 'type':
+                    link_obj["properties"][key] = value
+            
+            links.append(link_obj)
+        
+        # Process query results
+        for record in result:
+            # Add investigation node
+            i_id = add_node(record.get("i"))
+            
+            # Add first level nodes and links
+            n1_id = add_node(record.get("n1"))
+            if i_id and n1_id and record.get("r1"):
+                add_link(i_id, n1_id, record.get("r1"))
+            
+            # Add second level nodes and links
+            n2_id = add_node(record.get("n2"))
+            if n1_id and n2_id and record.get("r2"):
+                add_link(n1_id, n2_id, record.get("r2"))
+        
+        # Prepare graph data
+        graph_data = {
+            "nodes": list(nodes.values()),
+            "links": links
+        }
+        
+        return jsonify(graph_data)
+    except NotFoundError as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error retrieving visualization for investigation {investigation_id}: {str(e)}", exc_info=True)
+        return jsonify({
+            "error": str(e),
+            "message": f"Failed to retrieve visualization for investigation {investigation_id}",
+            "traceback": traceback.format_exc()
+        }), 500

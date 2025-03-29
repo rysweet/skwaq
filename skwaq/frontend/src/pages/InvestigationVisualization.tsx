@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import InvestigationGraphVisualization from '../components/InvestigationGraphVisualization';
 import useInvestigationGraph from '../hooks/useInvestigationGraph';
-import { GraphNode } from '../hooks/useKnowledgeGraph';
+// GraphNode import commented out as it's not used
+// import { GraphNode } from '../hooks/useKnowledgeGraph';
 import '../styles/InvestigationVisualization.css';
 
 interface InvestigationVisualizationProps {
@@ -21,6 +22,8 @@ const InvestigationVisualization: React.FC<InvestigationVisualizationProps> = ({
   
   const {
     loading,
+    // Error variable is declared but not used
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     error,
     selectedNode,
     setSelectedNode
@@ -39,7 +42,8 @@ const InvestigationVisualization: React.FC<InvestigationVisualizationProps> = ({
         return response.json();
       })
       .then(data => {
-        setInvestigationTitle(data.name || `Investigation ${investigationId}`);
+        console.log('Investigation details:', data);
+        setInvestigationTitle(data.title || data.name || `Investigation ${investigationId}`);
       })
       .catch(err => {
         console.error('Error fetching investigation details:', err);

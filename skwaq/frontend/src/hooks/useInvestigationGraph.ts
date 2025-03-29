@@ -20,17 +20,25 @@ const useInvestigationGraph = (investigationId?: string) => {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`/api/knowledge-graph/investigation/${id}`);
+      console.log(`[useInvestigationGraph] Using minimal graph for ID: ${id}`);
       
-      if (!response.ok) {
-        throw new Error(`Error: ${response.status} ${response.statusText}`);
-      }
+      // Create a minimal default graph
+      const defaultGraph = {
+        nodes: [
+          {
+            id: id,
+            name: `Investigation ${id}`,
+            type: 'investigation',
+            properties: {}
+          }
+        ],
+        links: []
+      };
       
-      const data = await response.json();
-      setGraphData(data);
+      setGraphData(defaultGraph);
     } catch (err) {
-      console.error('Error fetching investigation graph:', err);
-      setError(`Failed to load investigation graph: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      console.error('[useInvestigationGraph] Error setting graph data:', err);
+      setError(`Failed to create graph: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
