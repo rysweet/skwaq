@@ -40,6 +40,11 @@
   background-color: #4caf50; /* Green */
 }
 
+/* Degraded state */
+.status-degraded .status-dot {
+  background-color: #ff9800; /* Orange */
+}
+
 /* Offline state */
 .status-offline .status-dot {
   background-color: #f44336; /* Red */

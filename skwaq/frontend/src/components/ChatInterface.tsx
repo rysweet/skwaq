@@ -14,7 +14,7 @@ interface ChatInterfaceProps {
 }
 
 interface ThreadInfo {
-  [key: number]: {
+  [key: string]: {
     isOpen: boolean;
     replies: number[];
   }
@@ -42,10 +42,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     
     messages.forEach(msg => {
       if (msg.parentId) {
-        if (!newThreads[msg.parentId]) {
-          newThreads[msg.parentId] = { isOpen: true, replies: [] };
+        const parentIdStr = msg.parentId.toString();
+        if (!newThreads[parentIdStr]) {
+          newThreads[parentIdStr] = { isOpen: true, replies: [] };
         }
-        newThreads[msg.parentId].replies.push(msg.id);
+        newThreads[parentIdStr].replies.push(msg.id);
       }
     });
     
@@ -104,9 +105,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const toggleThread = (parentId: number) => {
     setThreads(prev => ({
       ...prev,
-      [parentId]: {
-        ...prev[parentId],
-        isOpen: !prev[parentId].isOpen
+      [parentId.toString()]: {
+        ...prev[parentId.toString()],
+        isOpen: !prev[parentId.toString()].isOpen
       }
     }));
   };
@@ -121,9 +122,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
   
   const renderMessage = (msg: ChatMessage, isReply: boolean = false) => {
-    const isThreadParent = threads[msg.id] && threads[msg.id].replies.length > 0;
-    const replyCount = isThreadParent ? threads[msg.id].replies.length : 0;
-    const isThreadOpen = isThreadParent && threads[msg.id].isOpen;
+    const msgIdStr = msg.id.toString();
+    const isThreadParent = threads[msgIdStr] && threads[msgIdStr].replies.length > 0;
+    const replyCount = isThreadParent ? threads[msgIdStr].replies.length : 0;
+    const isThreadOpen = isThreadParent && threads[msgIdStr].isOpen;
     
     return (
       <React.Fragment key={msg.id}>
@@ -176,7 +178,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         {/* Render thread replies if thread is open */}
         {isThreadParent && isThreadOpen && (
           <div className="thread-replies">
-            {threads[msg.id].replies.map(replyId => {
+            {threads[msgIdStr].replies.map(replyId => {
               const replyMsg = messages.find(m => m.id === replyId);
               if (replyMsg) {
                 return renderMessage(replyMsg, true);

@@ -16,6 +16,12 @@ class ApiService {
       },
     });
     
+    // Make sure baseURL points to port 5001
+    if (this.api.defaults.baseURL && !this.api.defaults.baseURL.includes('5001')) {
+      console.log('Updating API base URL to use port 5001');
+      this.api.defaults.baseURL = 'http://localhost:5001/api';
+    }
+    
     // Add request interceptor for auth header
     this.api.interceptors.request.use(
       (config) => {
@@ -44,6 +50,57 @@ class ApiService {
         // Handle specific error codes
         console.log('API Error:', error);
         
+        // Create a visible error notification in development
+        const createErrorNotification = (message: string) => {
+          if (process.env.NODE_ENV === 'development') {
+            // Create a floating error notification
+            const notification = document.createElement('div');
+            notification.style.position = 'fixed';
+            notification.style.bottom = '20px';
+            notification.style.right = '20px';
+            notification.style.backgroundColor = '#f8d7da';
+            notification.style.color = '#721c24';
+            notification.style.padding = '15px';
+            notification.style.borderRadius = '4px';
+            notification.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+            notification.style.maxWidth = '400px';
+            notification.style.zIndex = '9999';
+            
+            const title = document.createElement('div');
+            title.style.fontWeight = 'bold';
+            title.style.marginBottom = '5px';
+            title.textContent = 'API Error';
+            
+            const content = document.createElement('div');
+            content.textContent = message;
+            
+            const closeButton = document.createElement('button');
+            closeButton.textContent = '×';
+            closeButton.style.position = 'absolute';
+            closeButton.style.top = '5px';
+            closeButton.style.right = '10px';
+            closeButton.style.border = 'none';
+            closeButton.style.background = 'none';
+            closeButton.style.fontSize = '20px';
+            closeButton.style.cursor = 'pointer';
+            closeButton.style.color = '#721c24';
+            closeButton.onclick = () => document.body.removeChild(notification);
+            
+            notification.appendChild(title);
+            notification.appendChild(content);
+            notification.appendChild(closeButton);
+            
+            document.body.appendChild(notification);
+            
+            // Auto-remove after 10 seconds
+            setTimeout(() => {
+              if (document.body.contains(notification)) {
+                document.body.removeChild(notification);
+              }
+            }, 10000);
+          }
+        };
+        
         if (error.response) {
           console.error('API Error Response:', {
             url: error.config?.url,
@@ -52,36 +109,48 @@ class ApiService {
             data: error.response.data
           });
           
+          let message = '';
+          
           switch (error.response.status) {
             case 401:
               // Handle unauthorized error
+              message = 'Unauthorized access - Please log in again';
               console.error('Unauthorized access');
               break;
             case 403:
               // Handle forbidden error
+              message = 'Forbidden access - You do not have permission for this action';
               console.error('Forbidden access');
               break;
             case 404:
               // Handle not found error
+              message = `Resource not found: ${error.config?.url}`;
               console.error('Resource not found');
               break;
             default:
               // Handle other errors
+              message = `API error (${error.response.status}): ${JSON.stringify(error.response.data)}`;
               console.error('API error:', error.response.data);
           }
+          
+          createErrorNotification(message);
         } else if (error.request) {
           // Handle network errors
+          const message = `Network error: No response received from ${error.config?.url}`;
           console.error('Network error details:', {
             url: error.config?.url,
             method: error.config?.method,
             message: 'No response received'
           });
+          createErrorNotification(message);
         } else {
           // Handle other errors
+          const message = `API Error: ${error.message}`;
           console.error('API Error:', {
             message: error.message,
             config: error.config
           });
+          createErrorNotification(message);
         }
         
         return Promise.reject(error);

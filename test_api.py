@@ -27,18 +27,21 @@ def test_api(investigation_id=None):
         except Exception as e:
             print(f"Error connecting to investigation endpoint: {str(e)}")
             
-        # Test knowledge graph endpoint for the investigation
+        # Test investigation visualization endpoint
         try:
-            response = requests.get(f"{base_url}/knowledge-graph/investigation/{investigation_id}")
-            print(f"Knowledge Graph for Investigation {investigation_id} Response:")
+            response = requests.get(f"{base_url}/investigations/{investigation_id}/visualization")
+            print(f"Visualization for Investigation {investigation_id} Response:")
             print(f"Status Code: {response.status_code}")
-            print("Data contains:")
-            data = response.json()
-            print(f"Nodes: {len(data.get('nodes', []))} nodes")
-            print(f"Links: {len(data.get('links', []))} links")
+            if response.status_code == 200:
+                data = response.json()
+                print("Data contains:")
+                print(f"Nodes: {len(data.get('nodes', []))} nodes")
+                print(f"Links: {len(data.get('links', []))} links")
+            else:
+                print("Error response:", response.text)
             print("=" * 50)
         except Exception as e:
-            print(f"Error connecting to knowledge graph endpoint: {str(e)}")
+            print(f"Error connecting to visualization endpoint: {str(e)}")
     else:
         # Test investigations endpoint
         try:

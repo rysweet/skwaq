@@ -625,10 +625,10 @@ const Settings: React.FC = () => {
                 </ul>
                 
                 <div className="links-section">
-                  <a href="#" className="about-link">Documentation</a>
-                  <a href="#" className="about-link">GitHub Repository</a>
-                  <a href="#" className="about-link">Report Issue</a>
-                  <a href="#" className="about-link">License Information</a>
+                  <a href="https://docs.example.com/skwaq" className="about-link">Documentation</a>
+                  <a href="https://github.com/example/skwaq" className="about-link">GitHub Repository</a>
+                  <a href="https://github.com/example/skwaq/issues" className="about-link">Report Issue</a>
+                  <a href="https://github.com/example/skwaq/blob/main/LICENSE" className="about-link">License Information</a>
                 </div>
                 
                 <div className="copyright">

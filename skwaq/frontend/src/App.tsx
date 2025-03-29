@@ -103,6 +103,7 @@ function App() {
           <Route path="/workflows" element={<Workflows />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/investigations" element={<Investigations />} />
+          <Route path="/investigations/:investigationId" element={<Investigations />} />
           <Route path="/repositories" element={<Repositories />} />
           <Route path="/investigations/:investigationId/visualization" element={<InvestigationVisualization darkMode={darkMode} />} />
           <Route path="/api-test" element={<ApiTestPage />} />

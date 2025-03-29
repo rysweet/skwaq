@@ -3,8 +3,9 @@ import apiService from '../services/api';
 import authService from '../services/authService';
 import repositoryService from '../services/repositoryService';
 import chatService from '../services/chatService';
-import workflowService from '../services/workflowService';
 import eventService from '../services/eventService';
+// Commenting out unused import
+// import workflowService from '../services/workflowService';
 
 /**
  * A comprehensive test page for checking API integration
@@ -26,10 +27,10 @@ const ApiTestPage: React.FC = () => {
   // Repository state
   const [repositories, setRepositories] = useState<any[]>([]);
   const [repoUrl, setRepoUrl] = useState<string>('https://github.com/example/repo');
-  const [selectedRepoId, setSelectedRepoId] = useState<string>('');
+  // Commented out unused state variables
+  // const [selectedRepoId, setSelectedRepoId] = useState<string>('');
   
   // Workflow state
-  const [workflows, setWorkflows] = useState<any[]>([]);
   const [activeWorkflows, setActiveWorkflows] = useState<any[]>([]);
   
   // Chat state
@@ -54,14 +55,26 @@ const ApiTestPage: React.FC = () => {
     }
   }, []);
   
+  // Health status state
+  const [healthStatus, setHealthStatus] = useState<any>(null);
+  const [healthError, setHealthError] = useState<string | null>(null);
+  const [healthLoading, setHealthLoading] = useState<boolean>(true);
+  
   // Check health on load
   useEffect(() => {
     const checkHealth = async () => {
+      setHealthLoading(true);
       try {
         const health = await apiService.get('/health');
         console.log('API Health:', health);
-      } catch (err) {
+        setHealthStatus(health);
+        setHealthError(null);
+      } catch (err: any) {
         console.error('Error checking API health:', err);
+        setHealthStatus(null);
+        setHealthError(err.message || 'Failed to connect to API');
+      } finally {
+        setHealthLoading(false);
       }
     };
     
@@ -277,7 +290,6 @@ const ApiTestPage: React.FC = () => {
     try {
       const result = await apiService.get('/workflows');
       console.log('Workflows:', result);
-      setWorkflows(result);
       setResponse(result);
     } catch (err: any) {
       console.error('Get workflows error:', err);
@@ -381,6 +393,178 @@ const ApiTestPage: React.FC = () => {
   return (
     <div style={{ padding: '20px', fontFamily: 'system-ui, sans-serif' }}>
       <h1>API Integration Test</h1>
+      
+      {/* API Health Status Section */}
+      <div style={{ marginBottom: '30px', padding: '15px', border: '1px solid #ddd', borderRadius: '5px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+          <h2 style={{ margin: 0 }}>API Health Status</h2>
+          <button 
+            onClick={() => {
+              const checkHealth = async () => {
+                setHealthLoading(true);
+                try {
+                  const health = await apiService.get('/health');
+                  console.log('API Health:', health);
+                  setHealthStatus(health);
+                  setHealthError(null);
+                } catch (err: any) {
+                  console.error('Error checking API health:', err);
+                  setHealthStatus(null);
+                  setHealthError(err.message || 'Failed to connect to API');
+                } finally {
+                  setHealthLoading(false);
+                }
+              };
+              
+              checkHealth();
+            }}
+            style={{ 
+              padding: '5px 10px', 
+              backgroundColor: '#007bff',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+            disabled={healthLoading}
+          >
+            {healthLoading ? 'Checking...' : 'Check Health'}
+          </button>
+        </div>
+        {healthLoading ? (
+          <div style={{ padding: '10px', textAlign: 'center' }}>Checking API health...</div>
+        ) : healthError ? (
+          <div style={{ 
+            padding: '10px', 
+            backgroundColor: '#fdecea', 
+            color: '#721c24', 
+            border: '1px solid #f5c6cb',
+            borderRadius: '4px'
+          }}>
+            <h3>API Connection Error</h3>
+            <pre style={{ 
+              whiteSpace: 'pre-wrap', 
+              overflow: 'auto', 
+              backgroundColor: '#f8d7da', 
+              padding: '10px', 
+              borderRadius: '4px'
+            }}>
+              {healthError}
+            </pre>
+            <button 
+              onClick={() => window.location.reload()}
+              style={{ 
+                marginTop: '10px', 
+                padding: '5px 10px', 
+                backgroundColor: '#dc3545',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              Retry Connection
+            </button>
+          </div>
+        ) : healthStatus ? (
+          <div>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              marginBottom: '10px',
+              padding: '10px',
+              backgroundColor: healthStatus.status === 'healthy' ? '#d4edda' : healthStatus.status === 'degraded' ? '#fff3cd' : '#f8d7da',
+              borderRadius: '4px'
+            }}>
+              <span style={{ 
+                display: 'inline-block',
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                marginRight: '10px',
+                backgroundColor: healthStatus.status === 'healthy' ? '#28a745' : healthStatus.status === 'degraded' ? '#ffc107' : '#dc3545'
+              }}></span>
+              <span>
+                <strong>Status: </strong>
+                {healthStatus.status === 'healthy' ? 'Healthy' : healthStatus.status === 'degraded' ? 'Degraded' : 'Unhealthy'}
+              </span>
+              <button 
+                onClick={() => window.location.reload()}
+                style={{ 
+                  marginLeft: 'auto', 
+                  padding: '3px 8px', 
+                  backgroundColor: 'transparent',
+                  border: '1px solid #6c757d',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '0.8rem'
+                }}
+              >
+                Refresh
+              </button>
+            </div>
+            
+            {healthStatus.database && (
+              <div style={{ marginBottom: '10px' }}>
+                <h3>Database Status</h3>
+                <div style={{ 
+                  padding: '10px', 
+                  backgroundColor: healthStatus.database.connected ? '#d4edda' : '#f8d7da',
+                  borderRadius: '4px'
+                }}>
+                  <strong>Connection: </strong>
+                  {healthStatus.database.connected ? 'Connected' : 'Disconnected'}
+                  <div><strong>Message: </strong>{healthStatus.database.message}</div>
+                </div>
+              </div>
+            )}
+            
+            {healthStatus.api_version && (
+              <div style={{ marginBottom: '10px' }}>
+                <strong>API Version: </strong>{healthStatus.api_version}
+              </div>
+            )}
+            
+            {healthStatus.timestamp && (
+              <div>
+                <strong>Timestamp: </strong>
+                {new Date(healthStatus.timestamp).toLocaleString()}
+              </div>
+            )}
+            
+            {healthStatus.error && (
+              <div style={{ 
+                marginTop: '10px',
+                padding: '10px', 
+                backgroundColor: '#f8d7da', 
+                borderRadius: '4px'
+              }}>
+                <h3>Error Details</h3>
+                <pre style={{ whiteSpace: 'pre-wrap', overflow: 'auto' }}>
+                  {healthStatus.error}
+                </pre>
+                {healthStatus.details && healthStatus.details.traceback && (
+                  <details style={{ marginTop: '10px' }}>
+                    <summary>Traceback</summary>
+                    <pre style={{ 
+                      whiteSpace: 'pre-wrap', 
+                      overflow: 'auto',
+                      backgroundColor: '#f8d7da',
+                      padding: '10px',
+                      marginTop: '5px',
+                      fontSize: '0.8rem'
+                    }}>
+                      {healthStatus.details.traceback}
+                    </pre>
+                  </details>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ padding: '10px', textAlign: 'center' }}>No health information available</div>
+        )}
+      </div>
       
       <div style={{ display: 'flex', gap: '20px' }}>
         <div style={{ width: '60%' }}>

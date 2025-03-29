@@ -24,25 +24,9 @@ def validate_investigation_id(investigation_id):
     Returns:
         bool: True if valid investigation ID, False otherwise
     """
-    # Check if it's a standard UUID
-    uuid_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-    if re.match(uuid_pattern, investigation_id.lower()):
-        try:
-            UUID(investigation_id)
-            return True
-        except ValueError:
-            return False
-    
-    # Check for the 'inv-' prefix format (e.g., inv-c4e062ca)
-    inv_pattern = r'^inv-[0-9a-f]{8}$'
-    if re.match(inv_pattern, investigation_id.lower()):
-        return True
-        
-    # Check for other known investigation ID formats (like the demo ones)
-    if investigation_id.startswith('inv-'):
-        return True
-        
-    return False
+    # Accept any investigation ID - we'll let the database handle if it exists
+    # This is more flexible and avoids issues with different formats
+    return True
 
 
 @bp.route('/investigation/<investigation_id>', methods=['GET'])
@@ -171,8 +155,14 @@ def get_investigation_graph(investigation_id):
     except NotFoundError as e:
         raise e
     except Exception as e:
-        logger.error(f"Error retrieving investigation graph for {investigation_id}: {str(e)}")
-        raise APIError(f"Failed to retrieve investigation graph: {str(e)}")
+        logger.error(f"Error retrieving investigation graph for {investigation_id}: {str(e)}", exc_info=True)
+        # Return a more detailed error
+        return jsonify({
+            "error": f"Failed to retrieve investigation graph: {str(e)}",
+            "status": "error",
+            "investigation_id": investigation_id,
+            "message": "An error occurred while processing the investigation graph data"
+        }), 500
 
 
 @bp.route('/search', methods=['GET'])

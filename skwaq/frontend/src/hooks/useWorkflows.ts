@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import workflowService, {
   AvailableWorkflow,
   WorkflowStatus,
@@ -18,16 +18,18 @@ export default function useWorkflows() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Simple event subscription management
-  const eventSubscriptions: Record<string, any> = {};
-  
   // Function to subscribe to workflow events
+  // Using useMemo to wrap the subscription management to avoid dependency issues
+  const subscriptionManager = React.useMemo(() => ({
+    subscriptions: {} as Record<string, {channel: string, callback: any}>
+  }), []);
+  
   const subscribe = useCallback((channel: string, callback: any) => {
     // Create a unique subscription ID
     const subscriptionId = `${channel}-${Date.now()}`;
     
-    // Store the subscription
-    eventSubscriptions[subscriptionId] = {
+    // Store subscription info in our managed object
+    subscriptionManager.subscriptions[subscriptionId] = {
       channel,
       callback
     };
@@ -35,10 +37,12 @@ export default function useWorkflows() {
     // Return an object with unsubscribe method
     return {
       unsubscribe: () => {
-        delete eventSubscriptions[subscriptionId];
+        // Clean up the subscription from our manager
+        delete subscriptionManager.subscriptions[subscriptionId];
+        console.log(`Unsubscribing from ${channel}`);
       }
     };
-  }, [eventSubscriptions]);
+  }, [subscriptionManager]);
 
   // Fetch available workflows
   const fetchAvailableWorkflows = useCallback(async () => {

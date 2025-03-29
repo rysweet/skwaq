@@ -1,4 +1,4 @@
-import apiService from './api';
+// No need for apiService import as we're not making any API calls directly
 
 export interface EventCallback {
   (eventData: any): void;

@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import KnowledgeGraphVisualization from '../components/KnowledgeGraphVisualization';
 import GraphFilter, { SavedFilter } from '../components/GraphFilter';
-import useKnowledgeGraph, { GraphNode, GraphFilter as FilterConfig } from '../hooks/useKnowledgeGraph';
+// Only importing the types we actually use
+import useKnowledgeGraph, { GraphFilter as FilterConfig } from '../hooks/useKnowledgeGraph';
 import '../styles/KnowledgeGraph.css';
 
 interface KnowledgeGraphProps {

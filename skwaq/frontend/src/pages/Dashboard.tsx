@@ -149,7 +149,7 @@ const Dashboard: React.FC = () => {
         eventService.unsubscribe(eventSubscriptionId);
       }
     };
-  }, []);
+  }, [eventSubscriptionId]);
   
   // Update relative times for activities periodically
   useEffect(() => {
