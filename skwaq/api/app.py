@@ -1,12 +1,27 @@
 """Flask application entry point for API server."""
 
 import os
+import traceback
+import datetime
 from flask import Flask, jsonify, request, g
+import json
+import neo4j.time
 from flask_cors import CORS
 
 from skwaq.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+class CustomJSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder to handle Neo4j data types."""
+    
+    def default(self, obj):
+        if isinstance(obj, neo4j.time.DateTime):
+            return obj.to_native().isoformat()
+        if isinstance(obj, datetime.datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 
 def create_app(test_config=None):
@@ -19,6 +34,7 @@ def create_app(test_config=None):
         Flask application
     """
     app = Flask(__name__, instance_relative_config=True)
+    app.json_encoder = CustomJSONEncoder
 
     # Enable CORS for frontend development
     CORS(
@@ -71,15 +87,59 @@ def create_app(test_config=None):
     # Add a health check endpoint
     @app.route("/api/health")
     def health_check():
-        return jsonify({"status": "healthy"})
+        try:
+            # Check database connection
+            from skwaq.db.neo4j_connector import get_connector
+            
+            db_status = {
+                "connected": False,
+                "message": "Database not checked"
+            }
+            
+            try:
+                connector = get_connector()
+                # Test query to verify database connection
+                if connector.is_connected():
+                    result = connector.run_query("MATCH (n) RETURN count(n) AS count LIMIT 1")
+                    if result and len(result) > 0:
+                        node_count = result[0]["count"]
+                        db_status = {
+                            "connected": True,
+                            "message": f"Database connected, found {node_count} nodes"
+                        }
+                    else:
+                        db_status["message"] = "Database query returned no results"
+                else:
+                    db_status["message"] = "Failed to connect to database"
+            except Exception as db_err:
+                db_status["message"] = f"Database error: {str(db_err)}"
+                
+            return jsonify({
+                "status": "healthy" if db_status["connected"] else "degraded",
+                "api_version": "1.0.0",
+                "database": db_status,
+                "timestamp": datetime.datetime.now().isoformat()
+            })
+        except Exception as e:
+            # Catch all other errors and return unhealthy status
+            logger.error(f"Health check failed: {str(e)}")
+            return jsonify({
+                "status": "unhealthy",
+                "error": str(e),
+                "details": {
+                    "traceback": traceback.format_exc(),
+                    "timestamp": datetime.datetime.now().isoformat()
+                }
+            }), 500
     
     # Register blueprints
-    from skwaq.api.routes import auth, repositories, events, workflows, chat
+    from skwaq.api.routes import auth, repositories, events, workflows, chat, investigations
     app.register_blueprint(auth.bp)
     app.register_blueprint(repositories.bp)
     app.register_blueprint(events.bp)
     app.register_blueprint(workflows.bp)
     app.register_blueprint(chat.bp)
+    app.register_blueprint(investigations.bp)
     
     # Additional blueprints will be registered as they are implemented
     

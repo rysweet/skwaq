@@ -1,6 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 
+export interface Finding {
+  id: string;
+  title: string;
+  description: string;
+  location?: string;
+  severity?: string;
+  type?: string;
+  status?: string;
+}
+
 export interface Investigation {
   id: string;
   title: string;
@@ -16,6 +26,7 @@ export interface Investigation {
 export interface InvestigationDetail extends Investigation {
   workflow_id?: string;
   update_date?: string;
+  findings?: Finding[];
 }
 
 /**
