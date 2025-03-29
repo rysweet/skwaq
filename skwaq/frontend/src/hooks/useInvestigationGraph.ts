@@ -20,25 +20,49 @@ const useInvestigationGraph = (investigationId?: string) => {
       setLoading(true);
       setError(null);
       
-      console.log(`[useInvestigationGraph] Using minimal graph for ID: ${id}`);
+      console.log(`[useInvestigationGraph] Fetching graph for ID: ${id}`);
+      const response = await fetch(`/api/investigations/${id}/visualization`);
       
-      // Create a minimal default graph
-      const defaultGraph = {
-        nodes: [
-          {
-            id: id,
-            name: `Investigation ${id}`,
-            type: 'investigation',
-            properties: {}
+      if (!response.ok) {
+        let errorMessage = `Error: ${response.status} ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          console.error('[useInvestigationGraph] Error response:', errorData);
+          if (errorData && errorData.error) {
+            errorMessage = errorData.error;
           }
-        ],
-        links: []
+        } catch (e) {
+          console.error('[useInvestigationGraph] Failed to parse error response');
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const data = await response.json();
+      console.log(`[useInvestigationGraph] Received graph data with ${data.nodes?.length || 0} nodes and ${data.links?.length || 0} links`);
+      
+      // Transform data if needed to match the expected format
+      const transformedData: GraphData = {
+        nodes: data.nodes.map((node: any) => ({
+          id: node.id,
+          name: node.label || node.id,
+          type: node.type?.toLowerCase() || 'unknown',
+          properties: node.properties || {},
+          is_funnel_identified: node.is_funnel_identified || false,
+          color: node.color
+        })),
+        links: data.links.map((link: any) => ({
+          source: typeof link.source === 'object' ? link.source.id : link.source,
+          target: typeof link.target === 'object' ? link.target.id : link.target,
+          type: link.type,
+          value: link.value || 1,
+          properties: link.properties || {}
+        }))
       };
       
-      setGraphData(defaultGraph);
+      setGraphData(transformedData);
     } catch (err) {
-      console.error('[useInvestigationGraph] Error setting graph data:', err);
-      setError(`Failed to create graph: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      console.error('[useInvestigationGraph] Error fetching investigation graph:', err);
+      setError(`Failed to load investigation graph: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }

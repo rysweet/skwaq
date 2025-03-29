@@ -56,26 +56,73 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
     setIsDataLoading(true);
     setError(null);
     
-    // Create a minimal default graph to avoid API issues
-    console.log(`Creating minimal graph data for investigation: ${investigationId}`);
-    
-    // Create a minimal default graph
-    const defaultGraph = {
-      nodes: [
-        {
-          id: investigationId,
-          name: `Investigation ${investigationId}`,
-          type: 'investigation',
-          properties: {}
+    // Fetch graph data from the API
+    console.log(`Fetching graph data for investigation: ${investigationId}`);
+    fetch(`/api/investigations/${investigationId}/visualization`)
+      .then(async response => {
+        if (!response.ok) {
+          // Try to get detailed error message from response
+          let errorMessage = `Error ${response.status}: ${response.statusText}`;
+          try {
+            const errorData = await response.json();
+            console.error('Error response data:', errorData);
+            if (errorData && errorData.error) {
+              errorMessage = errorData.error;
+            }
+          } catch (e) {
+            console.error('Failed to parse error response:', e);
+          }
+          throw new Error(errorMessage);
         }
-      ],
-      links: []
-    };
-    
-    // Set the default graph data
-    setGraphData(defaultGraph);
-    setIsDataLoading(false);
-    
+        return response.json();
+      })
+      .then(data => {
+        console.log('Graph data received:', data);
+        
+        // Transform the nodes to ensure they have the needed properties
+        const processedData = {
+          nodes: data.nodes.map((node: any) => ({
+            id: node.id,
+            name: node.label || node.id,
+            type: node.type || 'unknown',
+            group: node.group || 1,
+            properties: node.properties || {},
+            is_funnel_identified: node.is_funnel_identified || false,
+            color: node.color
+          })),
+          links: data.links.map((link: any) => ({
+            source: link.source,
+            target: link.target,
+            type: link.type,
+            value: link.value || 1
+          }))
+        };
+        
+        setGraphData(processedData);
+        setIsDataLoading(false);
+      })
+      .catch(err => {
+        console.error('Error fetching investigation graph:', err);
+        setError(`Failed to load investigation graph: ${err.message}`);
+        setIsDataLoading(false);
+        
+        // Create a minimal default graph if there's an error
+        const defaultGraph = {
+          nodes: [
+            {
+              id: investigationId,
+              name: `Investigation ${investigationId}`,
+              type: 'investigation',
+              group: 1,
+              properties: {},
+              color: '#4b76e8'
+            }
+          ],
+          links: []
+        };
+        
+        setGraphData(defaultGraph);
+      });
   }, [investigationId]);
   
   // Function to handle physics settings changes
