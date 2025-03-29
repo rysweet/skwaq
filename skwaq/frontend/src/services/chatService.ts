@@ -21,45 +21,45 @@ export interface ChatSession {
  */
 class ChatService {
   /**
-   * Get all chat sessions
+   * Get all chat conversations
    */
   public async getChatSessions(): Promise<ChatSession[]> {
-    return await apiService.get<ChatSession[]>('/chat/sessions');
+    return await apiService.get<ChatSession[]>('/chat/conversations');
   }
   
   /**
-   * Get a chat session by ID
+   * Get a conversation by ID
    */
   public async getChatSession(id: string): Promise<ChatSession> {
-    return await apiService.get<ChatSession>(`/chat/sessions/${id}`);
+    return await apiService.get<ChatSession>(`/chat/conversations/${id}`);
   }
   
   /**
-   * Create a new chat session
+   * Create a new conversation
    */
   public async createChatSession(title: string): Promise<ChatSession> {
-    return await apiService.post<ChatSession>('/chat/sessions', { title });
+    return await apiService.post<ChatSession>('/chat/conversations', { title });
   }
   
   /**
-   * Send a message in a chat session
+   * Send a message in a conversation
    */
   public async sendMessage(sessionId: string, content: string): Promise<ChatMessage> {
-    return await apiService.post<ChatMessage>(`/chat/sessions/${sessionId}/messages`, { content });
+    return await apiService.post<ChatMessage>(`/chat/conversations/${sessionId}/messages`, { content });
   }
   
   /**
-   * Delete a chat session
+   * Delete a conversation
    */
   public async deleteChatSession(id: string): Promise<void> {
-    await apiService.delete<void>(`/chat/sessions/${id}`);
+    await apiService.delete<void>(`/chat/conversations/${id}`);
   }
   
   /**
-   * Get all messages for a session
+   * Get all messages for a conversation
    */
   public async getMessages(sessionId: string): Promise<ChatMessage[]> {
-    return await apiService.get<ChatMessage[]>(`/chat/sessions/${sessionId}/messages`);
+    return await apiService.get<ChatMessage[]>(`/chat/conversations/${sessionId}/messages`);
   }
   
   /**
@@ -71,10 +71,12 @@ class ChatService {
     const { signal } = controller;
     
     // Start the fetch in the background
-    fetch(`${apiService['api'].defaults.baseURL}/chat/sessions/${sessionId}/stream`, {
+    const token = localStorage.getItem('authToken');
+    fetch(`${apiService['api'].defaults.baseURL}/chat/conversations/${sessionId}/stream`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : '',
       },
       body: JSON.stringify({ content }),
       signal,

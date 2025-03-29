@@ -59,79 +59,72 @@ const workflowService = {
    * Get all available workflows
    */
   getAvailableWorkflows: async (): Promise<AvailableWorkflow[]> => {
-    const response = await api.get('/api/workflows');
-    return response.data;
+    return await api.get('/workflows');
   },
   
   /**
    * Get all available tools for the tool invocation workflow
    */
   getAvailableTools: async (): Promise<AvailableTool[]> => {
-    const response = await api.get('/api/workflows/tools');
-    return response.data;
+    return await api.get('/workflows/tools');
   },
   
   /**
    * Start a workflow with the given parameters
    */
   startWorkflow: async (workflowId: string, parameters: WorkflowParameters): Promise<string> => {
-    const response = await api.post(`/api/workflows/${workflowId}/start`, parameters);
-    return response.data.workflow_id;
+    const response = await api.post(`/workflows/${workflowId}/start`, parameters);
+    return response.workflow_id;
   },
   
   /**
    * Get the status of a workflow
    */
   getWorkflowStatus: async (workflowId: string): Promise<WorkflowStatus> => {
-    const response = await api.get(`/api/workflows/${workflowId}/status`);
-    return response.data;
+    return await api.get(`/workflows/${workflowId}/status`);
   },
   
   /**
    * Get the results of a workflow
    */
   getWorkflowResults: async (workflowId: string): Promise<WorkflowResult[]> => {
-    const response = await api.get(`/api/workflows/${workflowId}/results`);
-    return response.data;
+    return await api.get(`/workflows/${workflowId}/results`);
   },
   
   /**
    * Stop a running workflow
    */
   stopWorkflow: async (workflowId: string): Promise<void> => {
-    await api.post(`/api/workflows/${workflowId}/stop`);
+    await api.post(`/workflows/${workflowId}/stop`);
   },
   
   /**
    * Get all active workflows
    */
   getActiveWorkflows: async (): Promise<WorkflowStatus[]> => {
-    const response = await api.get('/api/workflows/active');
-    return response.data;
+    return await api.get('/workflows/active');
   },
   
   /**
    * Get workflow history
    */
   getWorkflowHistory: async (limit: number = 10, offset: number = 0): Promise<WorkflowStatus[]> => {
-    const response = await api.get(`/api/workflows/history?limit=${limit}&offset=${offset}`);
-    return response.data;
+    return await api.get(`/workflows/history?limit=${limit}&offset=${offset}`);
   },
   
   /**
    * Invoke a specific tool
    */
   invokeTool: async (toolId: string, parameters: Record<string, any>): Promise<string> => {
-    const response = await api.post(`/api/workflows/tools/${toolId}/invoke`, parameters);
-    return response.data.execution_id;
+    const response = await api.post(`/workflows/tools/${toolId}/invoke`, parameters);
+    return response.execution_id;
   },
   
   /**
    * Get tool execution results
    */
   getToolResults: async (executionId: string): Promise<any> => {
-    const response = await api.get(`/api/workflows/tools/executions/${executionId}`);
-    return response.data;
+    return await api.get(`/workflows/tools/executions/${executionId}`);
   }
 };
 

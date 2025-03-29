@@ -9,7 +9,7 @@ class ApiService {
   constructor() {
     // Create axios instance
     this.api = axios.create({
-      baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+      baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5001/api',
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
@@ -31,10 +31,27 @@ class ApiService {
     
     // Add response interceptor for error handling
     this.api.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        console.log('API Response:', {
+          url: response.config.url,
+          method: response.config.method,
+          status: response.status,
+          data: response.data
+        });
+        return response;
+      },
       (error) => {
         // Handle specific error codes
+        console.log('API Error:', error);
+        
         if (error.response) {
+          console.error('API Error Response:', {
+            url: error.config?.url,
+            method: error.config?.method,
+            status: error.response.status,
+            data: error.response.data
+          });
+          
           switch (error.response.status) {
             case 401:
               // Handle unauthorized error
@@ -54,10 +71,17 @@ class ApiService {
           }
         } else if (error.request) {
           // Handle network errors
-          console.error('Network error, no response received');
+          console.error('Network error details:', {
+            url: error.config?.url,
+            method: error.config?.method,
+            message: 'No response received'
+          });
         } else {
           // Handle other errors
-          console.error('Error:', error.message);
+          console.error('API Error:', {
+            message: error.message,
+            config: error.config
+          });
         }
         
         return Promise.reject(error);

@@ -11,6 +11,7 @@ import NotFound from './pages/NotFound';
 import Investigations from './pages/Investigations';
 import Repositories from './pages/Repositories';
 import InvestigationVisualization from './pages/InvestigationVisualization';
+import ApiTestPage from './pages/ApiTestPage';
 import HelpOverlay from './components/HelpOverlay';
 import './styles/App.css';
 
@@ -104,6 +105,7 @@ function App() {
           <Route path="/investigations" element={<Investigations />} />
           <Route path="/repositories" element={<Repositories />} />
           <Route path="/investigations/:investigationId/visualization" element={<InvestigationVisualization darkMode={darkMode} />} />
+          <Route path="/api-test" element={<ApiTestPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Layout>

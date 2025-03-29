@@ -2,7 +2,7 @@
 # Script to run both the React frontend and Flask backend for development
 
 # Default backend port
-BACKEND_PORT=5000
+BACKEND_PORT=5001
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -29,7 +29,7 @@ start_backend() {
     fi
     
     # Run Flask with hot reload
-    FLASK_APP=skwaq/api/app.py FLASK_ENV=development python -m flask run --host=0.0.0.0 --port=${BACKEND_PORT} &
+    FLASK_APP=skwaq.api.app FLASK_DEBUG=1 python -m flask run --host=0.0.0.0 --port=${BACKEND_PORT} &
     BACKEND_PID=$!
     echo "Backend started with PID: $BACKEND_PID on port ${BACKEND_PORT}"
 }
@@ -42,8 +42,8 @@ start_frontend() {
     # Set API URL for React development using the specified backend port
     export REACT_APP_API_URL=http://localhost:${BACKEND_PORT}/api
 
-    # Run npm start
-    npm start &
+    # Run npm start on a different port
+    PORT=3001 npm start &
     FRONTEND_PID=$!
     echo "Frontend started with PID: $FRONTEND_PID (connecting to backend on port ${BACKEND_PORT})"
 }

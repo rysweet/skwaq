@@ -35,11 +35,28 @@ const useInvestigations = () => {
       setIsLoading(true);
       setError(null);
       
-      const results = await api.get<Investigation[]>('/api/investigations');
-      setInvestigations(results);
-    } catch (err) {
+      console.log('Fetching investigations...');
+      const results = await api.get<Investigation[]>('/investigations');
+      console.log('Received investigations:', results);
+      setInvestigations(results || []);
+    } catch (err: any) {
       console.error('Error fetching investigations:', err);
-      setError('Failed to load investigations');
+      // Log more detailed error information
+      if (err.response) {
+        // The request was made and the server responded with a status code outside of 2xx
+        console.error('Error response data:', err.response.data);
+        console.error('Error response status:', err.response.status);
+        console.error('Error response headers:', err.response.headers);
+        setError(`Failed to load investigations: ${err.response.status} ${err.response.statusText}`);
+      } else if (err.request) {
+        // The request was made but no response was received
+        console.error('No response received:', err.request);
+        setError('Failed to load investigations: No response from server');
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        console.error('Error message:', err.message);
+        setError(`Failed to load investigations: ${err.message}`);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -53,7 +70,7 @@ const useInvestigations = () => {
       setIsLoading(true);
       setError(null);
       
-      const result = await api.get<InvestigationDetail>(`/api/investigations/${id}`);
+      const result = await api.get<InvestigationDetail>(`/investigations/${id}`);
       setSelectedInvestigation(result);
       return result;
     } catch (err) {
@@ -73,7 +90,7 @@ const useInvestigations = () => {
       setIsLoading(true);
       setError(null);
       
-      const result = await api.post<Investigation>('/api/investigations', investigation);
+      const result = await api.post<Investigation>('/investigations', investigation);
       setInvestigations(prev => [...prev, result]);
       return result;
     } catch (err) {

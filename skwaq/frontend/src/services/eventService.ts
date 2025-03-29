@@ -22,7 +22,7 @@ class EventService {
   private baseUrl: string;
   
   constructor() {
-    this.baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+    this.baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
   }
   
   /**
@@ -78,8 +78,15 @@ class EventService {
     }
     
     try {
-      const url = `${this.baseUrl}/events/${channel}/connect`;
-      const eventSource = new EventSource(url);
+      // Use the correct path for SSE connections
+      const url = `${this.baseUrl}/events/${channel}`;
+      const token = localStorage.getItem('authToken');
+      
+      // Create EventSource with auth token
+      // Note: EventSource doesn't support headers in the constructor in most browsers,
+      // so we need to include the token in the URL as a query parameter
+      const fullUrl = token ? `${url}?token=${encodeURIComponent(token)}` : url;
+      const eventSource = new EventSource(fullUrl);
       
       // Store the event source
       this.eventSources[channel] = eventSource;

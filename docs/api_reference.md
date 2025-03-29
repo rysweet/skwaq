@@ -762,7 +762,7 @@ The API supports real-time updates via Server-Sent Events (SSE).
 ### Connect to Event Stream
 
 ```
-GET /api/events/{channel}/connect
+GET /api/events/{channel}
 ```
 
 Connect to a specific event channel for real-time updates.
@@ -874,7 +874,7 @@ curl -s -X POST http://localhost:5001/api/chat/conversations/$CONV_ID/messages \
 
 ```javascript
 // JavaScript example for connecting to SSE stream
-const eventSource = new EventSource('http://localhost:5001/api/events/repository/connect', {
+const eventSource = new EventSource('http://localhost:5001/api/events/repository', {
   headers: {
     'Authorization': `Bearer ${token}`
   },
