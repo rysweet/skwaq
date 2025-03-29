@@ -133,13 +133,14 @@ def create_app(test_config=None):
             }), 500
     
     # Register blueprints
-    from skwaq.api.routes import auth, repositories, events, workflows, chat, investigations
+    from skwaq.api.routes import auth, repositories, events, workflows, chat, investigations, knowledge_graph
     app.register_blueprint(auth.bp)
     app.register_blueprint(repositories.bp)
     app.register_blueprint(events.bp)
     app.register_blueprint(workflows.bp)
     app.register_blueprint(chat.bp)
     app.register_blueprint(investigations.bp)
+    app.register_blueprint(knowledge_graph.bp)
     
     # Additional blueprints will be registered as they are implemented
     
