@@ -100,12 +100,17 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
             is_funnel_identified: node.is_funnel_identified || false,
             color: node.color
           })),
-          links: data.links.map((link: any) => ({
-            source: link.source,
-            target: link.target,
-            type: link.type,
-            value: link.value || 1
-          }))
+          links: data.links.map((link: any) => {
+            // Debug log link info
+            console.log(`Processing link: source=${JSON.stringify(link.source)}, target=${JSON.stringify(link.target)}, type=${link.type}`);
+            
+            return {
+              source: link.source,
+              target: link.target,
+              type: link.type,
+              value: link.value || 1
+            };
+          })
         };
         
         setGraphData(processedData);
@@ -198,12 +203,21 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
     
     // Get IDs of remaining nodes
     const nodeIds = new Set(filteredNodes.map(node => node.id));
+    console.log('Node IDs after filtering:', Array.from(nodeIds));
     
     // Filter links where both source and target exist in filtered nodes
     const filteredLinks = graphData.links.filter(link => {
       const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
       const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-      return nodeIds.has(sourceId) && nodeIds.has(targetId);
+      
+      const hasSource = nodeIds.has(sourceId);
+      const hasTarget = nodeIds.has(targetId);
+      
+      if (!hasSource || !hasTarget) {
+        console.log(`Dropping link: source=${sourceId} (${hasSource ? 'valid' : 'missing'}), target=${targetId} (${hasTarget ? 'valid' : 'missing'})`);
+      }
+      
+      return hasSource && hasTarget;
     });
     
     return { nodes: filteredNodes, links: filteredLinks };
@@ -220,8 +234,11 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
       }
       
       if (graphData.nodes.length === 0) {
+        console.warn('No nodes in graph data, skipping graph rendering');
         return;
       }
+      
+      console.log('Creating graph with nodes:', graphData.nodes.length, 'links:', graphData.links.length);
       
       // Get filtered data based on current filter settings
       const filteredData = getFilteredGraphData();
@@ -266,7 +283,11 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
         })
         // Special effect for funnel-identified nodes
         .nodeThreeObject((node: GraphNode) => {
+          // Count number of nodes actually processed
+          console.log(`Processing node 3D object: ${node.id} (${node.type})`);
+          
           if (highlightFunnel && node.is_funnel_identified) {
+            console.log(`Adding glow effect to funnel-identified node: ${node.id}`);
             // Create a glowing effect for funnel-identified nodes
             const sprite = new THREE.Sprite(
               new THREE.SpriteMaterial({
