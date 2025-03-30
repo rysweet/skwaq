@@ -79,6 +79,14 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
       .then(data => {
         console.log('Graph data received:', data);
         
+        // Debug log for node types
+        console.log('Node types before processing:');
+        const typesBeforeProcessing = {};
+        data.nodes.forEach((node: any) => {
+          typesBeforeProcessing[node.type] = (typesBeforeProcessing[node.type] || 0) + 1;
+        });
+        console.table(typesBeforeProcessing);
+        
         // Transform the nodes to ensure they have the needed properties
         const processedData = {
           nodes: data.nodes.map((node: any) => ({
@@ -159,6 +167,10 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
     // Start with all nodes
     let filteredNodes = [...graphData.nodes];
     
+    // Debug log filtered nodes
+    console.log('Filtering nodes. Initial count:', filteredNodes.length);
+    console.log('Node types before filtering:', filteredNodes.map(n => n.type));
+    
     // Apply filters
     if (!showSources) {
       filteredNodes = filteredNodes.filter(node => node.type !== 'source');
@@ -169,12 +181,19 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
     }
     
     if (!showDataFlowPaths) {
-      filteredNodes = filteredNodes.filter(node => node.type !== 'dataFlowPath');
+      // Handle both capitalized and lowercase data flow path types
+      filteredNodes = filteredNodes.filter(node => 
+        node.type !== 'dataflowpath' && 
+        node.type !== 'dataFlowPath' &&
+        node.type !== 'DataFlowPath'
+      );
     }
     
     if (!showMethods) {
       filteredNodes = filteredNodes.filter(node => node.type !== 'method');
     }
+    
+    console.log('Node count after filtering:', filteredNodes.length);
     
     // Get IDs of remaining nodes
     const nodeIds = new Set(filteredNodes.map(node => node.id));
@@ -223,8 +242,13 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
         .backgroundColor(darkMode ? '#1a1a1a' : '#ffffff')
         .nodeLabel((node: GraphNode) => `${node.name} (${node.type})`)
         .nodeColor((node: GraphNode) => {
-          // Color nodes based on type
-          switch (node.type) {
+          // Color nodes based on type (with debug log)
+          console.log(`Coloring node type: "${node.type}"`);
+          
+          // Normalize type to lowercase for consistent switch matching
+          const nodeType = (node.type || 'unknown').toLowerCase();
+          
+          switch (nodeType) {
             case 'investigation': return 'rgba(75, 118, 232, 0.8)';  // #4b76e8
             case 'repository': return 'rgba(102, 16, 242, 0.8)';     // #6610f2
             case 'finding': return 'rgba(249, 65, 68, 0.8)';         // #f94144
@@ -232,9 +256,11 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
             case 'file': return 'rgba(32, 201, 151, 0.8)';           // #20c997
             case 'source': return 'rgba(2, 204, 250, 0.8)';          // #02ccfa
             case 'sink': return 'rgba(250, 118, 2, 0.8)';            // #fa7602
-            case 'dataFlowPath': return 'rgba(250, 2, 144, 0.8)';    // #fa0290
+            case 'dataflowpath': return 'rgba(250, 2, 144, 0.8)';    // #fa0290
             case 'method': return 'rgba(147, 112, 219, 0.8)';        // #9370db
-            default: return 'rgba(158, 158, 158, 0.8)';              // gray
+            default: 
+              console.log(`Unrecognized node type: "${nodeType}"`);
+              return 'rgba(158, 158, 158, 0.8)';  // gray
           }
         })
         // Special effect for funnel-identified nodes
