@@ -45,7 +45,8 @@ const useInvestigationGraph = (investigationId?: string) => {
         nodes: data.nodes.map((node: any) => ({
           id: node.id,
           name: node.label || node.id,
-          type: node.type?.toLowerCase() || 'unknown',
+          // Always convert node type to lowercase for consistent filtering
+          type: (node.type || 'unknown').toLowerCase(),
           properties: node.properties || {},
           is_funnel_identified: node.is_funnel_identified || false,
           color: node.color

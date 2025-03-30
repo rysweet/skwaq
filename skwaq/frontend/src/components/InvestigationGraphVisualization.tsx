@@ -84,7 +84,8 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
           nodes: data.nodes.map((node: any) => ({
             id: node.id,
             name: node.label || node.id,
-            type: node.type || 'unknown',
+            // Convert node type to lowercase for consistent handling
+            type: (node.type || 'unknown').toLowerCase(),
             group: node.group || 1,
             properties: node.properties || {},
             is_funnel_identified: node.is_funnel_identified || false,
