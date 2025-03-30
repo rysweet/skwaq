@@ -81,9 +81,10 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
         
         // Debug log for node types
         console.log('Node types before processing:');
-        const typesBeforeProcessing = {};
+        const typesBeforeProcessing: Record<string, number> = {};
         data.nodes.forEach((node: any) => {
-          typesBeforeProcessing[node.type] = (typesBeforeProcessing[node.type] || 0) + 1;
+          const nodeType = String(node.type || 'unknown');
+          typesBeforeProcessing[nodeType] = (typesBeforeProcessing[nodeType] || 0) + 1;
         });
         console.table(typesBeforeProcessing);
         
