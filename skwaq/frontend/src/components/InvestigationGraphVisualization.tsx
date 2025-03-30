@@ -91,10 +91,12 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
             try {
               // Try to parse as JSON
               return JSON.parse(text);
-            } catch (e) {
+            } catch (e: unknown) {
               console.error('Failed to parse response as JSON:', e);
               console.log('Raw response starts with:', text.substring(0, 100));
-              throw new Error(`Invalid JSON response from server: ${e.message}`);
+              // Handle error with proper type checking
+              const errorMessage = e instanceof Error ? e.message : 'Unknown parsing error';
+              throw new Error(`Invalid JSON response from server: ${errorMessage}`);
             }
           });
         }
