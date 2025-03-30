@@ -343,29 +343,77 @@ def get_investigation_visualization(investigation_id):
         )
         
         # Preprocess the data structure
-        try:
-            # First handle any Neo4j types in the data structure
-            graph_data = preprocess_data_for_json(graph_data)
+        # Ensure all data is serializable
+        serializable_data = {
+            'nodes': [],
+            'links': []
+        }
+        
+        # Process nodes - ensure all IDs are strings and all values are serializable
+        for node in graph_data.get('nodes', []):
+            serializable_node = {}
+            # Ensure ID is a string
+            if 'id' in node:
+                serializable_node['id'] = str(node['id'])
+            else:
+                # Skip nodes without ID
+                continue
+                
+            # Copy other fields, ensuring they're serializable
+            for key, value in node.items():
+                if key == 'id':
+                    continue  # Already handled
+                    
+                if isinstance(value, (str, int, float, bool, type(None))):
+                    # Basic types are safe
+                    serializable_node[key] = value
+                elif isinstance(value, (neo4j.time.DateTime, datetime)):
+                    # Handle datetime objects
+                    serializable_node[key] = value.isoformat() if hasattr(value, 'isoformat') else str(value)
+                elif isinstance(value, dict):
+                    # Make properties safe
+                    serializable_props = {}
+                    for prop_key, prop_value in value.items():
+                        if isinstance(prop_value, (str, int, float, bool, type(None))):
+                            serializable_props[prop_key] = prop_value
+                        else:
+                            serializable_props[prop_key] = str(prop_value)
+                    serializable_node[key] = serializable_props
+                else:
+                    # Convert anything else to string
+                    serializable_node[key] = str(value)
             
-            # Convert numerical IDs to strings for nodes
-            for node in graph_data.get('nodes', []):
-                if 'id' in node and not isinstance(node['id'], str):
-                    node['id'] = str(node['id'])
+            serializable_data['nodes'].append(serializable_node)
+        
+        # Process links - ensure source and target are strings
+        for link in graph_data.get('links', []):
+            serializable_link = {}
             
-            # Convert source and target to strings in links
-            for link in graph_data.get('links', []):
-                if 'source' in link and not isinstance(link['source'], str):
-                    link['source'] = str(link['source'])
-                if 'target' in link and not isinstance(link['target'], str):
-                    link['target'] = str(link['target'])
+            # Ensure source is a string
+            if 'source' in link:
+                serializable_link['source'] = str(link['source']) if link['source'] is not None else None
+            else:
+                # Skip links without source
+                continue
+                
+            # Ensure target is a string
+            if 'target' in link:
+                serializable_link['target'] = str(link['target']) if link['target'] is not None else None
+            else:
+                # Skip links without target
+                continue
+                
+            # Copy other fields
+            for key, value in link.items():
+                if key in ('source', 'target'):
+                    continue  # Already handled
+                    
+                serializable_link[key] = str(value) if value is not None else None
             
-            # Use jsonify for the most compatible JSON serialization
-            return jsonify(graph_data)
-        except Exception as e:
-            logger.error(f"Error serializing graph data: {str(e)}", exc_info=True)
-            # Fallback to simpler serialization with better error handling
-            response = json.dumps(graph_data, cls=CustomVisualizationEncoder, default=str)
-            return response, 200, {'Content-Type': 'application/json'}
+            serializable_data['links'].append(serializable_link)
+        
+        # Use Flask's jsonify for proper JSON response
+        return jsonify(serializable_data)
     except NotFoundError as e:
         raise e
     except Exception as e:

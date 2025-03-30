@@ -80,12 +80,21 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
         } else {
           // Handle text response if not properly formatted as JSON
           return response.text().then(text => {
+            // Print the first 500 characters of the response for debugging
+            console.error('Response is not JSON. First 500 chars:', text.substring(0, 500));
+            
+            // If it starts with < it's likely HTML
+            if (text.trim().startsWith('<')) {
+              throw new Error('Server returned HTML instead of JSON. This usually indicates a server-side error. Check server logs for details.');
+            }
+            
             try {
+              // Try to parse as JSON
               return JSON.parse(text);
             } catch (e) {
               console.error('Failed to parse response as JSON:', e);
-              console.log('Raw response:', text);
-              throw new Error('Invalid JSON response from server');
+              console.log('Raw response starts with:', text.substring(0, 100));
+              throw new Error(`Invalid JSON response from server: ${e.message}`);
             }
           });
         }
