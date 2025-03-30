@@ -13,6 +13,34 @@ from skwaq.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Custom JSON encoder for visualization data
+class CustomVisualizationEncoder(json.JSONEncoder):
+    """Custom JSON encoder to handle Neo4j data types and dates in visualization output."""
+    
+    def default(self, obj):
+        """Handle special types for JSON serialization."""
+        if isinstance(obj, neo4j.time.DateTime):
+            return obj.to_native().isoformat()
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
+def preprocess_data_for_json(data):
+    """Pre-process data to handle DateTime objects in nested structures."""
+    if isinstance(data, dict):
+        for key, value in list(data.items()):
+            if isinstance(value, (neo4j.time.DateTime, datetime)):
+                data[key] = value.isoformat() if hasattr(value, 'isoformat') else str(value)
+            elif isinstance(value, (dict, list)):
+                data[key] = preprocess_data_for_json(value)
+    elif isinstance(data, list):
+        for i, item in enumerate(data):
+            if isinstance(item, (neo4j.time.DateTime, datetime)):
+                data[i] = item.isoformat() if hasattr(item, 'isoformat') else str(item)
+            elif isinstance(item, (dict, list)):
+                data[i] = preprocess_data_for_json(item)
+    return data
+
 # Blueprint for investigation routes
 bp = Blueprint('investigations', __name__, url_prefix='/api/investigations')
 
@@ -314,14 +342,19 @@ def get_investigation_visualization(investigation_id):
             max_nodes=100
         )
         
-        # Return the graph data as JSON
-        return jsonify(graph_data)
+        # Preprocess the data structure
+        graph_data = preprocess_data_for_json(graph_data)
+        
+        # Use custom encoder as a fallback for any objects we missed
+        response = json.dumps(graph_data, cls=CustomVisualizationEncoder)
+        return response, 200, {'Content-Type': 'application/json'}
     except NotFoundError as e:
         raise e
     except Exception as e:
         logger.error(f"Error retrieving visualization for investigation {investigation_id}: {str(e)}", exc_info=True)
-        return jsonify({
+        error_response = {
             "error": str(e),
             "message": f"Failed to retrieve visualization for investigation {investigation_id}",
             "traceback": traceback.format_exc()
-        }), 500
+        }
+        return json.dumps(error_response), 500, {'Content-Type': 'application/json'}
