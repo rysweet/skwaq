@@ -343,11 +343,29 @@ def get_investigation_visualization(investigation_id):
         )
         
         # Preprocess the data structure
-        graph_data = preprocess_data_for_json(graph_data)
-        
-        # Use custom encoder as a fallback for any objects we missed
-        response = json.dumps(graph_data, cls=CustomVisualizationEncoder)
-        return response, 200, {'Content-Type': 'application/json'}
+        try:
+            # First handle any Neo4j types in the data structure
+            graph_data = preprocess_data_for_json(graph_data)
+            
+            # Convert numerical IDs to strings for nodes
+            for node in graph_data.get('nodes', []):
+                if 'id' in node and not isinstance(node['id'], str):
+                    node['id'] = str(node['id'])
+            
+            # Convert source and target to strings in links
+            for link in graph_data.get('links', []):
+                if 'source' in link and not isinstance(link['source'], str):
+                    link['source'] = str(link['source'])
+                if 'target' in link and not isinstance(link['target'], str):
+                    link['target'] = str(link['target'])
+            
+            # Use jsonify for the most compatible JSON serialization
+            return jsonify(graph_data)
+        except Exception as e:
+            logger.error(f"Error serializing graph data: {str(e)}", exc_info=True)
+            # Fallback to simpler serialization with better error handling
+            response = json.dumps(graph_data, cls=CustomVisualizationEncoder, default=str)
+            return response, 200, {'Content-Type': 'application/json'}
     except NotFoundError as e:
         raise e
     except Exception as e:
@@ -357,4 +375,4 @@ def get_investigation_visualization(investigation_id):
             "message": f"Failed to retrieve visualization for investigation {investigation_id}",
             "traceback": traceback.format_exc()
         }
-        return json.dumps(error_response), 500, {'Content-Type': 'application/json'}
+        return jsonify(error_response), 500

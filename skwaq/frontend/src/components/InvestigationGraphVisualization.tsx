@@ -74,7 +74,21 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
           }
           throw new Error(errorMessage);
         }
-        return response.json();
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          return response.json();
+        } else {
+          // Handle text response if not properly formatted as JSON
+          return response.text().then(text => {
+            try {
+              return JSON.parse(text);
+            } catch (e) {
+              console.error('Failed to parse response as JSON:', e);
+              console.log('Raw response:', text);
+              throw new Error('Invalid JSON response from server');
+            }
+          });
+        }
       })
       .then(data => {
         console.log('Graph data received:', data);
