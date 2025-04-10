@@ -29,7 +29,7 @@ jobs:
     - name: Test development image
       run: |
         docker compose up -d
-        docker compose exec -T skwaq bash -c "cd /app && . $VENV_PATH/bin/activate && pytest tests/"
+        docker compose exec -T skwaq bash -c "cd /app && python -m pytest tests/"
         docker compose down -v
 
     - name: Build production image
