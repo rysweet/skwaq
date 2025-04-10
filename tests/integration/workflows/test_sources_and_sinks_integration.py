@@ -332,7 +332,6 @@ async def test_minimal_workflow_creation():
             "skwaq.workflows.sources_and_sinks.get_connector"
         ) as mock_get_sources_connector,
     ):
-
         mock_get_connector.return_value = mock_connector
         mock_get_sources_connector.return_value = mock_connector
 

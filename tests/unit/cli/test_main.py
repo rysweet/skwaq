@@ -115,7 +115,6 @@ class TestMainWrapper:
             ),
             patch("skwaq.cli.main.refactored_run", mock_run),
         ):
-
             # Create a mock run function
             mock_run = MagicMock()
 
@@ -198,7 +197,6 @@ class TestCLIParser:
             patch("skwaq.cli.parser.base.create_parser", return_value=parser),
             patch("skwaq.cli.parser.commands.register_all_parsers"),
         ):
-
             # Import the create_parser function
             from skwaq.cli.main import create_parser
 
@@ -256,7 +254,6 @@ class TestCLIParser:
             patch("skwaq.cli.parser.base.create_parser", return_value=parser),
             patch("skwaq.cli.parser.commands.register_all_parsers"),
         ):
-
             # Import the create_parser function
             from skwaq.cli.main import create_parser
 

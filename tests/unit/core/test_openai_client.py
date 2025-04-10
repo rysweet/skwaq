@@ -241,7 +241,6 @@ def test_azure_entra_id_auth():
         patch("azure.identity.DefaultAzureCredential") as mock_credential,
         patch("azure.identity.get_bearer_token_provider") as mock_token_provider,
     ):
-
         # Mock credential instance
         mock_credential.return_value = MagicMock(name="default_credential")
 
@@ -294,7 +293,6 @@ def test_azure_bearer_token_auth():
         patch("azure.identity.DefaultAzureCredential") as mock_credential,
         patch("azure.identity.get_bearer_token_provider") as mock_get_token_provider,
     ):
-
         # Mock credential and token provider instances
         mock_credential.return_value = MagicMock(name="default_credential")
         mock_token_provider = MagicMock(name="token_provider")
@@ -344,7 +342,6 @@ def test_client_registry():
         patch("skwaq.core.openai_client.OpenAI"),
         patch("skwaq.core.openai_client.OpenAIClient.__init__") as mock_init,
     ):
-
         # Mock the client initialization to avoid actual initialization
         mock_init.return_value = None
 

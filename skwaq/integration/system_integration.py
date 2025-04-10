@@ -192,9 +192,9 @@ class SystemIntegrationManager:
 
         if "resource_manager" in self._components:
             resource_manager = self._components["resource_manager"]
-            self._health_status["resource_usage"] = (
-                resource_manager.get_resource_usage()
-            )
+            self._health_status[
+                "resource_usage"
+            ] = resource_manager.get_resource_usage()
 
         return self._health_status
 

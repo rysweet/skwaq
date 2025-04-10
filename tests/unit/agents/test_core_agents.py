@@ -536,9 +536,9 @@ class TestAgentCommunication:
                 knowledge_agent = KnowledgeAgent()
 
                 # Register knowledge agent with orchestrator
-                orchestrator.available_agents[knowledge_agent.agent_id] = (
-                    knowledge_agent
-                )
+                orchestrator.available_agents[
+                    knowledge_agent.agent_id
+                ] = knowledge_agent
                 orchestrator.agent_capabilities[knowledge_agent.agent_id] = [
                     "knowledge_retrieval"
                 ]

@@ -652,7 +652,6 @@ class TestSourcesAndSinksWorkflow:
                 patch.object(SourcesAndSinksWorkflow, "update_graph") as mock_update,
                 patch.object(SourcesAndSinksWorkflow, "generate_report") as mock_report,
             ):
-
                 mock_setup.return_value = None
 
                 mock_query.return_value = {

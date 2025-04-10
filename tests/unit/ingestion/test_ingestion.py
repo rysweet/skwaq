@@ -167,7 +167,6 @@ async def test_run_ingestion_local_path(
             "skwaq.ingestion.ingestion.DocumentationProcessor"
         ) as mock_doc_processor_cls,
     ):
-
         # Setup mock filesystem graph builder
         mock_fs_builder = MagicMock()
         mock_fs_builder.build_graph = AsyncMock(
@@ -246,7 +245,6 @@ async def test_run_ingestion_git_repo(
             "skwaq.ingestion.ingestion.DocumentationProcessor"
         ) as mock_doc_processor_cls,
     ):
-
         # Setup mock filesystem graph builder
         mock_fs_builder = MagicMock()
         mock_fs_builder.build_graph = AsyncMock(
@@ -331,7 +329,6 @@ async def test_run_ingestion_with_documentation(
             "skwaq.ingestion.ingestion.DocumentationProcessor"
         ) as mock_doc_processor_cls,
     ):
-
         # Setup mock filesystem graph builder
         mock_fs_builder = MagicMock()
         mock_fs_builder.build_graph = AsyncMock(
@@ -405,7 +402,6 @@ async def test_run_ingestion_parse_only(
             "skwaq.ingestion.ingestion.DocumentationProcessor"
         ) as mock_doc_processor_cls,
     ):
-
         # Setup mock filesystem graph builder
         mock_fs_builder = MagicMock()
         mock_fs_builder.build_graph = AsyncMock(
@@ -462,7 +458,6 @@ async def test_run_ingestion_error(
         patch("skwaq.ingestion.ingestion.get_parser", return_value=None),
         patch("skwaq.ingestion.ingestion.ASTFileMapper", return_value=mock_ast_mapper),
     ):
-
         # Setup mock filesystem graph builder
         mock_fs_builder = MagicMock()
         mock_fs_builder.build_graph = AsyncMock(

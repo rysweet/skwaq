@@ -550,9 +550,9 @@ implementable within reasonable constraints.
                 status = ComplianceStatus(evaluation["compliance_status"])
                 evaluation["compliance_status"] = status.value
             except ValueError:
-                evaluation["compliance_status"] = (
-                    ComplianceStatus.REQUIRES_INVESTIGATION.value
-                )
+                evaluation[
+                    "compliance_status"
+                ] = ComplianceStatus.REQUIRES_INVESTIGATION.value
 
             return evaluation
 
@@ -638,9 +638,9 @@ implementable within reasonable constraints.
 
             # Ensure all required fields are present
             if "title" not in recommendation:
-                recommendation["title"] = (
-                    f"Security {recommendation_type.value.replace('_', ' ').title()} Recommendation"
-                )
+                recommendation[
+                    "title"
+                ] = f"Security {recommendation_type.value.replace('_', ' ').title()} Recommendation"
             if "description" not in recommendation:
                 recommendation["description"] = "No description provided"
             if "justification" not in recommendation:

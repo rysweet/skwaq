@@ -805,7 +805,6 @@ class TestWorkflowExecution:
                 "skwaq.agents.specialized.workflows.orchestrator.RemediationComplexity"
             ) as mock_remediation_complexity,
         ):
-
             # Create Enum mock values
             mock_exploit_status.EXPLOITABLE = type(
                 "obj", (object,), {"value": "exploitable"}

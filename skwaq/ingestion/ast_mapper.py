@@ -74,7 +74,6 @@ class ASTFileMapper:
                     or path.replace("\\", "/") == file_path.replace("\\", "/")
                     or path.split("/")[-1] == file_path.split("/")[-1]
                 ):
-
                     # Create relationship from file to AST node
                     success = self.connector.create_relationship(
                         file_id, node_id, RelationshipTypes.DEFINES
