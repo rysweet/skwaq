@@ -55,7 +55,7 @@ class RepositoryCommandHandler(CommandHandler):
 
         # Query Neo4j for repositories
         info("[bold blue]Fetching repository list...")
-        
+
         # Get database connector
         db = get_connector()
 
@@ -367,7 +367,7 @@ class RepositoryCommandHandler(CommandHandler):
 
         # Delete repository
         info(f"[bold blue]Deleting repository '{repo_name}'...")
-        
+
         # Delete all connected nodes recursively
         delete_query = """
         MATCH (r:Repository)

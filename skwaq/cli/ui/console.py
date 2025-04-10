@@ -28,7 +28,9 @@ skwaq_theme = Theme(
 console = Console(theme=skwaq_theme)
 
 
-def print_banner(include_version: bool = True, version: Optional[str] = None, file=None) -> None:
+def print_banner(
+    include_version: bool = True, version: Optional[str] = None, file=None
+) -> None:
     """Print the Skwaq banner.
 
     Args:

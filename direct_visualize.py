@@ -14,10 +14,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from skwaq.visualization.graph_visualizer import GraphVisualizer
 from skwaq.db.neo4j_connector import get_connector
 
+
 # Custom JSON encoder for Neo4j DateTime objects
 class CustomJSONEncoder(json.JSONEncoder):
     """Custom JSON encoder to handle Neo4j data types."""
-    
+
     def default(self, obj):
         if isinstance(obj, neo4j.time.DateTime):
             return obj.to_native().isoformat()
@@ -25,24 +26,29 @@ class CustomJSONEncoder(json.JSONEncoder):
             return obj.isoformat()
         return super().default(obj)
 
+
 def main():
     """Main function to visualize an investigation."""
     parser = argparse.ArgumentParser(description="Visualize an investigation")
     parser.add_argument("investigation_id", help="ID of the investigation to visualize")
-    parser.add_argument("--format", choices=["html", "json", "svg"], default="html", 
-                        help="Output format")
+    parser.add_argument(
+        "--format",
+        choices=["html", "json", "svg"],
+        default="html",
+        help="Output format",
+    )
     parser.add_argument("--output", help="Output file path")
-    
+
     args = parser.parse_args()
-    
+
     # Set default output path if not provided
     if not args.output:
         args.output = f"investigation-{args.investigation_id}.{args.format}"
-    
+
     try:
         # Initialize the graph visualizer
         visualizer = GraphVisualizer()
-        
+
         # Get the investigation graph data
         graph_data = visualizer.get_investigation_graph(
             investigation_id=args.investigation_id,
@@ -50,29 +56,31 @@ def main():
             include_vulnerabilities=True,
             include_files=True,
             include_sources_sinks=True,
-            max_nodes=100
+            max_nodes=100,
         )
-        
+
         # Handle JSON serialization
         # First convert DateTime objects
-        for node in graph_data['nodes']:
-            for key, value in node.get('properties', {}).items():
+        for node in graph_data["nodes"]:
+            for key, value in node.get("properties", {}).items():
                 if isinstance(value, (neo4j.time.DateTime, datetime.datetime)):
-                    node['properties'][key] = value.isoformat() if hasattr(value, 'isoformat') else str(value)
-        
+                    node["properties"][key] = (
+                        value.isoformat() if hasattr(value, "isoformat") else str(value)
+                    )
+
         # Export the graph based on the format
         if args.format == "html":
             # Modify the GraphVisualizer's _generate_html_template method to use our custom encoder
             original_method = visualizer._generate_html_template
-            
+
             def custom_template_method(graph_data, title):
                 # Use our custom encoder
                 graph_data_json = json.dumps(graph_data, cls=CustomJSONEncoder)
-                
+
                 # Get the rest of the template from the original function
                 html_template = original_method.__code__
                 css_styles = html_template.co_consts[1]
-                
+
                 # Build the HTML with our serialized data
                 html = [
                     "<!DOCTYPE html>",
@@ -450,51 +458,53 @@ def main():
                     "</body>",
                     "</html>",
                 ]
-                
+
                 return "\n".join(html)
-            
+
             # Replace the method temporarily
             visualizer._generate_html_template = custom_template_method
-            
+
             # Export the graph
             output_path = visualizer.export_graph_as_html(
                 graph_data, args.output, f"Investigation {args.investigation_id}"
             )
-            
+
             # Restore the original method
             visualizer._generate_html_template = original_method
-            
+
         elif args.format == "json":
             # Export as JSON using our custom encoder
             with open(args.output, "w") as f:
                 json.dump(graph_data, f, cls=CustomJSONEncoder, indent=2)
             output_path = args.output
-            
+
         elif args.format == "svg":
             # Convert DateTime objects before passing to SVG export
             # which might use other libraries that don't handle our custom encoder
             output_path = visualizer.export_graph_as_svg(graph_data, args.output)
-        
+
         print(f"Investigation graph exported to: {output_path}")
-        
+
         # Print data summary
         print(f"Nodes: {len(graph_data['nodes'])}")
         print(f"Links: {len(graph_data['links'])}")
-        
+
         # Count node types
         node_types = {}
-        for node in graph_data['nodes']:
-            node_type = node.get('type', 'unknown')
+        for node in graph_data["nodes"]:
+            node_type = node.get("type", "unknown")
             node_types[node_type] = node_types.get(node_type, 0) + 1
-        
+
         print("\nNode Types:")
         for node_type, count in node_types.items():
             print(f"  - {node_type}: {count}")
-            
+
     except Exception as e:
         print(f"Error generating visualization: {e}")
         import traceback
+
         traceback.print_exc()
-        
+
+
 if __name__ == "__main__":
     main()

@@ -13,10 +13,11 @@ from ..utils.logging import get_logger
 
 try:
     from azure.identity import (
-        DefaultAzureCredential, 
+        DefaultAzureCredential,
         ClientSecretCredential,
-        get_bearer_token_provider
+        get_bearer_token_provider,
     )
+
     HAS_AZURE_IDENTITY = True
 except ImportError:
     HAS_AZURE_IDENTITY = False
@@ -53,7 +54,7 @@ class OpenAIClient:
         # Get model configuration
         model_deployments = openai_config.get("model_deployments", {})
         default_chat_model = model_deployments.get("chat", "gpt4o")
-        
+
         # Set up the client instance
         if api_type == "azure":
             # For Azure OpenAI
@@ -62,9 +63,9 @@ class OpenAIClient:
                 raise ValueError(
                     "Azure OpenAI endpoint is required but not provided in configuration"
                 )
-                
+
             api_version = openai_config.get("api_version", "2023-05-15")
-            
+
             if use_entra_id:
                 # Use Azure AD authentication
                 if not HAS_AZURE_IDENTITY:
@@ -76,7 +77,7 @@ class OpenAIClient:
                 logger.info(
                     "Using Microsoft Entra ID (Azure AD) authentication for Azure OpenAI"
                 )
-                
+
                 # Create credentials for authentication
                 if (
                     "auth_method" in openai_config
@@ -85,12 +86,15 @@ class OpenAIClient:
                     try:
                         credential = DefaultAzureCredential()
                         scope = openai_config.get(
-                            "token_scope", "https://cognitiveservices.azure.com/.default"
+                            "token_scope",
+                            "https://cognitiveservices.azure.com/.default",
                         )
-                        
+
                         token_provider = get_bearer_token_provider(credential, scope)
-                        logger.info(f"Using bearer token authentication with scope: {scope}")
-                        
+                        logger.info(
+                            f"Using bearer token authentication with scope: {scope}"
+                        )
+
                         self.client = AzureOpenAI(
                             azure_endpoint=endpoint,
                             api_version=api_version,
@@ -117,14 +121,15 @@ class OpenAIClient:
                             client_secret=client_secret,
                         )
                         scope = openai_config.get(
-                            "token_scope", "https://cognitiveservices.azure.com/.default"
+                            "token_scope",
+                            "https://cognitiveservices.azure.com/.default",
                         )
                         token_provider = get_bearer_token_provider(credential, scope)
-                        
+
                         logger.info(
                             "Using service principal authentication with tenant, client ID and secret"
                         )
-                        
+
                         self.client = AzureOpenAI(
                             azure_endpoint=endpoint,
                             api_version=api_version,
@@ -134,14 +139,15 @@ class OpenAIClient:
                         # Use managed identity or default authentication
                         credential = DefaultAzureCredential()
                         scope = openai_config.get(
-                            "token_scope", "https://cognitiveservices.azure.com/.default"
+                            "token_scope",
+                            "https://cognitiveservices.azure.com/.default",
                         )
                         token_provider = get_bearer_token_provider(credential, scope)
-                        
+
                         logger.info(
                             "Using DefaultAzureCredential (managed identity or environment)"
                         )
-                        
+
                         self.client = AzureOpenAI(
                             azure_endpoint=endpoint,
                             api_version=api_version,
@@ -154,11 +160,11 @@ class OpenAIClient:
                         "token_scope", "https://cognitiveservices.azure.com/.default"
                     )
                     token_provider = get_bearer_token_provider(credential, scope)
-                    
+
                     logger.info(
                         "Using DefaultAzureCredential (managed identity or environment)"
                     )
-                    
+
                     self.client = AzureOpenAI(
                         azure_endpoint=endpoint,
                         api_version=api_version,
@@ -172,7 +178,7 @@ class OpenAIClient:
                     )
 
                 logger.info("Using API key authentication for Azure OpenAI")
-                
+
                 self.client = AzureOpenAI(
                     azure_endpoint=endpoint,
                     api_version=api_version,
@@ -186,17 +192,17 @@ class OpenAIClient:
                 )
 
             logger.info("Using API key authentication for OpenAI")
-            
+
             client_kwargs = {
                 "api_key": config.openai_api_key,
             }
-            
+
             # Add organization ID if available
             if config.openai_org_id:
                 client_kwargs["organization"] = config.openai_org_id
-            
+
             self.client = OpenAI(**client_kwargs)
-        
+
         # Store model information
         if api_type == "azure":
             self.model = openai_config.get("chat_model", default_chat_model)
@@ -205,7 +211,7 @@ class OpenAIClient:
         else:
             self.model = config.openai_model or "gpt-4-turbo-preview"
             self.deployment = None  # Not used for regular OpenAI API
-        
+
         logger.info(f"Initialized OpenAI client with model {self.model}")
 
     async def get_completion(
@@ -249,25 +255,25 @@ class OpenAIClient:
             List of embedding vectors
         """
         embedding_model = model or "text-embedding-ada-002"
-        
+
         results = []
         # Process texts in batches of 10 to avoid overloading the API
         batch_size = 10
         for i in range(0, len(texts), batch_size):
-            batch = texts[i:i+batch_size]
+            batch = texts[i : i + batch_size]
             try:
                 response = await self.client.embeddings.create(
                     input=batch,
                     model=embedding_model,
                 )
-                
+
                 for embedding_data in response.data:
                     results.append(embedding_data.embedding)
             except Exception as e:
                 logger.error(f"Error getting embeddings: {e}")
                 # Add None for each failed embedding
                 results.extend([None] * len(batch))
-                
+
         return results
 
     async def chat_completion(
@@ -294,18 +300,18 @@ class OpenAIClient:
             kwargs = {
                 "messages": messages,
             }
-            
+
             # Handle Azure vs regular OpenAI API parameters
-            is_azure = hasattr(self, 'deployment') and self.deployment is not None
-            
+            is_azure = hasattr(self, "deployment") and self.deployment is not None
+
             # For Azure OpenAI, we need to specify the deployment
             if is_azure:
                 kwargs["model"] = self.deployment
-                
+
                 # Azure OpenAI API uses different parameter names
                 if max_tokens is not None:
                     kwargs["max_tokens"] = max_tokens
-                
+
                 # Temperature is supported for Azure OpenAI as well, but with some models
                 # it might use a different name or not be supported
                 # We include it by default but log any errors it might cause
@@ -313,37 +319,39 @@ class OpenAIClient:
             else:
                 # Regular OpenAI
                 kwargs["model"] = self.model
-                
+
                 if max_tokens is not None:
                     kwargs["max_tokens"] = max_tokens
-                
+
                 kwargs["temperature"] = temperature
-            
+
             # Stop sequences work the same for both APIs
             if stop_sequences is not None:
                 kwargs["stop"] = stop_sequences
-                
+
             logger.debug(f"Chat completion parameters: {kwargs}")
-            
+
             # Make the API call
             try:
                 response = await self.client.chat.completions.create(**kwargs)
             except Exception as api_error:
                 # If there's an error with temperature in Azure, retry without it
                 if is_azure and "temperature" in str(api_error).lower():
-                    logger.warning(f"Temperature parameter issue detected: {api_error}. Retrying without temperature parameter.")
+                    logger.warning(
+                        f"Temperature parameter issue detected: {api_error}. Retrying without temperature parameter."
+                    )
                     kwargs.pop("temperature", None)
                     response = await self.client.chat.completions.create(**kwargs)
                 else:
                     raise  # Re-raise if it's not a temperature issue or not Azure
-            
+
             if not response or not response.choices:
                 raise ValueError("No completion received from the model")
-            
+
             # Get the message and convert to dict with role and content
             message = response.choices[0].message
             return {"role": message.role, "content": message.content}
-                
+
         except Exception as e:
             logger.error(f"Error in chat_completion: {e}")
             # Return a fallback response with error message

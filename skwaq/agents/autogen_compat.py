@@ -57,7 +57,7 @@ class GroupChat:
 
 class AsyncAPIResponse:
     """Compatibility shim for async API response."""
-    
+
     def __init__(self, content: str) -> None:
         """Initialize the response."""
         self.choices = [AsyncAPIChoice(content)]
@@ -65,7 +65,7 @@ class AsyncAPIResponse:
 
 class AsyncAPIChoice:
     """Compatibility shim for async API choice."""
-    
+
     def __init__(self, content: str) -> None:
         """Initialize the choice."""
         self.message = {"role": "assistant", "content": content}
@@ -73,12 +73,9 @@ class AsyncAPIChoice:
 
 class ChatCompletionClient:
     """Compatibility shim for autogen_core.ChatCompletionClient."""
-    
+
     def __init__(
-        self, 
-        config_list: List[Dict[str, Any]], 
-        is_async: bool = False,
-        **kwargs: Any
+        self, config_list: List[Dict[str, Any]], is_async: bool = False, **kwargs: Any
     ) -> None:
         """Initialize the client."""
         self.config_list = config_list
@@ -87,27 +84,27 @@ class ChatCompletionClient:
         logger.warning(
             f"Using compatibility layer for autogen_core.ChatCompletionClient"
         )
-    
+
     async def generate(
         self,
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
         stop: Optional[List[str]] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> AsyncAPIResponse:
         """Generate a response from an async API."""
         try:
             # Try using the actual API with OpenAI package
             # This is a simplified implementation for compatibility
             import openai
-            
+
             # Extract config from the first item in config_list
             config = self.config_list[0]
             api_key = config.get("api_key")
             api_type = config.get("api_type", "openai")
             model = config.get("model", "gpt-4")
-            
+
             # Set up the client
             if api_type == "azure":
                 client = openai.AzureOpenAI(
@@ -119,7 +116,7 @@ class ChatCompletionClient:
                 client = openai.OpenAI(
                     api_key=api_key,
                 )
-            
+
             # Make the API call
             response = await client.chat.completions.create(
                 model=model,
@@ -127,19 +124,21 @@ class ChatCompletionClient:
                 temperature=temperature,
                 max_tokens=max_tokens,
                 stop=stop,
-                **kwargs
+                **kwargs,
             )
-            
+
             # Extract the content from the response
             content = response.choices[0].message.content
-            
+
             # Return a compatible response
             return AsyncAPIResponse(content)
-            
+
         except Exception as e:
             # Fallback to a simple mock response for testing
             logger.error(f"Error in ChatCompletionClient.generate: {e}")
-            return AsyncAPIResponse("This is a mock response from the compatibility layer.")
+            return AsyncAPIResponse(
+                "This is a mock response from the compatibility layer."
+            )
 
 
 # Event system compatibility

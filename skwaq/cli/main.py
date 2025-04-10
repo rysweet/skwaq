@@ -16,6 +16,7 @@ from .refactored_main import COMMAND_HANDLERS
 from .commands.base import CommandHandler
 from .ui.console import console, error, print_banner
 
+
 # Re-export symbols for backward compatibility
 # NOTE: main must be a regular function, not a coroutine, for entry point use
 def main():
@@ -29,6 +30,7 @@ def main():
         error(f"An unexpected error occurred: {str(e)}")
         console.print_exception(show_locals=False)
         return 1
+
 
 run = refactored_run
 command_handlers = COMMAND_HANDLERS

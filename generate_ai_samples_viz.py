@@ -5,15 +5,16 @@ from datetime import datetime
 from skwaq.db.neo4j_connector import get_connector
 from skwaq.visualization.graph_visualizer import GraphVisualizer
 
+
 async def main():
     """Create a demo visualization of the filesystem, AST, code summaries, and potential sources/sinks."""
     try:
         connector = get_connector()
-        
+
         # Create a demo investigation
         investigation_id = f"inv-ai-samples-{uuid.uuid4().hex[:8]}"
         print(f"Creating investigation with ID: {investigation_id}")
-        
+
         # Create investigation node
         connector.run_query(
             """
@@ -26,9 +27,9 @@ async def main():
             })
             RETURN i
             """,
-            {"id": investigation_id}
+            {"id": investigation_id},
         )
-        
+
         # Create sample repository
         connector.run_query(
             """
@@ -41,9 +42,9 @@ async def main():
             CREATE (i)-[:HAS_REPOSITORY]->(r)
             RETURN r
             """,
-            {"id": investigation_id}
+            {"id": investigation_id},
         )
-        
+
         # Create filesystem structure
         print("Creating filesystem structure")
         connector.run_query(
@@ -88,9 +89,9 @@ async def main():
             
             RETURN f1, f2, f3, finding
             """,
-            {"id": investigation_id}
+            {"id": investigation_id},
         )
-        
+
         # Create AST structure
         print("Creating AST structure")
         connector.run_query(
@@ -150,9 +151,9 @@ async def main():
             
             RETURN c1, c2, c3, m1, m2, m3
             """,
-            {"id": investigation_id}
+            {"id": investigation_id},
         )
-        
+
         # Create code summaries
         print("Creating code summaries")
         connector.run_query(
@@ -184,9 +185,9 @@ async def main():
             
             RETURN s1, s2, s3
             """,
-            {"id": investigation_id}
+            {"id": investigation_id},
         )
-        
+
         # Create sources and sinks
         print("Creating sources and sinks")
         connector.run_query(
@@ -274,9 +275,9 @@ async def main():
             
             RETURN source1, source2, sink1, sink2, path1, path2
             """,
-            {"id": investigation_id}
+            {"id": investigation_id},
         )
-        
+
         # Generate visualization
         print("Generating visualization")
         visualizer = GraphVisualizer()
@@ -286,23 +287,27 @@ async def main():
             include_vulnerabilities=True,
             include_files=True,
             include_sources_sinks=True,
-            max_nodes=1000
+            max_nodes=1000,
         )
-        
+
         # Export as HTML
-        output_path = os.path.join(os.getcwd(), 'docs/demos/ai-samples-visualization.html')
+        output_path = os.path.join(
+            os.getcwd(), "docs/demos/ai-samples-visualization.html"
+        )
         visualizer.export_graph_as_html(
             graph_data,
             output_path=output_path,
-            title='AI Samples: Filesystem, AST, and Code Summary Relationships'
+            title="AI Samples: Filesystem, AST, and Code Summary Relationships",
         )
-        
+
         print(f"Visualization saved to: {output_path}")
-        
+
     except Exception as e:
         print(f"Error: {str(e)}")
         import traceback
+
         traceback.print_exc()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

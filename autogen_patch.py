@@ -43,7 +43,7 @@ class AutogenProxy(types.ModuleType):
 
         # Add our GroupChat class
         self.GroupChat = GroupChat
-        
+
         # Add ChatCompletionClient class
         self.ChatCompletionClient = ChatCompletionClient
 

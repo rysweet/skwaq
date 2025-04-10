@@ -4,6 +4,7 @@
 import requests
 import sys
 
+
 def check_health():
     """Check the health status of the API."""
     try:
@@ -14,6 +15,7 @@ def check_health():
     except Exception as e:
         print(f"Error connecting to API: {e}")
         return False
+
 
 if __name__ == "__main__":
     if check_health():

@@ -4,10 +4,11 @@ import json
 from skwaq.db.neo4j_connector import get_connector
 from skwaq.visualization.graph_visualizer import GraphVisualizer
 
+
 async def generate_demo():
     # Create test investigation if it doesn't exist
     connector = get_connector()
-    
+
     # Check if test investigation exists
     result = connector.run_query(
         """
@@ -15,9 +16,9 @@ async def generate_demo():
         RETURN i
         """
     )
-    
+
     if not result:
-        print('Creating test investigation')
+        print("Creating test investigation")
         # Create test investigation node
         connector.run_query(
             """
@@ -31,10 +32,10 @@ async def generate_demo():
             RETURN i
             """
         )
-    
+
     # Create some test nodes (Source, Sink, DataFlowPath)
     # This would normally be done by the sources_and_sinks workflow
-    print('Creating test source and sink nodes')
+    print("Creating test source and sink nodes")
     connector.run_query(
         """
         MATCH (i:Investigation {id: 'inv-demo-viz'})
@@ -83,24 +84,23 @@ async def generate_demo():
     )
 
     # Create the HTML visualization
-    print('Generating visualization')
+    print("Generating visualization")
     visualizer = GraphVisualizer()
     graph_data = visualizer.get_investigation_graph(
-        investigation_id='inv-demo-viz',
+        investigation_id="inv-demo-viz",
         include_findings=True,
         include_vulnerabilities=True,
         include_files=True,
-        include_sources_sinks=True
+        include_sources_sinks=True,
     )
-    
+
     # Export as HTML
-    output_path = '/Users/ryan/src/msechackathon/vuln-researcher/docs/demos/investigation-demo.html'
+    output_path = "/Users/ryan/src/msechackathon/vuln-researcher/docs/demos/investigation-demo.html"
     visualizer.export_graph_as_html(
-        graph_data,
-        output_path=output_path,
-        title='Demo Investigation Visualization'
+        graph_data, output_path=output_path, title="Demo Investigation Visualization"
     )
-    
-    print(f'Visualization saved to: {output_path}')
+
+    print(f"Visualization saved to: {output_path}")
+
 
 asyncio.run(generate_demo())

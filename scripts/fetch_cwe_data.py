@@ -43,11 +43,11 @@ def ensure_directories():
 
 def download_file(url, local_filename=None):
     """Download file from URL and return the content.
-    
+
     Args:
         url: URL to download from
         local_filename: Optional filename to save the downloaded content
-        
+
     Returns:
         If local_filename is provided, returns the path to the file.
         Otherwise, returns the content as bytes.
@@ -56,9 +56,9 @@ def download_file(url, local_filename=None):
     try:
         response = requests.get(url, stream=True)
         response.raise_for_status()
-        
+
         if local_filename:
-            with open(local_filename, 'wb') as f:
+            with open(local_filename, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
             logger.info(f"Downloaded to {local_filename}")
@@ -72,7 +72,7 @@ def download_file(url, local_filename=None):
 
 def process_cwe_zip(zip_content):
     """Process the CWE ZIP file and extract its contents.
-    
+
     Args:
         zip_content: ZIP file content as bytes
     """
@@ -80,18 +80,18 @@ def process_cwe_zip(zip_content):
         with zipfile.ZipFile(BytesIO(zip_content)) as zip_ref:
             # Get a timestamp for versioning
             timestamp = datetime.now().strftime("%Y%m%d")
-            
+
             # Extract all files to the CWE directory
             zip_ref.extractall(CWE_DIR)
             logger.info(f"Extracted CWE data to {CWE_DIR}")
-            
+
             # Also save a timestamped copy of the XML
-            xml_files = [f for f in zip_ref.namelist() if f.endswith('.xml')]
+            xml_files = [f for f in zip_ref.namelist() if f.endswith(".xml")]
             if xml_files:
                 for xml_file in xml_files:
                     content = zip_ref.read(xml_file)
                     versioned_file = CWE_DIR / f"cwec_{timestamp}.xml"
-                    with open(versioned_file, 'wb') as f:
+                    with open(versioned_file, "wb") as f:
                         f.write(content)
                     logger.info(f"Saved timestamped copy to {versioned_file}")
     except zipfile.BadZipFile:
@@ -104,20 +104,20 @@ def main():
     try:
         # Ensure directories exist
         ensure_directories()
-        
+
         # Download CWE XML ZIP
         logger.info("Downloading CWE XML data...")
         zip_content = download_file(CWE_XML_URL)
         process_cwe_zip(zip_content)
-        
+
         # Download CWE XSD schema
         logger.info("Downloading CWE XSD schema...")
         xsd_path = CWE_DIR / "cwe_schema_latest.xsd"
         download_file(CWE_XSD_URL, xsd_path)
-        
+
         logger.info("Successfully downloaded and processed CWE data!")
         return 0
-    
+
     except Exception as e:
         logger.error(f"An error occurred: {e}")
         return 1

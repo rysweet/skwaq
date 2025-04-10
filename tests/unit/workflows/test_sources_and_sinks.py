@@ -38,7 +38,7 @@ class TestSourcesAndSinksDataModels:
             line_number=42,
             description="Gets input from the user",
             confidence=0.8,
-            metadata={"key": "value"}
+            metadata={"key": "value"},
         )
 
         # Convert to dict
@@ -84,7 +84,7 @@ class TestSourcesAndSinksDataModels:
             line_number=42,
             description="Executes an SQL query",
             confidence=0.9,
-            metadata={"key": "value"}
+            metadata={"key": "value"},
         )
 
         # Convert to dict
@@ -124,14 +124,14 @@ class TestSourcesAndSinksDataModels:
             node_id=123,
             name="get_user_input",
             source_type=SourceSinkType.USER_INPUT,
-            file_node_id=456
+            file_node_id=456,
         )
 
         sink_node = SinkNode(
             node_id=789,
             name="execute_sql_query",
             sink_type=SourceSinkType.DATABASE_WRITE,
-            file_node_id=456
+            file_node_id=456,
         )
 
         # Create data flow path
@@ -144,7 +144,7 @@ class TestSourcesAndSinksDataModels:
             description="User input flows to SQL query without sanitization",
             recommendations=["Use parameterized queries", "Sanitize input data"],
             confidence=0.85,
-            metadata={"key": "value"}
+            metadata={"key": "value"},
         )
 
         # Convert to dict
@@ -156,8 +156,14 @@ class TestSourcesAndSinksDataModels:
         assert path_dict["intermediate_nodes"] == [101, 102]
         assert path_dict["vulnerability_type"] == "SQL Injection"
         assert path_dict["impact"] == "high"
-        assert path_dict["description"] == "User input flows to SQL query without sanitization"
-        assert path_dict["recommendations"] == ["Use parameterized queries", "Sanitize input data"]
+        assert (
+            path_dict["description"]
+            == "User input flows to SQL query without sanitization"
+        )
+        assert path_dict["recommendations"] == [
+            "Use parameterized queries",
+            "Sanitize input data",
+        ]
         assert path_dict["confidence"] == 0.85
         assert path_dict["metadata"] == {"key": "value"}
 
@@ -186,14 +192,14 @@ class TestSourcesAndSinksDataModels:
             node_id=123,
             name="get_user_input",
             source_type=SourceSinkType.USER_INPUT,
-            file_node_id=456
+            file_node_id=456,
         )
 
         sink_node = SinkNode(
             node_id=789,
             name="execute_sql_query",
             sink_type=SourceSinkType.DATABASE_WRITE,
-            file_node_id=456
+            file_node_id=456,
         )
 
         # Create data flow path
@@ -202,7 +208,7 @@ class TestSourcesAndSinksDataModels:
             sink_node=sink_node,
             vulnerability_type="SQL Injection",
             impact=DataFlowImpact.HIGH,
-            description="User input flows to SQL query without sanitization"
+            description="User input flows to SQL query without sanitization",
         )
 
         # Create result
@@ -212,7 +218,7 @@ class TestSourcesAndSinksDataModels:
             sinks=[sink_node],
             data_flow_paths=[data_flow_path],
             summary="Analysis found potential SQL injection vulnerability",
-            metadata={"timestamp": "2023-01-01T00:00:00"}
+            metadata={"timestamp": "2023-01-01T00:00:00"},
         )
 
         # Test to_dict method
@@ -221,7 +227,10 @@ class TestSourcesAndSinksDataModels:
         assert len(result_dict["sources"]) == 1
         assert len(result_dict["sinks"]) == 1
         assert len(result_dict["data_flow_paths"]) == 1
-        assert result_dict["summary"] == "Analysis found potential SQL injection vulnerability"
+        assert (
+            result_dict["summary"]
+            == "Analysis found potential SQL injection vulnerability"
+        )
         assert result_dict["metadata"] == {"timestamp": "2023-01-01T00:00:00"}
 
         # Test to_json method
@@ -252,7 +261,7 @@ class MockCodeSummaryFunnel(FunnelQuery):
                 "file_node_id": 101,
                 "line_number": 42,
                 "description": "Gets user data from the form",
-                "file_path": "/src/app/forms.py"
+                "file_path": "/src/app/forms.py",
             }
         ]
 
@@ -265,7 +274,7 @@ class MockCodeSummaryFunnel(FunnelQuery):
                 "file_node_id": 102,
                 "line_number": 55,
                 "description": "Executes a database query",
-                "file_path": "/src/app/db.py"
+                "file_path": "/src/app/db.py",
             }
         ]
 
@@ -273,7 +282,9 @@ class MockCodeSummaryFunnel(FunnelQuery):
 class MockAnalyzer(Analyzer):
     """Mock implementation of Analyzer for testing."""
 
-    async def analyze_source(self, node_data: Dict[str, Any], investigation_id: str) -> Optional[SourceNode]:
+    async def analyze_source(
+        self, node_data: Dict[str, Any], investigation_id: str
+    ) -> Optional[SourceNode]:
         """Analyze if a node is a source."""
         return SourceNode(
             node_id=node_data["node_id"],
@@ -282,10 +293,12 @@ class MockAnalyzer(Analyzer):
             file_node_id=node_data["file_node_id"],
             line_number=node_data.get("line_number"),
             description=node_data.get("description", ""),
-            confidence=0.8
+            confidence=0.8,
         )
 
-    async def analyze_sink(self, node_data: Dict[str, Any], investigation_id: str) -> Optional[SinkNode]:
+    async def analyze_sink(
+        self, node_data: Dict[str, Any], investigation_id: str
+    ) -> Optional[SinkNode]:
         """Analyze if a node is a sink."""
         return SinkNode(
             node_id=node_data["node_id"],
@@ -294,7 +307,7 @@ class MockAnalyzer(Analyzer):
             file_node_id=node_data["file_node_id"],
             line_number=node_data.get("line_number"),
             description=node_data.get("description", ""),
-            confidence=0.8
+            confidence=0.8,
         )
 
     async def analyze_data_flow(
@@ -303,7 +316,7 @@ class MockAnalyzer(Analyzer):
         """Analyze potential data flow paths between sources and sinks."""
         if not sources or not sinks:
             return []
-            
+
         return [
             DataFlowPath(
                 source_node=sources[0],
@@ -312,7 +325,7 @@ class MockAnalyzer(Analyzer):
                 impact=DataFlowImpact.HIGH,
                 description="User input flows to SQL query without sanitization",
                 recommendations=["Use parameterized queries", "Sanitize input"],
-                confidence=0.7
+                confidence=0.7,
             )
         ]
 
@@ -321,11 +334,14 @@ class MockAnalyzer(Analyzer):
 def mock_llm_client():
     """Create a mock LLM client."""
     client = AsyncMock()
+
     # Configure the mock to return different responses based on the prompt
     async def mock_chat_completion(messages=None, **kwargs):
-        system_message = messages[0]["content"] if messages and len(messages) > 0 else ""
+        system_message = (
+            messages[0]["content"] if messages and len(messages) > 0 else ""
+        )
         user_message = messages[1]["content"] if messages and len(messages) > 1 else ""
-        
+
         # Check if this is a sink analysis request
         if "sink" in system_message.lower():
             return {
@@ -336,7 +352,7 @@ def mock_llm_client():
             return {
                 "content": "This is a source function that gets user input from a form."
             }
-    
+
     client.chat_completion = AsyncMock(side_effect=mock_chat_completion)
     return client
 
@@ -350,17 +366,17 @@ class TestSourcesAndSinksWorkflow:
         # Mock the get_connector function in the Workflow base class
         with patch("skwaq.workflows.base.get_connector") as mock_get_connector:
             mock_get_connector.return_value = mock_connector
-            
+
             # Create a mock LLM client
             mock_llm_client = AsyncMock()
-            
+
             workflow = SourcesAndSinksWorkflow(
                 llm_client=mock_llm_client,
                 investigation_id="inv-123",
                 name="Test Sources and Sinks",
-                description="Test workflow"
+                description="Test workflow",
             )
-            
+
             assert workflow.name == "Test Sources and Sinks"
             assert workflow.description == "Test workflow"
             assert workflow.llm_client is mock_llm_client
@@ -375,21 +391,22 @@ class TestSourcesAndSinksWorkflow:
         # Mock the get_connector function in both the base Workflow and the CodeSummaryFunnel
         with patch("skwaq.workflows.base.get_connector") as mock_get_connector:
             mock_get_connector.return_value = mock_connector
-            
+
             workflow = SourcesAndSinksWorkflow(
-                llm_client=mock_llm_client,
-                investigation_id="inv-123"
+                llm_client=mock_llm_client, investigation_id="inv-123"
             )
-            
+
             # Mock the connector initialization in the analyzers
-            with patch("skwaq.workflows.sources_and_sinks.get_connector") as mock_get_analyzer_connector:
+            with patch(
+                "skwaq.workflows.sources_and_sinks.get_connector"
+            ) as mock_get_analyzer_connector:
                 mock_get_analyzer_connector.return_value = mock_connector
-                
+
                 await workflow.setup()
-                
+
                 assert len(workflow.funnels) == 1
                 assert isinstance(workflow.funnels[0], CodeSummaryFunnel)
-                
+
                 assert len(workflow.analyzers) == 2
                 assert isinstance(workflow.analyzers[0], LLMAnalyzer)
                 assert isinstance(workflow.analyzers[1], DocumentationAnalyzer)
@@ -398,25 +415,24 @@ class TestSourcesAndSinksWorkflow:
         """Test registering custom funnels and analyzers."""
         with patch("skwaq.workflows.base.get_connector") as mock_get_connector:
             mock_get_connector.return_value = mock_connector
-            
+
             # Create a mock LLM client
             mock_llm_client = AsyncMock()
-            
+
             workflow = SourcesAndSinksWorkflow(
-                llm_client=mock_llm_client,
-                investigation_id="inv-123"
+                llm_client=mock_llm_client, investigation_id="inv-123"
             )
-            
+
             # Register custom funnel and analyzer
             funnel = MockCodeSummaryFunnel()
             analyzer = MockAnalyzer()
-            
+
             workflow.register_funnel(funnel)
             workflow.register_analyzer(analyzer)
-            
+
             assert len(workflow.funnels) == 1
             assert workflow.funnels[0] is funnel
-            
+
             assert len(workflow.analyzers) == 1
             assert workflow.analyzers[0] is analyzer
 
@@ -424,26 +440,25 @@ class TestSourcesAndSinksWorkflow:
         """Test querying codebase for potential sources and sinks."""
         with patch("skwaq.workflows.base.get_connector") as mock_get_connector:
             mock_get_connector.return_value = mock_connector
-            
+
             # Mock the connector to return investigation data
             mock_connector.run_query.return_value = [{"i": {"id": "inv-123"}}]
-            
+
             # Create a mock LLM client
             mock_llm_client = AsyncMock()
-            
+
             # Create workflow
             workflow = SourcesAndSinksWorkflow(
-                llm_client=mock_llm_client,
-                investigation_id="inv-123"
+                llm_client=mock_llm_client, investigation_id="inv-123"
             )
-            
+
             # Register mock funnel
             funnel = MockCodeSummaryFunnel()
             workflow.register_funnel(funnel)
-            
+
             # Query codebase
             result = await workflow.query_codebase()
-            
+
             # Verify results
             assert "potential_sources" in result
             assert "potential_sinks" in result
@@ -456,20 +471,19 @@ class TestSourcesAndSinksWorkflow:
         """Test analyzing potential sources and sinks."""
         with patch("skwaq.workflows.base.get_connector") as mock_get_connector:
             mock_get_connector.return_value = mock_connector
-            
+
             # Create a mock LLM client
             mock_llm_client = AsyncMock()
-            
+
             # Create workflow
             workflow = SourcesAndSinksWorkflow(
-                llm_client=mock_llm_client,
-                investigation_id="inv-123"
+                llm_client=mock_llm_client, investigation_id="inv-123"
             )
-            
+
             # Register mock analyzer
             analyzer = MockAnalyzer()
             workflow.register_analyzer(analyzer)
-            
+
             # Mock potential sources and sinks
             potential_sources = [
                 {
@@ -477,23 +491,23 @@ class TestSourcesAndSinksWorkflow:
                     "name": "get_user_data",
                     "file_node_id": 101,
                     "line_number": 42,
-                    "description": "Gets user data from the form"
+                    "description": "Gets user data from the form",
                 }
             ]
-            
+
             potential_sinks = [
                 {
                     "node_id": 2,
                     "name": "execute_query",
                     "file_node_id": 102,
                     "line_number": 55,
-                    "description": "Executes a database query"
+                    "description": "Executes a database query",
                 }
             ]
-            
+
             # Analyze code
             result = await workflow.analyze_code(potential_sources, potential_sinks)
-            
+
             # Verify results
             assert "sources" in result
             assert "sinks" in result
@@ -509,7 +523,7 @@ class TestSourcesAndSinksWorkflow:
         """Test updating the graph with sources, sinks, and data flow paths."""
         with patch("skwaq.workflows.base.get_connector") as mock_get_connector:
             mock_get_connector.return_value = mock_connector
-            
+
             # Mock successful graph operations with sequential query results
             mock_connector.run_query.side_effect = [
                 [{"source_graph_id": 201}],  # Source creation
@@ -518,18 +532,17 @@ class TestSourcesAndSinksWorkflow:
                 None,  # Class relationship
                 [{"source_graph_id": 201}],  # Source query
                 [{"sink_graph_id": 202}],  # Sink query
-                [{"path_graph_id": 203}]  # Path creation
+                [{"path_graph_id": 203}],  # Path creation
             ]
-            
+
             # Create a mock LLM client
             mock_llm_client = AsyncMock()
-            
+
             # Create workflow
             workflow = SourcesAndSinksWorkflow(
-                llm_client=mock_llm_client,
-                investigation_id="inv-123"
+                llm_client=mock_llm_client, investigation_id="inv-123"
             )
-            
+
             # Create source and sink nodes
             source = SourceNode(
                 node_id=1,
@@ -538,9 +551,9 @@ class TestSourcesAndSinksWorkflow:
                 file_node_id=101,
                 class_node_id=301,
                 line_number=42,
-                description="Gets user data from the form"
+                description="Gets user data from the form",
             )
-            
+
             sink = SinkNode(
                 node_id=2,
                 name="execute_query",
@@ -548,20 +561,20 @@ class TestSourcesAndSinksWorkflow:
                 file_node_id=102,
                 class_node_id=302,
                 line_number=55,
-                description="Executes a database query"
+                description="Executes a database query",
             )
-            
+
             path = DataFlowPath(
                 source_node=source,
                 sink_node=sink,
                 vulnerability_type="SQL Injection",
                 impact=DataFlowImpact.HIGH,
-                description="User input flows to SQL query without sanitization"
+                description="User input flows to SQL query without sanitization",
             )
-            
+
             # Update graph
             await workflow.update_graph([source], [sink], [path])
-            
+
             # Verify connector calls (simplified check)
             assert mock_connector.run_query.call_count >= 7
 
@@ -569,16 +582,15 @@ class TestSourcesAndSinksWorkflow:
         """Test generating a report of the sources and sinks analysis."""
         with patch("skwaq.workflows.base.get_connector") as mock_get_connector:
             mock_get_connector.return_value = mock_connector
-            
+
             # Create a mock LLM client
             mock_llm_client = AsyncMock()
-            
+
             # Create workflow
             workflow = SourcesAndSinksWorkflow(
-                llm_client=mock_llm_client,
-                investigation_id="inv-123"
+                llm_client=mock_llm_client, investigation_id="inv-123"
             )
-            
+
             # Create source and sink nodes
             source = SourceNode(
                 node_id=1,
@@ -586,31 +598,31 @@ class TestSourcesAndSinksWorkflow:
                 source_type=SourceSinkType.USER_INPUT,
                 file_node_id=101,
                 line_number=42,
-                description="Gets user data from the form"
+                description="Gets user data from the form",
             )
-            
+
             sink = SinkNode(
                 node_id=2,
                 name="execute_query",
                 sink_type=SourceSinkType.DATABASE_WRITE,
                 file_node_id=102,
                 line_number=55,
-                description="Executes a database query"
+                description="Executes a database query",
             )
-            
+
             path = DataFlowPath(
                 source_node=source,
                 sink_node=sink,
                 vulnerability_type="SQL Injection",
                 impact=DataFlowImpact.HIGH,
-                description="User input flows to SQL query without sanitization"
+                description="User input flows to SQL query without sanitization",
             )
-            
+
             summary = "Analysis found potential SQL injection vulnerability"
-            
+
             # Generate report
             result = await workflow.generate_report([source], [sink], [path], summary)
-            
+
             # Verify result
             assert isinstance(result, SourcesAndSinksResult)
             assert result.investigation_id == "inv-123"
@@ -628,81 +640,86 @@ class TestSourcesAndSinksWorkflow:
         """Test running the full workflow."""
         with patch("skwaq.workflows.base.get_connector") as mock_get_connector:
             mock_get_connector.return_value = mock_connector
-            
+
             # Create a mock LLM client
             mock_llm_client = AsyncMock()
-            
+
             # Mock the stages of the workflow
-            with patch.object(SourcesAndSinksWorkflow, "setup") as mock_setup, \
-                 patch.object(SourcesAndSinksWorkflow, "query_codebase") as mock_query, \
-                 patch.object(SourcesAndSinksWorkflow, "analyze_code") as mock_analyze, \
-                 patch.object(SourcesAndSinksWorkflow, "update_graph") as mock_update, \
-                 patch.object(SourcesAndSinksWorkflow, "generate_report") as mock_report:
-                
+            with (
+                patch.object(SourcesAndSinksWorkflow, "setup") as mock_setup,
+                patch.object(SourcesAndSinksWorkflow, "query_codebase") as mock_query,
+                patch.object(SourcesAndSinksWorkflow, "analyze_code") as mock_analyze,
+                patch.object(SourcesAndSinksWorkflow, "update_graph") as mock_update,
+                patch.object(SourcesAndSinksWorkflow, "generate_report") as mock_report,
+            ):
+
                 mock_setup.return_value = None
-                
+
                 mock_query.return_value = {
-                    "potential_sources": [{"node_id": 1, "name": "get_user_data", "file_node_id": 101}],
-                    "potential_sinks": [{"node_id": 2, "name": "execute_query", "file_node_id": 102}]
+                    "potential_sources": [
+                        {"node_id": 1, "name": "get_user_data", "file_node_id": 101}
+                    ],
+                    "potential_sinks": [
+                        {"node_id": 2, "name": "execute_query", "file_node_id": 102}
+                    ],
                 }
-                
+
                 source = SourceNode(
                     node_id=1,
                     name="get_user_data",
                     source_type=SourceSinkType.USER_INPUT,
-                    file_node_id=101
+                    file_node_id=101,
                 )
-                
+
                 sink = SinkNode(
                     node_id=2,
                     name="execute_query",
                     sink_type=SourceSinkType.DATABASE_WRITE,
-                    file_node_id=102
+                    file_node_id=102,
                 )
-                
+
                 path = DataFlowPath(
                     source_node=source,
                     sink_node=sink,
                     vulnerability_type="SQL Injection",
                     impact=DataFlowImpact.HIGH,
-                    description="User input flows to SQL query without sanitization"
+                    description="User input flows to SQL query without sanitization",
                 )
-                
+
                 mock_analyze.return_value = {
                     "sources": [source],
                     "sinks": [sink],
                     "data_flow_paths": [path],
-                    "summary": "Analysis found potential SQL injection vulnerability"
+                    "summary": "Analysis found potential SQL injection vulnerability",
                 }
-                
+
                 mock_update.return_value = None
-                
+
                 expected_result = SourcesAndSinksResult(
                     investigation_id="inv-123",
                     sources=[source],
                     sinks=[sink],
                     data_flow_paths=[path],
-                    summary="Analysis found potential SQL injection vulnerability"
+                    summary="Analysis found potential SQL injection vulnerability",
                 )
-                
+
                 mock_report.return_value = expected_result
-                
+
                 # Create workflow
                 workflow = SourcesAndSinksWorkflow(
-                    llm_client=mock_llm_client,
-                    investigation_id="inv-123"
+                    llm_client=mock_llm_client, investigation_id="inv-123"
                 )
-                
+
                 # Run the workflow
                 result = await workflow.run()
-                
+
                 # Verify the workflow steps were called
                 mock_setup.assert_called_once()
                 mock_query.assert_called_once()
                 mock_analyze.assert_called_once()
                 mock_update.assert_called_once()
                 mock_report.assert_called_once()
-                
+
                 # Verify result
                 assert result is expected_result
 
@@ -713,17 +730,23 @@ class TestLLMAnalyzer:
 
     async def test_analyze_source(self, mock_connector, mock_llm_client):
         """Test analyzing if a node is a source using LLM."""
-        with patch("skwaq.workflows.sources_and_sinks.get_connector") as mock_get_connector:
+        with patch(
+            "skwaq.workflows.sources_and_sinks.get_connector"
+        ) as mock_get_connector:
             mock_get_connector.return_value = mock_connector
-            
+
             # Mock function code retrieval
-            mock_connector.run_query.return_value = [{"code": "def get_user_input(request):\n    return request.POST.get('username', '')"}]
-            
+            mock_connector.run_query.return_value = [
+                {
+                    "code": "def get_user_input(request):\n    return request.POST.get('username', '')"
+                }
+            ]
+
             # Mock LLM response - the mock_llm_client fixture already configures this
-            # Set up _prompts property directly 
+            # Set up _prompts property directly
             analyzer = LLMAnalyzer(llm_client=mock_llm_client, connector=mock_connector)
             analyzer._prompts = {"identify_sources": "Identify if this is a source"}
-            
+
             # Node data to analyze
             node_data = {
                 "node_id": 1,
@@ -731,12 +754,12 @@ class TestLLMAnalyzer:
                 "file_node_id": 101,
                 "line_number": 42,
                 "description": "Gets user input from a form",
-                "file_path": "/src/app/forms.py"
+                "file_path": "/src/app/forms.py",
             }
-            
+
             # Analyze source
             source_node = await analyzer.analyze_source(node_data, "inv-123")
-            
+
             # Verify source was identified correctly
             assert source_node is not None
             assert source_node.node_id == 1
@@ -745,23 +768,29 @@ class TestLLMAnalyzer:
             assert source_node.line_number == 42
             assert source_node.confidence > 0
             assert "llm_response" in source_node.metadata
-            
+
             # Verify method calls
             mock_llm_client.chat_completion.assert_called_once()
 
     async def test_analyze_sink(self, mock_connector, mock_llm_client):
         """Test analyzing if a node is a sink using LLM."""
-        with patch("skwaq.workflows.sources_and_sinks.get_connector") as mock_get_connector:
+        with patch(
+            "skwaq.workflows.sources_and_sinks.get_connector"
+        ) as mock_get_connector:
             mock_get_connector.return_value = mock_connector
-            
+
             # Mock function code retrieval
-            mock_connector.run_query.return_value = [{"code": "def execute_query(sql):\n    conn = get_db_connection()\n    return conn.execute(sql)"}]
-            
+            mock_connector.run_query.return_value = [
+                {
+                    "code": "def execute_query(sql):\n    conn = get_db_connection()\n    return conn.execute(sql)"
+                }
+            ]
+
             # Mock LLM response - the mock_llm_client fixture already configures this
-            # Set up _prompts property directly 
+            # Set up _prompts property directly
             analyzer = LLMAnalyzer(llm_client=mock_llm_client, connector=mock_connector)
             analyzer._prompts = {"identify_sinks": "Identify if this is a sink"}
-            
+
             # Node data to analyze
             node_data = {
                 "node_id": 2,
@@ -769,12 +798,12 @@ class TestLLMAnalyzer:
                 "file_node_id": 102,
                 "line_number": 55,
                 "description": "Executes a database query",
-                "file_path": "/src/app/db.py"
+                "file_path": "/src/app/db.py",
             }
-            
+
             # Analyze sink
             sink_node = await analyzer.analyze_sink(node_data, "inv-123")
-            
+
             # Verify sink was identified
             assert sink_node is not None
             assert sink_node.node_id == 2
@@ -782,86 +811,104 @@ class TestLLMAnalyzer:
             assert sink_node.file_node_id == 102
             assert sink_node.line_number == 55
             assert "llm_response" in sink_node.metadata
-            
+
             # Verify method calls
             mock_llm_client.chat_completion.assert_called_once()
 
     async def test_analyze_data_flow(self, mock_connector, mock_llm_client):
         """Test analyzing data flow between sources and sinks using LLM."""
-        with patch("skwaq.workflows.sources_and_sinks.get_connector") as mock_get_connector:
+        with patch(
+            "skwaq.workflows.sources_and_sinks.get_connector"
+        ) as mock_get_connector:
             mock_get_connector.return_value = mock_connector
-            
+
             # Mock function code retrieval and file path query
             mock_connector.run_query.side_effect = [
                 [{"file_path": "/src/app/forms.py"}],  # File path query
-                [{"code": "def get_user_input(request):\n    return request.POST.get('username', '')"}],  # Source code
-                [{"code": "def execute_query(sql):\n    conn = get_db_connection()\n    return conn.execute(sql)"}]  # Sink code
+                [
+                    {
+                        "code": "def get_user_input(request):\n    return request.POST.get('username', '')"
+                    }
+                ],  # Source code
+                [
+                    {
+                        "code": "def execute_query(sql):\n    conn = get_db_connection()\n    return conn.execute(sql)"
+                    }
+                ],  # Sink code
             ]
-            
+
             # Set up analyzer with directly configured prompts
             analyzer = LLMAnalyzer(llm_client=mock_llm_client, connector=mock_connector)
-            analyzer._prompts = {"analyze_data_flow": "Analyze data flow between sources and sinks"}
-            
+            analyzer._prompts = {
+                "analyze_data_flow": "Analyze data flow between sources and sinks"
+            }
+
             # Create source and sink nodes
             source = SourceNode(
                 node_id=1,
                 name="get_user_input",
                 source_type=SourceSinkType.USER_INPUT,
-                file_node_id=101
+                file_node_id=101,
             )
-            
+
             sink = SinkNode(
                 node_id=2,
                 name="execute_query",
                 sink_type=SourceSinkType.DATABASE_WRITE,
-                file_node_id=101  # Same file_node_id as the source for this test
+                file_node_id=101,  # Same file_node_id as the source for this test
             )
-            
+
             # Analyze data flow
             paths = await analyzer.analyze_data_flow([source], [sink], "inv-123")
-            
+
             # Verify method calls - even if no paths were identified, the call should have been made
             mock_llm_client.chat_completion.assert_called_once()
 
     async def test_generate_summary(self, mock_connector, mock_llm_client):
         """Test generating a summary of the sources and sinks analysis."""
-        with patch("skwaq.workflows.sources_and_sinks.get_connector") as mock_get_connector:
+        with patch(
+            "skwaq.workflows.sources_and_sinks.get_connector"
+        ) as mock_get_connector:
             mock_get_connector.return_value = mock_connector
-            
+
             # Set up analyzer with directly configured prompts
             analyzer = LLMAnalyzer(llm_client=mock_llm_client, connector=mock_connector)
-            analyzer._prompts = {"summarize_results": "Summarize the sources and sinks analysis"}
-            
+            analyzer._prompts = {
+                "summarize_results": "Summarize the sources and sinks analysis"
+            }
+
             # Create source and sink nodes
             source = SourceNode(
                 node_id=1,
                 name="get_user_input",
                 source_type=SourceSinkType.USER_INPUT,
-                file_node_id=101
+                file_node_id=101,
             )
-            
+
             sink = SinkNode(
                 node_id=2,
                 name="execute_query",
                 sink_type=SourceSinkType.DATABASE_WRITE,
-                file_node_id=102
+                file_node_id=102,
             )
-            
+
             path = DataFlowPath(
                 source_node=source,
                 sink_node=sink,
                 vulnerability_type="SQL Injection",
                 impact=DataFlowImpact.HIGH,
-                description="User input flows to SQL query without sanitization"
+                description="User input flows to SQL query without sanitization",
             )
-            
+
             # Generate summary
-            summary = await analyzer.generate_summary([source], [sink], [path], "inv-123")
-            
+            summary = await analyzer.generate_summary(
+                [source], [sink], [path], "inv-123"
+            )
+
             # Verify summary generation
             assert summary is not None
             assert len(summary) > 0
-            
+
             # Verify method calls
             mock_llm_client.chat_completion.assert_called_once()
 
@@ -872,27 +919,33 @@ class TestDocumentationAnalyzer:
 
     async def test_analyze_source(self, mock_connector):
         """Test analyzing if a node is a source using documentation."""
-        with patch("skwaq.workflows.sources_and_sinks.get_connector") as mock_get_connector:
+        with patch(
+            "skwaq.workflows.sources_and_sinks.get_connector"
+        ) as mock_get_connector:
             mock_get_connector.return_value = mock_connector
-            
+
             # Mock documentation retrieval
-            mock_connector.run_query.return_value = [{"doc_content": "This function gets user input from a form and returns it."}]
-            
+            mock_connector.run_query.return_value = [
+                {
+                    "doc_content": "This function gets user input from a form and returns it."
+                }
+            ]
+
             # Create analyzer
             analyzer = DocumentationAnalyzer(connector=mock_connector)
-            
+
             # Node data to analyze
             node_data = {
                 "node_id": 1,
                 "name": "get_user_input",
                 "file_node_id": 101,
                 "line_number": 42,
-                "description": "Gets user input from a form"
+                "description": "Gets user input from a form",
             }
-            
+
             # Analyze source
             source_node = await analyzer.analyze_source(node_data, "inv-123")
-            
+
             # Verify source was identified correctly
             assert source_node is not None
             assert source_node.node_id == 1
@@ -905,27 +958,31 @@ class TestDocumentationAnalyzer:
 
     async def test_analyze_sink(self, mock_connector):
         """Test analyzing if a node is a sink using documentation."""
-        with patch("skwaq.workflows.sources_and_sinks.get_connector") as mock_get_connector:
+        with patch(
+            "skwaq.workflows.sources_and_sinks.get_connector"
+        ) as mock_get_connector:
             mock_get_connector.return_value = mock_connector
-            
+
             # Mock documentation retrieval
-            mock_connector.run_query.return_value = [{"doc_content": "This function executes an SQL query on the database."}]
-            
+            mock_connector.run_query.return_value = [
+                {"doc_content": "This function executes an SQL query on the database."}
+            ]
+
             # Create analyzer
             analyzer = DocumentationAnalyzer(connector=mock_connector)
-            
+
             # Node data to analyze
             node_data = {
                 "node_id": 2,
                 "name": "execute_query",
                 "file_node_id": 102,
                 "line_number": 55,
-                "description": "Executes a database query"
+                "description": "Executes a database query",
             }
-            
+
             # Analyze sink
             sink_node = await analyzer.analyze_sink(node_data, "inv-123")
-            
+
             # Verify sink was identified correctly
             assert sink_node is not None
             assert sink_node.node_id == 2
@@ -938,33 +995,37 @@ class TestDocumentationAnalyzer:
 
     async def test_analyze_data_flow(self, mock_connector):
         """Test analyzing data flow between sources and sinks using documentation."""
-        with patch("skwaq.workflows.sources_and_sinks.get_connector") as mock_get_connector:
+        with patch(
+            "skwaq.workflows.sources_and_sinks.get_connector"
+        ) as mock_get_connector:
             mock_get_connector.return_value = mock_connector
-            
+
             # Mock calls relationship query
-            mock_connector.run_query.return_value = [{}]  # At least one result to indicate a relationship
-            
+            mock_connector.run_query.return_value = [
+                {}
+            ]  # At least one result to indicate a relationship
+
             # Create analyzer
             analyzer = DocumentationAnalyzer(connector=mock_connector)
-            
+
             # Create source and sink nodes
             source = SourceNode(
                 node_id=1,
                 name="get_user_input",
                 source_type=SourceSinkType.USER_INPUT,
-                file_node_id=101
+                file_node_id=101,
             )
-            
+
             sink = SinkNode(
                 node_id=2,
                 name="execute_query",
                 sink_type=SourceSinkType.DATABASE_WRITE,
-                file_node_id=102
+                file_node_id=102,
             )
-            
+
             # Analyze data flow
             paths = await analyzer.analyze_data_flow([source], [sink], "inv-123")
-            
+
             # Verify data flow path was identified
             assert len(paths) == 1
             assert paths[0].source_node is source

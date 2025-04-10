@@ -1,7 +1,7 @@
 """Integration tests for the Sources and Sinks workflow.
 
-These tests verify the end-to-end integration of the Sources and Sinks workflow with 
-Neo4j database and OpenAI. They test the ability to identify sources, sinks, and 
+These tests verify the end-to-end integration of the Sources and Sinks workflow with
+Neo4j database and OpenAI. They test the ability to identify sources, sinks, and
 data flow paths in real code and store the results in the Neo4j database.
 """
 
@@ -14,13 +14,13 @@ from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional
 
 from skwaq.workflows.sources_and_sinks import (
-    SourceSinkType, 
+    SourceSinkType,
     DataFlowImpact,
-    SourceNode, 
+    SourceNode,
     SinkNode,
     DataFlowPath,
     SourcesAndSinksResult,
-    SourcesAndSinksWorkflow
+    SourcesAndSinksWorkflow,
 )
 from skwaq.core.openai_client import OpenAIClient
 from skwaq.utils.config import Config
@@ -29,13 +29,13 @@ from skwaq.utils.config import Config
 @pytest.fixture
 def setup_test_codebase(neo4j_connection: Tuple[neo4j.Driver, Dict[str, str]]):
     """Set up a test codebase in Neo4j for sources and sinks analysis.
-    
+
     This fixture creates a repository with files containing vulnerable code patterns
     that can be detected as sources and sinks by the workflow.
-    
+
     Args:
         neo4j_connection: Neo4j connection fixture
-        
+
     Returns:
         Dictionary with test node IDs and data
     """
@@ -47,7 +47,7 @@ def setup_test_codebase(neo4j_connection: Tuple[neo4j.Driver, Dict[str, str]]):
     # Generate a unique identifier for test nodes
     test_id = f"test-{uuid.uuid4()}"
     test_nodes = {"test_id": test_id, "node_ids": []}
-    
+
     try:
         with driver.session(database=connection_details["database"]) as session:
             # Create a test investigation
@@ -55,10 +55,9 @@ def setup_test_codebase(neo4j_connection: Tuple[neo4j.Driver, Dict[str, str]]):
                 "CREATE (i:Investigation {id: $id, name: 'Test Investigation', test_id: $test_id}) "
                 "RETURN id(i) as node_id, i.id as investigation_id"
             )
-            result = session.run(investigation_query, {
-                "id": f"inv-{test_id}", 
-                "test_id": test_id
-            })
+            result = session.run(
+                investigation_query, {"id": f"inv-{test_id}", "test_id": test_id}
+            )
             record = result.single()
             if record:
                 investigation_id = record["investigation_id"]
@@ -66,7 +65,7 @@ def setup_test_codebase(neo4j_connection: Tuple[neo4j.Driver, Dict[str, str]]):
                 test_nodes["investigation_id"] = investigation_id
                 test_nodes["investigation_node_id"] = investigation_node_id
                 test_nodes["node_ids"].append(investigation_node_id)
-            
+
             # Create a test repository
             repo_query = (
                 "MATCH (i:Investigation {test_id: $test_id}) "
@@ -80,14 +79,14 @@ def setup_test_codebase(neo4j_connection: Tuple[neo4j.Driver, Dict[str, str]]):
                 repo_id = record["node_id"]
                 test_nodes["repo_id"] = repo_id
                 test_nodes["node_ids"].append(repo_id)
-            
+
             # Create test files with source and sink functions
             file_paths = [
                 "/src/app/user_input.py",  # Contains source functions
-                "/src/app/database.py",    # Contains sink functions
+                "/src/app/database.py",  # Contains sink functions
                 "/src/app/controller.py",  # Contains functions that connect sources and sinks
             ]
-            
+
             file_ids = {}
             for path in file_paths:
                 file_query = (
@@ -97,18 +96,16 @@ def setup_test_codebase(neo4j_connection: Tuple[neo4j.Driver, Dict[str, str]]):
                     "RETURN id(f) as node_id"
                 )
                 file_name = Path(path).name
-                result = session.run(file_query, {
-                    "test_id": test_id,
-                    "path": path,
-                    "name": file_name
-                })
+                result = session.run(
+                    file_query, {"test_id": test_id, "path": path, "name": file_name}
+                )
                 record = result.single()
                 if record:
                     file_id = record["node_id"]
                     file_ids[path] = file_id
                     test_nodes[f"file__{path.replace('/', '_')}"] = file_id
                     test_nodes["node_ids"].append(file_id)
-            
+
             # Create source function in user_input.py
             source_function_query = (
                 "MATCH (f:File {path: $path, test_id: $test_id}) "
@@ -118,7 +115,7 @@ def setup_test_codebase(neo4j_connection: Tuple[neo4j.Driver, Dict[str, str]]):
                 "CREATE (func)-[:HAS_SUMMARY]->(summary) "
                 "RETURN id(func) as node_id"
             )
-            
+
             source_code = """def get_user_input(request):
     \"\"\"Get user input from the form submission.
     
@@ -131,20 +128,23 @@ def setup_test_codebase(neo4j_connection: Tuple[neo4j.Driver, Dict[str, str]]):
     user_input = request.POST.get('user_input', '')
     return user_input
 """
-            
-            result = session.run(source_function_query, {
-                "test_id": test_id,
-                "path": "/src/app/user_input.py",
-                "name": "get_user_input",
-                "code": source_code,
-                "summary": "Gets user input from a form submission"
-            })
+
+            result = session.run(
+                source_function_query,
+                {
+                    "test_id": test_id,
+                    "path": "/src/app/user_input.py",
+                    "name": "get_user_input",
+                    "code": source_code,
+                    "summary": "Gets user input from a form submission",
+                },
+            )
             record = result.single()
             if record:
                 source_func_id = record["node_id"]
                 test_nodes["source_function_id"] = source_func_id
                 test_nodes["node_ids"].append(source_func_id)
-            
+
             # Create sink function in database.py
             sink_function_query = (
                 "MATCH (f:File {path: $path, test_id: $test_id}) "
@@ -154,7 +154,7 @@ def setup_test_codebase(neo4j_connection: Tuple[neo4j.Driver, Dict[str, str]]):
                 "CREATE (func)-[:HAS_SUMMARY]->(summary) "
                 "RETURN id(func) as node_id"
             )
-            
+
             sink_code = """def execute_query(sql_query):
     \"\"\"Execute an SQL query in the database.
     
@@ -171,20 +171,23 @@ def setup_test_codebase(neo4j_connection: Tuple[neo4j.Driver, Dict[str, str]]):
     cursor.close()
     return results
 """
-            
-            result = session.run(sink_function_query, {
-                "test_id": test_id,
-                "path": "/src/app/database.py",
-                "name": "execute_query",
-                "code": sink_code,
-                "summary": "Executes an SQL query in the database"
-            })
+
+            result = session.run(
+                sink_function_query,
+                {
+                    "test_id": test_id,
+                    "path": "/src/app/database.py",
+                    "name": "execute_query",
+                    "code": sink_code,
+                    "summary": "Executes an SQL query in the database",
+                },
+            )
             record = result.single()
             if record:
                 sink_func_id = record["node_id"]
                 test_nodes["sink_function_id"] = sink_func_id
                 test_nodes["node_ids"].append(sink_func_id)
-            
+
             # Create controller function that connects source and sink
             controller_function_query = (
                 "MATCH (f:File {path: $path, test_id: $test_id}) "
@@ -198,7 +201,7 @@ def setup_test_codebase(neo4j_connection: Tuple[neo4j.Driver, Dict[str, str]]):
                 "CREATE (func)-[:HAS_SUMMARY]->(summary) "
                 "RETURN id(func) as node_id"
             )
-            
+
             controller_code = """def search_user_records(request):
     \"\"\"Search for user records based on user input.
     
@@ -216,22 +219,25 @@ def setup_test_codebase(neo4j_connection: Tuple[neo4j.Driver, Dict[str, str]]):
     results = execute_query(query)
     return results
 """
-            
-            result = session.run(controller_function_query, {
-                "test_id": test_id,
-                "path": "/src/app/controller.py",
-                "name": "search_user_records",
-                "code": controller_code,
-                "summary": "Searches for user records based on user input"
-            })
+
+            result = session.run(
+                controller_function_query,
+                {
+                    "test_id": test_id,
+                    "path": "/src/app/controller.py",
+                    "name": "search_user_records",
+                    "code": controller_code,
+                    "summary": "Searches for user records based on user input",
+                },
+            )
             record = result.single()
             if record:
                 controller_func_id = record["node_id"]
                 test_nodes["controller_function_id"] = controller_func_id
                 test_nodes["node_ids"].append(controller_func_id)
-            
+
         return test_nodes
-        
+
     except Exception as e:
         pytest.fail(f"Error setting up test codebase: {str(e)}")
         return None
@@ -240,10 +246,10 @@ def setup_test_codebase(neo4j_connection: Tuple[neo4j.Driver, Dict[str, str]]):
 @pytest.fixture
 def openai_client(openai_api_credentials: Dict[str, str]) -> Optional[OpenAIClient]:
     """Create an OpenAI client for testing.
-    
+
     Args:
         openai_api_credentials: OpenAI API credentials fixture
-        
+
     Returns:
         OpenAI client instance
     """
@@ -304,53 +310,57 @@ def openai_client(openai_api_credentials: Dict[str, str]) -> Optional[OpenAIClie
 @pytest.mark.asyncio
 async def test_minimal_workflow_creation():
     """Minimal test to verify the workflow can be created and initialized.
-    
+
     This test just creates a workflow and calls setup() to ensure the basic
     structure works without requiring complex mocks or external services.
     """
     from unittest.mock import MagicMock, AsyncMock, patch
     import uuid
-    
+
     # Create mock Neo4j connector
     mock_connector = MagicMock()
     mock_connector.run_query.return_value = [{"i": {"id": "inv-test-123"}}]
-    
+
     # Create a mock OpenAI client
     mock_client = MagicMock()
     mock_client.chat_completion = AsyncMock(return_value={"content": "Mock response"})
-    
+
     # Create the workflow with our mocks
-    with patch("skwaq.workflows.base.get_connector") as mock_get_connector, \
-         patch("skwaq.workflows.sources_and_sinks.get_connector") as mock_get_sources_connector:
-        
+    with (
+        patch("skwaq.workflows.base.get_connector") as mock_get_connector,
+        patch(
+            "skwaq.workflows.sources_and_sinks.get_connector"
+        ) as mock_get_sources_connector,
+    ):
+
         mock_get_connector.return_value = mock_connector
         mock_get_sources_connector.return_value = mock_connector
-        
+
         # Create the workflow
         investigation_id = "inv-test-123"
         workflow = SourcesAndSinksWorkflow(
             llm_client=mock_client,
             investigation_id=investigation_id,
             name="Minimal Test Workflow",
-            description="Basic workflow creation test"
+            description="Basic workflow creation test",
         )
-        
+
         # Just test setup to ensure the analyzers and funnels can be created
         await workflow.setup()
-        
+
         # Verify basic properties
         assert workflow.name == "Minimal Test Workflow"
         assert workflow.description == "Basic workflow creation test"
         assert workflow.investigation_id == investigation_id
         assert workflow.llm_client is mock_client
         assert workflow.connector is mock_connector
-        
+
         # Verify the funnels and analyzers lists were created
         assert isinstance(workflow.funnels, list)
         assert isinstance(workflow.analyzers, list)
         assert len(workflow.funnels) > 0
         assert len(workflow.analyzers) > 0
-        
+
         # Check that there's an LLMAnalyzer in the analyzers
         llm_analyzer_found = False
         for analyzer in workflow.analyzers:
@@ -367,19 +377,19 @@ async def test_minimal_workflow_creation():
 async def test_sources_and_sinks_workflow_integration(
     setup_test_codebase: Dict[str, Any],
     neo4j_connection: Tuple[neo4j.Driver, Dict[str, str]],
-    openai_client: OpenAIClient
+    openai_client: OpenAIClient,
 ):
     """Integration test for Sources and Sinks workflow against real services.
-    
+
     This test verifies that the workflow can:
     1. Query Neo4j for potential sources and sinks
     2. Analyze them using OpenAI
     3. Store the results back in Neo4j
-    
+
     Note: This is a softer integration test that verifies the workflow runs without
     errors against real services but doesn't assert specific results since those
     depend on the exact LLM responses, which can vary.
-    
+
     Args:
         setup_test_codebase: Test codebase fixture with Neo4j nodes
         neo4j_connection: Neo4j connection fixture
@@ -388,21 +398,21 @@ async def test_sources_and_sinks_workflow_integration(
     # Skip if required fixtures are not available
     if not setup_test_codebase:
         pytest.skip("Test codebase setup failed")
-    
+
     driver, _ = neo4j_connection
     if not driver:
         pytest.skip("Neo4j connection not available")
-    
+
     if not openai_client:
         pytest.skip("OpenAI client not available")
-        
+
     investigation_id = setup_test_codebase["investigation_id"]
-    
+
     # Print diagnostic information
     print(f"\nRunning integration test with investigation ID: {investigation_id}")
     print(f"Source function ID: {setup_test_codebase.get('source_function_id')}")
     print(f"Sink function ID: {setup_test_codebase.get('sink_function_id')}")
-    
+
     # Check some test codebase setup properties
     with driver.session() as session:
         # Check that the investigation exists
@@ -414,7 +424,7 @@ async def test_sources_and_sinks_workflow_integration(
         inv_record = inv_result.single()
         print(f"Investigation found: {inv_record['id'] if inv_record else 'Not found'}")
         print(f"Repository count: {inv_record['repo_count'] if inv_record else 'N/A'}")
-        
+
         # Check that the functions exist
         func_query = """
         MATCH (i:Investigation {id: $investigation_id})
@@ -426,92 +436,114 @@ async def test_sources_and_sinks_workflow_integration(
         """
         func_result = session.run(func_query, {"investigation_id": investigation_id})
         func_record = func_result.single()
-        print(f"Functions in repository: {func_record['function_count'] if func_record else 'Not found'}")
-    
+        print(
+            f"Functions in repository: {func_record['function_count'] if func_record else 'Not found'}"
+        )
+
     # Create and run the Sources and Sinks workflow
     workflow = SourcesAndSinksWorkflow(
         llm_client=openai_client,
         investigation_id=investigation_id,
         name="Integration Test Workflow",
-        description="Test workflow for sources and sinks integration test"
+        description="Test workflow for sources and sinks integration test",
     )
-    
+
     try:
         # Set up the workflow with analyzers and funnels
         await workflow.setup()
-        
+
         # Manually run each step of the workflow for better diagnostics
         print("Step 1: Querying codebase for potential sources and sinks...")
         query_results = await workflow.query_codebase()
         potential_sources = query_results.get("potential_sources", [])
         potential_sinks = query_results.get("potential_sinks", [])
-        print(f"  Found {len(potential_sources)} potential sources and {len(potential_sinks)} potential sinks")
-        
+        print(
+            f"  Found {len(potential_sources)} potential sources and {len(potential_sinks)} potential sinks"
+        )
+
         # Print a sample of potential sources and sinks
         if potential_sources:
             print("  Sample potential source:")
             sample_source = potential_sources[0]
             for key, value in sample_source.items():
                 print(f"    {key}: {value}")
-        
+
         if potential_sinks:
             print("  Sample potential sink:")
             sample_sink = potential_sinks[0]
             for key, value in sample_sink.items():
                 print(f"    {key}: {value}")
-        
+
         print("Step 2: Analyzing potential sources and sinks...")
-        analysis_results = await workflow.analyze_code(potential_sources, potential_sinks)
+        analysis_results = await workflow.analyze_code(
+            potential_sources, potential_sinks
+        )
         sources = analysis_results.get("sources", [])
         sinks = analysis_results.get("sinks", [])
         data_flow_paths = analysis_results.get("data_flow_paths", [])
         summary = analysis_results.get("summary", "")
-        
-        print(f"  Analysis found {len(sources)} sources, {len(sinks)} sinks, and {len(data_flow_paths)} data flow paths")
-        
+
+        print(
+            f"  Analysis found {len(sources)} sources, {len(sinks)} sinks, and {len(data_flow_paths)} data flow paths"
+        )
+
         # Print information about identified sources and sinks
         if sources:
             print("  Sources identified:")
             for source in sources:
                 print(f"    {source.name} ({source.source_type.value})")
-        
+
         if sinks:
             print("  Sinks identified:")
             for sink in sinks:
                 print(f"    {sink.name} ({sink.sink_type.value})")
-        
+
         if data_flow_paths:
             print("  Data flow paths identified:")
             for path in data_flow_paths:
-                print(f"    {path.source_node.name} -> {path.sink_node.name} ({path.vulnerability_type})")
-        
+                print(
+                    f"    {path.source_node.name} -> {path.sink_node.name} ({path.vulnerability_type})"
+                )
+
         # Verify that the workflow can successfully analyze the code
         # Note: We're just verifying the structure, not specific results
-        assert "sources" in analysis_results, "Sources key missing from analysis results"
+        assert (
+            "sources" in analysis_results
+        ), "Sources key missing from analysis results"
         assert "sinks" in analysis_results, "Sinks key missing from analysis results"
-        assert "data_flow_paths" in analysis_results, "Data flow paths key missing from analysis results"
-        assert "summary" in analysis_results, "Summary key missing from analysis results"
-        
+        assert (
+            "data_flow_paths" in analysis_results
+        ), "Data flow paths key missing from analysis results"
+        assert (
+            "summary" in analysis_results
+        ), "Summary key missing from analysis results"
+
         print("Step 3: Updating graph with analysis results...")
         await workflow.update_graph(sources, sinks, data_flow_paths)
         print("  Graph updated successfully")
-        
+
         print("Step 4: Generating report...")
-        result = await workflow.generate_report(sources, sinks, data_flow_paths, summary)
+        result = await workflow.generate_report(
+            sources, sinks, data_flow_paths, summary
+        )
         print("  Report generated successfully")
-        
+
         # Verify the result has the right structure
         assert result is not None, "Workflow did not return a result"
-        assert isinstance(result, SourcesAndSinksResult), "Result is not a SourcesAndSinksResult"
-        assert result.investigation_id == investigation_id, "Result has incorrect investigation ID"
-        
+        assert isinstance(
+            result, SourcesAndSinksResult
+        ), "Result is not a SourcesAndSinksResult"
+        assert (
+            result.investigation_id == investigation_id
+        ), "Result has incorrect investigation ID"
+
         # Print summary statistics about the result
         print(f"Result summary statistics:")
         print(f"  Sources: {len(result.sources)}")
         print(f"  Sinks: {len(result.sinks)}")
         print(f"  Data flow paths: {len(result.data_flow_paths)}")
         print(f"  Summary length: {len(result.summary)} characters")
-        
+
         # Verify the graph was updated with any identified sources, sinks, or paths
         with driver.session() as session:
             # Check for any Source, Sink, or DataFlowPath nodes
@@ -524,24 +556,29 @@ async def test_sources_and_sinks_workflow_integration(
             """
             result = session.run(query, {"investigation_id": investigation_id})
             record = result.single()
-            
+
             if record:
-                print(f"Graph entities: {record['source_count']} sources, {record['sink_count']} sinks, {record['path_count']} paths")
-            
+                print(
+                    f"Graph entities: {record['source_count']} sources, {record['sink_count']} sinks, {record['path_count']} paths"
+                )
+
             # We consider the test successful if at least one entity (source, sink, or path) was created
             # This is a softer assertion since real-world results can vary with LLM responses
-            entity_count = (record['source_count'] if record else 0) + \
-                          (record['sink_count'] if record else 0) + \
-                          (record['path_count'] if record else 0)
-            
+            entity_count = (
+                (record["source_count"] if record else 0)
+                + (record["sink_count"] if record else 0)
+                + (record["path_count"] if record else 0)
+            )
+
             print(f"Total entities in graph: {entity_count}")
-            
+
     except Exception as e:
         import traceback
+
         print(f"Error in integration test: {str(e)}")
         print(traceback.format_exc())
         pytest.fail(f"Integration test failed with error: {str(e)}")
-        
+
     print("Integration test completed successfully")
 
 
@@ -550,52 +587,70 @@ async def test_sources_and_sinks_workflow_integration(
 @pytest.mark.asyncio
 async def test_sources_and_sinks_workflow_prompt_loading():
     """Test that the Sources and Sinks workflow prompts can be loaded correctly.
-    
+
     This test verifies that:
     1. The prompt files exist and can be loaded
     2. The prompts contain the expected content
     """
     from unittest.mock import MagicMock, AsyncMock
-    
+
     # Create a mock OpenAI client
     mock_client = MagicMock()
-    mock_client.chat_completion = AsyncMock(return_value={"content": "This is a mock response"})
-    
+    mock_client.chat_completion = AsyncMock(
+        return_value={"content": "This is a mock response"}
+    )
+
     # Create a simple workflow to test prompt loading
     workflow = SourcesAndSinksWorkflow(
         llm_client=mock_client,
         investigation_id="test-investigation",
     )
-    
+
     # Ensure the workflow is properly set up with analyzers
     await workflow.setup()
-    
+
     # Find the LLMAnalyzer in the workflow's analyzers
     llm_analyzer = None
     for analyzer in workflow.analyzers:
         if analyzer.__class__.__name__ == "LLMAnalyzer":
             llm_analyzer = analyzer
             break
-    
+
     assert llm_analyzer is not None, "LLMAnalyzer not found in workflow analyzers"
-    
+
     # Verify prompt loading
-    assert hasattr(llm_analyzer, "_prompts"), "LLMAnalyzer does not have _prompts attribute"
+    assert hasattr(
+        llm_analyzer, "_prompts"
+    ), "LLMAnalyzer does not have _prompts attribute"
     prompts = llm_analyzer._prompts
     assert prompts, "No prompts loaded in LLMAnalyzer"
-    
+
     # Check for required prompt types
-    required_prompts = ["identify_sources", "identify_sinks", "analyze_data_flow", "summarize_results"]
+    required_prompts = [
+        "identify_sources",
+        "identify_sinks",
+        "analyze_data_flow",
+        "summarize_results",
+    ]
     for prompt_name in required_prompts:
         assert prompt_name in prompts, f"Required prompt '{prompt_name}' not found"
         # Verify that the prompt content is not empty
         assert prompts[prompt_name], f"Prompt '{prompt_name}' is empty"
         # Verify that key phrases are in the prompts
         if prompt_name == "identify_sources":
-            assert "source" in prompts[prompt_name].lower(), "Source prompt doesn't mention 'source'"
+            assert (
+                "source" in prompts[prompt_name].lower()
+            ), "Source prompt doesn't mention 'source'"
         elif prompt_name == "identify_sinks":
-            assert "sink" in prompts[prompt_name].lower(), "Sink prompt doesn't mention 'sink'"
+            assert (
+                "sink" in prompts[prompt_name].lower()
+            ), "Sink prompt doesn't mention 'sink'"
         elif prompt_name == "analyze_data_flow":
-            assert "flow" in prompts[prompt_name].lower(), "Data flow prompt doesn't mention 'flow'"
+            assert (
+                "flow" in prompts[prompt_name].lower()
+            ), "Data flow prompt doesn't mention 'flow'"
         elif prompt_name == "summarize_results":
-            assert "summary" in prompts[prompt_name].lower() or "summarize" in prompts[prompt_name].lower(), "Summary prompt doesn't mention 'summary' or 'summarize'"
+            assert (
+                "summary" in prompts[prompt_name].lower()
+                or "summarize" in prompts[prompt_name].lower()
+            ), "Summary prompt doesn't mention 'summary' or 'summarize'"

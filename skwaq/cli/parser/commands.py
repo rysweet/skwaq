@@ -99,23 +99,22 @@ def register_ingest_parser(parser: SkwaqArgumentParser) -> None:
     )
 
     ingest_parser.add_argument("source", help="Path to the source to ingest")
-    
+
     ingest_parser.add_argument(
-        "--parse-only", 
-        action="store_true", 
-        help="Only parse the codebase without LLM summarization"
+        "--parse-only",
+        action="store_true",
+        help="Only parse the codebase without LLM summarization",
     )
-    
+
     ingest_parser.add_argument(
-        "--threads", 
-        type=int, 
+        "--threads",
+        type=int,
         default=3,
-        help="Maximum number of parallel threads for processing"
+        help="Maximum number of parallel threads for processing",
     )
-    
+
     ingest_parser.add_argument(
-        "--branch", 
-        help="Git branch to clone (for repository URLs)"
+        "--branch", help="Git branch to clone (for repository URLs)"
     )
 
 

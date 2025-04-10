@@ -238,7 +238,7 @@ class GraphVisualizer:
                                 "type": "FOUND_IN",
                             }
                         )
-        
+
         # Add sources and sinks if requested
         if include_sources_sinks:
             # Get source nodes
@@ -249,12 +249,12 @@ class GraphVisualizer:
                   s.is_funnel_identified as is_funnel_identified
             LIMIT $max_nodes
             """
-            
+
             sources_result = self.connector.run_query(
                 sources_query,
                 {"investigation_id": investigation_id, "max_nodes": max_nodes},
             )
-            
+
             for source in sources_result:
                 source_id = source["id"]
                 graph_data["nodes"].append(
@@ -262,7 +262,9 @@ class GraphVisualizer:
                         "id": f"s-{source_id}",
                         "label": source.get("name", "Source"),
                         "type": "source",
-                        "is_funnel_identified": source.get("is_funnel_identified", False),
+                        "is_funnel_identified": source.get(
+                            "is_funnel_identified", False
+                        ),
                         "properties": {
                             "name": source.get("name"),
                             "source_type": source.get("source_type"),
@@ -271,7 +273,7 @@ class GraphVisualizer:
                         },
                     }
                 )
-                
+
                 # Add link from investigation to source
                 graph_data["links"].append(
                     {
@@ -280,22 +282,24 @@ class GraphVisualizer:
                         "type": "HAS_SOURCE",
                     }
                 )
-                
+
                 # Find related method/function if available
                 method_query = """
                 MATCH (s:Source)-[:DEFINED_IN]->(m:Method)
                 WHERE elementId(s) = $source_id
                 RETURN elementId(m) as id, m.name as name, m.signature as signature
                 """
-                
+
                 method_result = self.connector.run_query(
                     method_query, {"source_id": source_id}
                 )
-                
+
                 for method in method_result:
                     method_id = method["id"]
                     # Check if method node already exists
-                    if not any(node["id"] == f"m-{method_id}" for node in graph_data["nodes"]):
+                    if not any(
+                        node["id"] == f"m-{method_id}" for node in graph_data["nodes"]
+                    ):
                         graph_data["nodes"].append(
                             {
                                 "id": f"m-{method_id}",
@@ -308,7 +312,7 @@ class GraphVisualizer:
                                 },
                             }
                         )
-                    
+
                     # Add link from source to method
                     graph_data["links"].append(
                         {
@@ -317,7 +321,7 @@ class GraphVisualizer:
                             "type": "DEFINED_IN",
                         }
                     )
-            
+
             # Get sink nodes
             sinks_query = """
             MATCH (i:Investigation {id: $investigation_id})-[:HAS_SINK]->(s:Sink)
@@ -326,12 +330,12 @@ class GraphVisualizer:
                   s.is_funnel_identified as is_funnel_identified
             LIMIT $max_nodes
             """
-            
+
             sinks_result = self.connector.run_query(
                 sinks_query,
                 {"investigation_id": investigation_id, "max_nodes": max_nodes},
             )
-            
+
             for sink in sinks_result:
                 sink_id = sink["id"]
                 graph_data["nodes"].append(
@@ -348,7 +352,7 @@ class GraphVisualizer:
                         },
                     }
                 )
-                
+
                 # Add link from investigation to sink
                 graph_data["links"].append(
                     {
@@ -357,22 +361,24 @@ class GraphVisualizer:
                         "type": "HAS_SINK",
                     }
                 )
-                
+
                 # Find related method/function if available
                 method_query = """
                 MATCH (s:Sink)-[:DEFINED_IN]->(m:Method)
                 WHERE elementId(s) = $sink_id
                 RETURN elementId(m) as id, m.name as name, m.signature as signature
                 """
-                
+
                 method_result = self.connector.run_query(
                     method_query, {"sink_id": sink_id}
                 )
-                
+
                 for method in method_result:
                     method_id = method["id"]
                     # Check if method node already exists
-                    if not any(node["id"] == f"m-{method_id}" for node in graph_data["nodes"]):
+                    if not any(
+                        node["id"] == f"m-{method_id}" for node in graph_data["nodes"]
+                    ):
                         graph_data["nodes"].append(
                             {
                                 "id": f"m-{method_id}",
@@ -385,7 +391,7 @@ class GraphVisualizer:
                                 },
                             }
                         )
-                    
+
                     # Add link from sink to method
                     graph_data["links"].append(
                         {
@@ -394,7 +400,7 @@ class GraphVisualizer:
                             "type": "DEFINED_IN",
                         }
                     )
-            
+
             # Get data flow paths
             dataflow_query = """
             MATCH (i:Investigation {id: $investigation_id})-[:HAS_DATA_FLOW_PATH]->(d:DataFlowPath)
@@ -403,12 +409,12 @@ class GraphVisualizer:
                   d.recommendations as recommendations, d.is_funnel_identified as is_funnel_identified
             LIMIT $max_nodes
             """
-            
+
             dataflow_result = self.connector.run_query(
                 dataflow_query,
                 {"investigation_id": investigation_id, "max_nodes": max_nodes},
             )
-            
+
             for dataflow in dataflow_result:
                 dataflow_id = dataflow["id"]
                 graph_data["nodes"].append(
@@ -416,7 +422,9 @@ class GraphVisualizer:
                         "id": f"df-{dataflow_id}",
                         "label": dataflow.get("label", "Data Flow Path"),
                         "type": "dataFlowPath",
-                        "is_funnel_identified": dataflow.get("is_funnel_identified", False),
+                        "is_funnel_identified": dataflow.get(
+                            "is_funnel_identified", False
+                        ),
                         "properties": {
                             "vulnerability_type": dataflow.get("vulnerability_type"),
                             "impact": dataflow.get("impact"),
@@ -426,7 +434,7 @@ class GraphVisualizer:
                         },
                     }
                 )
-                
+
                 # Add link from investigation to data flow path
                 graph_data["links"].append(
                     {
@@ -435,18 +443,18 @@ class GraphVisualizer:
                         "type": "HAS_DATA_FLOW_PATH",
                     }
                 )
-                
+
                 # Find related sources and sinks
                 source_flow_query = """
                 MATCH (s:Source)-[:FLOWS_TO]->(d:DataFlowPath)
                 WHERE elementId(d) = $dataflow_id
                 RETURN elementId(s) as id
                 """
-                
+
                 source_flow_results = self.connector.run_query(
                     source_flow_query, {"dataflow_id": dataflow_id}
                 )
-                
+
                 for source_flow in source_flow_results:
                     source_id = source_flow["id"]
                     # Add flow link from source to data flow path
@@ -457,17 +465,17 @@ class GraphVisualizer:
                             "type": "FLOWS_TO",
                         }
                     )
-                
+
                 sink_flow_query = """
                 MATCH (d:DataFlowPath)-[:FLOWS_TO]->(s:Sink)
                 WHERE elementId(d) = $dataflow_id
                 RETURN elementId(s) as id
                 """
-                
+
                 sink_flow_results = self.connector.run_query(
                     sink_flow_query, {"dataflow_id": dataflow_id}
                 )
-                
+
                 for sink_flow in sink_flow_results:
                     sink_id = sink_flow["id"]
                     # Add flow link from data flow path to sink

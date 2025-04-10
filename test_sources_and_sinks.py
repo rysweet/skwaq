@@ -14,32 +14,36 @@ from skwaq.workflows.sources_and_sinks import SourcesAndSinksWorkflow
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
+
 async def main():
     # Get OpenAI client
     print("Initializing OpenAI client...")
     config = get_config()
     openai_client = get_openai_client(async_mode=True)
-    
+
     # Create workflow
     print("Creating Sources and Sinks workflow...")
     workflow = SourcesAndSinksWorkflow(
         llm_client=openai_client,
         investigation_id="inv-test",  # Use a dummy investigation ID
         name="Test Sources and Sinks Workflow",
-        description="Test workflow for sources and sinks"
+        description="Test workflow for sources and sinks",
     )
-    
+
     # Setup the workflow
     print("Setting up workflow...")
     await workflow.setup()
-    
+
     # Print information about the workflow
-    print(f"Workflow initialized with {len(workflow.funnels)} funnels and {len(workflow.analyzers)} analyzers")
+    print(
+        f"Workflow initialized with {len(workflow.funnels)} funnels and {len(workflow.analyzers)} analyzers"
+    )
     print("Analyzers:")
     for analyzer in workflow.analyzers:
         print(f"- {analyzer.__class__.__name__}")
-    
+
     print("Test successful!")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

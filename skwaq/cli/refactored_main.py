@@ -57,11 +57,11 @@ async def main(args: Optional[List[str]] = None) -> int:
     # Get CLI arguments
     if args is None:
         args = sys.argv[1:]
-        
+
     # Check if help is requested and show banner
     if not args or "-h" in args or "--help" in args:
         print_banner(version=__version__)
-        
+
     # Create and configure the argument parser
     parser = create_parser()
     register_all_parsers(parser)
@@ -75,10 +75,12 @@ async def main(args: Optional[List[str]] = None) -> int:
         return await version_handler.handle()
 
     # Show banner for non-json output and non-help commands
-    show_banner = (not hasattr(parsed_args, "output") or parsed_args.output != "json")
-    
+    show_banner = not hasattr(parsed_args, "output") or parsed_args.output != "json"
+
     # Only show banner for normal commands (not help or version)
-    help_requested = (len(args) > 0 and (args[0] == '-h' or args[0] == '--help' or args[0] == '--version'))
+    help_requested = len(args) > 0 and (
+        args[0] == "-h" or args[0] == "--help" or args[0] == "--version"
+    )
     if show_banner and not help_requested:
         print_banner(version=__version__)
 

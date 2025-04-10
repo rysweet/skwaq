@@ -86,8 +86,10 @@ class GuiCommandHandler(CommandHandler):
         no_browser = self.args.no_browser
 
         # Find the run_gui.sh script
-        script_path = Path(__file__).resolve().parents[3] / "scripts" / "dev" / "run_gui.sh"
-        
+        script_path = (
+            Path(__file__).resolve().parents[3] / "scripts" / "dev" / "run_gui.sh"
+        )
+
         if not script_path.exists():
             error(f"GUI script not found at {script_path}")
             return 1
@@ -100,9 +102,9 @@ class GuiCommandHandler(CommandHandler):
                 # Default React port is 3000
                 port = 3000
                 host = "localhost"
-                
+
                 status.update("[bold green]Launching GUI frontend...")
-                
+
                 # Use subprocess to run the shell script
                 # We'll log the output for diagnostic purposes
                 process = subprocess.Popen(
@@ -112,18 +114,22 @@ class GuiCommandHandler(CommandHandler):
                     text=True,
                     bufsize=1,  # Line buffered
                 )
-                
+
                 # Add a listener for the script output
                 import threading
-                
+
                 def log_output(stream, prefix):
                     for line in stream:
-                        if "Installing" in line or "Starting" in line or "Error" in line:
+                        if (
+                            "Installing" in line
+                            or "Starting" in line
+                            or "Error" in line
+                        ):
                             if "Error" in line:
                                 error(f"{line.strip()}")
                             else:
                                 info(f"{line.strip()}")
-                
+
                 # Start threads to handle stdout and stderr
                 stdout_thread = threading.Thread(
                     target=log_output, args=(process.stdout, "OUT")
@@ -135,13 +141,13 @@ class GuiCommandHandler(CommandHandler):
                 stderr_thread.daemon = True
                 stdout_thread.start()
                 stderr_thread.start()
-                
+
                 # Wait for the React app to begin starting
                 import time
                 import socket
-                
+
                 # Function to check if port is in use (server is running)
-                def is_port_in_use(port, host='localhost'):
+                def is_port_in_use(port, host="localhost"):
                     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                         try:
                             s.settimeout(0.5)
@@ -149,42 +155,54 @@ class GuiCommandHandler(CommandHandler):
                             return True
                         except (socket.error, socket.timeout):
                             return False
-                
+
                 # Wait for server to start (up to 60 seconds)
                 max_wait_time = 60  # seconds
                 start_time = time.time()
                 server_started = False
-                
+
                 while time.time() - start_time < max_wait_time:
                     if is_port_in_use(port):
                         server_started = True
                         break
                     time.sleep(1)
-                    status.update(f"[bold blue]Waiting for GUI server to start ({int(time.time() - start_time)}s)...")
-                
+                    status.update(
+                        f"[bold blue]Waiting for GUI server to start ({int(time.time() - start_time)}s)..."
+                    )
+
                 if not server_started:
-                    status.update(f"[bold yellow]Server not detected within {max_wait_time} seconds, but it might still be starting...")
-                    info("The GUI server appears to be starting but may take longer to initialize")
+                    status.update(
+                        f"[bold yellow]Server not detected within {max_wait_time} seconds, but it might still be starting..."
+                    )
+                    info(
+                        "The GUI server appears to be starting but may take longer to initialize"
+                    )
                 else:
-                    status.update(f"[bold green]GUI server detected running on port {port}!")
-                
+                    status.update(
+                        f"[bold green]GUI server detected running on port {port}!"
+                    )
+
                 # Open browser if requested
                 if not no_browser:
                     url = f"http://{host}:{port}"
                     status.update(f"[bold green]Opening browser to {url}")
                     webbrowser.open(url)
-                
+
                 # Print instructions
                 console.print()
                 console.print(
                     f"GUI is starting and will be available at [link=http://{host}:{port}]http://{host}:{port}[/link]"
                 )
-                console.print("The React development server will open a browser window automatically")
-                console.print("Press Ctrl+C in the terminal where the server is running to stop it")
-                
+                console.print(
+                    "The React development server will open a browser window automatically"
+                )
+                console.print(
+                    "Press Ctrl+C in the terminal where the server is running to stop it"
+                )
+
                 # Return immediately so user can continue using CLI
                 return 0
-                
+
             except Exception as e:
                 status.update("[bold red]Failed to start GUI!")
                 error(f"Failed to start GUI: {str(e)}")

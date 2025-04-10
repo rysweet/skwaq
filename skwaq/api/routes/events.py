@@ -64,17 +64,17 @@ def connect(channel: str) -> Response:
 
     Returns:
         SSE stream response
-        
+
     Raises:
         BadRequestError: If channel is invalid
     """
     # Check if channel exists
     if channel not in ["repository", "analysis", "chat", "system"]:
         raise BadRequestError(f"Invalid channel: {channel}")
-        
+
     # Check for token in query param (for browsers that don't support headers in EventSource)
     # The auth middleware already handled the main token validation
-    
+
     # Generate a unique client ID
     client_id = str(uuid.uuid4())
 
@@ -93,8 +93,8 @@ def connect(channel: str) -> Response:
             "X-Accel-Buffering": "no",  # Disable buffering for nginx
         },
     )
-    
-    
+
+
 # Alias the old connect endpoint for backwards compatibility
 @bp.route("/<channel>/connect", methods=["GET"])
 @login_required
@@ -107,13 +107,13 @@ def connect_old(channel: str) -> Response:
 @login_required
 def get_recent_events() -> Response:
     """Get recent events for the dashboard.
-    
+
     Returns:
         A list of recent events
     """
     # Get recent events from the service
     recent_events = event_service.get_recent_events(limit=10)
-    
+
     # If no events are available, create placeholder events
     if not recent_events:
         # Create sample events for the dashboard
@@ -124,22 +124,22 @@ def get_recent_events() -> Response:
                 "type": "system",
                 "title": "API Server Active",
                 "description": "The API server is running and ready for requests",
-                "timestamp": now.isoformat()
+                "timestamp": now.isoformat(),
             },
             {
                 "id": "event-2",
                 "type": "repository",
                 "title": "Ready for Analysis",
                 "description": "Add a repository to start vulnerability assessment",
-                "timestamp": (now - datetime.timedelta(hours=1)).isoformat()
+                "timestamp": (now - datetime.timedelta(hours=1)).isoformat(),
             },
             {
                 "id": "event-3",
                 "type": "workflow",
                 "title": "Workflows Available",
                 "description": "Security assessment workflows are ready to use",
-                "timestamp": (now - datetime.timedelta(days=1)).isoformat()
-            }
+                "timestamp": (now - datetime.timedelta(days=1)).isoformat(),
+            },
         ]
-    
+
     return jsonify(recent_events)

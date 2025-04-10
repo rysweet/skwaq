@@ -65,7 +65,7 @@ class GraphVisualizer:
         query = """
         MATCH (i:Investigation {id: $id})
         """
-        
+
         # Add each optional match separately
         if include_findings:
             query += """
@@ -75,18 +75,18 @@ class GraphVisualizer:
             query += """
             WITH i
             """
-        
+
         if include_vulnerabilities:
             query += """
             OPTIONAL MATCH (f:Finding)-[:IDENTIFIES]->(v:Vulnerability)
             """
-        
+
         if include_files:
             query += """
             OPTIONAL MATCH (f:Finding)-[:FOUND_IN]->(file:File)
             OPTIONAL MATCH (file:File)-[:PART_OF]->(repo:Repository)
             """
-        
+
         # Complete the query
         query += """
         RETURN i, 
@@ -101,7 +101,7 @@ class GraphVisualizer:
         result = self.connector.run_query(
             query, {"id": investigation_id, "max_nodes": max_nodes}
         )
-        
+
         # If sources_sinks is enabled, get those nodes separately
         sources_sinks_data = {}
         if include_sources_sinks:
@@ -116,7 +116,7 @@ class GraphVisualizer:
             sources_result = self.connector.run_query(
                 sources_query, {"id": investigation_id, "max_nodes": max_nodes}
             )
-            
+
             # Query for Sink nodes
             sinks_query = """
             MATCH (i:Investigation {id: $id})-[:HAS_SINK]->(sink:Sink)
@@ -128,7 +128,7 @@ class GraphVisualizer:
             sinks_result = self.connector.run_query(
                 sinks_query, {"id": investigation_id, "max_nodes": max_nodes}
             )
-            
+
             # Query for DataFlowPath nodes
             dataflow_query = """
             MATCH (i:Investigation {id: $id})-[:HAS_DATA_FLOW_PATH]->(path:DataFlowPath),
@@ -139,19 +139,21 @@ class GraphVisualizer:
             dataflow_result = self.connector.run_query(
                 dataflow_query, {"id": investigation_id, "max_nodes": max_nodes}
             )
-            
+
             sources_sinks_data = {
                 "sources": sources_result,
                 "sinks": sinks_result,
-                "paths": dataflow_result
+                "paths": dataflow_result,
             }
 
         # Process query results into graph data
         return self._process_graph_data(result, investigation_id, sources_sinks_data)
 
     def _process_graph_data(
-        self, query_result: List[Dict[str, Any]], investigation_id: str,
-        sources_sinks_data: Dict[str, List[Dict[str, Any]]] = None
+        self,
+        query_result: List[Dict[str, Any]],
+        investigation_id: str,
+        sources_sinks_data: Dict[str, List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Process Neo4j query results into a graph data structure.
 
@@ -168,8 +170,11 @@ class GraphVisualizer:
         node_ids = set()
 
         # Helper function to add a node if it doesn't exist yet
-        def add_node(node_data: Dict[str, Any], node_type: str, 
-                     is_funnel_identified: bool = False) -> None:
+        def add_node(
+            node_data: Dict[str, Any],
+            node_type: str,
+            is_funnel_identified: bool = False,
+        ) -> None:
             node_id = node_data.get("id") or str(node_data.get("neo4j_id"))
 
             if node_id in node_ids:
@@ -252,9 +257,9 @@ class GraphVisualizer:
             nodes.append(placeholder_node)
             node_ids.add(investigation_id)
             return {"nodes": nodes, "links": links}
-        
+
         row = query_result[0]  # Get the first row since we're using COLLECT
-        
+
         # Extract investigation node
         investigation = row.get("i", {})
         if investigation:
@@ -274,67 +279,67 @@ class GraphVisualizer:
                 {"id": investigation_id, "title": f"Investigation {investigation_id}"},
                 "Investigation",
             )
-        
+
         # Process findings
         findings_list = row.get("findings", [])
         for finding in findings_list:
             if finding is None:
                 continue
-                
+
             finding_id = str(id(finding))
             add_node({"neo4j_id": finding_id, **finding}, "Finding")
-            
+
             # Link investigation to finding
             add_link(investigation_node_id, finding_id, "HAS_FINDING")
-        
+
         # Process vulnerabilities
         vulnerabilities_list = row.get("vulnerabilities", [])
         for vulnerability in vulnerabilities_list:
             if vulnerability is None:
                 continue
-                
+
             vuln_id = str(id(vulnerability))
             add_node({"neo4j_id": vuln_id, **vulnerability}, "Vulnerability")
-            
+
             # Find a matching finding to link to
             for finding in findings_list:
                 if finding is None:
                     continue
                 # Try to find a finding-vulnerability relationship
                 add_link(str(id(finding)), vuln_id, "IDENTIFIES")
-        
+
         # Process files
         files_list = row.get("files", [])
         for file_node in files_list:
             if file_node is None:
                 continue
-                
+
             file_id = str(id(file_node))
             add_node({"neo4j_id": file_id, **file_node}, "File")
-            
+
             # Link findings to files
             for finding in findings_list:
                 if finding is None:
                     continue
                 # Try to find a finding-file relationship
                 add_link(str(id(finding)), file_id, "FOUND_IN")
-        
+
         # Process repositories
         repos_list = row.get("repositories", [])
         for repo in repos_list:
             if repo is None:
                 continue
-                
+
             repo_id = str(id(repo))
             add_node({"neo4j_id": repo_id, **repo}, "Repository")
-            
+
             # Link files to repositories
             for file_node in files_list:
                 if file_node is None:
                     continue
                 # Try to find a file-repository relationship
                 add_link(str(id(file_node)), repo_id, "PART_OF")
-                
+
         # Process sources and sinks data if available
         if sources_sinks_data:
             # Process source nodes
@@ -343,127 +348,93 @@ class GraphVisualizer:
                 if source:
                     # Mark source nodes as funnel-identified
                     add_node(
-                        {"neo4j_id": id(source), **source}, 
-                        "Source", 
-                        is_funnel_identified=True
+                        {"neo4j_id": id(source), **source},
+                        "Source",
+                        is_funnel_identified=True,
                     )
-                    
+
                     # Link to investigation
-                    add_link(
-                        investigation_node_id,
-                        str(id(source)),
-                        "HAS_SOURCE"
-                    )
-                    
+                    add_link(investigation_node_id, str(id(source)), "HAS_SOURCE")
+
                     # Link to source file if available
                     source_file = row.get("sourcefile", {})
                     if source_file:
                         file_id = str(id(source_file))
-                        
+
                         # Add file node if it doesn't exist
                         if file_id not in node_ids:
-                            add_node({"neo4j_id": id(source_file), **source_file}, "File")
-                        
-                        add_link(
-                            str(id(source)),
-                            file_id,
-                            "DEFINED_IN"
-                        )
-                    
+                            add_node(
+                                {"neo4j_id": id(source_file), **source_file}, "File"
+                            )
+
+                        add_link(str(id(source)), file_id, "DEFINED_IN")
+
                     # Link to function if available
                     function_id = row.get("function_id")
                     if function_id:
                         function_id = str(function_id)
                         if function_id in node_ids:
-                            add_link(
-                                str(id(source)),
-                                function_id,
-                                "REPRESENTS"
-                            )
-            
+                            add_link(str(id(source)), function_id, "REPRESENTS")
+
             # Process sink nodes
             for row in sources_sinks_data.get("sinks", []):
                 sink = row.get("sink", {})
                 if sink:
                     # Mark sink nodes as funnel-identified
                     add_node(
-                        {"neo4j_id": id(sink), **sink}, 
-                        "Sink", 
-                        is_funnel_identified=True
+                        {"neo4j_id": id(sink), **sink},
+                        "Sink",
+                        is_funnel_identified=True,
                     )
-                    
+
                     # Link to investigation
-                    add_link(
-                        investigation_node_id,
-                        str(id(sink)),
-                        "HAS_SINK"
-                    )
-                    
+                    add_link(investigation_node_id, str(id(sink)), "HAS_SINK")
+
                     # Link to sink file if available
                     sink_file = row.get("sinkfile", {})
                     if sink_file:
                         file_id = str(id(sink_file))
-                        
+
                         # Add file node if it doesn't exist
                         if file_id not in node_ids:
                             add_node({"neo4j_id": id(sink_file), **sink_file}, "File")
-                        
-                        add_link(
-                            str(id(sink)),
-                            file_id,
-                            "DEFINED_IN"
-                        )
-                    
+
+                        add_link(str(id(sink)), file_id, "DEFINED_IN")
+
                     # Link to function if available
                     function_id = row.get("function_id")
                     if function_id:
                         function_id = str(function_id)
                         if function_id in node_ids:
-                            add_link(
-                                str(id(sink)),
-                                function_id,
-                                "REPRESENTS"
-                            )
-            
+                            add_link(str(id(sink)), function_id, "REPRESENTS")
+
             # Process data flow paths
             for row in sources_sinks_data.get("paths", []):
                 path = row.get("path", {})
                 source_id = row.get("source_id")
                 sink_id = row.get("sink_id")
-                
+
                 if path and source_id and sink_id:
                     # Add data flow path node
                     add_node(
-                        {"neo4j_id": id(path), **path}, 
-                        "DataFlowPath", 
-                        is_funnel_identified=True
+                        {"neo4j_id": id(path), **path},
+                        "DataFlowPath",
+                        is_funnel_identified=True,
                     )
-                    
+
                     # Link to source and sink
                     source_id = str(source_id)
                     sink_id = str(sink_id)
-                    
+
                     # Add links if nodes exist
                     if source_id in node_ids:
-                        add_link(
-                            source_id,
-                            str(id(path)),
-                            "FLOWS_TO"
-                        )
-                    
+                        add_link(source_id, str(id(path)), "FLOWS_TO")
+
                     if sink_id in node_ids:
-                        add_link(
-                            str(id(path)),
-                            sink_id,
-                            "FLOWS_TO"
-                        )
-                    
+                        add_link(str(id(path)), sink_id, "FLOWS_TO")
+
                     # Link to investigation
-                    add_link(
-                        investigation_node_id,
-                        str(id(path)),
-                        "HAS_DATA_FLOW_PATH"
-                    )
+                    add_link(investigation_node_id, str(id(path)), "HAS_DATA_FLOW_PATH")
 
         # If no investigation node was found, add a placeholder
         if not any(node.get("type") == "Investigation" for node in nodes):
@@ -477,7 +448,7 @@ class GraphVisualizer:
                 "is_funnel_identified": False,
             }
             nodes.append(investigation_node)
-        
+
         # Process sources and sinks data if available
         if sources_sinks_data:
             # Process source nodes
@@ -486,127 +457,93 @@ class GraphVisualizer:
                 if source:
                     # Mark source nodes as funnel-identified
                     add_node(
-                        {"neo4j_id": id(source), **source}, 
-                        "Source", 
-                        is_funnel_identified=True
+                        {"neo4j_id": id(source), **source},
+                        "Source",
+                        is_funnel_identified=True,
                     )
-                    
+
                     # Link to investigation
-                    add_link(
-                        investigation_id,
-                        str(id(source)),
-                        "HAS_SOURCE"
-                    )
-                    
+                    add_link(investigation_id, str(id(source)), "HAS_SOURCE")
+
                     # Link to source file if available
                     source_file = row.get("sourcefile", {})
                     if source_file:
                         file_id = str(id(source_file))
-                        
+
                         # Add file node if it doesn't exist
                         if file_id not in node_ids:
-                            add_node({"neo4j_id": id(source_file), **source_file}, "File")
-                        
-                        add_link(
-                            str(id(source)),
-                            file_id,
-                            "DEFINED_IN"
-                        )
-                    
+                            add_node(
+                                {"neo4j_id": id(source_file), **source_file}, "File"
+                            )
+
+                        add_link(str(id(source)), file_id, "DEFINED_IN")
+
                     # Link to function if available
                     function_id = row.get("function_id")
                     if function_id:
                         function_id = str(function_id)
                         if function_id in node_ids:
-                            add_link(
-                                str(id(source)),
-                                function_id,
-                                "REPRESENTS"
-                            )
-            
+                            add_link(str(id(source)), function_id, "REPRESENTS")
+
             # Process sink nodes
             for row in sources_sinks_data.get("sinks", []):
                 sink = row.get("sink", {})
                 if sink:
                     # Mark sink nodes as funnel-identified
                     add_node(
-                        {"neo4j_id": id(sink), **sink}, 
-                        "Sink", 
-                        is_funnel_identified=True
+                        {"neo4j_id": id(sink), **sink},
+                        "Sink",
+                        is_funnel_identified=True,
                     )
-                    
+
                     # Link to investigation
-                    add_link(
-                        investigation_id,
-                        str(id(sink)),
-                        "HAS_SINK"
-                    )
-                    
+                    add_link(investigation_id, str(id(sink)), "HAS_SINK")
+
                     # Link to sink file if available
                     sink_file = row.get("sinkfile", {})
                     if sink_file:
                         file_id = str(id(sink_file))
-                        
+
                         # Add file node if it doesn't exist
                         if file_id not in node_ids:
                             add_node({"neo4j_id": id(sink_file), **sink_file}, "File")
-                        
-                        add_link(
-                            str(id(sink)),
-                            file_id,
-                            "DEFINED_IN"
-                        )
-                    
+
+                        add_link(str(id(sink)), file_id, "DEFINED_IN")
+
                     # Link to function if available
                     function_id = row.get("function_id")
                     if function_id:
                         function_id = str(function_id)
                         if function_id in node_ids:
-                            add_link(
-                                str(id(sink)),
-                                function_id,
-                                "REPRESENTS"
-                            )
-            
+                            add_link(str(id(sink)), function_id, "REPRESENTS")
+
             # Process data flow paths
             for row in sources_sinks_data.get("paths", []):
                 path = row.get("path", {})
                 source_id = row.get("source_id")
                 sink_id = row.get("sink_id")
-                
+
                 if path and source_id and sink_id:
                     # Add data flow path node
                     add_node(
-                        {"neo4j_id": id(path), **path}, 
-                        "DataFlowPath", 
-                        is_funnel_identified=True
+                        {"neo4j_id": id(path), **path},
+                        "DataFlowPath",
+                        is_funnel_identified=True,
                     )
-                    
+
                     # Link to source and sink
                     source_id = str(source_id)
                     sink_id = str(sink_id)
-                    
+
                     # Add links if nodes exist
                     if source_id in node_ids:
-                        add_link(
-                            source_id,
-                            str(id(path)),
-                            "FLOWS_TO"
-                        )
-                    
+                        add_link(source_id, str(id(path)), "FLOWS_TO")
+
                     if sink_id in node_ids:
-                        add_link(
-                            str(id(path)),
-                            sink_id,
-                            "FLOWS_TO"
-                        )
-                    
+                        add_link(str(id(path)), sink_id, "FLOWS_TO")
+
                     # Link to investigation
-                    add_link(
-                        investigation_id,
-                        str(id(path)),
-                        "HAS_DATA_FLOW_PATH"
-                    )
+                    add_link(investigation_id, str(id(path)), "HAS_DATA_FLOW_PATH")
 
         # Return the graph data
         return {"nodes": nodes, "links": links}
@@ -767,11 +704,11 @@ class GraphVisualizer:
         import sys
         import datetime
         import neo4j.time
-        
+
         # Define a custom encoder class locally to avoid circular imports
         class CustomVisualizationEncoder(json.JSONEncoder):
             """Custom JSON encoder to handle Neo4j data types and dates in visualization output."""
-            
+
             def default(self, obj):
                 """Handle special types for JSON serialization."""
                 if isinstance(obj, neo4j.time.DateTime):
@@ -779,27 +716,35 @@ class GraphVisualizer:
                 if isinstance(obj, datetime.datetime):
                     return obj.isoformat()
                 return super().default(obj)
-                
+
         def local_preprocess_data(data):
             """Pre-process data to handle DateTime objects in nested structures."""
             if isinstance(data, dict):
                 for key, value in list(data.items()):
                     if isinstance(value, (neo4j.time.DateTime, datetime.datetime)):
-                        data[key] = value.isoformat() if hasattr(value, 'isoformat') else str(value)
+                        data[key] = (
+                            value.isoformat()
+                            if hasattr(value, "isoformat")
+                            else str(value)
+                        )
                     elif isinstance(value, (dict, list)):
                         data[key] = local_preprocess_data(value)
             elif isinstance(data, list):
                 for i, item in enumerate(data):
                     if isinstance(item, (neo4j.time.DateTime, datetime.datetime)):
-                        data[i] = item.isoformat() if hasattr(item, 'isoformat') else str(item)
+                        data[i] = (
+                            item.isoformat()
+                            if hasattr(item, "isoformat")
+                            else str(item)
+                        )
                     elif isinstance(item, (dict, list)):
                         data[i] = local_preprocess_data(item)
             return data
-        
+
         try:
             # Preprocess data to handle Neo4j DateTime objects
             processed_data = local_preprocess_data(graph_data)
-            
+
             # Convert to JSON using custom encoder
             graph_data_json = json.dumps(processed_data, cls=CustomVisualizationEncoder)
         except Exception as e:
@@ -847,9 +792,12 @@ class GraphVisualizer:
 
         # D3.js script for the visualization
         # Remove the percentage formatting that's causing issues
-        d3_script = """
+        d3_script = (
+            """
             // Graph data
-            const graphData = """ + graph_data_json + """;
+            const graphData = """
+            + graph_data_json
+            + """;
             
             // Set up the simulation
             const width = document.getElementById('graph').clientWidth;
@@ -1124,6 +1072,7 @@ class GraphVisualizer:
                 d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
             );
         """
+        )
 
         # Build the HTML page
         html = [

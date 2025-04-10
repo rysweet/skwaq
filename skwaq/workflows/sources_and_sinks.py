@@ -360,7 +360,7 @@ class SourcesAndSinksResult:
                 markdown += f"**Source**: {path.source_node.name} ({path.source_node.source_type.value})\n\n"
                 markdown += f"**Sink**: {path.sink_node.name} ({path.sink_node.sink_type.value})\n\n"
                 markdown += f"**Description**: {path.description}\n\n"
-                
+
                 if path.recommendations:
                     markdown += "**Recommendations**:\n\n"
                     for rec in path.recommendations:
@@ -427,11 +427,26 @@ class CodeSummaryFunnel(FunnelQuery):
         """
         # Keywords associated with sources in code summaries
         source_keywords = [
-            "input", "read", "load", "fetch", "get", "receive", "request",
-            "parse", "environment", "config", "parameter", "argument",
-            "userinput", "database", "file", "http", "socket", "port"
+            "input",
+            "read",
+            "load",
+            "fetch",
+            "get",
+            "receive",
+            "request",
+            "parse",
+            "environment",
+            "config",
+            "parameter",
+            "argument",
+            "userinput",
+            "database",
+            "file",
+            "http",
+            "socket",
+            "port",
         ]
-        
+
         # Construct the Cypher query using code summaries - with a more robust approach
         # First, try to find properly connected functions
         query = """
@@ -468,15 +483,14 @@ class CodeSummaryFunnel(FunnelQuery):
             summary.summary AS description,
             CASE WHEN file IS NOT NULL THEN file.path ELSE 'unknown' END AS file_path
         """
-        
-        params = {
-            "investigation_id": investigation_id,
-            "keywords": source_keywords
-        }
-        
+
+        params = {"investigation_id": investigation_id, "keywords": source_keywords}
+
         try:
             results = self._connector.run_query(query, params)
-            logger.info(f"Found {len(results)} potential source nodes using code summary funnel")
+            logger.info(
+                f"Found {len(results)} potential source nodes using code summary funnel"
+            )
             return results
         except Exception as e:
             logger.error(f"Error querying potential source nodes: {e}")
@@ -495,11 +509,29 @@ class CodeSummaryFunnel(FunnelQuery):
         """
         # Keywords associated with sinks in code summaries
         sink_keywords = [
-            "write", "save", "update", "execute", "insert", "delete", "query",
-            "render", "response", "print", "log", "output", "store", "send",
-            "sql", "command", "exec", "eval", "database", "file", "http"
+            "write",
+            "save",
+            "update",
+            "execute",
+            "insert",
+            "delete",
+            "query",
+            "render",
+            "response",
+            "print",
+            "log",
+            "output",
+            "store",
+            "send",
+            "sql",
+            "command",
+            "exec",
+            "eval",
+            "database",
+            "file",
+            "http",
         ]
-        
+
         # Construct the Cypher query using code summaries - with a more robust approach
         # First, try to find properly connected functions
         query = """
@@ -536,15 +568,14 @@ class CodeSummaryFunnel(FunnelQuery):
             summary.summary AS description,
             CASE WHEN file IS NOT NULL THEN file.path ELSE 'unknown' END AS file_path
         """
-        
-        params = {
-            "investigation_id": investigation_id,
-            "keywords": sink_keywords
-        }
-        
+
+        params = {"investigation_id": investigation_id, "keywords": sink_keywords}
+
         try:
             results = self._connector.run_query(query, params)
-            logger.info(f"Found {len(results)} potential sink nodes using code summary funnel")
+            logger.info(
+                f"Found {len(results)} potential sink nodes using code summary funnel"
+            )
             return results
         except Exception as e:
             logger.error(f"Error querying potential sink nodes: {e}")
@@ -564,7 +595,9 @@ class Analyzer(ABC):
         self.name = self.__class__.__name__
 
     @abstractmethod
-    async def analyze_source(self, node_data: Dict[str, Any], investigation_id: str) -> Optional[SourceNode]:
+    async def analyze_source(
+        self, node_data: Dict[str, Any], investigation_id: str
+    ) -> Optional[SourceNode]:
         """Analyze if a node is a source.
 
         Args:
@@ -577,7 +610,9 @@ class Analyzer(ABC):
         pass
 
     @abstractmethod
-    async def analyze_sink(self, node_data: Dict[str, Any], investigation_id: str) -> Optional[SinkNode]:
+    async def analyze_sink(
+        self, node_data: Dict[str, Any], investigation_id: str
+    ) -> Optional[SinkNode]:
         """Analyze if a node is a sink.
 
         Args:
@@ -619,7 +654,7 @@ class LLMAnalyzer(Analyzer):
         super().__init__(connector)
         self.llm_client = llm_client
         self._prompts: Dict[str, str] = self._load_prompts()
-        
+
     def _load_prompts(self) -> Dict[str, str]:
         """Load the LLM prompts for source and sink identification.
 
@@ -628,12 +663,12 @@ class LLMAnalyzer(Analyzer):
         """
         prompts: Dict[str, str] = {}
         prompts_dir = Path(__file__).parent / "prompts" / "sources_and_sinks"
-        
+
         # Ensure the prompts directory exists
         if not prompts_dir.exists():
             logger.warning(f"Prompts directory not found: {prompts_dir}")
             return prompts
-            
+
         # Load each prompt file
         for prompt_file in prompts_dir.glob("*.prompt"):
             prompt_name = prompt_file.stem
@@ -644,7 +679,7 @@ class LLMAnalyzer(Analyzer):
                 if "system: |" in content:
                     system_prompt = content.split("system: |")[1].strip()
                     prompts[prompt_name] = system_prompt
-        
+
         return prompts
 
     async def _get_function_code(self, node_id: int) -> str:
@@ -660,13 +695,15 @@ class LLMAnalyzer(Analyzer):
         MATCH (func) WHERE id(func) = $node_id
         RETURN func.code AS code
         """
-        
+
         results = self._connector.run_query(query, {"node_id": node_id})
         if results and "code" in results[0]:
             return results[0]["code"]
         return ""
 
-    async def analyze_source(self, node_data: Dict[str, Any], investigation_id: str) -> Optional[SourceNode]:
+    async def analyze_source(
+        self, node_data: Dict[str, Any], investigation_id: str
+    ) -> Optional[SourceNode]:
         """Analyze if a node is a source using LLM.
 
         Args:
@@ -681,7 +718,7 @@ class LLMAnalyzer(Analyzer):
         if not function_code:
             logger.warning(f"No code found for node: {node_data['node_id']}")
             return None
-        
+
         # Prepare context for LLM
         context = f"""
         Function Name: {node_data.get('name', 'Unknown')}
@@ -694,27 +731,27 @@ class LLMAnalyzer(Analyzer):
         
         Description/Summary: {node_data.get('description', 'No description available')}
         """
-        
+
         # Get the source identification prompt
         source_prompt = self._prompts.get(
             "identify_sources", "Identify if this function is a source of data."
         )
-        
+
         # Create messages for the LLM
         messages = [
             {"role": "system", "content": source_prompt},
             {"role": "user", "content": context},
         ]
-        
+
         try:
             # Get LLM response
             response = await self.llm_client.chat_completion(
                 messages=messages, temperature=0.2, max_tokens=1000
             )
-            
+
             # Check if the LLM identified this as a source
             content = response.get("content", "")
-            
+
             # Simple heuristic: if the LLM response contains "source" keywords, it's likely a source
             source_indicators = [
                 "is a source",
@@ -724,12 +761,14 @@ class LLMAnalyzer(Analyzer):
                 "obtains data",
                 "retrieves data",
             ]
-            
-            is_source = any(indicator in content.lower() for indicator in source_indicators)
-            
+
+            is_source = any(
+                indicator in content.lower() for indicator in source_indicators
+            )
+
             if not is_source:
                 return None
-                
+
             # Determine the source type based on the response
             source_type = SourceSinkType.UNKNOWN_SOURCE
             if "user input" in content.lower() or "user-supplied" in content.lower():
@@ -748,10 +787,12 @@ class LLMAnalyzer(Analyzer):
                 source_type = SourceSinkType.ENVIRONMENT_VARIABLE
             elif "config" in content.lower():
                 source_type = SourceSinkType.CONFIGURATION
-                
+
             # Extract a meaningful description from the LLM response
-            description = content.split("\n\n")[0] if "\n\n" in content else content[:200]
-            
+            description = (
+                content.split("\n\n")[0] if "\n\n" in content else content[:200]
+            )
+
             # Calculate confidence based on LLM response (simple heuristic)
             confidence_indicators = {
                 "definitely": 0.9,
@@ -760,13 +801,13 @@ class LLMAnalyzer(Analyzer):
                 "possibly": 0.4,
                 "might": 0.3,
             }
-            
+
             confidence = 0.5  # Default confidence
             for indicator, value in confidence_indicators.items():
                 if indicator in content.lower():
                     confidence = value
                     break
-                    
+
             # Create the source node
             return SourceNode(
                 node_id=node_data["node_id"],
@@ -780,12 +821,14 @@ class LLMAnalyzer(Analyzer):
                 confidence=confidence,
                 metadata={"llm_response": content},
             )
-            
+
         except Exception as e:
             logger.error(f"Error analyzing source with LLM: {e}")
             return None
 
-    async def analyze_sink(self, node_data: Dict[str, Any], investigation_id: str) -> Optional[SinkNode]:
+    async def analyze_sink(
+        self, node_data: Dict[str, Any], investigation_id: str
+    ) -> Optional[SinkNode]:
         """Analyze if a node is a sink using LLM.
 
         Args:
@@ -800,7 +843,7 @@ class LLMAnalyzer(Analyzer):
         if not function_code:
             logger.warning(f"No code found for node: {node_data['node_id']}")
             return None
-        
+
         # Prepare context for LLM
         context = f"""
         Function Name: {node_data.get('name', 'Unknown')}
@@ -813,27 +856,27 @@ class LLMAnalyzer(Analyzer):
         
         Description/Summary: {node_data.get('description', 'No description available')}
         """
-        
+
         # Get the sink identification prompt
         sink_prompt = self._prompts.get(
             "identify_sinks", "Identify if this function is a sink for data."
         )
-        
+
         # Create messages for the LLM
         messages = [
             {"role": "system", "content": sink_prompt},
             {"role": "user", "content": context},
         ]
-        
+
         try:
             # Get LLM response
             response = await self.llm_client.chat_completion(
                 messages=messages, temperature=0.2, max_tokens=1000
             )
-            
+
             # Check if the LLM identified this as a sink
             content = response.get("content", "")
-            
+
             # Simple heuristic: if the LLM response contains "sink" keywords, it's likely a sink
             sink_indicators = [
                 "is a sink",
@@ -844,12 +887,12 @@ class LLMAnalyzer(Analyzer):
                 "sends data",
                 "executes",
             ]
-            
+
             is_sink = any(indicator in content.lower() for indicator in sink_indicators)
-            
+
             if not is_sink:
                 return None
-                
+
             # Determine the sink type based on the response
             sink_type = SourceSinkType.UNKNOWN_SINK
             if "database" in content.lower() and any(
@@ -878,10 +921,12 @@ class LLMAnalyzer(Analyzer):
                 sink_type = SourceSinkType.LOGGING
             elif "response" in content.lower():
                 sink_type = SourceSinkType.RESPONSE_GENERATION
-                
+
             # Extract a meaningful description from the LLM response
-            description = content.split("\n\n")[0] if "\n\n" in content else content[:200]
-            
+            description = (
+                content.split("\n\n")[0] if "\n\n" in content else content[:200]
+            )
+
             # Calculate confidence based on LLM response (simple heuristic)
             confidence_indicators = {
                 "definitely": 0.9,
@@ -890,13 +935,13 @@ class LLMAnalyzer(Analyzer):
                 "possibly": 0.4,
                 "might": 0.3,
             }
-            
+
             confidence = 0.5  # Default confidence
             for indicator, value in confidence_indicators.items():
                 if indicator in content.lower():
                     confidence = value
                     break
-                    
+
             # Create the sink node
             return SinkNode(
                 node_id=node_data["node_id"],
@@ -910,7 +955,7 @@ class LLMAnalyzer(Analyzer):
                 confidence=confidence,
                 metadata={"llm_response": content},
             )
-            
+
         except Exception as e:
             logger.error(f"Error analyzing sink with LLM: {e}")
             return None
@@ -929,55 +974,56 @@ class LLMAnalyzer(Analyzer):
             List of potential data flow paths
         """
         data_flow_paths: List[DataFlowPath] = []
-        
+
         # If either sources or sinks is empty, return empty list
         if not sources or not sinks:
             logger.info("No sources and/or sinks to analyze data flow")
             return data_flow_paths
-            
+
         # Get the data flow analysis prompt
         data_flow_prompt = self._prompts.get(
-            "analyze_data_flow", "Analyze potential data flow between sources and sinks."
+            "analyze_data_flow",
+            "Analyze potential data flow between sources and sinks.",
         )
-        
+
         # Group sources and sinks by file for more accurate analysis
         file_to_sources: Dict[int, List[SourceNode]] = {}
         file_to_sinks: Dict[int, List[SinkNode]] = {}
-        
+
         for source in sources:
             if source.file_node_id not in file_to_sources:
                 file_to_sources[source.file_node_id] = []
             file_to_sources[source.file_node_id].append(source)
-            
+
         for sink in sinks:
             if sink.file_node_id not in file_to_sinks:
                 file_to_sinks[sink.file_node_id] = []
             file_to_sinks[sink.file_node_id].append(sink)
-            
+
         # First, analyze data flow within the same file
         for file_id, file_sources in file_to_sources.items():
             if file_id in file_to_sinks:
                 file_sinks = file_to_sinks[file_id]
-                
+
                 # Get file content
                 query = """
                 MATCH (f:File) WHERE id(f) = $file_id
                 RETURN f.path AS file_path
                 """
-                
+
                 result = self._connector.run_query(query, {"file_id": file_id})
                 if not result:
                     continue
-                    
+
                 file_path = result[0].get("file_path", "Unknown")
-                
+
                 # Prepare context for LLM
                 context = f"""
                 File Path: {file_path}
                 
                 Sources:
                 """
-                
+
                 for i, source in enumerate(file_sources, 1):
                     source_code = await self._get_function_code(source.node_id)
                     context += f"""
@@ -990,9 +1036,9 @@ class LLMAnalyzer(Analyzer):
                     ```
                     
                     """
-                    
+
                 context += "\nSinks:\n"
-                
+
                 for i, sink in enumerate(file_sinks, 1):
                     sink_code = await self._get_function_code(sink.node_id)
                     context += f"""
@@ -1005,21 +1051,21 @@ class LLMAnalyzer(Analyzer):
                     ```
                     
                     """
-                    
+
                 # Create messages for the LLM
                 messages = [
                     {"role": "system", "content": data_flow_prompt},
                     {"role": "user", "content": context},
                 ]
-                
+
                 try:
                     # Get LLM response
                     response = await self.llm_client.chat_completion(
                         messages=messages, temperature=0.3, max_tokens=1500
                     )
-                    
+
                     content = response.get("content", "")
-                    
+
                     # Parse the LLM response to find data flow paths
                     # This is a simplified parser that looks for specific patterns
                     lines = content.split("\n")
@@ -1028,81 +1074,113 @@ class LLMAnalyzer(Analyzer):
                     current_description: List[str] = []
                     current_vulnerability = ""
                     current_recommendations: List[str] = []
-                    
+
                     for line in lines:
                         line = line.strip().lower()
-                        
+
                         if not line:
                             continue
-                            
+
                         # Look for source references
                         if line.startswith("source") and ":" in line:
                             source_info = line.split(":", 1)[1].strip()
                             for i, source in enumerate(file_sources, 1):
-                                if f"source {i}" in line.lower() or source.name.lower() in source_info:
+                                if (
+                                    f"source {i}" in line.lower()
+                                    or source.name.lower() in source_info
+                                ):
                                     current_source = source
                                     break
-                        
+
                         # Look for sink references
                         elif line.startswith("sink") and ":" in line:
                             sink_info = line.split(":", 1)[1].strip()
                             for i, sink in enumerate(file_sinks, 1):
-                                if f"sink {i}" in line.lower() or sink.name.lower() in sink_info:
+                                if (
+                                    f"sink {i}" in line.lower()
+                                    or sink.name.lower() in sink_info
+                                ):
                                     current_sink = sink
                                     break
-                        
+
                         # Look for vulnerability type
-                        elif any(vuln in line for vuln in ["vulnerability", "vulnerability type", "issue"]) and ":" in line:
+                        elif (
+                            any(
+                                vuln in line
+                                for vuln in [
+                                    "vulnerability",
+                                    "vulnerability type",
+                                    "issue",
+                                ]
+                            )
+                            and ":" in line
+                        ):
                             current_vulnerability = line.split(":", 1)[1].strip()
-                        
+
                         # Look for description
                         elif line.startswith("description") and ":" in line:
                             current_description = [line.split(":", 1)[1].strip()]
-                        elif current_description and not line.startswith(("source", "sink", "recommendation", "vulnerability")):
+                        elif current_description and not line.startswith(
+                            ("source", "sink", "recommendation", "vulnerability")
+                        ):
                             current_description.append(line)
-                        
+
                         # Look for recommendations
                         elif line.startswith("recommendation") and ":" in line:
                             current_recommendations = [line.split(":", 1)[1].strip()]
                         elif current_recommendations and line.startswith("-"):
                             current_recommendations.append(line)
-                        
+
                         # If we have both source and sink, create a path
-                        if current_source and current_sink and (current_description or current_vulnerability):
+                        if (
+                            current_source
+                            and current_sink
+                            and (current_description or current_vulnerability)
+                        ):
                             # Determine impact based on the content
                             impact = DataFlowImpact.MEDIUM  # Default
-                            if "high" in content.lower() and "impact" in content.lower():
+                            if (
+                                "high" in content.lower()
+                                and "impact" in content.lower()
+                            ):
                                 impact = DataFlowImpact.HIGH
-                            elif "low" in content.lower() and "impact" in content.lower():
+                            elif (
+                                "low" in content.lower() and "impact" in content.lower()
+                            ):
                                 impact = DataFlowImpact.LOW
-                            
+
                             path = DataFlowPath(
                                 source_node=current_source,
                                 sink_node=current_sink,
-                                vulnerability_type=current_vulnerability or "Potential data flow vulnerability",
+                                vulnerability_type=current_vulnerability
+                                or "Potential data flow vulnerability",
                                 impact=impact,
                                 description="\n".join(current_description),
                                 recommendations=current_recommendations,
                                 confidence=0.6,  # Conservative confidence for LLM-detected data flows
                                 metadata={"llm_response": content},
                             )
-                            
+
                             data_flow_paths.append(path)
-                            
+
                             # Reset for next path
                             current_source = None
                             current_sink = None
                             current_description = []
                             current_vulnerability = ""
                             current_recommendations = []
-                    
+
                 except Exception as e:
                     logger.error(f"Error analyzing data flow with LLM: {e}")
-        
+
         return data_flow_paths
 
     async def generate_summary(
-        self, sources: List[SourceNode], sinks: List[SinkNode], data_flow_paths: List[DataFlowPath], investigation_id: str
+        self,
+        sources: List[SourceNode],
+        sinks: List[SinkNode],
+        data_flow_paths: List[DataFlowPath],
+        investigation_id: str,
     ) -> str:
         """Generate a summary of the sources and sinks analysis.
 
@@ -1117,9 +1195,10 @@ class LLMAnalyzer(Analyzer):
         """
         # Get the summary prompt
         summary_prompt = self._prompts.get(
-            "summarize_results", "Summarize the results of the sources and sinks analysis."
+            "summarize_results",
+            "Summarize the results of the sources and sinks analysis.",
         )
-        
+
         # Prepare context for LLM
         context = f"""
         Investigation ID: {investigation_id}
@@ -1130,64 +1209,64 @@ class LLMAnalyzer(Analyzer):
         
         Source Types:
         """
-        
+
         # Count source types
         source_type_counts: Dict[str, int] = {}
         for source in sources:
             source_type = source.source_type.value
             source_type_counts[source_type] = source_type_counts.get(source_type, 0) + 1
-        
+
         for source_type, count in source_type_counts.items():
             context += f"- {source_type}: {count}\n"
-            
+
         context += "\nSink Types:\n"
-        
+
         # Count sink types
         sink_type_counts: Dict[str, int] = {}
         for sink in sinks:
             sink_type = sink.sink_type.value
             sink_type_counts[sink_type] = sink_type_counts.get(sink_type, 0) + 1
-        
+
         for sink_type, count in sink_type_counts.items():
             context += f"- {sink_type}: {count}\n"
-            
+
         context += "\nVulnerability Types in Data Flow Paths:\n"
-        
+
         # Count vulnerability types
         vuln_type_counts: Dict[str, int] = {}
         for path in data_flow_paths:
             vuln_type = path.vulnerability_type or "Unknown"
             vuln_type_counts[vuln_type] = vuln_type_counts.get(vuln_type, 0) + 1
-        
+
         for vuln_type, count in vuln_type_counts.items():
             context += f"- {vuln_type}: {count}\n"
-            
+
         context += "\nImpact Levels:\n"
-        
+
         # Count impact levels
         impact_counts: Dict[str, int] = {}
         for path in data_flow_paths:
             impact = path.impact.value
             impact_counts[impact] = impact_counts.get(impact, 0) + 1
-        
+
         for impact, count in impact_counts.items():
             context += f"- {impact}: {count}\n"
-            
+
         # Create messages for the LLM
         messages = [
             {"role": "system", "content": summary_prompt},
             {"role": "user", "content": context},
         ]
-        
+
         try:
             # Get LLM response
             response = await self.llm_client.chat_completion(
                 messages=messages, temperature=0.3, max_tokens=1500
             )
-            
+
             result = response.get("content", "")
             return result
-            
+
         except Exception as e:
             logger.error(f"Error generating summary with LLM: {e}")
             return "Could not generate summary due to an error."
@@ -1196,7 +1275,9 @@ class LLMAnalyzer(Analyzer):
 class DocumentationAnalyzer(Analyzer):
     """Analyzer that uses documentation to identify sources and sinks."""
 
-    async def analyze_source(self, node_data: Dict[str, Any], investigation_id: str) -> Optional[SourceNode]:
+    async def analyze_source(
+        self, node_data: Dict[str, Any], investigation_id: str
+    ) -> Optional[SourceNode]:
         """Analyze if a node is a source using documentation.
 
         Args:
@@ -1212,43 +1293,57 @@ class DocumentationAnalyzer(Analyzer):
         MATCH (func)-[:DOCUMENTS]-(doc)
         RETURN doc.content AS doc_content
         """
-        
+
         results = self._connector.run_query(query, {"node_id": node_data["node_id"]})
-        
+
         if not results:
             return None
-            
+
         # Keywords that indicate a source in documentation
         source_keywords = [
-            "read", "input", "get", "fetch", "load", "receive", "obtain",
-            "parse", "extract", "import"
+            "read",
+            "input",
+            "get",
+            "fetch",
+            "load",
+            "receive",
+            "obtain",
+            "parse",
+            "extract",
+            "import",
         ]
-        
+
         # Check if documentation contains source keywords
         for result in results:
             doc_content = result.get("doc_content", "").lower()
-            
+
             if any(keyword in doc_content for keyword in source_keywords):
                 # Determine source type based on documentation
                 source_type = SourceSinkType.UNKNOWN_SOURCE
-                
+
                 if "user" in doc_content and "input" in doc_content:
                     source_type = SourceSinkType.USER_INPUT
                 elif "database" in doc_content:
                     source_type = SourceSinkType.DATABASE_READ
                 elif "file" in doc_content:
                     source_type = SourceSinkType.FILE_READ
-                elif any(word in doc_content for word in ["http", "request", "network"]):
+                elif any(
+                    word in doc_content for word in ["http", "request", "network"]
+                ):
                     source_type = SourceSinkType.NETWORK_RECEIVE
                 elif "environment" in doc_content:
                     source_type = SourceSinkType.ENVIRONMENT_VARIABLE
                 elif "config" in doc_content:
                     source_type = SourceSinkType.CONFIGURATION
-                
+
                 # Calculate confidence (simple heuristic based on keyword frequency)
-                keyword_count = sum(doc_content.count(keyword) for keyword in source_keywords)
-                confidence = min(0.3 + (keyword_count * 0.1), 0.8)  # Max 0.8 confidence from documentation
-                
+                keyword_count = sum(
+                    doc_content.count(keyword) for keyword in source_keywords
+                )
+                confidence = min(
+                    0.3 + (keyword_count * 0.1), 0.8
+                )  # Max 0.8 confidence from documentation
+
                 # Create source node
                 return SourceNode(
                     node_id=node_data["node_id"],
@@ -1262,10 +1357,12 @@ class DocumentationAnalyzer(Analyzer):
                     confidence=confidence,
                     metadata={"documentation": doc_content[:500]},  # Limit size
                 )
-                
+
         return None
 
-    async def analyze_sink(self, node_data: Dict[str, Any], investigation_id: str) -> Optional[SinkNode]:
+    async def analyze_sink(
+        self, node_data: Dict[str, Any], investigation_id: str
+    ) -> Optional[SinkNode]:
         """Analyze if a node is a sink using documentation.
 
         Args:
@@ -1281,45 +1378,72 @@ class DocumentationAnalyzer(Analyzer):
         MATCH (func)-[:DOCUMENTS]-(doc)
         RETURN doc.content AS doc_content
         """
-        
+
         results = self._connector.run_query(query, {"node_id": node_data["node_id"]})
-        
+
         if not results:
             return None
-            
+
         # Keywords that indicate a sink in documentation
         sink_keywords = [
-            "write", "output", "save", "store", "execute", "update", "delete",
-            "insert", "query", "render", "response", "print", "log"
+            "write",
+            "output",
+            "save",
+            "store",
+            "execute",
+            "update",
+            "delete",
+            "insert",
+            "query",
+            "render",
+            "response",
+            "print",
+            "log",
         ]
-        
+
         # Check if documentation contains sink keywords
         for result in results:
             doc_content = result.get("doc_content", "").lower()
-            
+
             if any(keyword in doc_content for keyword in sink_keywords):
                 # Determine sink type based on documentation
                 sink_type = SourceSinkType.UNKNOWN_SINK
-                
-                if "database" in doc_content and any(word in doc_content for word in ["write", "update", "delete", "insert", "query"]):
+
+                if "database" in doc_content and any(
+                    word in doc_content
+                    for word in ["write", "update", "delete", "insert", "query"]
+                ):
                     sink_type = SourceSinkType.DATABASE_WRITE
-                elif "file" in doc_content and any(word in doc_content for word in ["write", "save"]):
+                elif "file" in doc_content and any(
+                    word in doc_content for word in ["write", "save"]
+                ):
                     sink_type = SourceSinkType.FILE_WRITE
-                elif any(word in doc_content for word in ["http", "response", "network"]):
+                elif any(
+                    word in doc_content for word in ["http", "response", "network"]
+                ):
                     sink_type = SourceSinkType.NETWORK_SEND
-                elif any(word in doc_content for word in ["exec", "command", "system", "shell"]):
+                elif any(
+                    word in doc_content
+                    for word in ["exec", "command", "system", "shell"]
+                ):
                     sink_type = SourceSinkType.COMMAND_EXECUTION
-                elif any(word in doc_content for word in ["html", "render", "template"]):
+                elif any(
+                    word in doc_content for word in ["html", "render", "template"]
+                ):
                     sink_type = SourceSinkType.HTML_RENDERING
                 elif "log" in doc_content:
                     sink_type = SourceSinkType.LOGGING
                 elif "response" in doc_content:
                     sink_type = SourceSinkType.RESPONSE_GENERATION
-                
+
                 # Calculate confidence (simple heuristic based on keyword frequency)
-                keyword_count = sum(doc_content.count(keyword) for keyword in sink_keywords)
-                confidence = min(0.3 + (keyword_count * 0.1), 0.8)  # Max 0.8 confidence from documentation
-                
+                keyword_count = sum(
+                    doc_content.count(keyword) for keyword in sink_keywords
+                )
+                confidence = min(
+                    0.3 + (keyword_count * 0.1), 0.8
+                )  # Max 0.8 confidence from documentation
+
                 # Create sink node
                 return SinkNode(
                     node_id=node_data["node_id"],
@@ -1333,7 +1457,7 @@ class DocumentationAnalyzer(Analyzer):
                     confidence=confidence,
                     metadata={"documentation": doc_content[:500]},  # Limit size
                 )
-                
+
         return None
 
     async def analyze_data_flow(
@@ -1352,7 +1476,7 @@ class DocumentationAnalyzer(Analyzer):
         # Documentation analyzer is limited in detecting data flows
         # It mainly looks for connections mentioned in documentation
         data_flow_paths: List[DataFlowPath] = []
-        
+
         # Query for explicit connections in the graph
         for source in sources:
             for sink in sinks:
@@ -1363,12 +1487,11 @@ class DocumentationAnalyzer(Analyzer):
                 MATCH path = (source)-[:CALLS*1..3]->(sink)
                 RETURN path
                 """
-                
+
                 results = self._connector.run_query(
-                    query, 
-                    {"source_id": source.node_id, "sink_id": sink.node_id}
+                    query, {"source_id": source.node_id, "sink_id": sink.node_id}
                 )
-                
+
                 if results:
                     # There's a direct calling relationship, create a data flow path
                     path = DataFlowPath(
@@ -1377,12 +1500,14 @@ class DocumentationAnalyzer(Analyzer):
                         vulnerability_type=f"Potential data flow from {source.source_type.value} to {sink.sink_type.value}",
                         impact=DataFlowImpact.MEDIUM,  # Default impact
                         description=f"The function {source.name} calls {sink.name}, creating a potential flow of untrusted data.",
-                        recommendations=["Verify proper data validation between source and sink"],
+                        recommendations=[
+                            "Verify proper data validation between source and sink"
+                        ],
                         confidence=0.6,  # Medium confidence for graph-based connections
                     )
-                    
+
                     data_flow_paths.append(path)
-                
+
         return data_flow_paths
 
 
@@ -1407,11 +1532,11 @@ class SourcesAndSinksWorkflow(Workflow):
         super().__init__(name=name, description=description)
         self.llm_client = llm_client
         self.investigation_id = investigation_id
-        
+
         # Initialize funnels and analyzers
         self.funnels: List[FunnelQuery] = []
         self.analyzers: List[Analyzer] = []
-        
+
         # Results
         self.result: Optional[SourcesAndSinksResult] = None
 
@@ -1437,15 +1562,19 @@ class SourcesAndSinksWorkflow(Workflow):
         """Set up the workflow with default funnels and analyzers."""
         # Register default funnel
         self.register_funnel(CodeSummaryFunnel(connector=self.connector))
-        
+
         # Register default analyzers if LLM client is provided
         if self.llm_client:
-            self.register_analyzer(LLMAnalyzer(llm_client=self.llm_client, connector=self.connector))
-        
+            self.register_analyzer(
+                LLMAnalyzer(llm_client=self.llm_client, connector=self.connector)
+            )
+
         # Register documentation analyzer
         self.register_analyzer(DocumentationAnalyzer(connector=self.connector))
-        
-        logger.info(f"Setup complete with {len(self.funnels)} funnels and {len(self.analyzers)} analyzers")
+
+        logger.info(
+            f"Setup complete with {len(self.funnels)} funnels and {len(self.analyzers)} analyzers"
+        )
 
     async def query_codebase(self) -> Dict[str, List[Dict[str, Any]]]:
         """Query the codebase for potential sources and sinks.
@@ -1455,41 +1584,47 @@ class SourcesAndSinksWorkflow(Workflow):
         """
         if not self.investigation_id:
             raise ValueError("Investigation ID is required for the workflow")
-            
+
         # Verify investigation exists
         query = """
         MATCH (i:Investigation {id: $investigation_id})
         RETURN i
         """
-        
-        results = self.connector.run_query(query, {"investigation_id": self.investigation_id})
+
+        results = self.connector.run_query(
+            query, {"investigation_id": self.investigation_id}
+        )
         if not results:
             raise ValueError(f"Investigation {self.investigation_id} not found")
-            
+
         # Query for potential sources and sinks using registered funnels
         potential_sources = []
         potential_sinks = []
-        
+
         for funnel in self.funnels:
             # Query for potential sources
             logger.info(f"Querying for potential sources using {funnel.name}")
             sources = await funnel.query_sources(self.investigation_id)
             potential_sources.extend(sources)
-            
+
             # Query for potential sinks
             logger.info(f"Querying for potential sinks using {funnel.name}")
             sinks = await funnel.query_sinks(self.investigation_id)
             potential_sinks.extend(sinks)
-            
-        logger.info(f"Found {len(potential_sources)} potential source nodes and {len(potential_sinks)} potential sink nodes")
-        
+
+        logger.info(
+            f"Found {len(potential_sources)} potential source nodes and {len(potential_sinks)} potential sink nodes"
+        )
+
         return {
             "potential_sources": potential_sources,
-            "potential_sinks": potential_sinks
+            "potential_sinks": potential_sinks,
         }
 
     async def analyze_code(
-        self, potential_sources: List[Dict[str, Any]], potential_sinks: List[Dict[str, Any]]
+        self,
+        potential_sources: List[Dict[str, Any]],
+        potential_sinks: List[Dict[str, Any]],
     ) -> Dict[str, List[Any]]:
         """Analyze potential sources and sinks to determine if they are valid.
 
@@ -1503,57 +1638,70 @@ class SourcesAndSinksWorkflow(Workflow):
         if not self.analyzers:
             logger.warning("No analyzers registered")
             return {"sources": [], "sinks": [], "data_flow_paths": [], "summary": ""}
-            
+
         sources = []
         sinks = []
-        
+
         # Analyze potential sources
         for node_data in potential_sources:
             for analyzer in self.analyzers:
-                logger.debug(f"Analyzing potential source {node_data.get('name', 'Unknown')} with {analyzer.name}")
+                logger.debug(
+                    f"Analyzing potential source {node_data.get('name', 'Unknown')} with {analyzer.name}"
+                )
                 source = await analyzer.analyze_source(node_data, self.investigation_id)
                 if source:
                     sources.append(source)
                     break  # If one analyzer confirms it's a source, we don't need to check others
-        
+
         # Analyze potential sinks
         for node_data in potential_sinks:
             for analyzer in self.analyzers:
-                logger.debug(f"Analyzing potential sink {node_data.get('name', 'Unknown')} with {analyzer.name}")
+                logger.debug(
+                    f"Analyzing potential sink {node_data.get('name', 'Unknown')} with {analyzer.name}"
+                )
                 sink = await analyzer.analyze_sink(node_data, self.investigation_id)
                 if sink:
                     sinks.append(sink)
                     break  # If one analyzer confirms it's a sink, we don't need to check others
-        
-        logger.info(f"Identified {len(sources)} confirmed sources and {len(sinks)} confirmed sinks")
-        
+
+        logger.info(
+            f"Identified {len(sources)} confirmed sources and {len(sinks)} confirmed sinks"
+        )
+
         # Analyze data flow paths
         data_flow_paths = []
-        
+
         for analyzer in self.analyzers:
             logger.info(f"Analyzing data flow paths with {analyzer.name}")
-            paths = await analyzer.analyze_data_flow(sources, sinks, self.investigation_id)
+            paths = await analyzer.analyze_data_flow(
+                sources, sinks, self.investigation_id
+            )
             data_flow_paths.extend(paths)
-            
+
         logger.info(f"Identified {len(data_flow_paths)} potential data flow paths")
-        
+
         # Generate summary if LLM analyzer is available
         summary = ""
         for analyzer in self.analyzers:
             if isinstance(analyzer, LLMAnalyzer):
                 logger.info("Generating summary with LLM analyzer")
-                summary = await analyzer.generate_summary(sources, sinks, data_flow_paths, self.investigation_id)
+                summary = await analyzer.generate_summary(
+                    sources, sinks, data_flow_paths, self.investigation_id
+                )
                 break
-        
+
         return {
             "sources": sources,
             "sinks": sinks,
             "data_flow_paths": data_flow_paths,
-            "summary": summary
+            "summary": summary,
         }
 
     async def update_graph(
-        self, sources: List[SourceNode], sinks: List[SinkNode], data_flow_paths: List[DataFlowPath]
+        self,
+        sources: List[SourceNode],
+        sinks: List[SinkNode],
+        data_flow_paths: List[DataFlowPath],
     ) -> None:
         """Update the graph with sources, sinks, and data flow paths.
 
@@ -1564,7 +1712,7 @@ class SourcesAndSinksWorkflow(Workflow):
         """
         if not self.investigation_id:
             raise ValueError("Investigation ID is required for the workflow")
-            
+
         # Create Source nodes in the graph
         for source in sources:
             # Create Source node
@@ -1575,11 +1723,11 @@ class SourcesAndSinksWorkflow(Workflow):
                 "confidence": source.confidence,
                 "metadata": json.dumps(source.metadata),
             }
-            
+
             # Add optional properties
             if source.line_number is not None:
                 source_properties["line_number"] = source.line_number
-                
+
             # Create Source node
             query = """
             MATCH (i:Investigation {id: $investigation_id})
@@ -1591,19 +1739,19 @@ class SourcesAndSinksWorkflow(Workflow):
             CREATE (i)-[:HAS_SOURCE]->(s)
             RETURN id(s) AS source_graph_id
             """
-            
+
             params = {
                 "investigation_id": self.investigation_id,
                 "function_node_id": source.node_id,
                 "file_node_id": source.file_node_id,
-                "properties": source_properties
+                "properties": source_properties,
             }
-            
+
             result = self.connector.run_query(query, params)
             if result:
                 source_graph_id = result[0].get("source_graph_id")
                 logger.info(f"Created Source node in graph with ID: {source_graph_id}")
-                
+
                 # Add class relationship if applicable
                 if source.class_node_id is not None:
                     query = """
@@ -1611,12 +1759,15 @@ class SourcesAndSinksWorkflow(Workflow):
                     MATCH (c:Class) WHERE id(c) = $class_node_id
                     CREATE (s)-[:BELONGS_TO]->(c)
                     """
-                    
-                    self.connector.run_query(query, {
-                        "source_graph_id": source_graph_id,
-                        "class_node_id": source.class_node_id
-                    })
-        
+
+                    self.connector.run_query(
+                        query,
+                        {
+                            "source_graph_id": source_graph_id,
+                            "class_node_id": source.class_node_id,
+                        },
+                    )
+
         # Create Sink nodes in the graph
         for sink in sinks:
             # Create Sink node
@@ -1627,11 +1778,11 @@ class SourcesAndSinksWorkflow(Workflow):
                 "confidence": sink.confidence,
                 "metadata": json.dumps(sink.metadata),
             }
-            
+
             # Add optional properties
             if sink.line_number is not None:
                 sink_properties["line_number"] = sink.line_number
-                
+
             # Create Sink node
             query = """
             MATCH (i:Investigation {id: $investigation_id})
@@ -1643,19 +1794,19 @@ class SourcesAndSinksWorkflow(Workflow):
             CREATE (i)-[:HAS_SINK]->(s)
             RETURN id(s) AS sink_graph_id
             """
-            
+
             params = {
                 "investigation_id": self.investigation_id,
                 "function_node_id": sink.node_id,
                 "file_node_id": sink.file_node_id,
-                "properties": sink_properties
+                "properties": sink_properties,
             }
-            
+
             result = self.connector.run_query(query, params)
             if result:
                 sink_graph_id = result[0].get("sink_graph_id")
                 logger.info(f"Created Sink node in graph with ID: {sink_graph_id}")
-                
+
                 # Add class relationship if applicable
                 if sink.class_node_id is not None:
                     query = """
@@ -1663,12 +1814,15 @@ class SourcesAndSinksWorkflow(Workflow):
                     MATCH (c:Class) WHERE id(c) = $class_node_id
                     CREATE (s)-[:BELONGS_TO]->(c)
                     """
-                    
-                    self.connector.run_query(query, {
-                        "sink_graph_id": sink_graph_id,
-                        "class_node_id": sink.class_node_id
-                    })
-        
+
+                    self.connector.run_query(
+                        query,
+                        {
+                            "sink_graph_id": sink_graph_id,
+                            "class_node_id": sink.class_node_id,
+                        },
+                    )
+
         # Create DataFlowPath nodes in the graph
         for path in data_flow_paths:
             # Create DataFlowPath node
@@ -1680,7 +1834,7 @@ class SourcesAndSinksWorkflow(Workflow):
                 "confidence": path.confidence,
                 "metadata": json.dumps(path.metadata),
             }
-            
+
             # First, find the Source and Sink nodes we created
             source_query = """
             MATCH (i:Investigation {id: $investigation_id})
@@ -1688,28 +1842,34 @@ class SourcesAndSinksWorkflow(Workflow):
             WHERE id(func) = $function_node_id
             RETURN id(s) AS source_graph_id
             """
-            
-            source_result = self.connector.run_query(source_query, {
-                "investigation_id": self.investigation_id,
-                "function_node_id": path.source_node.node_id
-            })
-            
+
+            source_result = self.connector.run_query(
+                source_query,
+                {
+                    "investigation_id": self.investigation_id,
+                    "function_node_id": path.source_node.node_id,
+                },
+            )
+
             sink_query = """
             MATCH (i:Investigation {id: $investigation_id})
             MATCH (i)-[:HAS_SINK]->(s:Sink)-[:REPRESENTS]->(func)
             WHERE id(func) = $function_node_id
             RETURN id(s) AS sink_graph_id
             """
-            
-            sink_result = self.connector.run_query(sink_query, {
-                "investigation_id": self.investigation_id,
-                "function_node_id": path.sink_node.node_id
-            })
-            
+
+            sink_result = self.connector.run_query(
+                sink_query,
+                {
+                    "investigation_id": self.investigation_id,
+                    "function_node_id": path.sink_node.node_id,
+                },
+            )
+
             if source_result and sink_result:
                 source_graph_id = source_result[0].get("source_graph_id")
                 sink_graph_id = sink_result[0].get("sink_graph_id")
-                
+
                 # Create DataFlowPath node and relationships
                 query = """
                 MATCH (i:Investigation {id: $investigation_id})
@@ -1721,23 +1881,31 @@ class SourcesAndSinksWorkflow(Workflow):
                 CREATE (i)-[:HAS_DATA_FLOW_PATH]->(p)
                 RETURN id(p) AS path_graph_id
                 """
-                
+
                 params = {
                     "investigation_id": self.investigation_id,
                     "source_graph_id": source_graph_id,
                     "sink_graph_id": sink_graph_id,
-                    "properties": path_properties
+                    "properties": path_properties,
                 }
-                
+
                 result = self.connector.run_query(query, params)
                 if result:
                     path_graph_id = result[0].get("path_graph_id")
-                    logger.info(f"Created DataFlowPath node in graph with ID: {path_graph_id}")
-        
-        logger.info(f"Updated graph with {len(sources)} sources, {len(sinks)} sinks, and {len(data_flow_paths)} data flow paths")
+                    logger.info(
+                        f"Created DataFlowPath node in graph with ID: {path_graph_id}"
+                    )
+
+        logger.info(
+            f"Updated graph with {len(sources)} sources, {len(sinks)} sinks, and {len(data_flow_paths)} data flow paths"
+        )
 
     async def generate_report(
-        self, sources: List[SourceNode], sinks: List[SinkNode], data_flow_paths: List[DataFlowPath], summary: str
+        self,
+        sources: List[SourceNode],
+        sinks: List[SinkNode],
+        data_flow_paths: List[DataFlowPath],
+        summary: str,
     ) -> SourcesAndSinksResult:
         """Generate a report of the sources and sinks analysis.
 
@@ -1752,7 +1920,7 @@ class SourcesAndSinksWorkflow(Workflow):
         """
         if not self.investigation_id:
             raise ValueError("Investigation ID is required for the workflow")
-            
+
         # Create SourcesAndSinksResult
         result = SourcesAndSinksResult(
             investigation_id=self.investigation_id,
@@ -1766,9 +1934,9 @@ class SourcesAndSinksWorkflow(Workflow):
                 "timestamp": self._get_timestamp(),
                 "funnels": [funnel.name for funnel in self.funnels],
                 "analyzers": [analyzer.name for analyzer in self.analyzers],
-            }
+            },
         )
-        
+
         return result
 
     async def run(self, *args: Any, **kwargs: Any) -> SourcesAndSinksResult:
@@ -1786,26 +1954,26 @@ class SourcesAndSinksWorkflow(Workflow):
         # Get investigation ID if provided
         if "investigation_id" in kwargs:
             self.investigation_id = kwargs["investigation_id"]
-            
+
         # Get LLM client if provided
         if "llm_client" in kwargs:
             self.llm_client = kwargs["llm_client"]
-            
+
         if not self.investigation_id:
             raise ValueError("Investigation ID is required for the workflow")
-            
+
         if not self.llm_client:
             raise ValueError("LLM client is required for the workflow")
-            
+
         # Setup the workflow
         await self.setup()
-        
+
         # Step 1: Query codebase
         logger.info("Step 1: Querying codebase for potential sources and sinks")
         query_results = await self.query_codebase()
         potential_sources = query_results["potential_sources"]
         potential_sinks = query_results["potential_sinks"]
-        
+
         # Step 2: Analyze code
         logger.info("Step 2: Analyzing potential sources and sinks")
         analysis_results = await self.analyze_code(potential_sources, potential_sinks)
@@ -1813,13 +1981,15 @@ class SourcesAndSinksWorkflow(Workflow):
         sinks = analysis_results["sinks"]
         data_flow_paths = analysis_results["data_flow_paths"]
         summary = analysis_results["summary"]
-        
+
         # Step 3: Update graph
         logger.info("Step 3: Updating graph with sources and sinks")
         await self.update_graph(sources, sinks, data_flow_paths)
-        
+
         # Step 4: Generate report
         logger.info("Step 4: Generating report")
-        self.result = await self.generate_report(sources, sinks, data_flow_paths, summary)
-        
+        self.result = await self.generate_report(
+            sources, sinks, data_flow_paths, summary
+        )
+
         return self.result

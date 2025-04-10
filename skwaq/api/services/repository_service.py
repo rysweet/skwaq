@@ -11,9 +11,10 @@ from skwaq.ingestion.ingestion import Ingestion
 
 logger = get_logger(__name__)
 
+
 async def get_all_repositories() -> List[Dict[str, Any]]:
     """Get all repositories from the database.
-    
+
     Returns:
         List of repository dictionaries
     """
@@ -120,25 +121,25 @@ async def get_repository_by_id(repo_id: str) -> Optional[Dict[str, Any]]:
 
 async def add_repository(url: str, options: Dict[str, Any] = None) -> Dict[str, Any]:
     """Add a new repository for analysis.
-    
+
     Args:
         url: Repository URL
         options: Optional parameters for ingestion
-        
+
     Returns:
         Repository information
     """
     if options is None:
         options = {}
-        
+
     # Generate a unique ID for this repository
     ingestion_id = str(uuid.uuid4())
-    
+
     # Extract repository name from URL
     name = url.split("/")[-1]
     if name.endswith(".git"):
         name = name[:-4]
-        
+
     # Create repository representation
     repository = {
         "id": ingestion_id,
@@ -150,11 +151,11 @@ async def add_repository(url: str, options: Dict[str, Any] = None) -> Dict[str, 
         "lastAnalyzed": None,
         "url": url,
     }
-    
+
     # Start ingestion in the background
     branch = options.get("branch")
     parse_only = not options.get("deepAnalysis", True)
-    
+
     try:
         # Create ingestion instance with options
         ingestion = Ingestion(
@@ -162,17 +163,18 @@ async def add_repository(url: str, options: Dict[str, Any] = None) -> Dict[str, 
             branch=branch,
             parse_only=parse_only,
         )
-        
+
         # Start ingestion asynchronously
         # Note: We'll return before this completes, updates will be tracked separately
         ingestion.ingest_async(ingestion_id)
-        
+
         logger.info(f"Started ingestion with ID: {ingestion_id}")
-        
+
         # Publish event for repository added
         from skwaq.api.services.event_service import publish_repository_event
+
         publish_repository_event("repository_added", repository)
-        
+
         return repository
     except Exception as e:
         logger.error(f"Error starting repository ingestion: {e}")
@@ -183,17 +185,17 @@ async def add_repository(url: str, options: Dict[str, Any] = None) -> Dict[str, 
 
 async def delete_repository(repo_id: str) -> bool:
     """Delete a repository from the database.
-    
+
     Args:
         repo_id: Repository ID
-        
+
     Returns:
         True if successful, False otherwise
     """
     try:
         # Get database connector
         connector = get_connector()
-        
+
         # Delete repository and all related nodes
         query = f"""
         MATCH (r:{NodeLabels.REPOSITORY} {{ingestion_id: $id}})
@@ -202,13 +204,14 @@ async def delete_repository(repo_id: str) -> bool:
         WITH r
         DETACH DELETE r
         """
-        
+
         connector.run_query(query, {"id": repo_id})
-        
+
         # Publish event for repository deleted
         from skwaq.api.services.event_service import publish_repository_event
+
         publish_repository_event("repository_deleted", {"repoId": repo_id})
-        
+
         return True
     except Exception as e:
         logger.error(f"Error deleting repository {repo_id}: {e}")
@@ -217,17 +220,17 @@ async def delete_repository(repo_id: str) -> bool:
 
 async def get_repository_vulnerabilities(repo_id: str) -> List[Dict[str, Any]]:
     """Get vulnerabilities for a repository.
-    
+
     Args:
         repo_id: Repository ID
-        
+
     Returns:
         List of vulnerability dictionaries
     """
     try:
         # Get database connector
         connector = get_connector()
-        
+
         # Query vulnerabilities related to this repository
         query = f"""
         MATCH (r:{NodeLabels.REPOSITORY} {{ingestion_id: $id}})-[*1..3]-(v:{NodeLabels.VULNERABILITY})
@@ -241,9 +244,9 @@ async def get_repository_vulnerabilities(repo_id: str) -> List[Dict[str, Any]]:
                v.cwe_id as cweId,
                v.remediation as remediation
         """
-        
+
         results = connector.run_query(query, {"id": repo_id})
-        
+
         if not results:
             # Return sample vulnerabilities for development/demo purposes
             # In production, this would be removed
@@ -271,21 +274,25 @@ async def get_repository_vulnerabilities(repo_id: str) -> List[Dict[str, Any]]:
                     "remediation": "Use context-aware escaping for user data",
                 },
             ]
-        
+
         vulnerabilities = []
         for vuln in results:
-            vulnerabilities.append({
-                "id": vuln.get("id", str(uuid.uuid4())),
-                "name": vuln.get("name", "Unknown Vulnerability"),
-                "type": vuln.get("type", "Unknown"),
-                "severity": vuln.get("severity", "Medium"),
-                "file": vuln.get("file", "Unknown"),
-                "line": vuln.get("line", 0),
-                "description": vuln.get("description", "No description available"),
-                "cweId": vuln.get("cweId", "Unknown"),
-                "remediation": vuln.get("remediation", "No remediation advice available"),
-            })
-        
+            vulnerabilities.append(
+                {
+                    "id": vuln.get("id", str(uuid.uuid4())),
+                    "name": vuln.get("name", "Unknown Vulnerability"),
+                    "type": vuln.get("type", "Unknown"),
+                    "severity": vuln.get("severity", "Medium"),
+                    "file": vuln.get("file", "Unknown"),
+                    "line": vuln.get("line", 0),
+                    "description": vuln.get("description", "No description available"),
+                    "cweId": vuln.get("cweId", "Unknown"),
+                    "remediation": vuln.get(
+                        "remediation", "No remediation advice available"
+                    ),
+                }
+            )
+
         return vulnerabilities
     except Exception as e:
         logger.error(f"Error retrieving vulnerabilities for repository {repo_id}: {e}")
@@ -294,29 +301,31 @@ async def get_repository_vulnerabilities(repo_id: str) -> List[Dict[str, Any]]:
 
 async def get_repository_vulnerabilities_count(repo_id: str) -> Optional[int]:
     """Get the count of vulnerabilities for a repository.
-    
+
     Args:
         repo_id: Repository ID
-        
+
     Returns:
         Count of vulnerabilities or None if not available
     """
     try:
         # Get database connector
         connector = get_connector()
-        
+
         # Query vulnerabilities count
         query = f"""
         MATCH (r:{NodeLabels.REPOSITORY} {{ingestion_id: $id}})-[*1..3]-(v:{NodeLabels.VULNERABILITY})
         RETURN count(v) as count
         """
-        
+
         results = connector.run_query(query, {"id": repo_id})
-        
+
         if not results:
             return None
-        
+
         return results[0].get("count", 0)
     except Exception as e:
-        logger.error(f"Error retrieving vulnerability count for repository {repo_id}: {e}")
+        logger.error(
+            f"Error retrieving vulnerability count for repository {repo_id}: {e}"
+        )
         return None

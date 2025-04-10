@@ -26,9 +26,7 @@ class SkwaqArgumentParser:
         Args:
             description: Description of the CLI tool
         """
-        self.parser = argparse.ArgumentParser(
-            description=description
-        )
+        self.parser = argparse.ArgumentParser(description=description)
         self.subparsers = self.parser.add_subparsers(
             dest="command", help="Available commands"
         )
@@ -79,7 +77,7 @@ class SkwaqArgumentParser:
             # Banner is printed by the main function
             self.parser.print_help()
             sys.exit(0)
-            
+
         # Process the arguments
         return self.parser.parse_args(args)
 

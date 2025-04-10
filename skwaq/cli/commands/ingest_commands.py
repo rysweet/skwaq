@@ -31,7 +31,7 @@ class IngestCommandHandler(CommandHandler):
             source_str = str(source_path)
             # Fix for URL validation - improve "startswith" check and normalize the URL
             is_url = source_str.startswith(("http://", "https://"))
-            
+
             # For URLs, perform a basic check for proper format
             info(f"Processing source: {source_str}, is_url={is_url}")
             if source_str.startswith(("http:", "https:")):
@@ -39,8 +39,10 @@ class IngestCommandHandler(CommandHandler):
                 if "://" not in source_str:
                     # Fix URLs like "https:/github.com" to "https://github.com"
                     for prefix in ["http:/", "https:/"]:
-                        if source_str.startswith(prefix) and not source_str.startswith(prefix + "/"):
-                            fixed_url = prefix + "/" + source_str[len(prefix):]
+                        if source_str.startswith(prefix) and not source_str.startswith(
+                            prefix + "/"
+                        ):
+                            fixed_url = prefix + "/" + source_str[len(prefix) :]
                             info(f"Normalized URL from {source_str} to: {fixed_url}")
                             source_str = fixed_url
                             source_path = Path(source_str)
@@ -48,15 +50,19 @@ class IngestCommandHandler(CommandHandler):
                             break
             elif not source_path.exists():
                 # Not a URL and path doesn't exist
-                error(f"Error: {source_path} does not exist or is not a valid repository URL.")
+                error(
+                    f"Error: {source_path} does not exist or is not a valid repository URL."
+                )
                 return 1
-                
+
             return await self._handle_repo_ingestion(source_path, source_str)
         else:
             error("Currently only 'repo' ingestion type is supported.")
             return 1
 
-    async def _handle_repo_ingestion(self, source_path: Path, source_str: Optional[str] = None) -> int:
+    async def _handle_repo_ingestion(
+        self, source_path: Path, source_str: Optional[str] = None
+    ) -> int:
         """Handle repository ingestion.
 
         Args:
@@ -69,10 +75,12 @@ class IngestCommandHandler(CommandHandler):
         # Set up parameters for ingestion
         if source_str is None:
             source_str = str(source_path)
-            
+
         # Check if it's a URL using proper protocol handling
-        is_url = "://" in source_str and (source_str.startswith("http:") or source_str.startswith("https:"))
-        
+        is_url = "://" in source_str and (
+            source_str.startswith("http:") or source_str.startswith("https:")
+        )
+
         # Convert to absolute path if it's a local path (needed for Docker)
         if not is_url and not source_path.is_absolute():
             source_path = source_path.absolute()

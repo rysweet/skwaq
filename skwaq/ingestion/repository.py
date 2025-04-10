@@ -60,8 +60,10 @@ class RepositoryHandler:
         if "://" not in repo_url:
             # Fix URLs like "https:/github.com" to "https://github.com"
             for prefix in ["http:/", "https:/"]:
-                if repo_url.startswith(prefix) and not repo_url.startswith(prefix + "/"):
-                    repo_url = prefix + "/" + repo_url[len(prefix):]
+                if repo_url.startswith(prefix) and not repo_url.startswith(
+                    prefix + "/"
+                ):
+                    repo_url = prefix + "/" + repo_url[len(prefix) :]
                     logger.info(f"Normalized repository URL to: {repo_url}")
                     break
         try:
