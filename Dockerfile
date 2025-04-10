@@ -21,7 +21,7 @@ RUN apt-get update --allow-insecure-repositories && apt-get install --no-install
     gnupg \
     && rm -rf /var/lib/apt/lists/*
 # Add the GPG key for the Debian package repository
-RUN curl -fsSL https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x648ACFD622F3D138 | gpg --dearmor -o /usr/share/keyrings/debian-archive-keyring.gpg
+RUN curl -fsSL https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x648ACFD622F3D138 | gpg --batch --yes --dearmor -o /usr/share/keyrings/debian-archive-keyring.gpg
 # Update the package lists again
 RUN apt-get update --allow-insecure-repositories
 
