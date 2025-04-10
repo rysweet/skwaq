@@ -297,3 +297,14 @@ This file maintains a running history of user prompts and a brief summary of Cla
 - Fixed the virtual environment issue with uv
 - Used the pip-install and command options in setup-uv action
 - Committed changes to follow best practices for uv integration
+
+## Prompt 28 (2025-04-10)
+
+**Prompt**: [No explicit prompt, but examining error logs and fixing the CI]
+
+**Response**:
+- Analyzed the logs and found that Poetry was creating separate virtualenvs
+- Switched from uv to Poetry's official GitHub Action (snok/install-poetry)
+- Configured Poetry to create and use a consistent virtualenv in the project
+- Set Poetry version to match what's used in the project (1.7.1)
+- Simplified the workflow by removing the uv integration that was causing conflicts
