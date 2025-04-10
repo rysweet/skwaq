@@ -21,13 +21,15 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Set up uv
-      uses: astral-sh/setup-uv@v1
-      
     - name: Install dependencies
-      run: |
-        uv pip install poetry
-        poetry install --with dev
+      run: pip install poetry
+      
+    - name: Install project dependencies with uv
+      uses: astral-sh/setup-uv@v1
+      with:
+        python-version: ${{ matrix.python-version }}
+        pip-install: true
+        command: poetry install --with dev
 
     - name: Check formatting with black
       run: poetry run black . --check
