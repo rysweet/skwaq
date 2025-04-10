@@ -113,11 +113,17 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
         });
         console.table(typesBeforeProcessing);
         
+        // Diagnostic - log the raw links
+        console.log('Links before processing:');
+        data.links.forEach((link: any, index: number) => {
+          console.log(`Link ${index}: source=${JSON.stringify(link.source)}, target=${JSON.stringify(link.target)}, type=${link.type}`);
+        });
+        
         // Transform the nodes to ensure they have the needed properties
         const processedData = {
           nodes: data.nodes.map((node: any) => ({
-            id: node.id,
-            name: node.label || node.id,
+            id: String(node.id), // Ensure ID is a string
+            name: node.label || String(node.id),
             // Convert node type to lowercase for consistent handling
             type: (node.type || 'unknown').toLowerCase(),
             group: node.group || 1,
@@ -129,9 +135,13 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
             // Debug log link info
             console.log(`Processing link: source=${JSON.stringify(link.source)}, target=${JSON.stringify(link.target)}, type=${link.type}`);
             
+            // Ensure source and target are strings
+            const sourceId = typeof link.source === 'object' ? String(link.source.id) : String(link.source);
+            const targetId = typeof link.target === 'object' ? String(link.target.id) : String(link.target);
+            
             return {
-              source: link.source,
-              target: link.target,
+              source: sourceId,
+              target: targetId,
               type: link.type,
               value: link.value || 1
             };
@@ -202,6 +212,12 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
     console.log('Filtering nodes. Initial count:', filteredNodes.length);
     console.log('Node types before filtering:', filteredNodes.map(n => n.type));
     
+    // Debug log all nodes
+    console.log('All nodes before filtering:');
+    filteredNodes.forEach((node, index) => {
+      console.log(`Node ${index}: id=${node.id}, type=${node.type}, label=${node.name}`);
+    });
+    
     // Apply filters
     if (!showSources) {
       filteredNodes = filteredNodes.filter(node => node.type !== 'source');
@@ -229,6 +245,14 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
     // Get IDs of remaining nodes
     const nodeIds = new Set(filteredNodes.map(node => node.id));
     console.log('Node IDs after filtering:', Array.from(nodeIds));
+    
+    // Debug log all links
+    console.log('All links before filtering:');
+    graphData.links.forEach((link, index) => {
+      const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+      const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+      console.log(`Link ${index}: source=${sourceId}, target=${targetId}, type=${link.type}`);
+    });
     
     // Filter links where both source and target exist in filtered nodes
     const filteredLinks = graphData.links.filter(link => {
@@ -280,8 +304,31 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
       
       // Initialize new graph
       // Create the ForceGraph3D instance
+      
+      console.log("Creating force graph with data:", 
+                 JSON.stringify(filteredData, null, 2).substring(0, 1000) + "...");
+      
+      // Verify links have string IDs
+      const cleanedData = {
+        nodes: filteredData.nodes,
+        links: filteredData.links.map((link: any) => {
+          // Ensure source and target are always strings
+          const sourceId = typeof link.source === 'object' ? String(link.source.id) : String(link.source);
+          const targetId = typeof link.target === 'object' ? String(link.target.id) : String(link.target);
+          
+          return {
+            ...link,
+            source: sourceId,
+            target: targetId
+          };
+        })
+      };
+      
+      // Log the number of nodes and links before creating the graph
+      console.log(`Creating graph with ${cleanedData.nodes.length} nodes and ${cleanedData.links.length} links`);
+      
       const graph = createForceGraph(graphContainerRef.current as HTMLElement)
-        .graphData(filteredData)
+        .graphData(cleanedData)
         .backgroundColor(darkMode ? '#1a1a1a' : '#ffffff')
         .nodeLabel((node: GraphNode) => `${node.name} (${node.type})`)
         .nodeColor((node: GraphNode) => {
@@ -393,12 +440,7 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
           // TODO: Add link details display or editing
           console.log('Link clicked:', link);
         });
-      
-      // Add node hover tooltips for additional information
-      graph.nodeThreeObject((node: GraphNode) => {
-        // Use default sphere rendering
-        return false;
-      });
+      // Node hover tooltips are handled by the label functionality
       
       // Set force physics based on current settings
       graph.d3Force('charge').strength(physicsSettings.chargeStrength);

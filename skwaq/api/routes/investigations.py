@@ -342,78 +342,16 @@ def get_investigation_visualization(investigation_id):
             max_nodes=100
         )
         
-        # Preprocess the data structure
-        # Ensure all data is serializable
-        serializable_data = {
-            'nodes': [],
-            'links': []
-        }
+        # Use the custom encoder to handle serialization
+        # Process the entire graph data using the custom JSON encoder
+        # This will handle all nested structures in one pass
+        processed_data = preprocess_data_for_json(graph_data)
         
-        # Process nodes - ensure all IDs are strings and all values are serializable
-        for node in graph_data.get('nodes', []):
-            serializable_node = {}
-            # Ensure ID is a string
-            if 'id' in node:
-                serializable_node['id'] = str(node['id'])
-            else:
-                # Skip nodes without ID
-                continue
-                
-            # Copy other fields, ensuring they're serializable
-            for key, value in node.items():
-                if key == 'id':
-                    continue  # Already handled
-                    
-                if isinstance(value, (str, int, float, bool, type(None))):
-                    # Basic types are safe
-                    serializable_node[key] = value
-                elif isinstance(value, (neo4j.time.DateTime, datetime)):
-                    # Handle datetime objects
-                    serializable_node[key] = value.isoformat() if hasattr(value, 'isoformat') else str(value)
-                elif isinstance(value, dict):
-                    # Make properties safe
-                    serializable_props = {}
-                    for prop_key, prop_value in value.items():
-                        if isinstance(prop_value, (str, int, float, bool, type(None))):
-                            serializable_props[prop_key] = prop_value
-                        else:
-                            serializable_props[prop_key] = str(prop_value)
-                    serializable_node[key] = serializable_props
-                else:
-                    # Convert anything else to string
-                    serializable_node[key] = str(value)
-            
-            serializable_data['nodes'].append(serializable_node)
+        # Set content type header explicitly to ensure JSON response
+        response = jsonify(processed_data)
+        response.headers['Content-Type'] = 'application/json'
+        return response
         
-        # Process links - ensure source and target are strings
-        for link in graph_data.get('links', []):
-            serializable_link = {}
-            
-            # Ensure source is a string
-            if 'source' in link:
-                serializable_link['source'] = str(link['source']) if link['source'] is not None else None
-            else:
-                # Skip links without source
-                continue
-                
-            # Ensure target is a string
-            if 'target' in link:
-                serializable_link['target'] = str(link['target']) if link['target'] is not None else None
-            else:
-                # Skip links without target
-                continue
-                
-            # Copy other fields
-            for key, value in link.items():
-                if key in ('source', 'target'):
-                    continue  # Already handled
-                    
-                serializable_link[key] = str(value) if value is not None else None
-            
-            serializable_data['links'].append(serializable_link)
-        
-        # Use Flask's jsonify for proper JSON response
-        return jsonify(serializable_data)
     except NotFoundError as e:
         raise e
     except Exception as e:
@@ -423,4 +361,6 @@ def get_investigation_visualization(investigation_id):
             "message": f"Failed to retrieve visualization for investigation {investigation_id}",
             "traceback": traceback.format_exc()
         }
-        return jsonify(error_response), 500
+        response = jsonify(error_response)
+        response.headers['Content-Type'] = 'application/json'
+        return response, 500

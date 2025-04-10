@@ -763,12 +763,42 @@ class GraphVisualizer:
         Returns:
             HTML content as a string
         """
-        # Convert graph data to JSON string with custom handling for Neo4j types
-        from skwaq.api.routes.investigations import preprocess_data_for_json, CustomVisualizationEncoder
+        # Import the serialization tools
+        import sys
+        import datetime
+        import neo4j.time
+        
+        # Define a custom encoder class locally to avoid circular imports
+        class CustomVisualizationEncoder(json.JSONEncoder):
+            """Custom JSON encoder to handle Neo4j data types and dates in visualization output."""
+            
+            def default(self, obj):
+                """Handle special types for JSON serialization."""
+                if isinstance(obj, neo4j.time.DateTime):
+                    return obj.to_native().isoformat()
+                if isinstance(obj, datetime.datetime):
+                    return obj.isoformat()
+                return super().default(obj)
+                
+        def local_preprocess_data(data):
+            """Pre-process data to handle DateTime objects in nested structures."""
+            if isinstance(data, dict):
+                for key, value in list(data.items()):
+                    if isinstance(value, (neo4j.time.DateTime, datetime.datetime)):
+                        data[key] = value.isoformat() if hasattr(value, 'isoformat') else str(value)
+                    elif isinstance(value, (dict, list)):
+                        data[key] = local_preprocess_data(value)
+            elif isinstance(data, list):
+                for i, item in enumerate(data):
+                    if isinstance(item, (neo4j.time.DateTime, datetime.datetime)):
+                        data[i] = item.isoformat() if hasattr(item, 'isoformat') else str(item)
+                    elif isinstance(item, (dict, list)):
+                        data[i] = local_preprocess_data(item)
+            return data
         
         try:
             # Preprocess data to handle Neo4j DateTime objects
-            processed_data = preprocess_data_for_json(graph_data)
+            processed_data = local_preprocess_data(graph_data)
             
             # Convert to JSON using custom encoder
             graph_data_json = json.dumps(processed_data, cls=CustomVisualizationEncoder)
