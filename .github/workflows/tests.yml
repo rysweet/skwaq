@@ -32,14 +32,14 @@ jobs:
       run: |
         poetry install --with dev
 
-    - name: Show formatting issues with black (don't fail)
-      run: poetry run black . --diff || true
+    - name: Check formatting with black
+      run: poetry run black . --check
 
-    - name: Show linting issues with ruff (don't fail)
-      run: poetry run ruff . || true
+    - name: Lint with ruff
+      run: poetry run ruff .
 
-    - name: Show type checking issues with mypy (don't fail)
-      run: poetry run mypy . || true
+    - name: Type check with mypy
+      run: poetry run mypy .
 
     - name: Run tests with pytest
       run: |
