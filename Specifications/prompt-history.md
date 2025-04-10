@@ -286,3 +286,14 @@ This file maintains a running history of user prompts and a brief summary of Cla
 - Simplified the Dockerfile by installing the debian-archive-keyring package directly
 - Removed the custom keyring download step that was causing failures
 - Committed changes to fix the Docker build process in CI
+
+## Prompt 27 (2025-04-10)
+
+**Prompt**: "Isn't there a better pattern for integrating uv into GH Actions? https://docs.astral.sh/uv/guides/integration/github/"
+
+**Response**:
+- Followed the official Astral docs for GitHub Actions integration
+- Updated CI workflows to use the proper pattern for uv integration
+- Fixed the virtual environment issue with uv
+- Used the pip-install and command options in setup-uv action
+- Committed changes to follow best practices for uv integration
