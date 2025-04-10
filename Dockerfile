@@ -30,7 +30,7 @@ RUN curl -sSL https://install.python-poetry.org | python3 -
 WORKDIR $PYSETUP_PATH
 COPY poetry.lock pyproject.toml ./
 
-RUN poetry install --no-root
+RUN poetry install --no-root --with dev
 
 # Development image
 FROM python-base as development
@@ -50,7 +50,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 WORKDIR /app
 COPY . .
 
-RUN poetry install
+RUN poetry install --with dev
 
 # Production image
 FROM python-base as production
