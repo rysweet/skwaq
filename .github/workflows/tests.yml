@@ -30,6 +30,7 @@ jobs:
 
     - name: Install dependencies
       run: |
+        poetry lock
         poetry install --with dev
 
     - name: Check formatting with black

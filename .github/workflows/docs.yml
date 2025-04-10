@@ -26,6 +26,7 @@ jobs:
 
     - name: Install dependencies
       run: |
+        poetry lock
         poetry install --with dev --with docs
 
     - name: Check docstring coverage
