@@ -275,3 +275,14 @@ This file maintains a running history of user prompts and a brief summary of Cla
 - Fixed Dockerfile to use `--batch --yes` flags with gpg to avoid TTY errors
 - Updated CI workflows to use the official astral-sh/setup-uv@v1 action for more reliable uv installation
 - Committed all changes to resolve the CI failures
+
+## Prompt 26 (2025-04-10)
+
+**Prompt**: "hmm, could there be other repositories that have a similar CI flow where you could check to see what they are doing?"
+
+**Response**:
+- Examined the current Docker build approach for handling Debian keyrings
+- Found that fetching the key directly from a keyserver is unreliable in CI
+- Simplified the Dockerfile by installing the debian-archive-keyring package directly
+- Removed the custom keyring download step that was causing failures
+- Committed changes to fix the Docker build process in CI
