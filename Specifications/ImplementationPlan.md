@@ -2,6 +2,8 @@
 
 ## Overview
 
+Note: Consider this document apocryphal - it has been used to bootstrap a codebase that we are now iterating on. Consider all the milestones complete, however you may be working on content to reimplement some of the milestones in a more complete way.
+
 This document outlines a comprehensive implementation plan for the Vulnerability Assessment Copilot (codenamed "skwaq"), a multiagent AI system designed to assist vulnerability researchers in analyzing codebases to discover potential security vulnerabilities. The plan breaks down the system into manageable modules, provides implementation steps, and addresses technical requirements for each component.
 
 ### Project Name: Skwaq
@@ -1034,721 +1036,106 @@ The implementation will proceed through a series of incremental milestones, each
 - Deployment guide validation
 - Final acceptance testing
 
-### Milestone Validation and Testing Process
+### Graphical User Interface Phase Milestones
 
-For each milestone, the following validation and testing process will be followed:
-
-1. **Unit Testing**: Each component must pass all unit tests with at least 80% code coverage.
-
-2. **Integration Testing**: Components must work together as expected, with integration tests passing.
-
-3. **Performance Testing**: Performance must meet or exceed the defined benchmarks for the milestone.
-
-4. **Security Testing**: Security-related components must pass security review and testing.
-
-5. **Code Review**: All code must pass peer review before milestone completion.
-
-6. **Documentation Review**: Documentation must be updated to reflect the milestone deliverables.
-   - API documentation coverage must meet or exceed 90% for all new code
-   - API documentation must follow the established Google-style format
-   - Documentation must be generated successfully with Sphinx
-   - Code examples in docstrings must be valid and execute correctly
-
-7. **Milestone Demo**: A demonstration of the milestone functionality must be presented and approved.
-
-8. **Milestone Retrospective**: A retrospective must be conducted to identify lessons learned and improvements for future milestones.
-
-9. **Local CI Validation**: Before marking a milestone as complete, run the full local CI pipeline to verify that all tests pass and all requirements are met:
-   ```bash
-   ./scripts/ci/run-local-ci.sh
-   ```
-
-This ensures that the milestone meets all technical requirements and will pass validation in the GitHub Actions pipeline.
-
-## Development Phases Summary
-
-The implementation will proceed in the following phases, with each phase building on the dependencies established in previous phases:
-
-### Phase 1: Foundation
-- **Milestone F1**: Project Setup and Environment
-- **Milestone F2**: Core Utilities and Infrastructure
-- **Milestone F3**: Database Integration
-
-### Phase 2: Knowledge Management
-- **Milestone K1**: Knowledge Ingestion Pipeline
-- **Milestone K2**: Knowledge Indexing and Retrieval
-- **Milestone K3**: Knowledge Source Extensibility
-
-### Phase 3: Code Analysis
-- **Milestone C1**: Repository Fetching
-- **Milestone C2**: Basic Code Analysis
-- **Milestone C3**: Advanced Code Analysis
-- **Milestone C4**: Code Understanding and Summarization
-
-### Phase 4: Agent System
-- **Milestone A1**: Agent Foundation
-- **Milestone A2**: Core Agents Implementation
-- **Milestone A3**: Advanced Agent Capabilities
-
-### Phase 5: Workflow and UI
-- **Milestone W1**: Command Line Interface
-- **Milestone W2**: Basic Workflows
-- **Milestone W3**: Advanced Workflows
-- **Milestone W4**: Workflow Refinement and Integration
-
-### Phase 6: Integration and Finalization
-- **Milestone I1**: System Integration
-- **Milestone I2**: Security and Compliance
-- **Milestone I3**: Final Release Preparation
-
-### GitHub Actions CI Configuration
-
-The project uses GitHub Actions for continuous integration and testing. The following workflows will be implemented:
-
-1. **Create Tests and Linting Workflow**:
-   - Create `.github/workflows/tests.yml` configuration:
-   ```yaml
-   name: Tests & Linting
-
-   on:
-     push:
-       branches: [ main ]
-     pull_request:
-       branches: [ main ]
-     # Run tests when milestones are tagged
-     tags:
-       - "milestone-*"
-
-   jobs:
-     test:
-       runs-on: ubuntu-latest
-       services:
-         # Run Neo4j in a container for integration tests
-         neo4j:
-           image: neo4j:latest
-           env:
-             NEO4J_AUTH: neo4j/password
-             NEO4J_ACCEPT_LICENSE_AGREEMENT: yes
-           ports:
-             - 7474:7474
-             - 7687:7687
-           options: --health-cmd "wget -O - http://localhost:7474 || exit 1" --health-interval 10s --health-timeout 5s --health-retries 3
-       
-       strategy:
-         matrix:
-           python-version: ['3.10', '3.11']
-
-       steps:
-         - uses: actions/checkout@v3
-         
-         - name: Set up Python ${{ matrix.python-version }}
-           uses: actions/setup-python@v4
-           with:
-             python-version: ${{ matrix.python-version }}
-             cache: 'pip'
-         
-         - name: Install uv
-           run: pip install uv
-         
-         - name: Install dependencies
-           run: |
-             python -m uv venv .venv
-             source .venv/bin/activate
-             python -m uv pip install -e ".[dev,test]"
-         
-         - name: Run linting
-           run: |
-             source .venv/bin/activate
-             python -m black --check .
-             python -m flake8 .
-             python -m mypy .
-         
-         - name: Run tests
-           run: |
-             source .venv/bin/activate
-             python -m pytest --cov=skwaq tests/
-             
-         - name: Upload coverage report
-           uses: codecov/codecov-action@v3
-           with:
-             fail_ci_if_error: false
-   ```
-
-2. **Create Docker Build Workflow**:
-   - Create `.github/workflows/docker-build.yml` configuration:
-   ```yaml
-   name: Docker Build
-
-   on:
-     push:
-       branches: [ main ]
-     pull_request:
-       branches: [ main ]
-     # Build container when milestones are tagged
-     tags:
-       - "milestone-*"
-       - "v*.*.*"
-
-   jobs:
-     build:
-       runs-on: ubuntu-latest
-       steps:
-         - uses: actions/checkout@v3
-         
-         - name: Set up Docker Buildx
-           uses: docker/setup-buildx-action@v2
-         
-         - name: Build Docker image
-           uses: docker/build-push-action@v4
-           with:
-             context: .
-             push: false
-             tags: skwaq:latest
-             cache-from: type=gha
-             cache-to: type=gha,mode=max
-             load: true
-         
-         - name: Test Docker image
-           run: |
-             docker run --rm skwaq:latest --version
-   ```
-
-3. **Create Release Automation Workflow**:
-   - Create `.github/workflows/release.yml` configuration:
-   ```yaml
-   name: Release
-
-   on:
-     push:
-       tags:
-         - "v*.*.*"
-
-   jobs:
-     release:
-       runs-on: ubuntu-latest
-       steps:
-         - uses: actions/checkout@v3
-           with:
-             fetch-depth: 0
-         
-         - name: Set up Python
-           uses: actions/setup-python@v4
-           with:
-             python-version: '3.10'
-         
-         - name: Install dependencies
-           run: |
-             python -m pip install --upgrade pip
-             pip install build wheel
-         
-         - name: Build package
-           run: python -m build
-         
-         - name: Create Release
-           uses: softprops/action-gh-release@v1
-           with:
-             files: |
-               dist/*.whl
-               dist/*.tar.gz
-             generate_release_notes: true
-   ```
-
-4. **Create Milestone Validation Workflow**:
-   - Create `.github/workflows/milestone-validation.yml` configuration:
-   ```yaml
-   name: Milestone Validation
-
-   on:
-     push:
-       tags:
-         - "milestone-*"
-
-   jobs:
-     validate:
-       runs-on: ubuntu-latest
-       steps:
-         - uses: actions/checkout@v3
-         
-         - name: Set up Python
-           uses: actions/setup-python@v4
-           with:
-             python-version: '3.10'
-         
-         - name: Install dependencies
-           run: |
-             python -m pip install --upgrade pip
-             pip install -e ".[dev,test]"
-         
-         - name: Extract milestone information
-           id: milestone
-           run: |
-             MILESTONE=$(echo ${{ github.ref_name }} | sed 's/milestone-//')
-             echo "milestone=$MILESTONE" >> $GITHUB_OUTPUT
-         
-         - name: Run milestone-specific validation tests
-           run: |
-             python -m pytest tests/milestones/test_${{ steps.milestone.outputs.milestone }}.py -v
-         
-         - name: Create milestone documentation
-           run: |
-             python scripts/ci/generate_milestone_docs.py ${{ steps.milestone.outputs.milestone }}
-   ```
-
-These GitHub Actions workflows ensure:
-
-1. **Continuous Testing**: All code is tested on multiple Python versions with coverage reporting
-2. **Code Quality Checks**: Linting, formatting, and type checking are enforced
-3. **Docker Builds**: Container builds are validated for every significant change
-4. **Milestone Validation**: Specific tests run when milestone tags are pushed
-5. **Release Automation**: Packages are built and published for version tags
-6. **Documentation Quality**: API documentation is comprehensive, consistent, and accurate
-
-Each workflow is designed to run on specific events (pushes, PRs, tags) and provides clear feedback on the build status. The milestone validation workflow in particular supports the milestone-based development approach by running milestone-specific tests when appropriate tags are pushed.
-
-**CI Configuration Updates for Each Milestone**:
-
-As milestones progress, specific test files should be added in the `tests/milestones/` directory following this pattern:
-- `test_F1.py` - Project Setup and Environment tests
-- `test_F2.py` - Core Utilities and Infrastructure tests
-- And so on for each milestone
-
-These dedicated test files will contain comprehensive validation tests for the specific functionality expected at each milestone, allowing the milestone validation workflow to verify that all requirements have been met.
-
-**Milestone Tagging Process**:
-
-When a milestone is completed and ready for validation:
-1. Tag the commit representing the milestone completion:
-   ```bash
-   git tag milestone-F1  # For Milestone F1
-   git push origin milestone-F1
-   ```
-2. The milestone validation workflow will automatically run
-3. Results will be available in the GitHub Actions tab
-
-**Security Considerations for CI**:
-
-1. **Secret Management**: Sensitive values (API keys, credentials) should be stored as GitHub Secrets
-2. **Dependency Scanning**: Workflows include security scanning for dependencies
-3. **Container Scanning**: Docker images are scanned for vulnerabilities
-
-These CI/CD workflows form a critical part of the development process, ensuring all deliverables meet the validation criteria specified for each milestone.
-
-### Production Deployment Dependencies
-
-For production deployment, additional steps are required:
-
-1. **Containerization**:
-   ```bash
-   # Build the Docker image
-   docker build -t skwaq:latest .
-   
-   # Run the container
-   docker run -p 8000:8000 -v ./data:/app/data skwaq:latest
-   ```
-
-2. **Securing Neo4j**:
-   - Configure authentication
-   - Enable TLS for connections
-   - Set up proper backup procedures
-
-3. **Setting up Monitoring**:
-   - Configure logging to external systems
-   - Set up metrics collection
-   - Implement health checks
-
-## Implementation Milestones and Validation Criteria
-
-The implementation will proceed through a series of incremental milestones, each with specific validation criteria and testing requirements. Each milestone must pass its validation criteria before proceeding to the next milestone.
-
-### Foundation Phase Milestones
-
-#### Milestone F1: Project Setup and Environment
+#### Milestone G1: GUI Frontend Foundation
 **Deliverables:**
-- Project repository structure
-- Development environment configuration
-- Docker containerization
-- CI/CD pipeline setup
-- API documentation standards and tooling setup
+- React application skeleton with TypeScript
+- Component architecture setup
+- Basic navigation structure
+- Knowledge graph visualization framework
+- UI/UX design system implementation
 
 **Validation Criteria:**
-- All required directories and configuration files exist
-- Docker container builds successfully
-- Development environment scripts execute correctly
-- CI pipeline succeeds with baseline tests
-- API documentation templates and standards are defined
-- Documentation generation pipeline works correctly
+- Application builds and runs successfully
+- Navigation between main sections works correctly
+- Basic component structure follows React best practices
+- TypeScript types are properly implemented
+- UI/UX design system provides consistent styling
 
 **Testing Requirements:**
-- Script validation on all target platforms (Windows, macOS, Linux)
-- Container startup and shutdown tests
-- Environment variable configuration tests
-- CI pipeline verification test
-- Documentation generation tests
-- Docstring style validation tests
+- Component unit tests
+- Build pipeline verification
+- Responsive layout tests
+- TypeScript type checking validation
+- Accessibility compliance testing (WCAG 2.1 AA)
 
-#### Milestone F2: Core Utilities and Infrastructure
+#### Milestone G2: GUI Backend Integration
 **Deliverables:**
-- Telemetry system with opt-out functionality
-- Configuration management
-- Event system implementation
-- Logging system
+- REST API endpoints in Python backend
+- Data fetching and state management in frontend
+- Authentication flow (single-user)
+- Real-time updates for long-running processes
+- CLI command parity in API endpoints
 
 **Validation Criteria:**
-- Telemetry data is captured and can be disabled via configuration
-- Events can be emitted and consumed by subscribers
-- Logging captures appropriate information and respects log levels
-- Configuration changes are reflected in system behavior
+- Frontend successfully communicates with backend
+- API endpoints match CLI functionality
+- Long-running processes provide progress updates
+- Data is correctly displayed in the frontend
+- Error handling works properly for API failures
 
 **Testing Requirements:**
-- Unit tests for each utility component
-- Integration tests for interactions between components
-- Configuration change tests
-- Telemetry opt-out verification
-
-#### Milestone F3: Database Integration
-**Deliverables:**
-- Neo4j connection module
-- Schema implementation
-- Database initialization
-- Vector search integration
-
-**Validation Criteria:**
-- Stable connection to Neo4j can be established
-- Schema is correctly initialized
-- Queries can be executed and return expected results
-- Vector search returns relevant results for test queries
-
-**Testing Requirements:**
-- Connection reliability tests (including failure recovery)
-- Query performance benchmarks for common operations
-- Schema validation tests
-- Vector similarity search accuracy tests
-
-### Knowledge Management Phase Milestones
-
-#### Milestone K1: Knowledge Ingestion Pipeline
-**Deliverables:**
-- Document processing pipeline
-- CWE database integration
-- Core knowledge graph structure
-
-**Validation Criteria:**
-- Documents in various formats (Markdown, PDF) can be processed
-- CWE data is correctly imported and linked
-- Knowledge graph entities and relationships are created correctly
-
-**Testing Requirements:**
-- Document processing tests with various formats
-- CWE data verification tests
-- Graph consistency validation
-- Processing error handling tests
-
-#### Milestone K2: Knowledge Indexing and Retrieval
-**Deliverables:**
-- Document embedding generation
-- Vector indexing in Neo4j
-- Retrieval API implementation
-
-**Validation Criteria:**
-- Embeddings are generated consistently for similar text
-- Vector indices correctly store embeddings
-- Retrieval queries return relevant results
-- Performance meets requirements for typical queries
-
-**Testing Requirements:**
-- Embedding consistency tests
-- Retrieval accuracy evaluation
-- Performance benchmarks for indexing operations
-- Query latency tests
-
-#### Milestone K3: Knowledge Source Extensibility
-**Deliverables:**
-- Knowledge source registry
-- Source-specific ingestion pipelines
-- Schema integration templates
-
-**Validation Criteria:**
-- New knowledge sources can be registered and ingested
-- Source-specific processing correctly handles different formats
-- Knowledge from different sources is integrated properly
-
-**Testing Requirements:**
-- Integration tests with sample custom knowledge sources
-- Schema compatibility tests
-- Source registration and discovery tests
-- Error handling tests for invalid sources
-
-### Code Analysis Phase Milestones
-
-#### Milestone C1: Repository Fetching
-**Deliverables:**
-- GitHub API integration
-- Repository cloning functionality
-- Filesystem processing
-
-**Validation Criteria:**
-- Can successfully clone repositories from GitHub
-- Authentication works for private repositories
-- Repository structure is correctly processed
-- Progress is reported accurately
-
-**Testing Requirements:**
-- Tests with public and private repositories
-- Authentication failure handling tests
-- Large repository handling tests
-- Network failure recovery tests
-
-#### Milestone C2: Basic Code Analysis
-**Deliverables:**
-- Blarify integration
-- AST processing
-- Code structure mapping
-- Python and C# language support
-
-**Validation Criteria:**
-- AST is generated correctly for both Python and C# code
-- Code structure is mapped to the graph database
-- File relationships are correctly identified
-- Analysis works for both reference repositories (eShop and autogen)
-
-**Testing Requirements:**
-- Analysis correctness tests for reference repositories
-- Performance benchmarks for typical codebases
-- Language-specific validation tests
-- Error handling for malformed code
-
-#### Milestone C3: Advanced Code Analysis
-**Deliverables:**
-- Parallel analysis orchestration
-- CodeQL integration
-- Code metrics collection
-- Tool integration framework
-
-**Validation Criteria:**
-- Analysis tasks execute in parallel where appropriate
-- CodeQL queries execute and results are processed
-- Code metrics are calculated and stored
-- External tools can be integrated and executed
-
-**Testing Requirements:**
-- Parallel efficiency measurements
-- CodeQL result validation
-- Metrics accuracy verification
-- Tool integration tests with sample tools
-
-#### Milestone C4: Code Understanding and Summarization
-**Deliverables:**
-- Code summarization at multiple levels
-- Intent inference
-- Architecture reconstruction
-- Cross-reference linking
-
-**Validation Criteria:**
-- Summaries are generated at function, class, module, and system levels
-- Developer intent is inferred accurately
-- Architecture diagrams can be generated from analysis
-- Cross-references correctly link related components
-
-**Testing Requirements:**
-- Summary quality evaluation (manual review)
-- Cross-reference accuracy tests
-- Architecture reconstruction validation
-- Performance tests for large codebases
-
-### Agent System Phase Milestones
-
-#### Milestone A1: Agent Foundation
-**Deliverables:**
-- AutoGen Core integration
-- Base agent classes
-- Agent lifecycle management
-- Agent registry
-
-**Validation Criteria:**
-- Agents can be created and destroyed
-- Agents can communicate with each other
-- Agent registry correctly manages agent instances
-- Agent lifecycle events are properly tracked
-
-**Testing Requirements:**
-- Agent creation and destruction tests
-- Inter-agent communication tests
-- Registry functionality tests
-- Resource usage monitoring
-
-#### Milestone A2: Core Agents Implementation
-**Deliverables:**
-- Orchestrator agent
-- Knowledge agents
-- Code analysis agents
-- Basic workflow agents
-
-**Validation Criteria:**
-- Orchestrator correctly manages other agents
-- Knowledge agents retrieve relevant information
-- Code analysis agents process code correctly
-- Basic workflows can be executed
-
-**Testing Requirements:**
-- Agent behavior tests with mock inputs
-- End-to-end tests for simple workflows
-- Resource usage monitoring during agent operation
+- API endpoint tests
+- Frontend-backend integration tests
+- Mock API response tests
 - Error handling and recovery tests
+- Performance testing under various network conditions
 
-#### Milestone A3: Advanced Agent Capabilities
+#### Milestone G3: Advanced Visualization and Interactivity
 **Deliverables:**
-- Agent communication patterns
-- Specialized workflow agents
-- Critic and verification agents
-- Advanced orchestration
+- 3D force-graph visualization of Neo4j data
+- Interactive graph manipulation (edit nodes, edges)
+- Advanced filtering and search capabilities
+- Chat interface for copilot interaction
+- Workflow invocation and management
+- Telemetry event visualization
+- Export functionality for graphs and reports
 
 **Validation Criteria:**
-- Complex multi-agent interactions work correctly
-- Agents can critique and verify each other's work
-- Workflows correctly use specialized agents
-- Orchestration handles complex scenarios
+- Neo4j graph data is correctly visualized in 3D
+- Graph interactions allow editing of nodes and relationships
+- Complex filtering and search produce correct results
+- Chat interface communicates correctly with agents
+- All CLI workflows can be invoked from the GUI
+- Telemetry events are displayed accurately
+- Export functions create valid files in appropriate formats
 
 **Testing Requirements:**
-- Complex workflow tests
-- Critic agent effectiveness evaluation
-- Error recovery in multi-agent scenarios
-- Performance benchmarks for agent interactions
+- Visualization accuracy tests with sample data
+- Graph interaction usability testing
+- Performance benchmarks for large graphs
+- Chat functionality verification
+- Workflow execution tests
+- Export format validation
+- End-to-end testing of critical user journeys
 
-### Workflow and UI Phase Milestones
+### CLI Refactoring Milestone
 
-#### Milestone W1: Command Line Interface
+#### Milestone R1: CLI Refactoring and Modularization
 **Deliverables:**
-- CLI command structure
-- Interactive UI elements
-- Progress visualization
-- Investigation management commands
+- Refactored CLI structure with proper separation of concerns
+- UI component modules for console, progress, formatting, and prompts
+- Parser module for command-line argument handling
+- Command handler modules for each command group
+- Visualization module for graph visualization
+- Test suite updates for new structure
 
 **Validation Criteria:**
-- Commands work correctly and provide appropriate feedback
-- Help and documentation are comprehensive
-- Progress is visualized effectively
-- Investigations can be listed, exported, and managed
+- All CLI functionality works identically to pre-refactoring
+- Code is properly organized with clear responsibility boundaries
+- Shared code is moved to appropriate modules
+- Command handlers follow consistent patterns
+- Tests pass with refactored code
+- Documentation is updated to reflect new structure
 
 **Testing Requirements:**
-- Command execution tests
-- User experience evaluation
-- Error message clarity testing
-- Investigation management functionality tests
-
-#### Milestone W2: Basic Workflows
-**Deliverables:**
-- Q&A workflow
-- Guided inquiry workflow
-- Basic tool invocation
-
-**Validation Criteria:**
-- Q&A workflow provides accurate answers
-- Guided inquiry workflow asks relevant questions
-- Tools can be invoked and results processed
-- Workflows persist across sessions
-
-**Testing Requirements:**
-- End-to-end workflow tests
-- Answer accuracy evaluation
-- Question relevance evaluation
-- Session persistence tests
-
-#### Milestone W3: Advanced Workflows
-**Deliverables:**
-- Vulnerability research workflow
-- Investigation persistence
-- Markdown reporting
-- GitHub issue integration
-
-**Validation Criteria:**
-- Vulnerability research workflow identifies actual issues
-- Investigations persist and can be resumed
-- Reports are generated in well-formatted Markdown
-- GitHub issue scripts are generated correctly
-
-**Testing Requirements:**
-- Vulnerability detection tests with known issues
-- Report quality evaluation
-- GitHub issue script validation
-- Investigation persistence tests
-
-#### Milestone W4: Workflow Refinement and Integration
-**Deliverables:**
-- Inter-workflow communication
-- Context preservation
-- Workflow chaining
-- Performance optimization
-
-**Validation Criteria:**
-- Workflows can be chained together
-- Context is preserved when switching workflows
-- Performance meets requirements under typical load
-- User experience is smooth and intuitive
-
-**Testing Requirements:**
-- Workflow transition tests
-- Context preservation verification
-- Performance benchmarks under various loads
-- Usability testing with sample scenarios
-
-### Integration and Finalization Phase Milestones
-
-#### Milestone I1: System Integration
-**Deliverables:**
-- Full system integration
-- End-to-end testing
-- Performance optimization
-- Documentation updates
-
-**Validation Criteria:**
-- All components work together seamlessly
-- Performance meets requirements
-- Documentation is complete and accurate
-- No critical bugs or issues remain
-
-**Testing Requirements:**
-- End-to-end system tests
-- Performance benchmarks
-- Documentation verification
-- Regression testing
-
-#### Milestone I2: Security and Compliance
-**Deliverables:**
-- Security implementation
-- Telemetry privacy controls
-- Data protection
-- Compliance verification
-
-**Validation Criteria:**
-- Security controls are properly implemented
-- Telemetry respects privacy settings
-- Sensitive data is protected
-- System meets all compliance requirements
-
-**Testing Requirements:**
-- Security penetration testing
-- Privacy control verification
-- Data protection tests
-- Compliance checklist verification
-
-#### Milestone I3: Final Release Preparation
-**Deliverables:**
-- Release packaging
-- Installation and deployment scripts
-- Final documentation
-- Deployment guides
-
-**Validation Criteria:**
-- Package can be installed and run correctly
-- Documentation covers all aspects of the system
-- Deployment guides are comprehensive
-- Release meets all requirements and quality standards
-
-**Testing Requirements:**
-- Installation tests on all target platforms
-- Documentation completeness verification
-- Deployment guide validation
-- Final acceptance testing
+- Command execution tests verify identical behavior
+- New component unit tests
+- Integration tests for command execution
+- Regression testing for all command types
+- Error handling verification
+- Documentation completeness checks
 
 ### Milestone Validation and Testing Process
 
@@ -2012,3 +1399,14 @@ The implementation will proceed in the following phases, with each phase buildin
 - **Milestone I1**: System Integration
 - **Milestone I2**: Security and Compliance
 - **Milestone I3**: Final Release Preparation
+
+### Phase 7: Graphical User Interface
+- **Milestone G1**: GUI Frontend Foundation
+- **Milestone G2**: GUI Backend Integration
+- **Milestone G3**: Advanced Visualization and Interactivity
+
+### Phase 8: Enhanced Cloud Integration
+- **Milestone E1**: Azure AI Configuration Enhancement
+
+### Phase 9: Code Quality and Maintainability
+- **Milestone R1**: CLI Refactoring and Modularization

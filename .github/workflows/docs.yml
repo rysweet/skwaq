@@ -1,0 +1,48 @@
+name: Documentation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: 1.7.1
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: Install dependencies
+      run: |
+        poetry lock
+        poetry install --with dev --with docs
+
+    - name: Check docstring coverage
+      run: poetry run docstr-coverage ./skwaq --fail-under=90
+
+    - name: Build documentation
+      run: |
+        cd docs
+        # Use the sphinx-apidoc command directly instead of through make
+        poetry run sphinx-apidoc -o modules ../skwaq -f -e -M
+        poetry run make html
+        poetry run make doctest
+
+    - name: Deploy documentation
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs/_build/html

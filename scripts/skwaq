@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+"""
+Direct wrapper script to run the Skwaq CLI.
+This bypasses the package entry point system.
+"""
+
+import sys
+import os
+import asyncio
+import logging
+
+# Add the parent directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Configure logging 
+logging.getLogger("skwaq.code_analysis.blarify_integration").setLevel(logging.ERROR)
+
+from skwaq.cli.refactored_main import run
+from skwaq.utils.logging import setup_logging
+
+if __name__ == "__main__":
+    # Set up the main logger
+    setup_logging(module_name="skwaq.cli", level=logging.INFO)
+    
+    # Run the main CLI function
+    run()

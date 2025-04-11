@@ -1,0 +1,255 @@
+.workflow-status {
+  background-color: var(--bg-color-element);
+  border-radius: 6px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.workflow-status h2 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  color: var(--text-color-primary);
+  font-size: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.75rem;
+}
+
+.active-workflows, .completed-workflows {
+  margin-bottom: 2rem;
+}
+
+.active-workflows h3, .completed-workflows h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
+  color: var(--text-color-primary);
+}
+
+.workflow-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background-color: var(--bg-color-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  transition: box-shadow 0.2s ease;
+}
+
+@media (min-width: 768px) {
+  .workflow-item {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.workflow-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.workflow-item.running {
+  border-left: 4px solid var(--status-running);
+}
+
+.workflow-item.pending {
+  border-left: 4px solid var(--status-pending);
+}
+
+.workflow-item.completed {
+  border-left: 4px solid var(--status-completed);
+}
+
+.workflow-item.failed {
+  border-left: 4px solid var(--status-failed);
+}
+
+.workflow-info {
+  flex: 2;
+}
+
+.workflow-info h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  color: var(--text-color-primary);
+}
+
+.workflow-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.875rem;
+  color: var(--text-color-tertiary);
+}
+
+.workflow-id, .workflow-started, .workflow-completed, .workflow-duration {
+  display: inline-flex;
+  align-items: center;
+}
+
+.workflow-status-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 2rem;
+  background-color: var(--bg-color-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+}
+
+.status-indicator.running {
+  background-color: var(--status-running);
+  box-shadow: 0 0 0 2px rgba(66, 135, 245, 0.2);
+}
+
+.status-indicator.pending {
+  background-color: var(--status-pending);
+  box-shadow: 0 0 0 2px rgba(245, 166, 35, 0.2);
+}
+
+.status-indicator.completed {
+  background-color: var(--status-completed);
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
+.status-indicator.failed {
+  background-color: var(--status-failed);
+  box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.2);
+}
+
+.status-text {
+  color: var(--text-color-primary);
+  text-transform: capitalize;
+}
+
+.progress-container {
+  margin-top: 0.5rem;
+}
+
+.progress-bar {
+  height: 8px;
+  background-color: var(--bg-color-secondary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: var(--primary-color);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--text-color-tertiary);
+  text-align: right;
+}
+
+.workflow-error {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background-color: var(--error-color-bg);
+  color: var(--error-color-text);
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+
+.error-label {
+  font-weight: 500;
+  margin-right: 0.5rem;
+}
+
+.workflow-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+
+.stop-button, .view-results-button {
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.stop-button {
+  background-color: var(--error-color-bg);
+  color: var(--error-color);
+  border: 1px solid var(--error-color);
+}
+
+.stop-button:hover {
+  background-color: var(--error-color);
+  color: white;
+}
+
+.view-results-button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+}
+
+.view-results-button:hover {
+  background-color: var(--primary-color-dark);
+}
+
+.loading-message, .no-workflows-message {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-color-tertiary);
+}
+
+/* Variables for status colors */
+:root {
+  --status-running: #4287f5;
+  --status-pending: #f5a623;
+  --status-completed: #4caf50;
+  --status-failed: #f44336;
+}
+
+/* Dark mode adjustments */
+.dark-mode .workflow-item {
+  background-color: var(--bg-color-secondary);
+}
+
+.dark-mode .status-badge {
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .workflow-details {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .workflow-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .stop-button, .view-results-button {
+    width: 100%;
+    text-align: center;
+  }
+}

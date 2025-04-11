@@ -1,0 +1,247 @@
+{
+  "nodes": [
+    {
+      "id": "inv-ai-samples-8d357166",
+      "label": "AI Samples Demo",
+      "type": "Investigation",
+      "is_funnel_identified": false,
+      "properties": {
+        "created_at": "2025-03-28T20:04:51.406000000+00:00",
+        "description": "Demo of dotnet/ai-samples",
+        "title": "AI Samples Demo",
+        "status": "In Progress"
+      },
+      "group": 1,
+      "color": "#4b76e8"
+    },
+    {
+      "id": "4360034768",
+      "label": "Unknown",
+      "type": "Finding",
+      "is_funnel_identified": false,
+      "properties": {
+        "severity": "High",
+        "remediation": "Use Azure Key Vault or other secure storage",
+        "vulnerability_type": "Insecure Configuration",
+        "confidence": 0.85,
+        "description": "API key is exposed in configuration file",
+        "type": "api_key_exposure"
+      },
+      "group": 2,
+      "color": "#ff4500"
+    },
+    {
+      "id": "4360034528",
+      "label": "Configuration.cs",
+      "type": "File",
+      "is_funnel_identified": false,
+      "properties": {
+        "path": "/src/dotnet/Configuration.cs",
+        "name": "Configuration.cs",
+        "language": "csharp"
+      },
+      "group": 4,
+      "color": "#20c997"
+    },
+    {
+      "id": "4360281968",
+      "label": "dotnet/ai-samples",
+      "type": "Repository",
+      "is_funnel_identified": false,
+      "properties": {
+        "name": "dotnet/ai-samples",
+        "description": "AI samples repository from Microsoft",
+        "url": "https://github.com/dotnet/ai-samples"
+      },
+      "group": 5,
+      "color": "#6610f2"
+    },
+    {
+      "id": "4360284848",
+      "label": "User Input",
+      "type": "Source",
+      "is_funnel_identified": true,
+      "properties": {
+        "metadata": "{}",
+        "confidence": 0.9,
+        "name": "User Input",
+        "description": "User input from console in Program.Main",
+        "source_type": "user_input"
+      },
+      "group": 6,
+      "color": "#02ccfa",
+      "highlight": true,
+      "stroke_width": 3,
+      "stroke_color": "#FFD700"
+    },
+    {
+      "id": "4360285040",
+      "label": "API Key",
+      "type": "Source",
+      "is_funnel_identified": true,
+      "properties": {
+        "metadata": "{}",
+        "confidence": 0.95,
+        "name": "API Key",
+        "description": "API key from Configuration.GetApiKey",
+        "source_type": "configuration"
+      },
+      "group": 6,
+      "color": "#02ccfa",
+      "highlight": true,
+      "stroke_width": 3,
+      "stroke_color": "#FFD700"
+    },
+    {
+      "id": "4360288448",
+      "label": "API Request",
+      "type": "Sink",
+      "is_funnel_identified": true,
+      "properties": {
+        "metadata": "{}",
+        "confidence": 0.9,
+        "sink_type": "network_send",
+        "name": "API Request",
+        "description": "API request in OpenAIService.GetCompletion"
+      },
+      "group": 7,
+      "color": "#fa7602",
+      "highlight": true,
+      "stroke_width": 3,
+      "stroke_color": "#FFD700"
+    },
+    {
+      "id": "4360288640",
+      "label": "Console Output",
+      "type": "Sink",
+      "is_funnel_identified": true,
+      "properties": {
+        "metadata": "{}",
+        "confidence": 0.85,
+        "sink_type": "logging",
+        "name": "Console Output",
+        "description": "Console output in Program.Main"
+      },
+      "group": 7,
+      "color": "#fa7602",
+      "highlight": true,
+      "stroke_width": 3,
+      "stroke_color": "#FFD700"
+    },
+    {
+      "id": "4360390704",
+      "label": "Unknown",
+      "type": "DataFlowPath",
+      "is_funnel_identified": true,
+      "properties": {
+        "vulnerability_type": "Information Disclosure",
+        "metadata": "{}",
+        "confidence": 0.75,
+        "impact": "medium",
+        "description": "User input is sent to external API",
+        "recommendations": "[\"Add content filtering\", \"Implement rate limiting\"]"
+      },
+      "group": 8,
+      "color": "#fa0290",
+      "highlight": true,
+      "stroke_width": 3,
+      "stroke_color": "#FFD700"
+    },
+    {
+      "id": "4360390896",
+      "label": "Unknown",
+      "type": "DataFlowPath",
+      "is_funnel_identified": true,
+      "properties": {
+        "vulnerability_type": "API Key Exposure",
+        "metadata": "{}",
+        "confidence": 0.9,
+        "impact": "high",
+        "description": "API key stored in plaintext can be exposed",
+        "recommendations": "[\"Use secure storage\", \"Use Azure Key Vault\"]"
+      },
+      "group": 8,
+      "color": "#fa0290",
+      "highlight": true,
+      "stroke_width": 3,
+      "stroke_color": "#FFD700"
+    }
+  ],
+  "links": [
+    {
+      "source": "inv-ai-samples-8d357166",
+      "target": "4360034768",
+      "type": "HAS_FINDING"
+    },
+    {
+      "source": "4360034768",
+      "target": "4360034528",
+      "type": "FOUND_IN"
+    },
+    {
+      "source": "4360034528",
+      "target": "4360281968",
+      "type": "PART_OF"
+    },
+    {
+      "source": "inv-ai-samples-8d357166",
+      "target": "4360284848",
+      "type": "HAS_SOURCE"
+    },
+    {
+      "source": "inv-ai-samples-8d357166",
+      "target": "4360285040",
+      "type": "HAS_SOURCE"
+    },
+    {
+      "source": "inv-ai-samples-8d357166",
+      "target": "4360288448",
+      "type": "HAS_SINK"
+    },
+    {
+      "source": "inv-ai-samples-8d357166",
+      "target": "4360288640",
+      "type": "HAS_SINK"
+    },
+    {
+      "source": "inv-ai-samples-8d357166",
+      "target": "4360390704",
+      "type": "HAS_DATA_FLOW_PATH"
+    },
+    {
+      "source": "inv-ai-samples-8d357166",
+      "target": "4360390896",
+      "type": "HAS_DATA_FLOW_PATH"
+    },
+    {
+      "source": "inv-ai-samples-8d357166",
+      "target": "4360284848",
+      "type": "HAS_SOURCE"
+    },
+    {
+      "source": "inv-ai-samples-8d357166",
+      "target": "4360285040",
+      "type": "HAS_SOURCE"
+    },
+    {
+      "source": "inv-ai-samples-8d357166",
+      "target": "4360288448",
+      "type": "HAS_SINK"
+    },
+    {
+      "source": "inv-ai-samples-8d357166",
+      "target": "4360288640",
+      "type": "HAS_SINK"
+    },
+    {
+      "source": "inv-ai-samples-8d357166",
+      "target": "4360390704",
+      "type": "HAS_DATA_FLOW_PATH"
+    },
+    {
+      "source": "inv-ai-samples-8d357166",
+      "target": "4360390896",
+      "type": "HAS_DATA_FLOW_PATH"
+    }
+  ]
+}
