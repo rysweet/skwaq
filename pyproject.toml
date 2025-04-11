@@ -31,6 +31,7 @@ protobuf = "~5.29.3"
 grpcio = "^1.59.2"
 grpcio-tools = "^1.59.2"
 prompty = "^0.1.0"
+flask = "^2.3.0"
 
 # Azure and OpenAI dependencies
 azure-identity = "^1.15.0"
