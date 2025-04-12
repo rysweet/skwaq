@@ -4,14 +4,13 @@ This module provides functionality for managing installation processes,
 including script generation, environment validation, and dependency management.
 """
 
-import os
-import sys
 import platform
-import subprocess
-import pkg_resources
 import shutil
-from typing import Dict, Any, List, Optional, Tuple
+import subprocess
 from pathlib import Path
+from typing import Any, Dict, List
+
+import pkg_resources
 
 from skwaq.utils.config import get_config
 from skwaq.utils.logging import get_logger
@@ -135,10 +134,9 @@ class InstallationManager:
         Returns:
             The generated installation script as a string.
         """
-        requirements = self.get_requirements()
-
-        # Get Python executable - use 'python3' for Unix, 'python' for Windows
-        python_cmd = "python3" if platform == "unix" else "python"
+        # Get requirements but use directly in the script structure
+        # Implementation depends on the platform
+        # Python executable also varies by platform
 
         if platform == "unix":
             script = "#!/bin/bash\n\n"

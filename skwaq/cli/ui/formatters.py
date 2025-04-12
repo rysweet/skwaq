@@ -57,10 +57,19 @@ def format_findings_table(findings: List[Finding]) -> Table:
             f"{finding.confidence * 100:.0f}%" if finding.confidence else "N/A"
         )
 
+        # Apply color styling to severity based on level
+        severity_style = {
+            "Critical": "bold white on red",
+            "High": "bold white on dark_red",
+            "Medium": "black on orange3",
+            "Low": "black on yellow",
+            "Info": "blue",
+        }.get(finding.severity, "white")
+        
         table.add_row(
             finding.vulnerability_type,
             str(finding.line_number) if finding.line_number else "N/A",
-            finding.severity,
+            Text(finding.severity, style=severity_style),  # Apply style to severity
             finding.description,
             confidence_text,
             style=None,
@@ -107,7 +116,7 @@ def format_repository_table(repositories: List[Dict[str, Any]]) -> Table:
                 # Convert ISO timestamp to readable format
                 dt = datetime.fromisoformat(ingested_at.replace("Z", "+00:00"))
                 ingested_at = dt.strftime("%Y-%m-%d %H:%M")
-            except ValueError as e:
+            except ValueError:
                 # Failed to parse timestamp, keep original
                 pass
 
@@ -184,7 +193,7 @@ def format_investigation_table(investigations: List[Dict[str, Any]]) -> Table:
                 # Convert ISO timestamp to readable format
                 dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
                 created_at = dt.strftime("%Y-%m-%d %H:%M")
-            except ValueError as e:
+            except ValueError:
                 # Failed to parse timestamp, keep original
                 pass
 

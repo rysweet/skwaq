@@ -4,23 +4,21 @@ This module provides a parser implementation using Blarify to extract the syntax
 structure of a codebase and store it in the graph database.
 """
 
-import os
-import sys
 import json
-import tempfile
-import subprocess
+import os
 import platform
-from typing import Dict, List, Any, Optional, Set
+import subprocess
+import tempfile
+from typing import Any, Dict
 
-from skwaq.db.neo4j_connector import get_connector, Neo4jConnector
-from skwaq.db.schema import RelationshipTypes
+from skwaq.db.neo4j_connector import get_connector
 from skwaq.utils.logging import get_logger
 
 from . import CodeParser
 
 try:
-    from blarify.prebuilt.graph_builder import GraphBuilder
     from blarify.db_managers.neo4j_manager import Neo4jManager
+    from blarify.prebuilt.graph_builder import GraphBuilder
 
     HAS_BLARIFY = True
 except ImportError:
@@ -441,7 +439,8 @@ if __name__ == "__main__":
                 with tempfile.NamedTemporaryFile(
                     mode="w+", delete=False
                 ) as temp_output:
-                    output_path = temp_output.name
+                    # Using the temp file name is handled by the Docker command below
+                    pass
 
                 # Run the Docker container
                 docker_cmd = [
@@ -519,13 +518,8 @@ if __name__ == "__main__":
         """
         logger.info("Processing Docker result and saving to Neo4j")
 
-        # Get the database URI, username, and password from the connector
-        db_config = {
-            "uri": self.connector._uri,
-            "user": self.connector._user,
-            "password": self.connector._password,
-            "database": self.connector._database,
-        }
+        # Database connection is already established through self.connector
+        # No need to recreate config as we use the connector directly
 
         # Process and create nodes
         node_id_mapping = {}  # Map Blarify node IDs to Neo4j node IDs

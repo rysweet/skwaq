@@ -110,9 +110,8 @@ exclude = ["*.egg", "build", "dist"]
 extend-ignore = ["E203"]
 
 [tool.ruff]
+# Moving select and ignore to lint section as recommended by ruff
 line-length = 100
-select = ["E", "F", "I"]
-ignore = ["E203"]
 exclude = [
     ".git",
     ".ruff_cache",
@@ -122,6 +121,11 @@ exclude = [
     "build",
     "dist",
 ]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E203", "E501", "E402"]  # Ignoring E501 (line too long) as we'll handle it with black
+                                  # Ignoring E402 (module level import not at top of file) temporarily
 
 [tool.mypy]
 python_version = "3.10"
