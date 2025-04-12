@@ -45,6 +45,8 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     curl \
     git \
     wget \
+    build-essential \
+    libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

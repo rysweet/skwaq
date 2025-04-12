@@ -32,6 +32,9 @@ grpcio = "^1.59.2"
 grpcio-tools = "^1.59.2"
 prompty = "^0.1.0"
 flask = "^2.3.0"
+flask-cors = "^4.0.0"
+pytest-asyncio = "^0.21.1"
+types-flask = "^1.1.6"
 
 # Azure and OpenAI dependencies
 azure-identity = "^1.15.0"
