@@ -4,40 +4,44 @@ This module contains the implementation of the various specialized agents
 that work together to perform vulnerability assessment tasks.
 """
 
-from typing import Dict, Any, Optional, List, Type
+from typing import TYPE_CHECKING
 
-# Base agent framework
-from .base import (
-    BaseAgent,
-    AutogenChatAgent,
-    AgentState,
-    AgentContext,
-)
+if TYPE_CHECKING:
+    from typing import Any, Dict, List, Optional, Type
 
-# Agent registry
-from .registry import AgentRegistry
+from .agent_factory import create_orchestrator_agent
 
 # AutoGen integration
 from .autogen_integration import (
-    AutogenEventBridge,
     AutogenAgentAdapter,
+    AutogenEventBridge,
     AutogenGroupChatAdapter,
 )
+
+# Base agent framework
+from .base import (
+    AgentContext,
+    AgentState,
+    AutogenChatAgent,
+    BaseAgent,
+)
+from .code_analysis_agent import CodeAnalysisAgent
+from .critic_agent import CriticAgent
 
 # Agent communication events
 from .events import (
     AgentCommunicationEvent,
+    Task,
     TaskAssignmentEvent,
     TaskResultEvent,
-    Task,
 )
+from .knowledge_agent import KnowledgeAgent
 
 # Core agent implementations
 from .orchestrator_agent import OrchestratorAgent
-from .knowledge_agent import KnowledgeAgent
-from .code_analysis_agent import CodeAnalysisAgent
-from .critic_agent import CriticAgent
-from .agent_factory import create_orchestrator_agent
+
+# Agent registry
+from .registry import AgentRegistry
 from .vulnerability_research_agent import VulnerabilityResearchAgent
 
 __all__ = [

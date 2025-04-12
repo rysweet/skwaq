@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Run the Skwaq API server with authentication disabled for integration testing."""
 
-import os
-import sys
 import argparse
-import signal
-import logging
-import time
 import atexit
+import logging
+import os
+import signal
 import subprocess
+import sys
+import time
 from threading import Thread
 
 # Add parent directory to path so we can import skwaq modules
@@ -135,7 +135,8 @@ def signal_handler(sig, frame):
         try:
             server_process.terminate()
             server_process.wait(timeout=5)
-        except:
+        except Exception as e:
+            logger.error(f"Error terminating server process: {e}")
             server_process.kill()
 
     restore_auth_file()
@@ -147,7 +148,6 @@ def run_server(host, port, debug=False):
     global server_process
 
     # Import the Flask app
-    from skwaq.api.app import app
 
     # Create a command to run the server in a separate process
     cmd = [

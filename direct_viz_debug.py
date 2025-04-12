@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """Direct visualization script that generates an HTML page with raw data."""
 
+import argparse
+import datetime
+import json
 import os
 import sys
-import argparse
-import json
-import datetime
-import neo4j.time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
+
+import neo4j.time
 
 # Add the project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Import after path modification
 from skwaq.visualization.graph_visualizer import GraphVisualizer
 
 

@@ -4,31 +4,28 @@ This script patches Python's import system to redirect imports from
 autogen_core.agent, autogen_core.event, etc. to our compatibility module.
 """
 
-import sys
-import os
-import importlib.abc
-import importlib.util
-import types
 import logging
+import os
+import sys
+import types
 
+# Configure logging first
 logger = logging.getLogger(__name__)
 
-# Path to our project root
+# Modify Python path before any relative imports
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
-# Import real autogen_core first
+# Now import the modules after path is set up
 import autogen_core
-
-# Import our compatibility layer
 from skwaq.agents.autogen_compat import (
-    agent,
-    event,
-    code_utils,
-    memory,
+    ChatCompletionClient,
     GroupChat,
     __version__,
-    ChatCompletionClient,
+    agent,
+    code_utils,
+    event,
+    memory,
 )
 
 

@@ -5,24 +5,20 @@ This example demonstrates how to use the Sources and Sinks workflow to analyze a
 for potential data flow vulnerabilities.
 """
 
-import os
-import sys
 import asyncio
-import json
+import sys
 from pathlib import Path
 
 # Add the parent directory to the path to import skwaq
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# Import after path modification
 from skwaq.core.openai_client import OpenAIClient
 from skwaq.db.neo4j_connector import Neo4jConnector, get_connector
+from skwaq.utils.config import Config
 from skwaq.workflows.sources_and_sinks import (
     SourcesAndSinksWorkflow,
-    CodeSummaryFunnel,
-    LLMAnalyzer,
-    DocumentationAnalyzer,
 )
-from skwaq.utils.config import Config
 
 
 async def main():

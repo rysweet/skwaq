@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Run the Skwaq development environment with both API and frontend."""
 
-import os
-import sys
 import argparse
-import subprocess
+import os
 import signal
+import subprocess
+import sys
 import time
 from threading import Thread
 
@@ -108,7 +108,8 @@ def cleanup():
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 process.kill()
-            except:
+            except Exception as e:
+                print(f"Error during process cleanup: {e}")
                 pass
 
 

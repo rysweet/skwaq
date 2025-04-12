@@ -4,11 +4,11 @@ Script to ensure Neo4j is running and initialized with the proper schema.
 Optionally seeds the database with mock data for testing.
 """
 
+import argparse
 import os
+import subprocess
 import sys
 import time
-import subprocess
-import argparse
 from pathlib import Path
 
 # Add the project root to the Python path
@@ -16,10 +16,10 @@ script_dir = Path(__file__).resolve().parent
 project_root = script_dir.parent.parent
 sys.path.insert(0, str(project_root))
 
+# Import after path modification
 from skwaq.db.neo4j_connector import get_connector
 from skwaq.db.schema import initialize_schema
 from skwaq.utils.logging import get_logger
-
 
 logger = get_logger(__name__)
 
@@ -72,7 +72,7 @@ def start_neo4j_container():
         )
 
         # Start the Neo4j container
-        result = subprocess.run(
+        subprocess.run(
             ["docker-compose", "up", "-d", "neo4j"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

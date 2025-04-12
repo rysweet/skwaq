@@ -1,13 +1,12 @@
 """Formatters for displaying data in the Skwaq CLI."""
 
-from typing import List, Dict, Any, Optional, Union
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
 
-from rich.table import Table
+from rich.box import ROUNDED
 from rich.panel import Panel
+from rich.table import Table
 from rich.text import Text
-from rich.style import Style
-from rich.box import Box, ROUNDED
 
 from ...shared.finding import Finding
 
@@ -108,7 +107,8 @@ def format_repository_table(repositories: List[Dict[str, Any]]) -> Table:
                 # Convert ISO timestamp to readable format
                 dt = datetime.fromisoformat(ingested_at.replace("Z", "+00:00"))
                 ingested_at = dt.strftime("%Y-%m-%d %H:%M")
-            except:
+            except ValueError as e:
+                # Failed to parse timestamp, keep original
                 pass
 
         table.add_row(repo_id, name, file_count, source, ingested_at)
@@ -184,7 +184,8 @@ def format_investigation_table(investigations: List[Dict[str, Any]]) -> Table:
                 # Convert ISO timestamp to readable format
                 dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
                 created_at = dt.strftime("%Y-%m-%d %H:%M")
-            except:
+            except ValueError as e:
+                # Failed to parse timestamp, keep original
                 pass
 
         table.add_row(

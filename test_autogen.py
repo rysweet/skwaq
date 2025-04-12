@@ -1,8 +1,8 @@
 """Test script for autogen-core integration."""
 
+import logging
 import os
 import sys
-import logging
 
 # Configure basic logging
 logging.basicConfig(level=logging.INFO)
@@ -11,6 +11,9 @@ logging.basicConfig(level=logging.INFO)
 project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+
+# Import modules needed for testing
+import traceback
 
 
 def test_autogen_core():
@@ -23,7 +26,7 @@ def test_autogen_core():
         print(f"Autogen-core version: {autogen_core.__version__}")
 
         # Test creating a basic agent
-        from autogen_core import Agent, BaseAgent
+        from autogen_core import Agent
 
         # Check Agent implementation details
         agent_methods = [method for method in dir(Agent) if not method.startswith("_")]
@@ -42,8 +45,6 @@ def test_autogen_core():
         return True
     except Exception as e:
         print(f"Error testing autogen-core: {e}")
-        import traceback
-
         traceback.print_exc()
         return False
 
@@ -56,7 +57,6 @@ def test_skwaq_integration():
         # Import our agent integration
         from skwaq.agents.autogen_integration import (
             AutogenAgentAdapter,
-            AutogenGroupChatAdapter,
         )
 
         # Create adapter

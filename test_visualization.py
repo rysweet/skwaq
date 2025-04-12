@@ -1,5 +1,6 @@
-import requests
 import json
+
+import requests
 
 
 def test_investigation_visualization():
@@ -37,7 +38,7 @@ def test_investigation_visualization():
         print(f"Error: {response.status_code}")
         try:
             print(response.json())
-        except:
+        except json.JSONDecodeError:
             print(response.text)
 
 
