@@ -4,7 +4,7 @@ This module defines custom exceptions for the ingestion process to provide
 more detailed error information and improve error handling.
 """
 
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 
 class IngestionError(Exception):

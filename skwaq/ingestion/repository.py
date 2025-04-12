@@ -6,21 +6,18 @@ This module provides classes for interacting with Git repositories during ingest
 import os
 import tempfile
 from datetime import datetime
-from pathlib import Path
-from typing import Dict, Optional, Any, List
+from typing import Any, Dict, Optional
 
 import git
-from github import (
-    Github,
-    Repository as GithubRepo,
-    UnknownObjectException,
-    GithubException,
-)
+from github import Github, GithubException
+from github import Repository as GithubRepo
+from github import UnknownObjectException
 
 from skwaq.db.neo4j_connector import Neo4jConnector
 from skwaq.db.schema import NodeLabels
 from skwaq.utils.logging import get_logger
-from .exceptions import RepositoryError, DatabaseError
+
+from .exceptions import DatabaseError, RepositoryError
 
 logger = get_logger(__name__)
 
@@ -236,9 +233,9 @@ class RepositoryHandler:
             if repo.head.is_valid():
                 commit = repo.head.commit
                 metadata["commit_hash"] = commit.hexsha
-                metadata[
-                    "commit_author"
-                ] = f"{commit.author.name} <{commit.author.email}>"
+                metadata["commit_author"] = (
+                    f"{commit.author.name} <{commit.author.email}>"
+                )
                 metadata["commit_date"] = datetime.fromtimestamp(
                     commit.committed_date
                 ).isoformat()

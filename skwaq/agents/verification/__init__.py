@@ -5,8 +5,8 @@ critiquing the work of other agents to improve quality and accuracy.
 """
 
 from .critic_agent import AdvancedCriticAgent
-from .verification_agent import VerificationAgent
 from .fact_checking_agent import FactCheckingAgent
+from .verification_agent import VerificationAgent
 
 __all__ = [
     "AdvancedCriticAgent",

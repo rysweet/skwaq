@@ -1,9 +1,8 @@
 """Tests for the event streaming routes."""
 
-import pytest
 import json
-import queue
-from unittest.mock import patch, MagicMock
+
+import pytest
 
 from skwaq.api import create_app
 from skwaq.api.services import event_service

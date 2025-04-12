@@ -1,14 +1,15 @@
 """API routes for handling investigations."""
 
 import json
-from datetime import datetime
-import neo4j.time
-from flask import Blueprint, jsonify, request, g
-from uuid import uuid4
 import traceback
+from datetime import datetime
+from uuid import uuid4
 
+import neo4j.time
+from flask import Blueprint, jsonify, request
+
+from skwaq.api.middleware.error_handling import APIError, BadRequestError, NotFoundError
 from skwaq.db.neo4j_connector import get_connector
-from skwaq.api.middleware.error_handling import APIError, NotFoundError, BadRequestError
 from skwaq.utils.logging import get_logger
 
 logger = get_logger(__name__)

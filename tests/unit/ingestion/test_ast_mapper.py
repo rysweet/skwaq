@@ -1,10 +1,10 @@
 """Tests for the AST to filesystem mapper module."""
 
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
 
-from skwaq.ingestion.ast_mapper import ASTFileMapper
+import pytest
+
 from skwaq.db.schema import RelationshipTypes
+from skwaq.ingestion.ast_mapper import ASTFileMapper
 
 
 @pytest.mark.asyncio

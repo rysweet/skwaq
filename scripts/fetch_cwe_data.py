@@ -6,14 +6,14 @@ This script downloads the latest CWE XML data, unzips it to the knowledge direct
 and also downloads the XSD schema for validation purposes.
 """
 
-import os
-import sys
-import requests
-import zipfile
-from pathlib import Path
 import logging
-from io import BytesIO
+import sys
+import zipfile
 from datetime import datetime
+from io import BytesIO
+from pathlib import Path
+
+import requests
 
 # Configure logging
 logging.basicConfig(

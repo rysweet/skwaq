@@ -1,10 +1,11 @@
 """Tests for the graph visualization module."""
 
-import os
 import json
+import os
 import tempfile
+from unittest.mock import MagicMock, mock_open, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, mock_open
 
 from skwaq.db.graph_visualization import GraphVisualizer
 
@@ -92,8 +93,8 @@ class TestGraphVisualizer:
         assert repository_node["properties"]["name"] == "test-repo"
 
         # Check link between investigation and repository
-        assert result["links"][0]["source"] == f"i-123"
-        assert result["links"][0]["target"] == f"r-456"
+        assert result["links"][0]["source"] == "i-123"
+        assert result["links"][0]["target"] == "r-456"
 
     def test_get_investigation_graph_with_findings(self, mock_connector, visualizer):
         """Test getting investigation graph with findings."""

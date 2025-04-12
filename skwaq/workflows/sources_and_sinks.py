@@ -4,20 +4,16 @@ This module provides functionality to identify potential sources and sinks in co
 repositories. It helps developers understand data flow and potential security vulnerabilities.
 """
 
-import os
 import json
-import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Set, Union, cast
+from typing import Any, Dict, List, Optional
 
-from ..db.neo4j_connector import get_connector
-from ..db.schema import NodeLabels, RelationshipTypes
-from ..utils.logging import get_logger
 from ..core.openai_client import OpenAIClient
-from ..shared.finding import Finding
+from ..db.neo4j_connector import get_connector
+from ..utils.logging import get_logger
 from .base import Workflow
 
 logger = get_logger(__name__)
@@ -323,7 +319,7 @@ class SourcesAndSinksResult:
         Returns:
             Markdown representation of the result
         """
-        markdown = f"# Sources and Sinks Analysis Results\n\n"
+        markdown = "# Sources and Sinks Analysis Results\n\n"
         markdown += f"## Investigation ID: {self.investigation_id}\n\n"
 
         if self.summary:

@@ -4,24 +4,19 @@ This module implements a step-by-step guided inquiry workflow for assessing vuln
 in a codebase.
 """
 
-from typing import Dict, List, Any, Optional, AsyncGenerator, Tuple
 import asyncio
 import json
 from enum import Enum
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
-import autogen_core
-from autogen_core import Agent
-from autogen_core import event
+from ..agents.skwaq_agent import SkwaqAgent
 
 # Use the BaseEvent class from our vulnerability_events implementation
 from ..agents.vulnerability_events import BaseEvent
-
-from .base import Workflow
-from ..agents.skwaq_agent import SkwaqAgent
-from ..agents.vulnerability_events import KnowledgeRetrievalEvent
 from ..db.neo4j_connector import get_connector
+from ..shared.finding import Finding
 from ..utils.logging import get_logger
-from ..shared.finding import Finding, AnalysisResult
+from .base import Workflow
 
 logger = get_logger(__name__)
 

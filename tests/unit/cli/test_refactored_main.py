@@ -1,9 +1,10 @@
 """Tests for the refactored CLI main module."""
 
 import argparse
-import pytest
 import sys
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Define the rich modules we need to mock
 RICH_MODULES = [

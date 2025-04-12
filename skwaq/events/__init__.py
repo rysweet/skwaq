@@ -5,14 +5,14 @@ for the Skwaq vulnerability assessment copilot.
 """
 
 from .system_events import (
-    SystemEvent,
     ConfigEvent,
-    TelemetryEvent,
     LoggingEvent,
+    SystemEvent,
+    TelemetryEvent,
+    get_subscribers,
+    publish,
     subscribe,
     unsubscribe,
-    publish,
-    get_subscribers,
 )
 
 __all__ = [

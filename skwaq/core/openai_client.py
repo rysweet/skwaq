@@ -3,18 +3,18 @@ This module provides a wrapper around the Azure OpenAI API with configuration
 specific to the Skwaq vulnerability assessment copilot.
 """
 
-from typing import Dict, List, Optional, Union, Any
-import json
+from typing import Dict, List, Optional
 
 # Direct OpenAI imports
 from openai import AzureOpenAI, OpenAI
+
 from ..utils.config import Config, get_config
 from ..utils.logging import get_logger
 
 try:
     from azure.identity import (
-        DefaultAzureCredential,
         ClientSecretCredential,
+        DefaultAzureCredential,
         get_bearer_token_provider,
     )
 

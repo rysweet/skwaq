@@ -4,14 +4,13 @@ This module provides functionality for managing documentation, including
 building documentation, checking coverage, and identifying documentation gaps.
 """
 
-import os
-import sys
-import subprocess
-import re
 import importlib
 import inspect
+import os
+import subprocess
+import sys
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Set, Tuple, Union
+from typing import List
 
 from skwaq.utils.config import get_config
 from skwaq.utils.logging import get_logger

@@ -1,12 +1,11 @@
 """Tests for the workflow routes."""
 
-import pytest
 import json
-from unittest.mock import patch, MagicMock
-import time
+from unittest.mock import patch
+
+import pytest
 
 from skwaq.api import create_app
-from skwaq.api.services import workflow_service
 
 
 @pytest.fixture

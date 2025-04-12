@@ -5,19 +5,17 @@ approach to vulnerability assessment, helping users systematically
 analyze repositories for security issues.
 """
 
-from typing import Dict, List, Any, Optional, Set, Tuple, Union, cast
 import asyncio
-import json
 import enum
+import json
 import time
 import uuid
+from typing import Any, Dict, Optional
 
-from ..base import AutogenChatAgent
-from ..events import AgentCommunicationEvent, TaskAssignmentEvent, TaskResultEvent, Task
-from ...events.system_events import EventBus, SystemEvent
-from ...utils.config import get_config
+from ...events.system_events import SystemEvent
 from ...utils.logging import get_logger
-from ...shared.finding import Finding
+from ..base import AutogenChatAgent
+from ..events import TaskAssignmentEvent, TaskResultEvent
 
 logger = get_logger(__name__)
 

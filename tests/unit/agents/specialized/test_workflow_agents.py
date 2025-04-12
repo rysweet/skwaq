@@ -1,12 +1,11 @@
 """Unit tests for specialized workflow agents."""
 
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch, call
 import json
 import sys
 import uuid
-import enum
-from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 # Before importing any of our modules, properly mock the autogen modules
 autogen_mock = MagicMock()
@@ -72,38 +71,29 @@ sys.modules["autogen_core.event"] = autogen_event_mock
 sys.modules["autogen_core.code_utils"] = autogen_code_utils_mock
 sys.modules["autogen_core.memory"] = autogen_memory_mock
 
+from skwaq.agents.specialized.exploitation_agent import (
+    ExploitabilityStatus,
+    ExploitationVerificationAgent,
+)
+
 # Import specialized agents
 from skwaq.agents.specialized.guided_assessment_agent import (
-    GuidedAssessmentAgent,
-    AssessmentStage,
     AssessmentPlanEvent,
     AssessmentStageEvent,
-)
-from skwaq.agents.specialized.exploitation_agent import (
-    ExploitationVerificationAgent,
-    ExploitabilityStatus,
-    ExploitVerificationEvent,
-)
-from skwaq.agents.specialized.remediation_agent import (
-    RemediationPlanningAgent,
-    RemediationPriority,
-    RemediationComplexity,
-    RemediationPlanEvent,
-)
-from skwaq.agents.specialized.policy_agent import (
-    SecurityPolicyAgent,
-    ComplianceStatus,
-    PolicyRecommendationType,
-    PolicyEvaluationEvent,
-    PolicyRecommendationEvent,
+    GuidedAssessmentAgent,
 )
 from skwaq.agents.specialized.orchestration import (
     AdvancedOrchestrator,
-    WorkflowType,
-    WorkflowStatus,
-    WorkflowEvent,
     WorkflowDefinition,
     WorkflowExecution,
+    WorkflowStatus,
+    WorkflowType,
+)
+from skwaq.agents.specialized.policy_agent import ComplianceStatus, SecurityPolicyAgent
+from skwaq.agents.specialized.remediation_agent import (
+    RemediationComplexity,
+    RemediationPlanningAgent,
+    RemediationPriority,
 )
 
 
@@ -832,7 +822,7 @@ class TestAdvancedOrchestrator:
         )
 
         # Verify the result
-        workflow_id = f"workflow_guided_assessment_1000000_12345678"
+        workflow_id = "workflow_guided_assessment_1000000_12345678"
         assert result["workflow_id"] == workflow_id
         assert result["name"] == "Test Workflow"
         assert result["description"] == "Workflow for testing"

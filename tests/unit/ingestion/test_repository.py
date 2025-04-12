@@ -1,14 +1,13 @@
 """Tests for the repository module of the ingestion system."""
 
-import os
-import pytest
-from unittest.mock import MagicMock, patch, mock_open, PropertyMock
-import tempfile
-import git
+from unittest.mock import MagicMock, patch
 
-from skwaq.ingestion.repository import RepositoryHandler, RepositoryManager
-from skwaq.ingestion.exceptions import RepositoryError, DatabaseError
+import git
+import pytest
+
 from skwaq.db.schema import NodeLabels
+from skwaq.ingestion.exceptions import DatabaseError
+from skwaq.ingestion.repository import RepositoryHandler, RepositoryManager
 
 
 def test_repository_handler_init():

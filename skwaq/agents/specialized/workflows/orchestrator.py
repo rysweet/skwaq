@@ -4,57 +4,32 @@ This module provides the main orchestrator class for managing and
 executing specialized agent workflows.
 """
 
-from typing import Dict, List, Any, Optional, Set, Tuple, Union, cast
-import asyncio
-import json
 import uuid
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Set
 
+from ....events.system_events import EventBus
+from ....utils.logging import get_logger
 from ...base import AutogenChatAgent
-from ...events import (
-    AgentCommunicationEvent,
-    TaskAssignmentEvent,
-    TaskResultEvent,
-    Task,
-)
 from ...communication_patterns.chain_of_thought import ChainOfThoughtPattern
 from ...communication_patterns.debate import DebatePattern
 from ...communication_patterns.feedback_loop import FeedbackLoopPattern
 from ...communication_patterns.parallel_reasoning import ParallelReasoningPattern
-from ....events.system_events import EventBus, SystemEvent
-from ....utils.config import get_config
-from ....utils.logging import get_logger
-from ....shared.finding import Finding
+from ..exploitation_agent import ExploitabilityStatus, ExploitationVerificationAgent
 
 # Import specialized agents
-from ..guided_assessment_agent import (
-    GuidedAssessmentAgent,
-    AssessmentStage,
-    AssessmentPlanEvent,
-    AssessmentStageEvent,
-)
-from ..exploitation_agent import (
-    ExploitationVerificationAgent,
-    ExploitVerificationEvent,
-    ExploitabilityStatus,
-)
+from ..guided_assessment_agent import GuidedAssessmentAgent
+from ..policy_agent import SecurityPolicyAgent
 from ..remediation_agent import (
-    RemediationPlanningAgent,
-    RemediationPlanEvent,
-    RemediationPriority,
     RemediationComplexity,
+    RemediationPlanningAgent,
+    RemediationPriority,
 )
-from ..policy_agent import (
-    SecurityPolicyAgent,
-    PolicyEvaluationEvent,
-    PolicyRecommendationEvent,
-    ComplianceStatus,
-)
-
-# Import workflow-related classes
-from .workflow_types import WorkflowType, WorkflowStatus, WorkflowDefinition
 from .workflow_events import WorkflowEvent
 from .workflow_execution import WorkflowExecution
+
+# Import workflow-related classes
+from .workflow_types import WorkflowDefinition, WorkflowStatus, WorkflowType
 
 # Import utility functions
 from .workflow_utils import create_workflow_id, validate_workflow_definition

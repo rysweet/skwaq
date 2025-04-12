@@ -5,29 +5,29 @@ It handles command-line argument parsing and dispatches to the appropriate
 command handlers.
 """
 
-import sys
 import asyncio
-import argparse
-from typing import Dict, Optional, Type, List, Any
+import sys
+from typing import Dict, List, Optional, Type
 
 from .. import __version__
+from .commands.base import CommandHandler
+from .commands.config_commands import ConfigCommandHandler
+from .commands.ingest_commands import IngestCommandHandler
+from .commands.repository_commands import RepositoryCommandHandler
+from .commands.system_commands import GuiCommandHandler, VersionCommandHandler
+from .commands.workflow_commands import (
+    InvestigationCommandHandler,  # Moved from investigation_commands.py
+)
+from .commands.workflow_commands import (
+    GuidedInquiryCommandHandler,
+    QACommandHandler,
+    SourcesAndSinksCommandHandler,
+    ToolCommandHandler,
+    VulnerabilityResearchCommandHandler,
+)
 from .parser.base import create_parser
 from .parser.commands import register_all_parsers
 from .ui.console import console, error, print_banner
-from .commands.base import CommandHandler
-
-from .commands.repository_commands import RepositoryCommandHandler
-from .commands.system_commands import VersionCommandHandler, GuiCommandHandler
-from .commands.workflow_commands import (
-    QACommandHandler,
-    GuidedInquiryCommandHandler,
-    ToolCommandHandler,
-    VulnerabilityResearchCommandHandler,
-    SourcesAndSinksCommandHandler,
-    InvestigationCommandHandler,  # Moved from investigation_commands.py
-)
-from .commands.ingest_commands import IngestCommandHandler
-from .commands.config_commands import ConfigCommandHandler
 
 # Map of commands to their handler classes
 COMMAND_HANDLERS: Dict[str, Type[CommandHandler]] = {

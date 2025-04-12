@@ -8,12 +8,12 @@ import pytest
 # Configure pytest-asyncio to use strict mode
 pytest.register_assert_rewrite("tests.unit.ingestion.test_isolated_github")
 
-import sys
-import os
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
 import importlib
+import sys
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 # List of modules to mock
 MOCK_MODULES = [
@@ -338,7 +338,6 @@ def reset_registries_and_modules(monkeypatch):
     )
 
     # Save original Path.exists to restore it after tests
-    from pathlib import Path
 
     original_path_exists = Path.exists
 

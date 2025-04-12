@@ -6,7 +6,7 @@ the code analysis components, but for development and testing, it can
 return mock data.
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict
 
 
 async def analyze_repository(parameters: Dict[str, Any]) -> Dict[str, Any]:

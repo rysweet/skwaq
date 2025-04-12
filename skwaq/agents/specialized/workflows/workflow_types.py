@@ -6,8 +6,7 @@ and workflow statuses used in the orchestration system.
 
 import enum
 from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional, Set, Tuple, Union
-from datetime import datetime
+from typing import Any, Dict, List
 
 
 class WorkflowType(enum.Enum):

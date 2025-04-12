@@ -1,17 +1,12 @@
 """Tests for the main ingestion module."""
 
-import asyncio
-import os
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
-import uuid
 import time
+import uuid
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from skwaq.ingestion.ingestion import Ingestion, IngestionStatus
-from skwaq.ingestion.filesystem import CodebaseFileSystem, FilesystemGraphBuilder
-from skwaq.ingestion.repository import RepositoryHandler, RepositoryManager
-from skwaq.ingestion.ast_mapper import ASTFileMapper
-from skwaq.ingestion.documentation import DocumentationProcessor
 
 
 def test_ingestion_init():

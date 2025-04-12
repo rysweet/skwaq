@@ -1,8 +1,7 @@
 """Base functionality for command handlers."""
 
 import argparse
-import sys
-from typing import Any, Callable, Dict, List, Optional, Type, TypeVar, Union
+from typing import Any, Callable, TypeVar
 
 from ..ui.console import console, error
 

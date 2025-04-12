@@ -4,14 +4,15 @@ These tests verify direct integration with Azure OpenAI using the OpenAI Python 
 without going through the autogen-core layer that's causing test issues.
 """
 
-import os
-import json
 import asyncio
+import json
+import os
 import sys
+
 from azure.identity import DefaultAzureCredential
 
 try:
-    from dotenv import load_dotenv, find_dotenv
+    from dotenv import find_dotenv, load_dotenv
 
     HAS_DOTENV = True
 except ImportError:

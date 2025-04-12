@@ -1,18 +1,10 @@
 """Unit tests for skwaq.security.integration module."""
 
-import os
-import pytest
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import patch
 
-from skwaq.security.integration import (
-    SecurityManager,
-    SecurityContext,
-    SecurityConfigurationError,
-    SecurityOperationError,
-    secure_operation,
-    get_security_manager,
-)
-from skwaq.security.authorization import Permission
+import pytest
+
+from skwaq.security.integration import SecurityContext, SecurityManager
 
 
 @pytest.mark.skip(reason="Security Manager not fully implemented yet")

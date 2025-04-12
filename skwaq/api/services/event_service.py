@@ -1,11 +1,10 @@
 """Event service for the Flask API."""
 
-import uuid
-import json
-import time
-import queue
 import datetime
-from typing import Dict, Any, List, Optional, Callable
+import queue
+import time
+import uuid
+from typing import Any, Dict, List, Optional
 
 from skwaq.utils.logging import get_logger
 

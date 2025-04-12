@@ -6,14 +6,14 @@ usage metrics while respecting user opt-out settings.
 """
 
 import json
-import uuid
 import time
-from typing import Dict, Any, Optional, List
+import uuid
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
+from skwaq.events.system_events import TelemetryEvent, publish
 from skwaq.utils.config import get_config
 from skwaq.utils.logging import get_logger
-from skwaq.events.system_events import TelemetryEvent, publish
 
 logger = get_logger(__name__)
 

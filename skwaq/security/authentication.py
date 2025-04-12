@@ -5,24 +5,19 @@ vulnerability assessment copilot, including user verification,
 token management, and secure credential handling.
 """
 
-import base64
 import datetime
 import hashlib
-import hmac
 import json
 import os
 import secrets
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Dict, List, Optional, Set, Tuple, Any, Union
 import time
 import uuid
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Dict, Optional, Set, Tuple
 
 import jwt
 from cryptography.fernet import Fernet
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from skwaq.events.system_events import SystemEvent, publish
 from skwaq.utils.config import get_config

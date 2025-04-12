@@ -4,32 +4,20 @@ This module provides implementation details for workflow execution,
 including stage execution and workflow component generation.
 """
 
-from typing import Dict, List, Any, Optional, Set, Tuple, Union, cast
-import asyncio
-import json
-import uuid
-from datetime import datetime
+from typing import Any, Dict
 
-from ...base import AutogenChatAgent
-from ...communication_patterns.chain_of_thought import ChainOfThoughtPattern
-from ...communication_patterns.debate import DebatePattern
-from ...communication_patterns.feedback_loop import FeedbackLoopPattern
-from ...communication_patterns.parallel_reasoning import ParallelReasoningPattern
 from ....utils.logging import get_logger
+from ...base import AutogenChatAgent
+from ..exploitation_agent import ExploitationVerificationAgent
 
 # Import specialized agents
-from ..guided_assessment_agent import GuidedAssessmentAgent, AssessmentStage
-from ..exploitation_agent import ExploitationVerificationAgent, ExploitabilityStatus
-from ..remediation_agent import (
-    RemediationPlanningAgent,
-    RemediationPriority,
-    RemediationComplexity,
-)
-from ..policy_agent import SecurityPolicyAgent, ComplianceStatus
+from ..guided_assessment_agent import GuidedAssessmentAgent
+from ..policy_agent import SecurityPolicyAgent
+from ..remediation_agent import RemediationPlanningAgent
+from .workflow_execution import WorkflowExecution
 
 # Import workflow-related classes
-from .workflow_types import WorkflowType, WorkflowStatus, WorkflowDefinition
-from .workflow_execution import WorkflowExecution
+from .workflow_types import WorkflowDefinition, WorkflowType
 
 logger = get_logger(__name__)
 

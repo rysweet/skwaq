@@ -5,16 +5,13 @@ It is a thin wrapper around the refactored implementation to maintain
 backward compatibility with existing code.
 """
 
-import sys
 import asyncio
-from typing import Optional, List, Dict, Any, Type
 
 # Import from the refactored implementation
+from .refactored_main import COMMAND_HANDLERS
 from .refactored_main import main as refactored_main
 from .refactored_main import run as refactored_run
-from .refactored_main import COMMAND_HANDLERS
-from .commands.base import CommandHandler
-from .ui.console import console, error, print_banner
+from .ui.console import console, error
 
 
 # Re-export symbols for backward compatibility

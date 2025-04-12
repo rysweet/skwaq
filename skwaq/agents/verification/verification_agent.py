@@ -4,19 +4,17 @@ This module defines a verification agent that validates the work of other
 agents, ensuring findings are accurate and well-supported by evidence.
 """
 
-from typing import Dict, List, Any, Optional, Set, Tuple, Union, cast
 import asyncio
-import json
 import enum
+import json
 import time
 import uuid
+from typing import Any, Dict, List, Optional
 
-from ..base import BaseAgent, AutogenChatAgent, AgentState
-from ..events import AgentCommunicationEvent, TaskAssignmentEvent, TaskResultEvent, Task
-from ...events.system_events import EventBus
-from ...utils.config import get_config
-from ...utils.logging import get_logger, LogEvent
 from ...shared.finding import Finding
+from ...utils.logging import get_logger
+from ..base import AutogenChatAgent
+from ..events import AgentCommunicationEvent, Task, TaskAssignmentEvent, TaskResultEvent
 
 logger = get_logger(__name__)
 

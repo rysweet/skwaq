@@ -1,13 +1,14 @@
 """Unit tests for skwaq.integration.system_integration module."""
 
-import pytest
-from unittest.mock import MagicMock, patch
 import time
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from skwaq.integration.system_integration import (
-    SystemIntegrationManager,
     EndToEndWorkflowOrchestrator,
     SystemDocumentation,
+    SystemIntegrationManager,
     get_system_manager,
 )
 

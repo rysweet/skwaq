@@ -6,11 +6,11 @@ to generate natural language descriptions of code files.
 
 import asyncio
 import os
-from typing import Dict, List, Any, Optional, Set
 import time
+from typing import Any, Dict, List
 
-from skwaq.db.neo4j_connector import get_connector, Neo4jConnector
-from skwaq.db.schema import NodeLabels, RelationshipTypes
+from skwaq.db.neo4j_connector import get_connector
+from skwaq.db.schema import RelationshipTypes
 from skwaq.utils.logging import get_logger
 
 from . import CodeSummarizer

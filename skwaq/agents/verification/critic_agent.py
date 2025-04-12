@@ -5,19 +5,15 @@ evaluation and feedback on the work of other agents, helping to
 improve overall system quality and reliability.
 """
 
-from typing import Dict, List, Any, Optional, Set, Tuple, Union, cast
-import asyncio
-import json
 import enum
+import json
 import time
 import uuid
+from typing import Any, Dict, List, Optional, Union
 
-from ..base import BaseAgent, AutogenChatAgent, AgentState
-from ..events import AgentCommunicationEvent, TaskAssignmentEvent, TaskResultEvent, Task
+from ...utils.logging import get_logger
 from ..critic_agent import CriticAgent
-from ...events.system_events import EventBus
-from ...utils.config import get_config
-from ...utils.logging import get_logger, LogEvent
+from ..events import AgentCommunicationEvent, Task
 
 logger = get_logger(__name__)
 

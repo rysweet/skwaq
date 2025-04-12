@@ -4,23 +4,16 @@ This module provides utilities for creating and executing end-to-end tests
 that validate the entire system works correctly together.
 """
 
-from typing import Any, Dict, List, Optional, Set, Union, Callable, Awaitable
-import time
 import asyncio
 import json
-import os
-import logging
+import time
 from datetime import datetime
-from pathlib import Path
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 
 from ..utils.logging import get_logger
-from ..utils.config import get_config
 
 # CodeAnalyzer import removed
 from ..workflows.vulnerability_research import VulnerabilityResearchWorkflow
-from ..workflows.qa_workflow import QAWorkflow
-from ..db.neo4j_connector import get_connector
-from .system_integration import get_system_manager
 
 logger = get_logger(__name__)
 
@@ -441,7 +434,7 @@ class E2ETestRunner:
         for scenario_name in self.scenarios:
             try:
                 self.run_scenario(scenario_name, fail_fast=fail_fast)
-            except RuntimeError as e:
+            except RuntimeError:
                 if fail_fast:
                     break
 

@@ -1,17 +1,16 @@
 """Test fixtures for ingestion module unit tests."""
 
 import os
-import pytest
-import tempfile
 import shutil
-from unittest.mock import MagicMock, AsyncMock, patch
-from typing import Dict, Any, List
+import tempfile
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from skwaq.db.neo4j_connector import Neo4jConnector
+from skwaq.ingestion.ast_mapper import ASTFileMapper
 from skwaq.ingestion.filesystem import CodebaseFileSystem
 from skwaq.ingestion.repository import RepositoryHandler, RepositoryManager
-from skwaq.ingestion.ast_mapper import ASTFileMapper
-from skwaq.db.schema import NodeLabels, RelationshipTypes
 
 
 @pytest.fixture

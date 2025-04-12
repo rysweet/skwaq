@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 """Script to directly test the visualization endpoint."""
 
-from skwaq.api.routes.investigations import get_investigation_visualization
 from flask import Response
+
+from skwaq.api.routes.investigations import get_investigation_visualization
 
 # Mock the investigation ID
 investigation_id = "inv-ai-samples-8d357166"

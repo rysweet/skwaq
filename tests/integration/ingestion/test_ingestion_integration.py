@@ -3,28 +3,27 @@
 These tests perform actual ingestion of a small test repository.
 """
 
-import os
-import uuid
-import pytest
-import tempfile
-import shutil
 import asyncio
-import time
+import os
+import shutil
+import tempfile
+import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
-from unittest.mock import patch, MagicMock, AsyncMock
+from typing import Dict, List, Optional
+from unittest.mock import MagicMock
+
+import pytest
 
 try:
-    from dotenv import load_dotenv, find_dotenv
+    from dotenv import find_dotenv, load_dotenv
 
     HAS_DOTENV = True
 except ImportError:
     HAS_DOTENV = False
 
-from skwaq.ingestion import Ingestion
-from skwaq.core.openai_client import get_openai_client, OpenAIClient
 from skwaq.db.neo4j_connector import get_connector
 from skwaq.db.schema import NodeLabels, RelationshipTypes
+from skwaq.ingestion import Ingestion
 
 
 @pytest.fixture
@@ -125,8 +124,8 @@ def test_repository_direct_creation():
     This test bypasses the full ingestion process and directly tests the
     RepositoryManager class with Neo4j.
     """
-    from skwaq.ingestion.repository import RepositoryManager
     from skwaq.db.neo4j_connector import Neo4jConnector
+    from skwaq.ingestion.repository import RepositoryManager
 
     # Create temporary directory
     temp_dir = tempfile.mkdtemp()
@@ -193,7 +192,6 @@ def test_neo4j_direct_query():
 
     # The test will look for Neo4j connection parameters in .env
     # Requires .env to be configured with NEO4J_URI, NEO4J_USER, and NEO4J_PASSWORD
-
     # Attempt to load environment variables
     if HAS_DOTENV:
         dotenv_path = find_dotenv()

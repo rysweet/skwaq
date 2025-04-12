@@ -4,19 +4,15 @@ This module defines the CodeAnalysisAgent responsible for analyzing code
 to identify potential security vulnerabilities.
 """
 
-from typing import Dict, List, Any, Optional
-import uuid
-import json
 import asyncio
+import json
 import time
+from typing import Any, Dict, Optional
 
-from .base import BaseAgent, AutogenChatAgent, AgentState, AgentContext
-from .registry import AgentRegistry
-from .events import AgentCommunicationEvent, TaskAssignmentEvent, TaskResultEvent, Task
-
-from ..events.system_events import EventBus
-from ..utils.config import get_config
 from ..utils.logging import get_logger
+from .base import AutogenChatAgent
+from .events import AgentCommunicationEvent, Task, TaskAssignmentEvent, TaskResultEvent
+from .registry import AgentRegistry
 
 # Define logging
 logger = get_logger(__name__)

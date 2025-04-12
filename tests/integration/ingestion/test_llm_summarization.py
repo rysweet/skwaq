@@ -5,24 +5,23 @@ and generate summaries that get stored in the Neo4j database. This directly test
 acceptance criteria for code summarization from the Ingestion specification.
 """
 
-import os
-import tempfile
-import shutil
-import uuid
 import asyncio
-import pytest
-from pathlib import Path
-from typing import Dict, Any, List, Optional, Generator
-
-# Import the components we need to test
-from skwaq.ingestion.summarizers.llm_summarizer import LLMSummarizer
+import os
+import shutil
+import tempfile
+import uuid
+from typing import Dict, List, Optional
 
 # For testing, use direct OpenAI client instead of skwaq.core.openai_client
 import openai
+import pytest
+
+from skwaq.db.neo4j_connector import get_connector
+from skwaq.db.schema import NodeLabels
+
+# Import the components we need to test
+from skwaq.ingestion.summarizers.llm_summarizer import LLMSummarizer
 from skwaq.utils.config import Config
-from skwaq.db.neo4j_connector import get_connector, Neo4jConnector
-from skwaq.db.schema import NodeLabels, RelationshipTypes
-from skwaq.ingestion.filesystem import CodebaseFileSystem
 
 
 class TestCodebaseFS:
@@ -302,9 +301,9 @@ async def test_llm_summarizer_integration(test_codebase_fs, neo4j_test_repo):
                 # for each request to ensure it's fresh
                 self.azure_credential = azure_credential
                 self.token_scope = token_scope
-                openai_config[
-                    "azure_ad_token_provider"
-                ] = lambda: azure_credential.get_token(token_scope).token
+                openai_config["azure_ad_token_provider"] = (
+                    lambda: azure_credential.get_token(token_scope).token
+                )
             else:
                 # Use API key authentication
                 openai_config["api_key"] = config.openai_api_key

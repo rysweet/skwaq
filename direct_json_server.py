@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Simple HTTP server that serves the CLI-generated investigation visualization JSON."""
 
-import os
-import sys
-import json
 import argparse
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import re
 import datetime
+import json
+import os
+import re
+import sys
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
 import neo4j.time
 
 # Add the project root to path

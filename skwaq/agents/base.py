@@ -4,36 +4,19 @@ This module provides the foundation for the Skwaq agent system, including base
 agent classes, agent lifecycle management, and other core agent functionality.
 """
 
-from typing import (
-    Dict,
-    List,
-    Any,
-    Optional,
-    Set,
-    Callable,
-    Awaitable,
-    Type,
-    Union,
-    cast,
-)
-import inspect
-import asyncio
+import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-import json
-import logging
-import time
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Type
 from unittest.mock import MagicMock
 
-import autogen_core
-from autogen_core import Agent, BaseAgent
-from autogen_core import event
+from autogen_core import BaseAgent
 
-from ..utils.config import get_config
-from ..utils.logging import get_logger
 from ..core.openai_client import get_openai_client
 from ..events.system_events import AgentLifecycleEvent, AgentLifecycleState
+from ..utils.config import get_config
+from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 

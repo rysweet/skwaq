@@ -4,13 +4,10 @@ This module provides event classes for workflow-related events in the
 orchestration system.
 """
 
-from typing import Dict, Any, Optional
-import uuid
-from datetime import datetime
+from typing import Any, Dict, Optional
 
 from ...events import AgentCommunicationEvent
-from ....events.system_events import EventBus, SystemEvent
-from .workflow_types import WorkflowType, WorkflowStatus
+from .workflow_types import WorkflowStatus, WorkflowType
 
 
 class WorkflowEvent(AgentCommunicationEvent):

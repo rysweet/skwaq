@@ -1,17 +1,8 @@
 """Test the logging module."""
 
 import logging
-import tempfile
-from pathlib import Path
-from unittest import mock
 
-import pytest
-
-from skwaq.utils.logging import (
-    LOG_FORMAT,
-    get_logger,
-    setup_logging,
-)
+from skwaq.utils.logging import get_logger, setup_logging
 
 
 def test_setup_logging():
@@ -36,7 +27,7 @@ def test_setup_logging():
             if hasattr(handler, "formatter") and handler.formatter:
                 # Just verify it has a formatter
                 assert handler.formatter is not None
-    except Exception as e:
+    except Exception:
         # If test fails, simplified assertions
         assert isinstance(logger, logging.Logger)
         assert logger.name == "skwaq"

@@ -1,14 +1,13 @@
 """Unit tests for specialized agent integration with communication patterns."""
 
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-import json
 import sys
-import uuid
 import time
-import asyncio
+import uuid
 from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, Optional
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 # Before importing any of our modules, properly mock the autogen modules
 autogen_mock = MagicMock()
@@ -45,37 +44,8 @@ sys.modules["autogen_core.event"] = autogen_event_mock
 sys.modules["autogen_core.code_utils"] = autogen_code_utils_mock
 sys.modules["autogen_core.memory"] = autogen_memory_mock
 
-# Import specialized agents and communication patterns
-from skwaq.agents.specialized.guided_assessment_agent import GuidedAssessmentAgent
-from skwaq.agents.specialized.exploitation_agent import ExploitationVerificationAgent
-from skwaq.agents.specialized.remediation_agent import RemediationPlanningAgent
-from skwaq.agents.specialized.policy_agent import SecurityPolicyAgent
-from skwaq.agents.specialized.orchestration import (
-    AdvancedOrchestrator,
-    WorkflowType,
-    WorkflowDefinition,
-    WorkflowExecution,
-    WorkflowStatus,
-)
 
-from skwaq.agents.communication_patterns.chain_of_thought import (
-    ChainOfThoughtPattern,
-    CognitiveStepEvent,
-)
-from skwaq.agents.communication_patterns.debate import (
-    DebatePattern,
-    DebateArgumentEvent,
-)
-from skwaq.agents.communication_patterns.feedback_loop import (
-    FeedbackLoopPattern,
-    FeedbackEvent,
-    RevisionEvent,
-)
-from skwaq.agents.communication_patterns.parallel_reasoning import (
-    ParallelReasoningPattern,
-    AnalysisEvent,
-    SynthesisEvent,
-)
+# Import specialized agents and communication patterns
 
 
 class TestChainOfThoughtIntegration:

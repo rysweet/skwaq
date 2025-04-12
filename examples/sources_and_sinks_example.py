@@ -16,9 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from skwaq.core.openai_client import OpenAIClient
 from skwaq.db.neo4j_connector import Neo4jConnector, get_connector
 from skwaq.utils.config import Config
-from skwaq.workflows.sources_and_sinks import (
-    SourcesAndSinksWorkflow,
-)
+from skwaq.workflows.sources_and_sinks import SourcesAndSinksWorkflow
 
 
 async def main():

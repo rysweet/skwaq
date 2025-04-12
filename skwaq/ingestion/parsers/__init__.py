@@ -6,7 +6,7 @@ used in the ingestion process.
 
 import importlib
 from abc import ABC, abstractmethod
-from typing import Dict, List, Any, Optional, Type
+from typing import Any, Dict, List, Optional, Type
 
 from skwaq.utils.logging import get_logger
 

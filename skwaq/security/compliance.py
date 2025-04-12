@@ -10,8 +10,7 @@ import json
 import os
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
+from typing import Any, Dict, List, Optional, Tuple
 
 from skwaq.security.audit import AuditEventType, AuditLogLevel, log_security_event
 from skwaq.utils.config import get_config

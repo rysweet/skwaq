@@ -1,12 +1,11 @@
 """Tests for the Blarify parser implementation."""
 
-import os
-import sys
 import json
-import tempfile
+import os
 import platform
-import pytest
 from unittest import mock
+
+import pytest
 
 from skwaq.ingestion.parsers.blarify_parser import BlarifyParser
 

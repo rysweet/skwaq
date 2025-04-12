@@ -5,12 +5,11 @@ vulnerability assessment copilot, allowing components to communicate
 through a publish-subscribe pattern.
 """
 
-from typing import Dict, List, Type, Callable, Optional, Any, Set
+import json
 import time
 import uuid
-import json
-from datetime import datetime
 from enum import Enum
+from typing import Any, Callable, Dict, Optional, Type
 
 from skwaq.utils.logging import get_logger
 

@@ -1,13 +1,13 @@
 """Chat service for the Flask API."""
 
-import uuid
 import threading
 import time
-from typing import Dict, Any, List, Optional
+import uuid
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-from skwaq.utils.logging import get_logger
 from skwaq.api.services.event_service import publish_event
+from skwaq.utils.logging import get_logger
 
 logger = get_logger(__name__)
 

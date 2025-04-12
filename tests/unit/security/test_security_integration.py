@@ -1,39 +1,15 @@
 """Unit tests for skwaq.security module integration."""
 
-import os
-import pytest
-from unittest.mock import MagicMock, patch, mock_open
-from pathlib import Path
+from unittest.mock import patch
 
-from skwaq.security.authentication import (
-    AuthenticationManager,
-    AuthRole,
-    UserCredentials,
-    get_auth_manager,
-)
-from skwaq.security.authorization import Authorization, Permission, get_authorization
-from skwaq.security.audit import (
-    AuditLogger,
-    AuditEventType,
-    AuditLogLevel,
-    log_security_event,
-    get_audit_logger,
-)
-from skwaq.security.encryption import (
-    EncryptionManager,
-    DataClassification,
-    encrypt_sensitive_data,
-    decrypt_sensitive_data,
-    get_encryption_manager,
-)
-from skwaq.security.compliance import (
-    ComplianceManager,
-    ComplianceStandard,
-    ComplianceCategory,
-    get_compliance_manager,
-)
-from skwaq.security.sandbox import Sandbox, SandboxIsolationLevel, create_sandbox
-from skwaq.security.vulnerability import VulnerabilityManager, get_vulnerability_manager
+import pytest
+
+from skwaq.security.audit import AuditLogger
+from skwaq.security.authentication import AuthenticationManager
+from skwaq.security.authorization import Authorization
+from skwaq.security.compliance import ComplianceManager
+from skwaq.security.encryption import EncryptionManager
+from skwaq.security.vulnerability import VulnerabilityManager
 
 
 class TestSecurityIntegration:

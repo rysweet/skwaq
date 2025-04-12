@@ -1,18 +1,18 @@
 """Tests for the ingestion exceptions module."""
 
-import pytest
+
 from skwaq.ingestion.exceptions import (
-    IngestionError,
-    RepositoryError,
-    FileSystemError,
-    ParserError,
-    SummarizerError,
-    DocumentationError,
     ASTMapperError,
-    DatabaseError,
     ConfigurationError,
-    ParallelProcessingError,
+    DatabaseError,
+    DocumentationError,
+    FileSystemError,
+    IngestionError,
     IngestionTimeoutError,
+    ParallelProcessingError,
+    ParserError,
+    RepositoryError,
+    SummarizerError,
 )
 
 

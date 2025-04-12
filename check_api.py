@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Simple script to check the API health status."""
 
-import requests
 import sys
+
+import requests
 
 
 def check_health():

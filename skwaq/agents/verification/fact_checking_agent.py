@@ -5,19 +5,17 @@ factual statements, claims, and references made during the vulnerability
 assessment process.
 """
 
-from typing import Dict, List, Any, Optional, Set, Tuple, Union, cast
 import asyncio
-import json
 import enum
+import json
+import re
 import time
 import uuid
-import re
+from typing import Any, Dict, List, Optional
 
-from ..base import BaseAgent, AutogenChatAgent, AgentState
-from ..events import AgentCommunicationEvent, TaskAssignmentEvent, TaskResultEvent, Task
-from ...events.system_events import EventBus
-from ...utils.config import get_config
-from ...utils.logging import get_logger, LogEvent
+from ...utils.logging import get_logger
+from ..base import AutogenChatAgent
+from ..events import AgentCommunicationEvent, Task, TaskAssignmentEvent
 
 logger = get_logger(__name__)
 
@@ -351,12 +349,12 @@ is based on accurate technical and security information.
             fact_check_prompt += f"PROVIDED SOURCES: {sources_str}\n\n"
 
         fact_check_prompt += (
-            f"Please analyze this claim and determine its factual accuracy. "
-            f"Return your analysis in JSON format with the following fields:\n"
-            f"- status: One of 'true', 'partially_true', 'false', 'unverifiable', 'misleading', 'outdated'\n"
-            f"- explanation: Detailed explanation of your fact check assessment\n"
-            f"- sources: List of authoritative sources that support your assessment\n"
-            f"- confidence: Your confidence in this fact check (0.0-1.0)\n"
+            "Please analyze this claim and determine its factual accuracy. "
+            "Return your analysis in JSON format with the following fields:\n"
+            "- status: One of 'true', 'partially_true', 'false', 'unverifiable', 'misleading', 'outdated'\n"
+            "- explanation: Detailed explanation of your fact check assessment\n"
+            "- sources: List of authoritative sources that support your assessment\n"
+            "- confidence: Your confidence in this fact check (0.0-1.0)\n"
         )
 
         # Use the chat model to analyze the claim

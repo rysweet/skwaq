@@ -5,11 +5,11 @@ refactored_main.py. These tests verify that the legacy API remains compatible
 with the refactored implementation.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
 import argparse
 import sys
-from io import StringIO
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Use pytest fixtures to properly isolate tests
 # Define rich modules to mock

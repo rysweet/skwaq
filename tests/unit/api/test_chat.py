@@ -1,10 +1,9 @@
 """Tests for the chat routes."""
 
-import pytest
 import json
-from unittest.mock import patch, MagicMock
-import time
-from datetime import datetime
+from unittest.mock import patch
+
+import pytest
 
 from skwaq.api import create_app
 from skwaq.api.services import chat_service

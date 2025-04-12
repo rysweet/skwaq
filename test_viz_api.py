@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Test script for the visualization API endpoint."""
 
-import requests
 import json
 import sys
+
+import requests
 
 
 def test_visualization_api(investigation_id):

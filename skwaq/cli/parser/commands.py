@@ -1,7 +1,5 @@
 """Command parsers for the Skwaq CLI."""
 
-import argparse
-from typing import Optional
 
 from .base import SkwaqArgumentParser
 

@@ -3,8 +3,9 @@
 A test script to ensure the CLI works correctly.
 """
 
-import sys
 import asyncio
+import sys
+
 from skwaq.cli.refactored_main import main as refactored_main
 
 

@@ -10,14 +10,12 @@ Run these tests directly with:
 python -m tests.integration.ingestion.test_azure_openai
 """
 
-import os
-import json
 import asyncio
-import pytest
-from typing import Dict, Any, List, Optional
+import json
+import os
 
 try:
-    from dotenv import load_dotenv, find_dotenv
+    from dotenv import find_dotenv, load_dotenv
 
     HAS_DOTENV = True
 except ImportError:
@@ -30,9 +28,10 @@ if HAS_DOTENV:
         print(f"Loading configuration from .env file: {dotenv_path}")
         load_dotenv(dotenv_path)
 
+from skwaq.core.openai_client import OpenAIClient
+
 # Import the actual modules we need
 from skwaq.utils.config import Config
-from skwaq.core.openai_client import OpenAIClient
 
 
 async def test_azure_openai_direct_completion():

@@ -1,19 +1,16 @@
 """Command handlers for repository management."""
 
-import argparse
+import asyncio
 import json
 import os
-import asyncio
 from pathlib import Path
-from typing import Dict, List, Optional, Any
 
-from ...ingestion import Ingestion
-from ...db.neo4j_connector import get_connector
-from ...db.schema import NodeLabels
 from ...core.openai_client import get_openai_client
-from ..ui.console import console, success, error, info
-from ..ui.progress import create_status_indicator, create_progress_bar
-from ..ui.formatters import format_repository_table, format_panel
+from ...db.neo4j_connector import get_connector
+from ...ingestion import Ingestion
+from ..ui.console import console, error, info, success
+from ..ui.formatters import format_repository_table
+from ..ui.progress import create_progress_bar
 from ..ui.prompts import prompt_for_confirmation
 from .base import CommandHandler, handle_command_error
 

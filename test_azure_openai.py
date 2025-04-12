@@ -6,7 +6,6 @@ This script tests the direct Azure OpenAI integration using the official OpenAI 
 
 import asyncio
 import logging
-from typing import Dict, Any
 
 # Configure logging
 logging.basicConfig(
@@ -14,9 +13,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger("test_azure_openai")
 
+from skwaq.core.openai_client import get_openai_client
+
 # Import the necessary modules
-from skwaq.utils.config import Config, get_config
-from skwaq.core.openai_client import OpenAIClient, get_openai_client
+from skwaq.utils.config import get_config
 
 
 async def test_azure_openai_integration():
@@ -111,7 +111,9 @@ async def run_all_tests():
 
     # Report results
     logger.info(f"Chat completion test: {'✅ PASSED' if chat_test else '❌ FAILED'}")
-    logger.info(f"Get completion test: {'✅ PASSED' if completion_test else '❌ FAILED'}")
+    logger.info(
+        f"Get completion test: {'✅ PASSED' if completion_test else '❌ FAILED'}"
+    )
 
     return chat_test and completion_test
 

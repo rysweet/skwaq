@@ -1,10 +1,11 @@
+import asyncio
+import os
+
 from skwaq.cli.commands.repository_commands import RepositoryCommandHandler
 from skwaq.cli.commands.workflow_commands import (
     InvestigationCommandHandler,
     SourcesAndSinksCommandHandler,
 )
-import asyncio
-import os
 
 
 class MockArgs:
@@ -133,7 +134,7 @@ async def main():
             return
 
         print("Process completed successfully")
-        print(f"Visualization saved to: docs/demos/ai-samples-visualization.html")
+        print("Visualization saved to: docs/demos/ai-samples-visualization.html")
     except Exception as e:
         print(f"Error: {str(e)}")
 

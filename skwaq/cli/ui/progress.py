@@ -1,17 +1,15 @@
 """Progress and status indicators for the Skwaq CLI."""
 
-from typing import List, Optional, Any, Dict, Callable
 
 from rich.progress import (
-    Progress,
-    TextColumn,
     BarColumn,
-    TaskProgressColumn,
-    TimeRemainingColumn,
+    Progress,
     SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeRemainingColumn,
 )
 from rich.status import Status
-from rich.style import Style
 
 from .console import console
 

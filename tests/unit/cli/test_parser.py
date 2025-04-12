@@ -5,18 +5,16 @@ and parses arguments for each command.
 """
 
 import sys
-import pytest
-from unittest.mock import patch
 from contextlib import contextmanager
+from unittest.mock import patch
 
 # Import directly from modules - no mocking needed for the parser tests
 from skwaq.cli.parser.base import SkwaqArgumentParser, create_parser
 from skwaq.cli.parser.commands import (
     register_all_parsers,
-    register_repository_parser,
     register_config_parser,
     register_ingest_parser,
-    register_gui_parser,
+    register_repository_parser,
     register_workflow_parsers,
 )
 
@@ -239,6 +237,6 @@ class TestCliParser:
                 try:
                     args = parser.parse_args(cmd_args)
                     assert args.command == cmd_args[0]
-                except RuntimeError as e:
+                except RuntimeError:
                     # Skip if it's a sys.exit call - this is just a validation test
                     continue

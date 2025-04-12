@@ -13,14 +13,10 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
+from typing import Any, Dict, List, Optional
 
-from skwaq.events.system_events import SystemEvent, EventType, subscribe
-from skwaq.security.encryption import (
-    encrypt_sensitive_data,
-    decrypt_sensitive_data,
-    DataClassification,
-)
+from skwaq.events.system_events import EventType, SystemEvent, subscribe
+from skwaq.security.encryption import decrypt_sensitive_data, encrypt_sensitive_data
 from skwaq.utils.config import get_config
 from skwaq.utils.logging import get_logger
 

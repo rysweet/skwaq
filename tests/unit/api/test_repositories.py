@@ -1,8 +1,9 @@
 """Tests for the repository routes."""
 
-import pytest
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
+import pytest
 
 from skwaq.api import create_app
 

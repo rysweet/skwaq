@@ -1,13 +1,14 @@
 """Unit tests for skwaq.integration.e2e_testing module."""
 
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from skwaq.integration.e2e_testing import (
-    E2ETestScenario,
     AsyncE2ETestScenario,
     E2ETestRunner,
+    E2ETestScenario,
     PredefinedScenarios,
 )
 

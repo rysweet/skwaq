@@ -1,10 +1,10 @@
 """Authentication routes for the Flask API."""
 
-from flask import Blueprint, request, jsonify, g, current_app, Response
+from flask import Blueprint, Response, g, jsonify, request
 
 from skwaq.api.middleware.auth import login_required
 from skwaq.api.middleware.error_handling import BadRequestError, UnauthorizedError
-from skwaq.api.services.auth_service import login, get_user_info
+from skwaq.api.services.auth_service import get_user_info, login
 from skwaq.utils.logging import get_logger
 
 logger = get_logger(__name__)

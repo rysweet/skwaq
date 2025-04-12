@@ -1,24 +1,24 @@
 """Unit tests for the sources and sinks workflow module."""
 
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
 import json
-from enum import Enum
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
+from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from skwaq.workflows.sources_and_sinks import (
-    SourceSinkType,
-    DataFlowImpact,
-    SourceNode,
-    SinkNode,
-    DataFlowPath,
-    SourcesAndSinksResult,
-    FunnelQuery,
-    CodeSummaryFunnel,
     Analyzer,
-    LLMAnalyzer,
+    CodeSummaryFunnel,
+    DataFlowImpact,
+    DataFlowPath,
     DocumentationAnalyzer,
+    FunnelQuery,
+    LLMAnalyzer,
+    SinkNode,
+    SourceNode,
+    SourcesAndSinksResult,
     SourcesAndSinksWorkflow,
+    SourceSinkType,
 )
 
 

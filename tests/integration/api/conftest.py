@@ -1,17 +1,14 @@
 """Pytest fixtures for API integration tests."""
 
-import pytest
-import sys
-import json
-import uuid
-from typing import Dict, Any, List
-from flask import Flask
-from flask.testing import FlaskClient
-from neo4j import GraphDatabase
 
 # Add custom path for imports
 import os
 import sys
+import uuid
+from typing import Any, Dict
+
+import pytest
+from neo4j import GraphDatabase
 
 sys.path.append(
     os.path.dirname(

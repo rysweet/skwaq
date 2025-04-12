@@ -1,11 +1,10 @@
 """Pytest fixtures for API unit tests."""
 
-import pytest
-import json
 import uuid
-from unittest.mock import MagicMock, patch
-from flask.testing import FlaskClient
 from datetime import datetime
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from skwaq.api import create_app
 

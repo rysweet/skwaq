@@ -1,14 +1,13 @@
 """Unit tests for core agents."""
 
-import pytest
-import asyncio
-import uuid
-from unittest.mock import MagicMock, AsyncMock, patch, call
-import json
-import time
 
 # Mock autogen_core modules
 import sys
+import time
+import uuid
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 sys.modules["autogen_core"] = MagicMock()
 sys.modules["autogen_core.agent"] = MagicMock()
@@ -36,16 +35,14 @@ sys.modules["autogen_core.agent"].ChatAgent = MagicMock()
 
 # Import our classes
 from skwaq.agents import (
-    BaseAgent,
     AgentRegistry,
-    OrchestratorAgent,
-    KnowledgeAgent,
     CodeAnalysisAgent,
     CriticAgent,
-    AgentCommunicationEvent,
+    KnowledgeAgent,
+    OrchestratorAgent,
+    Task,
     TaskAssignmentEvent,
     TaskResultEvent,
-    Task,
 )
 
 
@@ -536,9 +533,9 @@ class TestAgentCommunication:
                 knowledge_agent = KnowledgeAgent()
 
                 # Register knowledge agent with orchestrator
-                orchestrator.available_agents[
-                    knowledge_agent.agent_id
-                ] = knowledge_agent
+                orchestrator.available_agents[knowledge_agent.agent_id] = (
+                    knowledge_agent
+                )
                 orchestrator.agent_capabilities[knowledge_agent.agent_id] = [
                     "knowledge_retrieval"
                 ]

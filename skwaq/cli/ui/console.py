@@ -1,12 +1,10 @@
 """Console utilities for the Skwaq CLI."""
 
-import sys
 from typing import Optional
 
 from rich.console import Console
-from rich.theme import Theme
 from rich.panel import Panel
-from rich.style import Style
+from rich.theme import Theme
 
 # Define custom theme for the console
 skwaq_theme = Theme(

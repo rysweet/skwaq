@@ -5,25 +5,19 @@ Neo4j database and OpenAI. They test the ability to identify sources, sinks, and
 data flow paths in real code and store the results in the Neo4j database.
 """
 
-import os
-import pytest
 import uuid
-import neo4j
-import asyncio
 from pathlib import Path
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Any, Dict, Optional, Tuple
 
+import neo4j
+import pytest
+
+from skwaq.core.openai_client import OpenAIClient
+from skwaq.utils.config import Config
 from skwaq.workflows.sources_and_sinks import (
-    SourceSinkType,
-    DataFlowImpact,
-    SourceNode,
-    SinkNode,
-    DataFlowPath,
     SourcesAndSinksResult,
     SourcesAndSinksWorkflow,
 )
-from skwaq.core.openai_client import OpenAIClient
-from skwaq.utils.config import Config
 
 
 @pytest.fixture
@@ -314,8 +308,7 @@ async def test_minimal_workflow_creation():
     This test just creates a workflow and calls setup() to ensure the basic
     structure works without requiring complex mocks or external services.
     """
-    from unittest.mock import MagicMock, AsyncMock, patch
-    import uuid
+    from unittest.mock import AsyncMock, MagicMock, patch
 
     # Create mock Neo4j connector
     mock_connector = MagicMock()
@@ -537,7 +530,7 @@ async def test_sources_and_sinks_workflow_integration(
         ), "Result has incorrect investigation ID"
 
         # Print summary statistics about the result
-        print(f"Result summary statistics:")
+        print("Result summary statistics:")
         print(f"  Sources: {len(result.sources)}")
         print(f"  Sinks: {len(result.sinks)}")
         print(f"  Data flow paths: {len(result.data_flow_paths)}")
@@ -591,7 +584,7 @@ async def test_sources_and_sinks_workflow_prompt_loading():
     1. The prompt files exist and can be loaded
     2. The prompts contain the expected content
     """
-    from unittest.mock import MagicMock, AsyncMock
+    from unittest.mock import AsyncMock, MagicMock
 
     # Create a mock OpenAI client
     mock_client = MagicMock()

@@ -55,9 +55,7 @@ def test_skwaq_integration():
 
     try:
         # Import our agent integration
-        from skwaq.agents.autogen_integration import (
-            AutogenAgentAdapter,
-        )
+        from skwaq.agents.autogen_integration import AutogenAgentAdapter
 
         # Create adapter
         adapter = AutogenAgentAdapter(

@@ -6,14 +6,11 @@ release notes generation, package creation, and update mechanisms.
 
 import os
 import shutil
-import tempfile
 import subprocess
-import re
-import json
-import logging
-from pathlib import Path
+import tempfile
 from datetime import datetime
-from typing import Dict, Any, Optional, List, Tuple
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 from skwaq.utils.config import get_config
 from skwaq.utils.logging import get_logger

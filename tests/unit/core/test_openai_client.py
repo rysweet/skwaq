@@ -1,13 +1,13 @@
 """Tests for OpenAI client module."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from openai import AzureOpenAI, OpenAI
 
 from skwaq.core.openai_client import (
     OpenAIClient,
-    reset_client_registry,
     get_openai_client,
+    reset_client_registry,
 )
 from skwaq.utils.config import Config
 

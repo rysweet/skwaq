@@ -3,10 +3,9 @@
 This module provides classes for working with filesystems during the ingestion process.
 """
 
-import os
 import mimetypes
-from pathlib import Path
-from typing import Dict, List, Optional, Set, Any
+import os
+from typing import Any, Dict, List, Optional
 
 # Try to import python-magic for better MIME type detection
 try:

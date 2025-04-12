@@ -4,20 +4,16 @@ This module defines the OrchestratorAgent responsible for coordinating
 other agents, managing workflows, and assigning tasks.
 """
 
-from typing import Dict, List, Any, Optional, Set, Type, cast
-import uuid
-import json
 import asyncio
+import json
 import time
-import logging
+import uuid
+from typing import Any, Dict, List, Optional
 
-from .base import BaseAgent, AutogenChatAgent, AgentState, AgentContext
-from .registry import AgentRegistry
-from .events import AgentCommunicationEvent, TaskAssignmentEvent, TaskResultEvent, Task
-
-from ..events.system_events import EventBus
-from ..utils.config import get_config
 from ..utils.logging import get_logger
+from .base import AutogenChatAgent, BaseAgent
+from .events import AgentCommunicationEvent, Task, TaskAssignmentEvent, TaskResultEvent
+from .registry import AgentRegistry
 
 # Define logging
 logger = get_logger(__name__)

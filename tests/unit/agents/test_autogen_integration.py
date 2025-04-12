@@ -1,13 +1,11 @@
 """Unit tests for AutoGen integration."""
 
-import pytest
-import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
-import uuid
-import json
 
 # Set up mocks for autogen_core modules
 import sys
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Create our mock objects
 autogen_mock = MagicMock()
@@ -47,16 +45,11 @@ autogen_mock.GroupChat = MagicMock()
 
 # Import the classes to test
 from skwaq.agents.autogen_integration import (
-    AutogenEventBridge,
     AutogenAgentAdapter,
+    AutogenEventBridge,
     AutogenGroupChatAdapter,
 )
-from skwaq.events.system_events import (
-    EventBus,
-    SystemEvent,
-    AgentLifecycleEvent,
-    AgentLifecycleState,
-)
+from skwaq.events.system_events import AgentLifecycleEvent, AgentLifecycleState
 
 
 @pytest.fixture

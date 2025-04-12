@@ -5,7 +5,6 @@ vulnerability assessment copilot, enabling secure execution of
 potentially dangerous code or tools.
 """
 
-import json
 import os
 import shutil
 import signal
@@ -17,10 +16,9 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
+from typing import Any, Dict, List, Optional, Union
 
-from skwaq.security.audit import AuditEventType, log_security_event, AuditLogLevel
-from skwaq.utils.config import get_config
+from skwaq.security.audit import AuditEventType, AuditLogLevel, log_security_event
 from skwaq.utils.logging import get_logger
 
 logger = get_logger(__name__)

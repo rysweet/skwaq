@@ -1,13 +1,13 @@
 """Event streaming routes for the Flask API."""
 
-import uuid
+import datetime
 import json
 import queue
 import time
-import datetime
-from typing import Dict, Any, Generator, Optional, List
+import uuid
+from typing import Generator
 
-from flask import Blueprint, Response, request, stream_with_context, jsonify
+from flask import Blueprint, Response, jsonify, stream_with_context
 
 from skwaq.api.middleware.auth import login_required
 from skwaq.api.middleware.error_handling import BadRequestError

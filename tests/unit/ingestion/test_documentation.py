@@ -1,13 +1,12 @@
 """Tests for the documentation processor module."""
 
 import os
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
-import aiohttp
 import tempfile
+from unittest.mock import patch
+
+import pytest
 
 from skwaq.ingestion.documentation import DocumentationProcessor
-from skwaq.db.schema import NodeLabels, RelationshipTypes
 
 
 @pytest.fixture

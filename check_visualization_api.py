@@ -2,6 +2,7 @@
 """Test script to check the visualization API data."""
 
 import sys
+
 import requests
 
 

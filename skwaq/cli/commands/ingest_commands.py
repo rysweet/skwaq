@@ -1,16 +1,13 @@
 """Command handlers for ingestion commands."""
 
-import argparse
-import os
 import asyncio
-import uuid
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Optional
 
-from ...ingestion import Ingestion
 from ...core.openai_client import get_openai_client
-from ..ui.console import console, success, error, info
-from ..ui.progress import create_status_indicator, create_progress_bar
+from ...ingestion import Ingestion
+from ..ui.console import error, info, success
+from ..ui.progress import create_progress_bar
 from .base import CommandHandler, handle_command_error
 
 

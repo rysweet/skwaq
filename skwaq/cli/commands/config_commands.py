@@ -1,18 +1,15 @@
 """Command handlers for configuration commands."""
 
-import argparse
 import json
-import os
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List
 
-from ...utils.config import get_config, update_config, save_config, reset_config
-from ...utils.logging import get_logger
 from ...core.openai_client import test_openai_connection
-from ..ui.console import console, success, error, info, warning
-from ..ui.progress import create_status_indicator
+from ...utils.config import get_config, reset_config, save_config, update_config
+from ...utils.logging import get_logger
+from ..ui.console import console, error, info, success, warning
 from ..ui.formatters import format_panel
-from ..ui.prompts import prompt_for_input, prompt_for_confirmation, prompt_for_api_key
+from ..ui.progress import create_status_indicator
+from ..ui.prompts import prompt_for_api_key, prompt_for_confirmation, prompt_for_input
 from .base import CommandHandler, handle_command_error
 
 logger = get_logger(__name__)

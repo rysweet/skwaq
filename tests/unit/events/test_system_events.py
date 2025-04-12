@@ -1,20 +1,17 @@
 """Unit tests for the system_events module."""
 
-import pytest
-from unittest.mock import patch, MagicMock
 import json
-import time
-from datetime import datetime
+from unittest.mock import MagicMock, patch
 
 from skwaq.events.system_events import (
-    SystemEvent,
+    AnalysisEvent,
     EventBus,
     EventSubscriber,
     EventType,
     RepositoryEvent,
-    AnalysisEvent,
-    UserInteractionEvent,
+    SystemEvent,
     SystemStatusEvent,
+    UserInteractionEvent,
 )
 
 

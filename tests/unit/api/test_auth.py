@@ -1,12 +1,11 @@
 """Tests for the authentication routes."""
 
-import pytest
 import json
-from flask import Flask
+
 import jwt
+import pytest
 
 from skwaq.api import create_app
-from skwaq.api.services.auth_service import USERS
 
 
 @pytest.fixture

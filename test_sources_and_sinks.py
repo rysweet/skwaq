@@ -7,6 +7,7 @@ can be initialized and run using the updated OpenAI client implementation.
 
 import asyncio
 import logging
+
 from skwaq.core.openai_client import get_openai_client
 from skwaq.utils.config import get_config
 from skwaq.workflows.sources_and_sinks import SourcesAndSinksWorkflow

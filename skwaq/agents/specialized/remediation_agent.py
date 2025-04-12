@@ -4,19 +4,17 @@ This module defines a specialized workflow agent that develops detailed
 remediation plans for addressing discovered vulnerabilities.
 """
 
-from typing import Dict, List, Any, Optional, Set, Tuple, Union, cast
-import asyncio
-import json
 import enum
+import json
 import time
 import uuid
+from typing import Any, Dict, List, Optional, Union
 
-from ..base import AutogenChatAgent
-from ..events import AgentCommunicationEvent, TaskAssignmentEvent, TaskResultEvent, Task
-from ...events.system_events import EventBus, SystemEvent
-from ...utils.config import get_config
-from ...utils.logging import get_logger
+from ...events.system_events import SystemEvent
 from ...shared.finding import Finding
+from ...utils.logging import get_logger
+from ..base import AutogenChatAgent
+from ..events import Task, TaskAssignmentEvent, TaskResultEvent
 
 logger = get_logger(__name__)
 

@@ -4,7 +4,7 @@ This module provides functionality to map between AST nodes and filesystem nodes
 in the graph database.
 """
 
-from typing import Dict, List, Any, Optional, Set
+from typing import Any, Dict
 
 from skwaq.db.neo4j_connector import Neo4jConnector
 from skwaq.db.schema import RelationshipTypes

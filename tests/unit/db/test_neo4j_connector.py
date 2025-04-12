@@ -1,8 +1,8 @@
 """Test the Neo4j connector module."""
 
-import pytest
 from unittest import mock
 
+import pytest
 from neo4j.exceptions import ServiceUnavailable
 
 from skwaq.db.neo4j_connector import Neo4jConnector, get_connector

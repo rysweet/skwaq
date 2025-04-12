@@ -1,13 +1,11 @@
 """Tests for GitHub integration in the repository module."""
 
 import os
-import tempfile
-import pytest
-from unittest.mock import MagicMock
 
-from skwaq.ingestion.repository import RepositoryHandler
-from skwaq.db.neo4j_connector import Neo4jConnector
+import pytest
+
 from skwaq.ingestion.exceptions import RepositoryError
+from skwaq.ingestion.repository import RepositoryHandler
 
 # Test against a small, real, public repo
 TEST_REPO_URL = "https://github.com/pallets/flask"

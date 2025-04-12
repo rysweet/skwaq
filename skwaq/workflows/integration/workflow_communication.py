@@ -4,28 +4,15 @@ This module provides mechanisms for workflows to communicate and share data
 with each other, enabling coordinated execution and data passing.
 """
 
-from typing import (
-    Any,
-    Dict,
-    List,
-    Optional,
-    Set,
-    Type,
-    TypeVar,
-    Union,
-    Callable,
-    Awaitable,
-)
 import asyncio
-import time
 import uuid
-from enum import Enum
 from datetime import datetime
+from enum import Enum
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Set
 
 from autogen_core.event import Event
 
 from ...utils.logging import get_logger
-from ..base import Workflow
 
 logger = get_logger(__name__)
 

@@ -1,9 +1,8 @@
 """Interactive prompt utilities for the Skwaq CLI."""
 
-from typing import List, Dict, Any, Optional, Union, TypeVar, Generic
+from typing import List, Optional, TypeVar
 
-from rich.prompt import Prompt, Confirm, IntPrompt
-from rich.style import Style
+from rich.prompt import Confirm, IntPrompt, Prompt
 
 from .console import console
 

@@ -4,19 +4,19 @@ This module provides fixtures for integration tests that need to connect
 to external systems like Neo4j, OpenAI, and GitHub.
 """
 
+import json
 import os
+import sys
 import tempfile
 import uuid
-import json
-import sys
-import pytest
-import neo4j
-from pathlib import Path
-from typing import Dict, Any, Optional, Generator, Tuple
+from typing import Any, Dict, Generator, Tuple
 from unittest.mock import MagicMock
 
+import neo4j
+import pytest
+
 try:
-    from dotenv import load_dotenv, find_dotenv
+    from dotenv import find_dotenv, load_dotenv
 
     HAS_DOTENV = True
 except ImportError:
@@ -286,7 +286,6 @@ def unmock_autogen_core():
 
         try:
             # Import the real module
-            import autogen_core
 
             print("Using real autogen_core for OpenAI integration tests")
 

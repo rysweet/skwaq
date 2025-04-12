@@ -10,11 +10,9 @@ Notes:
     - If using Azure OpenAI, the endpoint must be provided in the config
 """
 
-import os
+from typing import Any, Dict
+
 import pytest
-from unittest.mock import patch
-import asyncio
-from typing import Dict, Any, List, Optional, Union
 
 from skwaq.core.openai_client import OpenAIClient, get_openai_client
 from skwaq.ingestion.summarizers.llm_summarizer import LLMSummarizer
@@ -290,7 +288,7 @@ async def test_openai_client_registry():
     This test verifies that the OpenAI client registry works correctly
     and returns the same client for the same registry key.
     """
-    from skwaq.core.openai_client import reset_client_registry, get_openai_client
+    from skwaq.core.openai_client import reset_client_registry
 
     # Reset the registry
     reset_client_registry()

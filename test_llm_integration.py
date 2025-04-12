@@ -5,10 +5,9 @@ This script tests the integration between the OpenAIClient and the LLMAnalyzer
 to verify that our fix for the ChatCompletionClient issue works correctly.
 """
 
-import sys
 import asyncio
 import logging
-from typing import Dict, Any
+import sys
 
 # Configure logging
 logging.basicConfig(
@@ -16,9 +15,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger("test_llm_integration")
 
+from skwaq.core.openai_client import get_openai_client
+
 # Import the necessary modules
-from skwaq.utils.config import Config, get_config
-from skwaq.core.openai_client import OpenAIClient, get_openai_client
+from skwaq.utils.config import get_config
 
 
 async def test_chat_completion() -> None:

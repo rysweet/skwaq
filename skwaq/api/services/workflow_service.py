@@ -1,13 +1,10 @@
 """Workflow service for the Flask API."""
 
-import uuid
-from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-from skwaq.utils.logging import get_logger
-from skwaq.db.neo4j_connector import get_connector
-from skwaq.db.schema import NodeLabels
 from skwaq.api.services.event_service import publish_event
+from skwaq.utils.logging import get_logger
 
 logger = get_logger(__name__)
 

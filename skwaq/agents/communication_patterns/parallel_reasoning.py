@@ -5,19 +5,14 @@ agents to analyze the same problem independently and then synthesize their findi
 """
 
 import asyncio
-from typing import Dict, List, Any, Optional, Callable, Awaitable, Type, Set, Union
-import json
 import enum
-import logging
 import time
 import uuid
+from typing import Any, Dict, List, Optional
 
-from autogen_core.agent import Agent, ChatAgent
-from autogen_core.event import BaseEvent, Event, EventHook, register_hook
-
-from ..events import AgentCommunicationEvent, TaskAssignmentEvent, TaskResultEvent, Task
+from ...utils.logging import LogEvent, get_logger
 from ..base import BaseAgent
-from ...utils.logging import get_logger, LogEvent
+from ..events import AgentCommunicationEvent, Task, TaskAssignmentEvent
 
 logger = get_logger(__name__)
 
@@ -321,9 +316,9 @@ class ParallelReasoningPattern:
                 await asyncio.wait_for(
                     synthesis_complete.wait(), self.synthesis_timeout
                 )
-                logger.info(f"Synthesis phase completed successfully")
+                logger.info("Synthesis phase completed successfully")
             except asyncio.TimeoutError:
-                logger.warning(f"Synthesis phase timed out")
+                logger.warning("Synthesis phase timed out")
                 reasoning_structure["timeout"] = "synthesis"
 
             # Mark as completed

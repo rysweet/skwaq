@@ -3,13 +3,10 @@
 This module provides common utility functions used across the application.
 """
 
-from typing import Dict, List, Any, Optional, Set, Callable, TypeVar, Awaitable
-from pathlib import Path
-from datetime import datetime
-import re
-import asyncio
-import functools
 import logging
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Awaitable, Callable, Optional, TypeVar
 
 T = TypeVar("T")
 logger = logging.getLogger(__name__)

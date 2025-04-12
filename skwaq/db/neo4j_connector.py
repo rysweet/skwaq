@@ -5,9 +5,9 @@ essential graph operations.
 """
 
 import time
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
-from neo4j import GraphDatabase, Session
+from neo4j import GraphDatabase
 from neo4j.exceptions import ServiceUnavailable
 
 from skwaq.utils.config import get_config
@@ -333,7 +333,7 @@ class Neo4jConnector:
         query = f"MERGE (n:{label_str} {self._dict_to_props(match_properties)})"
 
         if set_properties:
-            query += f" ON CREATE SET n += $set_props ON MATCH SET n += $set_props"
+            query += " ON CREATE SET n += $set_props ON MATCH SET n += $set_props"
             params = {"set_props": set_properties}
         else:
             params = {}

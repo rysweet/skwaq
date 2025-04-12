@@ -1,13 +1,11 @@
 """Tests for the filesystem module of the ingestion system."""
 
 import os
-import pytest
-from unittest.mock import MagicMock, patch
-
 import tempfile
 
+import pytest
+
 from skwaq.ingestion.filesystem import CodebaseFileSystem, FilesystemGraphBuilder
-from skwaq.db.schema import NodeLabels, RelationshipTypes
 
 
 @pytest.mark.asyncio

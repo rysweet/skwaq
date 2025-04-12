@@ -4,13 +4,12 @@ This module implements functionality for invoking external security tools
 and processing their results.
 """
 
-from typing import Dict, List, Any, Optional, AsyncGenerator
 import asyncio
 import json
+import os
 import subprocess
 import tempfile
-import os
-from pathlib import Path
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 
 # Simplified for ingestion module testing
@@ -39,10 +38,10 @@ class Agent:
     pass
 
 
-from .base import Workflow
 from ..db.neo4j_connector import get_connector
+from ..shared.finding import Finding
 from ..utils.logging import get_logger
-from ..shared.finding import Finding, AnalysisResult
+from .base import Workflow
 
 logger = get_logger(__name__)
 

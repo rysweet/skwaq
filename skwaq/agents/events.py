@@ -4,9 +4,9 @@ This module defines the communication events used by agents to exchange
 messages, task assignments, and results.
 """
 
-from typing import Dict, Any, Optional
 import time
 from dataclasses import dataclass, field
+from typing import Any, Dict, Optional
 
 from ..events.system_events import SystemEvent
 from ..utils.logging import get_logger

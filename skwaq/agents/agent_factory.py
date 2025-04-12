@@ -5,6 +5,7 @@ for the vulnerability assessment system.
 """
 
 from typing import Any
+
 from .orchestrator_agent import OrchestratorAgent
 
 

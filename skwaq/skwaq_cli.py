@@ -2,7 +2,6 @@
 """Entry point script for the Skwaq vulnerability assessment copilot."""
 
 import logging
-import sys
 
 # Configure logging before importing anything else
 # This will suppress warnings from blarify_integration during CLI startup

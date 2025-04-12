@@ -5,7 +5,7 @@ providing feedback. In production, it would use more sophisticated
 evaluation techniques, but for development and testing, it can return mock data.
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict
 
 
 async def critique_findings(parameters: Dict[str, Any]) -> Dict[str, Any]:

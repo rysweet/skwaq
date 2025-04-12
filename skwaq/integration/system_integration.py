@@ -5,22 +5,18 @@ together, ensuring seamless interaction between different components and efficie
 resource usage.
 """
 
-from typing import Any, Dict, List, Optional, Set, Type, Union, Callable, Awaitable
-import asyncio
-import time
-import logging
-import json
 import os
-from pathlib import Path
+import time
+from typing import Any, Dict, List, Optional
 
 from ..agents.registry import AgentRegistry
-from ..db.neo4j_connector import get_connector
 from ..core.openai_client import OpenAIClient
+from ..db.neo4j_connector import get_connector
 from ..utils.config import get_config
 from ..utils.logging import get_logger, setup_logging
 from ..workflows.integration import (
-    get_context_manager,
     get_communication_manager,
+    get_context_manager,
     get_performance_optimizer,
     get_resource_manager,
 )
@@ -192,9 +188,9 @@ class SystemIntegrationManager:
 
         if "resource_manager" in self._components:
             resource_manager = self._components["resource_manager"]
-            self._health_status[
-                "resource_usage"
-            ] = resource_manager.get_resource_usage()
+            self._health_status["resource_usage"] = (
+                resource_manager.get_resource_usage()
+            )
 
         return self._health_status
 

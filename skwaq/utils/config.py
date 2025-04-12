@@ -6,15 +6,14 @@ vulnerability assessment copilot.
 
 import json
 import os
-import time
-from dataclasses import dataclass, field, asdict
-from pathlib import Path
-from typing import Optional, Dict, Any, List, Set, TypeVar, Union, cast
 import threading
-import json
+import time
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional, TypeVar, Union, cast
 
 try:
-    from dotenv import load_dotenv, find_dotenv
+    from dotenv import find_dotenv, load_dotenv
 
     HAS_DOTENV = True
 except ImportError:

@@ -4,16 +4,13 @@ This module provides components for optimizing performance across the entire sys
 including query optimization, resource allocation, and caching strategies.
 """
 
-from typing import Any, Dict, List, Optional, Type, TypeVar, Union, Callable, Awaitable
-import time
-import inspect
-import asyncio
 import functools
-import logging
+import time
 from datetime import datetime
+from typing import Any, Awaitable, Callable, Dict, List, Optional, TypeVar
 
-from ..utils.logging import get_logger
 from ..db.neo4j_connector import get_connector
+from ..utils.logging import get_logger
 from ..workflows.integration.performance_optimizer import get_performance_optimizer
 
 logger = get_logger(__name__)
@@ -171,7 +168,7 @@ class QueryOptimizer:
         analysis = {"query": query, "issues": [], "suggestions": []}
 
         # Check for common performance issues
-        if "MATCH" in query and not "WHERE" in query:
+        if "MATCH" in query and "WHERE" not in query:
             analysis["issues"].append(
                 "Query without WHERE clause may return too many results"
             )
@@ -215,7 +212,7 @@ class QueryOptimizer:
         )
 
         # Add query hints for better performance
-        if "MATCH" in optimized and not "USING INDEX" in optimized:
+        if "MATCH" in optimized and "USING INDEX" not in optimized:
             # Add index hint example - would need to be customized for real query
             optimized = optimized.replace(
                 "MATCH (n:Label)", "MATCH (n:Label) USING INDEX n:Label(property)"

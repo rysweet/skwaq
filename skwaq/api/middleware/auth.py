@@ -2,11 +2,11 @@
 
 import functools
 import uuid
-from typing import Any, Callable, Dict, Optional, TypeVar, cast, List, Union
 from datetime import datetime, timedelta
+from typing import Any, Callable, List, TypeVar, cast
 
-from flask import current_app, g, request, jsonify, Response
 import jwt
+from flask import current_app, g, jsonify, request
 from jwt.exceptions import PyJWTError
 
 from skwaq.utils.logging import get_logger

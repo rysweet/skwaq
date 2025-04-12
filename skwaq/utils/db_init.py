@@ -4,9 +4,8 @@ This module provides functions to verify Neo4j is running and properly initializ
 before executing any database operations.
 """
 
-import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 from skwaq.utils.logging import get_logger

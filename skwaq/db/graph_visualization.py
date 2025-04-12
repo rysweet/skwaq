@@ -4,12 +4,11 @@ This module provides tools for visualizing and exporting Neo4j graph data
 in various formats, with a focus on Investigation visualization.
 """
 
-import os
 import json
-from typing import Dict, List, Any, Optional, Tuple, Union
-import uuid
-from pathlib import Path
+import os
 import tempfile
+import uuid
+from typing import Any, Dict, Optional
 
 from skwaq.db.neo4j_connector import get_connector
 from skwaq.utils.logging import get_logger

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Manage the Skwaq API server for development and testing."""
 
-import os
-import sys
 import argparse
-import signal
-import time
-import subprocess
 import logging
+import os
+import signal
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 # Set up logging
@@ -107,7 +107,7 @@ def stop_server():
                 return True
 
         # If we get here, the process didn't stop gracefully
-        logger.warning(f"API server didn't stop gracefully, forcing termination...")
+        logger.warning("API server didn't stop gracefully, forcing termination...")
         os.kill(pid, signal.SIGKILL)
         if PID_FILE.exists():
             PID_FILE.unlink()

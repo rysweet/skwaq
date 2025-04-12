@@ -1,12 +1,13 @@
 """Workflow routes for the Flask API."""
 
-from flask import Blueprint, jsonify, request, Response
 import asyncio
 import uuid
 
+from flask import Blueprint, Response, jsonify, request
+
 from skwaq.api.middleware.auth import login_required
-from skwaq.api.middleware.error_handling import APIError, NotFoundError, BadRequestError
-from skwaq.api.services import workflow_service, event_service
+from skwaq.api.middleware.error_handling import BadRequestError, NotFoundError
+from skwaq.api.services import event_service, workflow_service
 from skwaq.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -204,7 +205,7 @@ def execute_workflow() -> Response:
     )
 
     if not result:
-        raise BadRequestError(f"Failed to start workflow execution")
+        raise BadRequestError("Failed to start workflow execution")
 
     # Publish event for workflow started
     event_service.publish_event(

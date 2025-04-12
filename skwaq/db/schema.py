@@ -6,7 +6,7 @@ vulnerability assessment workflows.
 """
 
 from enum import Enum
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict
 
 from skwaq.db.neo4j_connector import get_connector
 from skwaq.utils.logging import get_logger

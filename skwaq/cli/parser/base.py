@@ -2,11 +2,7 @@
 
 import argparse
 import sys
-import io
-from typing import Optional, Callable, Dict, Any, List, Union, Tuple
-
-from ..ui.console import print_banner
-
+from typing import Any, Dict, List, Optional
 
 # We'll handle banner printing directly, so no need for a custom formatter
 

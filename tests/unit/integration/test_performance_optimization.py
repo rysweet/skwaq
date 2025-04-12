@@ -1,16 +1,17 @@
 """Unit tests for skwaq.integration.performance_optimization module."""
 
-import pytest
 import time
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from skwaq.integration.performance_optimization import (
-    QueryOptimizer,
     DatabaseOptimization,
     MemoryOptimization,
-    get_query_optimizer,
+    QueryOptimizer,
     get_db_optimization,
     get_memory_optimization,
+    get_query_optimizer,
 )
 
 

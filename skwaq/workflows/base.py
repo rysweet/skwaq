@@ -1,8 +1,8 @@
 """Base workflow class for Skwaq."""
 
-from typing import Dict, Any, Optional
-from abc import ABC, abstractmethod
 import asyncio
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Optional
 
 from ..db.neo4j_connector import get_connector
 

@@ -4,19 +4,17 @@ This module defines a specialized workflow agent that evaluates findings against
 security policies and compliance requirements, and generates policy recommendations.
 """
 
-from typing import Dict, List, Any, Optional, Set, Tuple, Union, cast
-import asyncio
-import json
 import enum
+import json
 import time
 import uuid
+from typing import Any, Dict, List, Optional, Union
 
-from ..base import AutogenChatAgent
-from ..events import AgentCommunicationEvent, TaskAssignmentEvent, TaskResultEvent, Task
-from ...events.system_events import EventBus, SystemEvent
-from ...utils.config import get_config
-from ...utils.logging import get_logger
+from ...events.system_events import SystemEvent
 from ...shared.finding import Finding
+from ...utils.logging import get_logger
+from ..base import AutogenChatAgent
+from ..events import Task, TaskAssignmentEvent, TaskResultEvent
 
 logger = get_logger(__name__)
 
@@ -550,9 +548,9 @@ implementable within reasonable constraints.
                 status = ComplianceStatus(evaluation["compliance_status"])
                 evaluation["compliance_status"] = status.value
             except ValueError:
-                evaluation[
-                    "compliance_status"
-                ] = ComplianceStatus.REQUIRES_INVESTIGATION.value
+                evaluation["compliance_status"] = (
+                    ComplianceStatus.REQUIRES_INVESTIGATION.value
+                )
 
             return evaluation
 
@@ -638,9 +636,9 @@ implementable within reasonable constraints.
 
             # Ensure all required fields are present
             if "title" not in recommendation:
-                recommendation[
-                    "title"
-                ] = f"Security {recommendation_type.value.replace('_', ' ').title()} Recommendation"
+                recommendation["title"] = (
+                    f"Security {recommendation_type.value.replace('_', ' ').title()} Recommendation"
+                )
             if "description" not in recommendation:
                 recommendation["description"] = "No description provided"
             if "justification" not in recommendation:

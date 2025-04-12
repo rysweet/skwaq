@@ -1,11 +1,10 @@
 """Unit tests for base agent classes."""
 
-import pytest
-import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
-import uuid
-import time
 import sys
+import uuid
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 # Create module mocks for autogen dependencies
 modules_to_mock = [
@@ -43,19 +42,9 @@ mocks["autogen_core.agent"].ChatAgent = MagicMock()
 import skwaq.agents.registry
 
 # Now import the classes to test
-from skwaq.agents.base import (
-    BaseAgent,
-    AutogenChatAgent,
-    AgentState,
-    AgentContext,
-)
+from skwaq.agents.base import AgentState, AutogenChatAgent, BaseAgent
 from skwaq.agents.registry import AgentRegistry
-from skwaq.events.system_events import (
-    EventBus,
-    SystemEvent,
-    AgentLifecycleEvent,
-    AgentLifecycleState,
-)
+from skwaq.events.system_events import AgentLifecycleState
 
 
 @pytest.fixture
@@ -109,7 +98,6 @@ def mock_event_add(monkeypatch):
 def mock_agent_registry(monkeypatch):
     """Mock the AgentRegistry for testing."""
     # Import the modules directly
-    import skwaq.agents.registry
     from skwaq.agents import base
 
     # Create a fresh mock for the test
@@ -358,7 +346,6 @@ class TestAgentRegistry:
     def setup_registry(self, monkeypatch):
         """Set up clean registry state for each test."""
         # Create a clean registry for each test
-        import skwaq.agents.registry
 
         # Save original registry
         self.original_agents = skwaq.agents.registry.AgentRegistry._agents

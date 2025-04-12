@@ -1,10 +1,10 @@
 """Specialized workflow agents for vulnerability research."""
 
-from skwaq.agents.specialized.guided_assessment_agent import GuidedAssessmentAgent
 from skwaq.agents.specialized.exploitation_agent import ExploitationVerificationAgent
-from skwaq.agents.specialized.remediation_agent import RemediationPlanningAgent
-from skwaq.agents.specialized.policy_agent import SecurityPolicyAgent
+from skwaq.agents.specialized.guided_assessment_agent import GuidedAssessmentAgent
 from skwaq.agents.specialized.orchestration import AdvancedOrchestrator
+from skwaq.agents.specialized.policy_agent import SecurityPolicyAgent
+from skwaq.agents.specialized.remediation_agent import RemediationPlanningAgent
 
 __all__ = [
     "GuidedAssessmentAgent",

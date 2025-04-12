@@ -18,6 +18,7 @@ sys.path.insert(0, project_root)
 
 # Now import the modules after path is set up
 import autogen_core
+
 from skwaq.agents.autogen_compat import (
     ChatCompletionClient,
     GroupChat,

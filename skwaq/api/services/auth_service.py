@@ -1,11 +1,8 @@
 """Authentication service for the Flask API."""
 
-import os
-from typing import Dict, Any, Optional, List, Tuple, Union
-import uuid
+from typing import Any, Dict, Optional, Tuple
 
-from flask import current_app
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from skwaq.api.middleware.auth import generate_token
 from skwaq.utils.logging import get_logger

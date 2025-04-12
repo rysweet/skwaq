@@ -1,11 +1,12 @@
 """Flask application entry point for API server."""
 
+import datetime
+import json
 import os
 import traceback
-import datetime
-from flask import Flask, jsonify, request, g
-import json
+
 import neo4j.time
+from flask import Flask, jsonify
 from flask_cors import CORS
 
 from skwaq.utils.logging import get_logger
@@ -72,14 +73,7 @@ def create_app(test_config=None):
     error_handling.init_app(app)
 
     # Register error handlers for our custom exceptions
-    from skwaq.api.middleware.error_handling import (
-        APIError,
-        NotFoundError,
-        BadRequestError,
-        UnauthorizedError,
-        ForbiddenError,
-        ConflictError,
-    )
+    from skwaq.api.middleware.error_handling import APIError
 
     @app.errorhandler(APIError)
     def handle_api_error(error):
@@ -147,12 +141,12 @@ def create_app(test_config=None):
     # Register blueprints
     from skwaq.api.routes import (
         auth,
-        repositories,
-        events,
-        workflows,
         chat,
+        events,
         investigations,
         knowledge_graph,
+        repositories,
+        workflows,
     )
 
     app.register_blueprint(auth.bp)

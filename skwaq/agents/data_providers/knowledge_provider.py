@@ -5,7 +5,7 @@ the knowledge graph. In production, it would connect to Neo4j, but for
 development and testing, it can return mock data.
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict
 
 
 async def retrieve_knowledge(parameters: Dict[str, Any]) -> Dict[str, Any]:

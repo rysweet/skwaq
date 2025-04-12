@@ -1,6 +1,5 @@
 import asyncio
-import os
-import json
+
 from skwaq.db.neo4j_connector import get_connector
 from skwaq.visualization.graph_visualizer import GraphVisualizer
 

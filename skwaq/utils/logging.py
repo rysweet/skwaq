@@ -13,7 +13,7 @@ import threading
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Type, Union, cast
+from typing import Any, Callable, Dict, Optional, Union, cast
 
 try:
     from skwaq.events.system_events import LoggingEvent, publish

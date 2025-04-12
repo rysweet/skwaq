@@ -1,8 +1,8 @@
 """Error handling middleware for the Flask API."""
 
-from typing import Dict, Any, Tuple, Optional, Union
+from typing import Any, Dict, Optional
 
-from flask import Flask, jsonify, Response
+from flask import Flask, Response, jsonify
 
 from skwaq.utils.logging import get_logger
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Run a test version of the Skwaq API server for integration testing."""
 
-import os
-import sys
 import argparse
-import signal
 import logging
+import os
+import signal
+import sys
 
 # Add parent directory to path so we can import skwaq modules
 sys.path.append(

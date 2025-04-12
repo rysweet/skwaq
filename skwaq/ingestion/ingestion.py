@@ -5,24 +5,21 @@ of codebases from local file systems or Git repositories.
 """
 
 import asyncio
-import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional
 
 from skwaq.db.neo4j_connector import get_connector
-from skwaq.db.schema import NodeLabels, RelationshipTypes
+from skwaq.db.schema import NodeLabels
 from skwaq.utils.logging import get_logger
 
-from .repository import RepositoryHandler, RepositoryManager
-from .filesystem import CodebaseFileSystem, FilesystemGraphBuilder
-from .parsers import register_parsers, get_parser
-from .summarizers import register_summarizers, get_summarizer
-from .documentation import DocumentationProcessor
 from .ast_mapper import ASTFileMapper
+from .documentation import DocumentationProcessor
+from .filesystem import CodebaseFileSystem, FilesystemGraphBuilder
+from .parsers import get_parser, register_parsers
+from .repository import RepositoryHandler, RepositoryManager
+from .summarizers import get_summarizer, register_summarizers
 
 logger = get_logger(__name__)
 

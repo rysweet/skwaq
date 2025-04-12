@@ -1,12 +1,8 @@
 """Unit tests for the finding module."""
 
-import pytest
-import json
-import time
-from datetime import datetime
-from unittest.mock import patch
 
-from skwaq.shared.finding import Finding, AnalysisResult
+
+from skwaq.shared.finding import AnalysisResult, Finding
 
 
 class TestFinding:

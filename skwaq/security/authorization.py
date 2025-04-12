@@ -5,9 +5,9 @@ vulnerability assessment copilot, including role-based access control
 and permission checking.
 """
 
-from enum import Enum, auto
+from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, TypeVar, Union, cast
+from typing import Any, Callable, Dict, List, Optional, Set, TypeVar, cast
 
 from skwaq.events.system_events import SystemEvent, publish
 from skwaq.security.authentication import AuthRole, UserCredentials

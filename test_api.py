@@ -1,6 +1,7 @@
-import requests
 import json
 import sys
+
+import requests
 
 
 def test_api(investigation_id=None):

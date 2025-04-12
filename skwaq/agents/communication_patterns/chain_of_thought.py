@@ -5,17 +5,12 @@ agents to show their reasoning process step by step before reaching a conclusion
 """
 
 import asyncio
-from typing import Dict, List, Any, Optional, Callable, Awaitable, Protocol, Type
-import json
-import logging
 import time
+from typing import Any, Dict, List, Optional
 
-from autogen_core.agent import Agent, ChatAgent
-from autogen_core.event import BaseEvent, Event, EventHook, register_hook
-
-from ..events import AgentCommunicationEvent, TaskAssignmentEvent, TaskResultEvent, Task
+from ...utils.logging import LogEvent, get_logger
 from ..base import BaseAgent
-from ...utils.logging import get_logger, LogEvent
+from ..events import AgentCommunicationEvent, Task
 
 logger = get_logger(__name__)
 

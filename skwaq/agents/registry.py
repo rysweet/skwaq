@@ -4,13 +4,11 @@ This module provides the AgentRegistry class for centralized tracking and
 management of all agents in the system.
 """
 
-from typing import Dict, List, Optional, Type, Any, cast
 import asyncio
 import threading
-from functools import wraps
+from typing import Dict, List, Optional, Type
 
 from ..utils.logging import get_logger
-from ..events.system_events import AgentLifecycleEvent, AgentLifecycleState
 
 logger = get_logger(__name__)
 

@@ -1,12 +1,9 @@
 """Unit tests for advanced orchestration functionality."""
 
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-import json
 import sys
-import uuid
-import enum
-from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 # Before importing any of our modules, properly mock the autogen modules
 autogen_mock = MagicMock()
@@ -39,37 +36,15 @@ sys.modules["autogen_core.event"] = autogen_event_mock
 sys.modules["autogen_core.code_utils"] = autogen_code_utils_mock
 sys.modules["autogen_core.memory"] = autogen_memory_mock
 
+
 # Import specialized agents
 from skwaq.agents.specialized.workflows import (
     AdvancedOrchestrator,
-    WorkflowType,
-    WorkflowStatus,
-    WorkflowEvent,
     WorkflowDefinition,
+    WorkflowEvent,
     WorkflowExecution,
-)
-from skwaq.agents.specialized.guided_assessment_agent import (
-    GuidedAssessmentAgent,
-    AssessmentStage,
-    AssessmentPlanEvent,
-    AssessmentStageEvent,
-)
-from skwaq.agents.specialized.exploitation_agent import (
-    ExploitationVerificationAgent,
-    ExploitabilityStatus,
-    ExploitVerificationEvent,
-)
-from skwaq.agents.specialized.remediation_agent import (
-    RemediationPlanningAgent,
-    RemediationPriority,
-    RemediationComplexity,
-    RemediationPlanEvent,
-)
-from skwaq.agents.specialized.policy_agent import (
-    SecurityPolicyAgent,
-    ComplianceStatus,
-    PolicyEvaluationEvent,
-    PolicyRecommendationEvent,
+    WorkflowStatus,
+    WorkflowType,
 )
 
 

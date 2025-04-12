@@ -1,14 +1,11 @@
 """System-level commands for the Skwaq CLI."""
 
-import argparse
-import os
-import sys
 import subprocess
+import sys
 import webbrowser
 from pathlib import Path
-from typing import Dict, Optional
 
-from ..ui.console import console, success, error, info, print_banner
+from ..ui.console import console, error, info, print_banner
 from ..ui.progress import create_status_indicator
 from .base import CommandHandler, handle_command_error
 
@@ -143,8 +140,8 @@ class GuiCommandHandler(CommandHandler):
                 stderr_thread.start()
 
                 # Wait for the React app to begin starting
-                import time
                 import socket
+                import time
 
                 # Function to check if port is in use (server is running)
                 def is_port_in_use(port, host="localhost"):

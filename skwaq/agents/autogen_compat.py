@@ -4,10 +4,10 @@ This module creates compatibility shims for the autogen_core module
 to match the expected API structure in our codebase.
 """
 
-import autogen_core
 import logging
-import sys
-from typing import Any, Dict, List, Optional, Callable, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Type
+
+import autogen_core
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class GroupChat:
         """Initialize the group chat."""
         self.agents = agents
         self.kwargs = kwargs
-        logger.warning(f"Using compatibility layer for autogen_core.GroupChat")
+        logger.warning("Using compatibility layer for autogen_core.GroupChat")
 
 
 class AsyncAPIResponse:
@@ -82,7 +82,7 @@ class ChatCompletionClient:
         self.is_async = is_async
         self.kwargs = kwargs
         logger.warning(
-            f"Using compatibility layer for autogen_core.ChatCompletionClient"
+            "Using compatibility layer for autogen_core.ChatCompletionClient"
         )
 
     async def generate(
@@ -173,7 +173,7 @@ class EventHook:
 
 def register_hook(event_type: Type[BaseEvent], hook: EventHook) -> None:
     """Register an event hook for the specified event type."""
-    logger.warning(f"Using compatibility layer for autogen_core.event.register_hook")
+    logger.warning("Using compatibility layer for autogen_core.event.register_hook")
     # In actual usage, we would register with autogen_core's event system
 
 
@@ -221,7 +221,7 @@ class MessageEvent(BaseEvent):
 def extract_code(text: str, patterns: Optional[List[str]] = None) -> List[str]:
     """Extract code blocks from text."""
     logger.warning(
-        f"Using compatibility layer for autogen_core.code_utils.extract_code"
+        "Using compatibility layer for autogen_core.code_utils.extract_code"
     )
     # Return an empty list as a fallback
     return []
@@ -236,7 +236,7 @@ class MemoryRecord:
         self.content = content
         self.metadata = metadata
         logger.warning(
-            f"Using compatibility layer for autogen_core.memory.MemoryRecord"
+            "Using compatibility layer for autogen_core.memory.MemoryRecord"
         )
 
 

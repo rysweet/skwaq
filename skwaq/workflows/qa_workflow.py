@@ -4,17 +4,15 @@ This module implements the question-answering workflow for interacting with
 the vulnerability assessment system.
 """
 
-from typing import Dict, List, Any, Optional, AsyncGenerator
-import asyncio
-import json
+from typing import Any, AsyncGenerator, Dict, List, Optional
+
+from ..utils.logging import get_logger
+from .base import Workflow
 
 # Temporarily remove autogen dependencies
 # from autogen.agent import Agent
 # from autogen.event import BaseEvent, Event, EventHook
 
-from .base import Workflow
-from ..db.neo4j_connector import get_connector
-from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 

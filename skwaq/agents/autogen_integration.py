@@ -5,29 +5,16 @@ with the Skwaq agent system, including event bridging, message handling,
 and agent lifecycle management.
 """
 
-from typing import Dict, List, Any, Optional, Set, Callable, Awaitable, Type, cast
-import asyncio
-import logging
-import json
-import time
-from functools import wraps
+from typing import Any, Dict, List, Optional
 from unittest.mock import MagicMock
 
-import autogen_core
+# Use AutoGen's event system
 from autogen_core import Agent, BaseAgent
 
-# Use AutoGen's event system
-from autogen_core import event
-
+from ..core.openai_client import get_openai_client
+from ..events.system_events import AgentLifecycleEvent, AgentLifecycleState, EventBus
 from ..utils.config import get_config
 from ..utils.logging import get_logger
-from ..core.openai_client import get_openai_client
-from ..events.system_events import (
-    EventBus,
-    SystemEvent,
-    AgentLifecycleEvent,
-    AgentLifecycleState,
-)
 
 logger = get_logger(__name__)
 

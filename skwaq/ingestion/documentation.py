@@ -4,10 +4,9 @@ This module handles the processing of additional documentation related to the co
 """
 
 import os
+from typing import Any, Dict, Optional
+
 import aiohttp
-import asyncio
-from pathlib import Path
-from typing import Dict, List, Any, Optional, Set
 
 from skwaq.db.neo4j_connector import Neo4jConnector
 from skwaq.db.schema import NodeLabels, RelationshipTypes

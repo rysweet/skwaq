@@ -1,9 +1,7 @@
 """Graph visualization for Skwaq investigations."""
 
 import json
-import os
-from typing import Dict, List, Optional, Any, Union, Set
-from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from ..db.neo4j_connector import get_connector
 from ..utils.logging import get_logger
@@ -617,8 +615,8 @@ class GraphVisualizer:
 
         try:
             # Try to use NetworkX and matplotlib for SVG export
-            import networkx as nx
             import matplotlib.pyplot as plt
+            import networkx as nx
 
             # Create NetworkX graph
             G = nx.Graph()
@@ -701,8 +699,8 @@ class GraphVisualizer:
             HTML content as a string
         """
         # Import the serialization tools
-        import sys
         import datetime
+
         import neo4j.time
 
         # Define a custom encoder class locally to avoid circular imports

@@ -4,10 +4,9 @@
 This script tests that the autogen_core.ChatCompletionClient is correctly patched.
 """
 
-import sys
 import asyncio
 import logging
-from typing import Dict, Any
+import sys
 
 # Configure logging
 logging.basicConfig(
@@ -16,7 +15,6 @@ logging.basicConfig(
 logger = logging.getLogger("test_autogen_compat")
 
 # First, run the patch
-import autogen_patch
 
 
 # Now test that we can import and use ChatCompletionClient
@@ -25,7 +23,7 @@ def test_chat_completion_client_exists():
     import autogen_core
 
     # Check that ChatCompletionClient is available
-    logger.info(f"Testing if ChatCompletionClient exists in autogen_core")
+    logger.info("Testing if ChatCompletionClient exists in autogen_core")
     assert hasattr(
         autogen_core, "ChatCompletionClient"
     ), "ChatCompletionClient does not exist in autogen_core"
@@ -35,7 +33,7 @@ def test_chat_completion_client_exists():
         config_list=[{"model": "gpt-4", "api_key": "test-key"}], is_async=True
     )
 
-    logger.info(f"Successfully created ChatCompletionClient instance")
+    logger.info("Successfully created ChatCompletionClient instance")
     return True
 
 

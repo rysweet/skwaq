@@ -5,7 +5,7 @@ and track the progress of the ingestion process.
 """
 
 import asyncio
-import time
+
 from skwaq.core.openai_client import get_openai_client
 from skwaq.ingestion import Ingestion
 from skwaq.utils.logging import get_logger

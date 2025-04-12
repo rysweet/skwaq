@@ -1,27 +1,25 @@
 """Command handlers for workflow-related commands."""
 
-import argparse
 import json
 import os
 import uuid
 from datetime import datetime
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Union
+from typing import Any, Dict, List, Optional
 
+from ...db.neo4j_connector import get_connector
 from ...workflows.guided_inquiry import GuidedInquiryWorkflow
 from ...workflows.qa_workflow import QAWorkflow
-from ...workflows.vulnerability_research import VulnerabilityResearchWorkflow
-from ...workflows.tool_invocation import ToolInvocationWorkflow
 from ...workflows.sources_and_sinks import SourcesAndSinksWorkflow
-from ...db.neo4j_connector import get_connector
-from ..ui.console import console, success, error, info
-from ..ui.progress import create_status_indicator
+from ...workflows.tool_invocation import ToolInvocationWorkflow
+from ...workflows.vulnerability_research import VulnerabilityResearchWorkflow
+from ..ui.console import console, error, info, success
 from ..ui.formatters import (
-    format_panel,
-    format_investigation_table,
     format_findings_table,
+    format_investigation_table,
+    format_panel,
 )
-from ..ui.prompts import prompt_for_input, prompt_for_confirmation
+from ..ui.progress import create_status_indicator
+from ..ui.prompts import prompt_for_confirmation, prompt_for_input
 from .base import CommandHandler, handle_command_error
 
 

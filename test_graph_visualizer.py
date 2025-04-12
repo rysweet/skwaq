@@ -4,10 +4,12 @@ Test script for graph visualizer
 """
 
 import json
-import neo4j.time
 from datetime import datetime
-from skwaq.visualization.graph_visualizer import GraphVisualizer
+
+import neo4j.time
+
 from skwaq.api.routes.investigations import preprocess_data_for_json
+from skwaq.visualization.graph_visualizer import GraphVisualizer
 
 
 # Custom JSON encoder to handle Neo4j data types
