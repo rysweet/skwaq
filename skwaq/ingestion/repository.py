@@ -233,9 +233,9 @@ class RepositoryHandler:
             if repo.head.is_valid():
                 commit = repo.head.commit
                 metadata["commit_hash"] = commit.hexsha
-                metadata["commit_author"] = (
-                    f"{commit.author.name} <{commit.author.email}>"
-                )
+                metadata[
+                    "commit_author"
+                ] = f"{commit.author.name} <{commit.author.email}>"
                 metadata["commit_date"] = datetime.fromtimestamp(
                     commit.committed_date
                 ).isoformat()

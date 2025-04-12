@@ -65,7 +65,7 @@ def format_findings_table(findings: List[Finding]) -> Table:
             "Low": "black on yellow",
             "Info": "blue",
         }.get(finding.severity, "white")
-        
+
         table.add_row(
             finding.vulnerability_type,
             str(finding.line_number) if finding.line_number else "N/A",

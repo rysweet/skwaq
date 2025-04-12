@@ -301,9 +301,9 @@ async def test_llm_summarizer_integration(test_codebase_fs, neo4j_test_repo):
                 # for each request to ensure it's fresh
                 self.azure_credential = azure_credential
                 self.token_scope = token_scope
-                openai_config["azure_ad_token_provider"] = (
-                    lambda: azure_credential.get_token(token_scope).token
-                )
+                openai_config[
+                    "azure_ad_token_provider"
+                ] = lambda: azure_credential.get_token(token_scope).token
             else:
                 # Use API key authentication
                 openai_config["api_key"] = config.openai_api_key

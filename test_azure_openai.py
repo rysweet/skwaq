@@ -111,9 +111,7 @@ async def run_all_tests():
 
     # Report results
     logger.info(f"Chat completion test: {'✅ PASSED' if chat_test else '❌ FAILED'}")
-    logger.info(
-        f"Get completion test: {'✅ PASSED' if completion_test else '❌ FAILED'}"
-    )
+    logger.info(f"Get completion test: {'✅ PASSED' if completion_test else '❌ FAILED'}")
 
     return chat_test and completion_test
 

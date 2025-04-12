@@ -220,9 +220,7 @@ class MessageEvent(BaseEvent):
 # Code utilities compatibility
 def extract_code(text: str, patterns: Optional[List[str]] = None) -> List[str]:
     """Extract code blocks from text."""
-    logger.warning(
-        "Using compatibility layer for autogen_core.code_utils.extract_code"
-    )
+    logger.warning("Using compatibility layer for autogen_core.code_utils.extract_code")
     # Return an empty list as a fallback
     return []
 
@@ -235,9 +233,7 @@ class MemoryRecord:
         """Initialize the memory record."""
         self.content = content
         self.metadata = metadata
-        logger.warning(
-            "Using compatibility layer for autogen_core.memory.MemoryRecord"
-        )
+        logger.warning("Using compatibility layer for autogen_core.memory.MemoryRecord")
 
 
 # Group these classes into modules for easier import

@@ -1,7 +1,6 @@
 """Unit tests for the finding module."""
 
 
-
 from skwaq.shared.finding import AnalysisResult, Finding
 
 
