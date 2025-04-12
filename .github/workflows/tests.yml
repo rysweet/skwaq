@@ -36,10 +36,10 @@ jobs:
     - name: Check formatting with black
       run: poetry run black . --check
 
-    - name: Lint with ruff and fix issues
+    - name: Lint with ruff
       run: |
-        # Run ruff with auto-fix enabled for all fixable issues
-        poetry run ruff . --fix
+        # Run ruff and fail if there are issues
+        poetry run ruff .
 
     - name: Type check with mypy (informational only)
       run: poetry run mypy . || true  # Don't fail the build on mypy errors
