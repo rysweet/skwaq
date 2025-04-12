@@ -13,9 +13,7 @@ from contextlib import contextmanager
 from skwaq.cli.parser.base import SkwaqArgumentParser, create_parser
 from skwaq.cli.parser.commands import (
     register_all_parsers,
-    register_analyze_parser,
     register_repository_parser,
-    register_investigation_parser,
     register_config_parser,
     register_ingest_parser,
     register_gui_parser,
@@ -80,48 +78,7 @@ class TestCliParser:
         assert args.command == "test"
         assert args.option == "value"
 
-    def test_analyze_parser_registration(self):
-        """Test registering and using the analyze parser."""
-        parser = SkwaqArgumentParser()
-
-        # Register just the analyze parser
-        register_analyze_parser(parser)
-
-        # Test basic analyze command
-        args = parser.parse_args(["analyze", "test.py"])
-
-        assert args.command == "analyze"
-        assert args.file == "test.py"
-
-        # Test with multiple strategies
-        args = parser.parse_args(
-            [
-                "analyze",
-                "test.py",
-                "--strategy",
-                "pattern_matching",
-                "--strategy",
-                "ast_analysis",
-            ]
-        )
-
-        assert args.command == "analyze"
-        assert args.file == "test.py"
-        assert "pattern_matching" in args.strategy
-        assert "ast_analysis" in args.strategy
-
-        # Test with output format
-        args = parser.parse_args(
-            [
-                "analyze",
-                "test.py",
-                "--output",
-                "json",
-            ]
-        )
-
-        assert args.command == "analyze"
-        assert args.output == "json"
+    # The analyze_parser has been removed from the CLI
 
     def test_repo_parser_registration(self):
         """Test registering and using the repo parser."""
@@ -175,8 +132,8 @@ class TestCliParser:
         """Test registering and using the investigations parser."""
         parser = SkwaqArgumentParser()
 
-        # Register just the investigations parser
-        register_investigation_parser(parser)
+        # Register workflow parsers which includes the investigations parser
+        register_workflow_parsers(parser)
 
         # Test investigations list command
         args = parser.parse_args(["investigations", "list"])
@@ -265,7 +222,6 @@ class TestCliParser:
         # Test one command from each parser to ensure they're all registered
         # Using with suppress_exit to catch SystemExit for invalid commands in this test
         commands_to_test = [
-            ["analyze", "test.py"],
             ["repo", "list"],
             ["investigations", "list"],
             ["config", "show"],
@@ -275,6 +231,7 @@ class TestCliParser:
             ["inquiry"],
             ["tool", "test-tool"],
             ["research", "--repo", "123"],
+            ["sources-and-sinks", "--investigation", "test-id"],
         ]
 
         with suppress_stderr(), suppress_exit():
