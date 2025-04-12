@@ -1,0 +1,233 @@
+.investigations-list {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  background-color: var(--card-background);
+}
+
+.investigations-list-header {
+  display: flex;
+  background-color: var(--card-background-highlight);
+  border-bottom: 1px solid var(--border-color);
+  padding: 12px 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.header-cell, .cell {
+  padding: 0 8px;
+}
+
+.title-cell {
+  flex: 3;
+}
+
+.repository-cell {
+  flex: 2;
+}
+
+.date-cell {
+  flex: 1;
+  white-space: nowrap;
+}
+
+.status-cell {
+  flex: 1;
+  text-align: center;
+}
+
+.findings-cell {
+  flex: 1.5;
+}
+
+.actions-cell {
+  flex: 0 0 100px;
+  text-align: right;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.investigation-row {
+  display: flex;
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color 0.2s;
+  cursor: pointer;
+  align-items: center;
+}
+
+.investigation-row:last-child {
+  border-bottom: none;
+}
+
+.investigation-row:hover {
+  background-color: var(--card-background-hover);
+}
+
+.investigation-title {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.investigation-description {
+  font-size: 0.85em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 350px;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.status-completed {
+  background-color: rgba(var(--success-color-rgb), 0.1);
+  color: var(--success-color);
+  border: 1px solid rgba(var(--success-color-rgb), 0.2);
+}
+
+.status-in_progress {
+  background-color: rgba(var(--primary-color-rgb), 0.1);
+  color: var(--primary-color);
+  border: 1px solid rgba(var(--primary-color-rgb), 0.2);
+}
+
+.status-new {
+  background-color: rgba(var(--info-color-rgb), 0.1);
+  color: var(--info-color);
+  border: 1px solid rgba(var(--info-color-rgb), 0.2);
+}
+
+.status-failed {
+  background-color: rgba(var(--danger-color-rgb), 0.1);
+  color: var(--danger-color);
+  border: 1px solid rgba(var(--danger-color-rgb), 0.2);
+}
+
+.findings-count, .vulnerabilities-count {
+  font-size: 0.85em;
+  color: var(--text-secondary);
+}
+
+.vulnerabilities-count {
+  margin-top: 2px;
+}
+
+.findings-count .count, .vulnerabilities-count .count {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.action-button {
+  background-color: transparent;
+  border: none;
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.action-button:hover {
+  background-color: var(--card-background-active);
+  color: var(--primary-color);
+}
+
+.action-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sources-sinks-button {
+  color: var(--accent-color, #4a90e2);
+}
+
+.sources-sinks-button:hover:not(:disabled) {
+  background-color: rgba(74, 144, 226, 0.1);
+  color: var(--accent-color, #4a90e2);
+}
+
+.mini-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(74, 144, 226, 0.5);
+  border-radius: 50%;
+  border-top-color: var(--accent-color, #4a90e2);
+  animation: mini-spin 1s linear infinite;
+}
+
+@keyframes mini-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.investigations-list-loading, 
+.investigations-list-error,
+.investigations-list-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background-color: var(--card-background);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  text-align: center;
+}
+
+.investigations-list-loading .loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(var(--primary-color-rgb), 0.3);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+.investigations-list-error {
+  color: var(--danger-color);
+}
+
+.investigations-list-empty p {
+  margin-bottom: 16px;
+  color: var(--text-secondary);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive styling */
+@media (max-width: 1024px) {
+  .date-cell {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .repository-cell {
+    display: none;
+  }
+  
+  .findings-cell {
+    display: none;
+  }
+}

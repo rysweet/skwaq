@@ -1,0 +1,114 @@
+.workflows-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.workflows-header {
+  padding: 1rem;
+  background-color: var(--bg-color-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.workflows-header h1 {
+  margin: 0 0 1rem 0;
+  font-size: 1.8rem;
+  color: var(--text-color-primary);
+}
+
+.error-banner {
+  background-color: var(--error-color-bg);
+  color: var(--error-color-text);
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  border-radius: 4px;
+  border-left: 4px solid var(--error-color);
+}
+
+.view-selector {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.view-button {
+  padding: 0.5rem 1rem;
+  background-color: var(--bg-color-element);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-color-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.view-button:hover {
+  background-color: var(--bg-color-hover);
+}
+
+.view-button.active {
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color-dark);
+}
+
+.workflows-content {
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.workflow-results-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.workflow-results-container {
+  background-color: var(--bg-color-primary);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  width: 90%;
+  max-width: 1200px;
+  height: 90%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Dark mode styles */
+.dark-mode .workflows-page {
+  --bg-color-secondary: #1e1e2d;
+  --border-color: #2d2d3d;
+  --bg-color-element: #2a2a3a;
+  --bg-color-hover: #3a3a4a;
+  --text-color-primary: #e0e0e0;
+  --text-color-secondary: #c0c0c0;
+  --error-color-bg: #3b1a1a;
+  --error-color-text: #ff9999;
+  --error-color: #ff5555;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .view-selector {
+    flex-wrap: wrap;
+  }
+  
+  .view-button {
+    flex: 1;
+    min-width: 120px;
+  }
+  
+  .workflow-results-container {
+    width: 95%;
+    height: 95%;
+  }
+}

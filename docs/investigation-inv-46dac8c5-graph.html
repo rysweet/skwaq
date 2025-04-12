@@ -1,0 +1,123 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Investigation Graph: inv-46dac8c5</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        .links line {
+            stroke: #999;
+            stroke-opacity: 0.6;
+        }
+        .nodes circle {
+            stroke: #fff;
+            stroke-width: 1.5px;
+        }
+        .node-labels {
+            font-size: 10px;
+        }
+        .investigation { fill: #3498db; }
+        .repository { fill: #2ecc71; }
+        .finding { fill: #e74c3c; }
+        .vulnerability { fill: #9b59b6; }
+        .file { fill: #f39c12; }
+        
+        .tooltip {
+            position: absolute;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 10px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            max-width: 300px;
+            overflow-wrap: break-word;
+        }
+        .controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        .title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <div class="title">Investigation Graph: inv-46dac8c5</div>
+    </div>
+    
+    <div id="tooltip" class="tooltip"></div>
+    
+    <script>
+        // Graph data
+        const graphData = {"nodes": [{"id": "i-363", "label": "Investigation", "type": "investigation", "properties": {"id": "inv-46dac8c5", "workflow_id": "workflow-001", "created_at": "2023-01-01T12:00:00Z", "updated_at": "2023-01-02T15:30:00Z"}}, {"id": "r-360", "label": "Repository", "type": "repository", "properties": {"name": "example/repo", "url": "https://github.com/example/repo", "description": "Example repository for testing"}}], "links": [{"source": "i-363", "target": "r-360", "type": "ANALYZES"}]};
+        
+        // Set up the SVG
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        
+        const svg = d3.select("body")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
+            
+        // Container for the graph
+        const container = svg.append("g");
+        
+        // Create a force simulation
+        const simulation = d3.forceSimulation(graphData.nodes)
+            .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(100))
+            .force("charge", d3.forceManyBody().strength(-300))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collide", d3.forceCollide(30));
+        
+        // Create links
+        const link = container.append("g")
+            .attr("class", "links")
+            .selectAll("line")
+            .data(graphData.links)
+            .enter()
+            .append("line")
+            .attr("stroke-width", 1);
+        
+        // Create nodes
+        const node = container.append("g")
+            .attr("class", "nodes")
+            .selectAll("circle")
+            .data(graphData.nodes)
+            .enter()
+            .append("circle")
+            .attr("r", 8)
+            .attr("class", d => d.type || "default");
+        
+        // Update positions on each simulation tick
+        simulation.on("tick", () => {
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+            
+            node
+                .attr("cx", d => d.x)
+                .attr("cy", d => d.y);
+        });
+    </script>
+</body>
+</html>
+        

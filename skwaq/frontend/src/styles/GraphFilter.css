@@ -1,0 +1,332 @@
+.graph-filter {
+  background-color: var(--card-background);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-md);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  max-width: 350px;
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  transition: background-color var(--transition-fast);
+}
+
+.graph-filter.dark {
+  background-color: var(--card-background-dark);
+  color: var(--text-light);
+}
+
+.filter-section {
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: var(--spacing-md);
+}
+
+.filter-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.filter-section h3 {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  margin-bottom: var(--spacing-sm);
+  color: var(--text-primary);
+}
+
+.graph-filter.dark .filter-section h3 {
+  color: var(--text-light);
+}
+
+.search-input-container {
+  position: relative;
+}
+
+.search-input {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  background-color: var(--background-color);
+  color: var(--text-primary);
+}
+
+.graph-filter.dark .search-input {
+  background-color: var(--background-dark);
+  color: var(--text-light);
+  border-color: var(--border-color-dark);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 1px var(--primary-light);
+}
+
+.clear-search {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: var(--font-size-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+}
+
+.checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: var(--spacing-sm);
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  padding: var(--spacing-xs) 0;
+}
+
+.checkbox-item input[type="checkbox"] {
+  margin-right: var(--spacing-sm);
+  cursor: pointer;
+}
+
+.item-label {
+  color: var(--text-secondary);
+}
+
+.graph-filter.dark .item-label {
+  color: var(--text-light);
+}
+
+.no-options {
+  color: var(--text-tertiary);
+  font-style: italic;
+  font-size: var(--font-size-sm);
+}
+
+.toggle-advanced {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  font-size: var(--font-size-sm);
+  text-decoration: underline;
+  margin-top: var(--spacing-xs);
+}
+
+.toggle-advanced:hover {
+  color: var(--text-primary);
+}
+
+.graph-filter.dark .toggle-advanced {
+  color: var(--text-tertiary);
+}
+
+.graph-filter.dark .toggle-advanced:hover {
+  color: var(--text-light);
+}
+
+.advanced-filters {
+  margin-top: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.filter-control label {
+  display: block;
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--spacing-xs);
+  color: var(--text-secondary);
+}
+
+.slider-with-value {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.slider-with-value input[type="range"] {
+  flex: 1;
+}
+
+.slider-value {
+  min-width: 30px;
+  text-align: right;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.saved-filter-select {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  background-color: var(--background-color);
+  color: var(--text-primary);
+}
+
+.graph-filter.dark .saved-filter-select {
+  background-color: var(--background-dark);
+  color: var(--text-light);
+  border-color: var(--border-color-dark);
+}
+
+.selected-filter-info {
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.filter-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+  position: relative;
+}
+
+.action-button {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex: 1;
+}
+
+.action-button.clear {
+  background-color: var(--background-highlight);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.action-button.clear:hover {
+  background-color: var(--background-active);
+}
+
+.action-button.save {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+}
+
+.action-button.save:hover {
+  background-color: var(--primary-dark);
+}
+
+.save-filter-dialog {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  z-index: 10;
+}
+
+.graph-filter.dark .save-filter-dialog {
+  background-color: var(--card-background-dark);
+  border-color: var(--border-color-dark);
+}
+
+.save-filter-dialog h4 {
+  margin: 0 0 var(--spacing-md) 0;
+  font-size: var(--font-size-md);
+  color: var(--text-primary);
+}
+
+.graph-filter.dark .save-filter-dialog h4 {
+  color: var(--text-light);
+}
+
+.form-group {
+  margin-bottom: var(--spacing-md);
+}
+
+.form-group label {
+  display: block;
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--spacing-xs);
+  color: var(--text-secondary);
+}
+
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  background-color: var(--background-color);
+  color: var(--text-primary);
+}
+
+.graph-filter.dark .form-group input,
+.graph-filter.dark .form-group textarea {
+  background-color: var(--background-dark);
+  color: var(--text-light);
+  border-color: var(--border-color-dark);
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 1px var(--primary-light);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
+
+.cancel-button {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--background-highlight);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.save-button {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.save-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.save-button:hover:not(:disabled) {
+  background-color: var(--primary-dark);
+}

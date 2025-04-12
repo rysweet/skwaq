@@ -1,0 +1,62 @@
+name: Tests and Linting
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10"]
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: 1.7.1
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: Install dependencies
+      run: |
+        poetry lock
+        poetry install --with dev
+
+    - name: Check formatting with black
+      run: poetry run black . --check
+
+    - name: Lint with ruff
+      run: |
+        # Run ruff and fail if there are issues
+        poetry run ruff .
+
+    - name: Type check with mypy (informational only)
+      run: poetry run mypy . || true  # Don't fail the build on mypy errors
+
+    - name: Start Neo4j for tests
+      run: |
+        # Start Neo4j for integration tests
+        echo "Starting Neo4j for integration tests..."
+        poetry run python scripts/db/ensure_neo4j.py
+
+    - name: Run tests with pytest
+      run: |
+        # Run tests with proper coverage
+        poetry run pytest tests/ -xvs --cov=skwaq --cov-report=xml
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        fail_ci_if_error: true

@@ -1,0 +1,207 @@
+[tool.poetry]
+name = "skwaq"
+version = "0.1.0"
+description = "Vulnerability Assessment Copilot - A Multiagent AI System for Vulnerability Discovery"
+authors = ["Ryan Sweet <rysweet@microsoft.com>"]
+readme = "README.md"
+repository = "https://github.com/rysweet/skwaq"
+keywords = ["security", "vulnerability", "ai", "copilot", "multiagent"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Topic :: Security",
+    "Topic :: Software Development :: Quality Assurance",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<=3.14"
+# Core dependencies
+neo4j = "^5.15.0"
+rich = "^13.7.0"
+click = "^8.1.7"
+pydantic = "^2.5.2"
+autogen-core = "^0.4.9.2"
+loguru = "^0.7.2"
+typer = "^0.9.0"
+protobuf = "~5.29.3"
+grpcio = "^1.59.2"
+grpcio-tools = "^1.59.2"
+prompty = "^0.1.0"
+flask = "^2.3.0"
+flask-cors = "^4.0.0"
+pytest-asyncio = "^0.21.1"
+types-flask = "^1.1.6"
+
+# Azure and OpenAI dependencies
+azure-identity = "^1.15.0"
+azure-mgmt-cognitiveservices = "^13.5.0"
+openai = "^1.2.4"
+
+# GitHub integration
+pygithub = "^2.1.1"
+
+# Code analysis dependencies
+blarify = "^1.0.6"
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+# Development tools
+black = "23.12.1"
+mypy = "^1.7.0"
+isort = "^5.12.0"
+flake8 = "^6.1.0"
+ruff = "^0.3.0"
+pre-commit = "^3.5.0"
+pytest = "^7.4.3"
+pytest-cov = "^4.1.0"
+pytest-mock = "^3.12.0"
+types-protobuf = "^4.24.0.2"
+pydocstyle = "^6.3.0"
+docstr-coverage = "^2.3.0"
+bandit = "^1.7.5"
+
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.docs.dependencies]
+sphinx = "^7.2.6"
+sphinx-autoapi = "^2.1.0"
+sphinx-rtd-theme = "^1.3.0"
+sphinx-autodoc-typehints = "^1.25.2"
+
+[tool.poetry.extras]
+all = ["dev", "docs"]
+
+[build-system]
+requires = ["poetry-core>=1.0.0", "setuptools>=42", "wheel"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ["py310", "py311"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+multi_line_output = 3
+
+[tool.flake8]
+max-line-length = 100
+exclude = ["*.egg", "build", "dist"]
+extend-ignore = ["E203"]
+
+[tool.ruff]
+# Moving select and ignore to lint section as recommended by ruff
+line-length = 100
+exclude = [
+    ".git",
+    ".ruff_cache",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E203", "E501", "E402"]  # Ignoring E501 (line too long) as we'll handle it with black
+                                  # Ignoring E402 (module level import not at top of file) temporarily
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_optional = true
+
+[[tool.mypy.overrides]]
+module = [
+    "skwaq.code_analysis.languages.java",
+    "skwaq.code_analysis.languages.csharp",
+    "skwaq.code_analysis.languages.php"
+]
+warn_return_any = false
+disallow_untyped_defs = false
+check_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = ["neo4j.*", "autogen.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+python_classes = "Test*"
+addopts = "-k 'not isolated' --cov=skwaq --cov-report=term --cov-report=xml --cov-report=html"
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+asyncio_default_test_loop_scope = "function"
+markers = [
+    "isolated: tests that need to run in isolation and are not part of the main test suite",
+    "asyncio: mark test functions as asyncio tests",
+    "integration: integration tests that connect to external systems",
+    "neo4j: tests that require a Neo4j database connection",
+    "github: tests that require a GitHub connection",
+    "openai: tests that require an OpenAI API connection"
+]
+
+[tool.coverage.run]
+source = ["skwaq"]
+omit = [
+    "tests/*",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+    "raise ImportError",
+]
+
+[tool.pydocstyle]
+convention = "google"
+add_ignore = ["D100", "D104"]
+
+[tool.poetry.scripts]
+skwaq = "skwaq.cli.main:main"
+
+[tool.poe.tasks]
+test = "pytest"
+lint = { cmd = "flake8 skwaq tests" }
+format = { cmd = "black skwaq tests" }
+mypy = { cmd = "mypy skwaq" }
+check_docs = { cmd = "docstr-coverage ./skwaq --fail-under=90" }
+all = ["format", "lint", "mypy", "test", "check_docs"]

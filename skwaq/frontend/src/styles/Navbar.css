@@ -1,0 +1,111 @@
+.navbar {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background-color: var(--card-background);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  z-index: 100;
+}
+
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  margin-right: var(--spacing-lg);
+}
+
+.logo {
+  display: flex;
+  flex-direction: column;
+  color: var(--primary-color);
+  font-weight: bold;
+  text-decoration: none;
+}
+
+.logo-text {
+  font-size: var(--font-size-xl);
+}
+
+.logo-subtitle {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.search-form {
+  display: flex;
+  flex: 1;
+  max-width: 500px;
+  margin: 0 var(--spacing-lg);
+}
+
+.search-input {
+  flex: 1;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm) 0 0 var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  background-color: var(--background-color);
+  color: var(--text-primary);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.search-button {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 0 var(--border-radius-sm) var(--border-radius-sm) 0;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.search-button:hover {
+  background-color: var(--primary-dark);
+}
+
+.navbar-actions {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.notification-btn, .profile-btn {
+  background: none;
+  border: none;
+  font-size: var(--font-size-lg);
+  padding: var(--spacing-sm);
+  margin-left: var(--spacing-md);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.notification-btn:hover, .profile-btn:hover {
+  background-color: var(--background-color);
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    flex-wrap: wrap;
+    padding: var(--spacing-sm);
+  }
+
+  .navbar-brand {
+    margin-right: var(--spacing-sm);
+  }
+
+  .search-form {
+    order: 3;
+    width: 100%;
+    max-width: none;
+    margin: var(--spacing-sm) 0 0;
+  }
+
+  .logo-subtitle {
+    display: none;
+  }
+}

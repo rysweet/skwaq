@@ -1,0 +1,58 @@
+name: Docker Build
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build development image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        target: development
+        push: false
+        load: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Test development image
+      run: |
+        # Start services including Neo4j
+        docker compose up -d
+        
+        # Wait for Neo4j to start
+        echo "Waiting for Neo4j to start..."
+        sleep 10
+        
+        # Install dependencies and initialize Neo4j
+        docker compose exec -T skwaq bash -c "cd /app && poetry install --with dev"
+        
+        # Initialize Neo4j schema
+        docker compose exec -T skwaq bash -c "cd /app && poetry run python scripts/db/ensure_neo4j.py --clear"
+        
+        # Run the tests
+        docker compose exec -T skwaq bash -c "cd /app && poetry run python -m pytest tests/ -v"
+        
+        # Clean up
+        docker compose down -v
+
+    - name: Build production image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        target: production
+        push: false
+        load: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
