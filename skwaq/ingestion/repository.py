@@ -9,9 +9,8 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 import git
-from github import Github, GithubException
+from github import Github, GithubException, UnknownObjectException
 from github import Repository as GithubRepo
-from github import UnknownObjectException
 
 from skwaq.db.neo4j_connector import Neo4jConnector
 from skwaq.db.schema import NodeLabels

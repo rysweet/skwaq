@@ -16,10 +16,8 @@ from .commands.ingest_commands import IngestCommandHandler
 from .commands.repository_commands import RepositoryCommandHandler
 from .commands.system_commands import GuiCommandHandler, VersionCommandHandler
 from .commands.workflow_commands import (
-    InvestigationCommandHandler,  # Moved from investigation_commands.py
-)
-from .commands.workflow_commands import (
     GuidedInquiryCommandHandler,
+    InvestigationCommandHandler,  # Moved from investigation_commands.py
     QACommandHandler,
     SourcesAndSinksCommandHandler,
     ToolCommandHandler,
