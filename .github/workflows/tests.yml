@@ -36,24 +36,24 @@ jobs:
     - name: Check formatting with black
       run: poetry run black . --check
 
-    - name: Lint with ruff (informational only)
-      run: poetry run ruff . || true  # Don't fail the build on ruff errors
+    - name: Lint with ruff and fix issues
+      run: |
+        # Run ruff with auto-fix enabled for all fixable issues
+        poetry run ruff . --fix
 
     - name: Type check with mypy (informational only)
       run: poetry run mypy . || true  # Don't fail the build on mypy errors
 
+    - name: Start Neo4j for tests
+      run: |
+        # Start Neo4j for integration tests
+        echo "Starting Neo4j for integration tests..."
+        poetry run python scripts/db/ensure_neo4j.py
+
     - name: Run tests with pytest
       run: |
-        # Save the test result and continue to allow CI to pass
-        set +e
+        # Run tests with proper coverage
         poetry run pytest tests/ -xvs --cov=skwaq --cov-report=xml
-        TEST_EXIT_CODE=$?
-        set -e
-        echo "Test exit code: $TEST_EXIT_CODE"
-        if [ $TEST_EXIT_CODE -ne 0 ]; then
-          echo "::warning::Tests failed with exit code $TEST_EXIT_CODE but continuing"
-        fi
-        exit 0
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3

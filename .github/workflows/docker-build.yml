@@ -28,9 +28,23 @@ jobs:
 
     - name: Test development image
       run: |
+        # Start services including Neo4j
         docker compose up -d
-        # Install dependencies in the container and activate virtual environment
-        docker compose exec -T skwaq bash -c "cd /app && poetry install --with dev && poetry run python -m pytest tests/ -v || echo 'Tests failed but continuing for now'"
+        
+        # Wait for Neo4j to start
+        echo "Waiting for Neo4j to start..."
+        sleep 10
+        
+        # Install dependencies and initialize Neo4j
+        docker compose exec -T skwaq bash -c "cd /app && poetry install --with dev"
+        
+        # Initialize Neo4j schema
+        docker compose exec -T skwaq bash -c "cd /app && poetry run python scripts/db/ensure_neo4j.py --clear"
+        
+        # Run the tests
+        docker compose exec -T skwaq bash -c "cd /app && poetry run python -m pytest tests/ -v"
+        
+        # Clean up
         docker compose down -v
 
     - name: Build production image
