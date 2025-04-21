@@ -11,7 +11,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from ..utils.logging import get_logger
-from .base import AutogenChatAgent, BaseAgent
+from .base import AutogenChatAgent, SkwaqBaseAgent as BaseAgent
 from .events import AgentCommunicationEvent, Task, TaskAssignmentEvent, TaskResultEvent
 from .registry import AgentRegistry
 

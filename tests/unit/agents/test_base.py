@@ -42,7 +42,7 @@ mocks["autogen_core.agent"].ChatAgent = MagicMock()
 import skwaq.agents.registry
 
 # Now import the classes to test
-from skwaq.agents.base import AgentState, AutogenChatAgent, BaseAgent
+from skwaq.agents.base import AgentState, AutogenChatAgent, SkwaqBaseAgent as BaseAgent
 from skwaq.agents.registry import AgentRegistry
 from skwaq.events.system_events import AgentLifecycleState
 

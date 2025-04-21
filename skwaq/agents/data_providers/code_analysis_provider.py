@@ -101,10 +101,11 @@ async def match_patterns(parameters: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Matching results
     """
-    code = parameters.get("code", "")
-    language = parameters.get("language", "")
-    patterns = parameters.get("patterns", [])
-
+    # In a real implementation, we would use these parameters to analyze code
+    # code = parameters.get("code", "")
+    # language = parameters.get("language", "")
+    # patterns = parameters.get("patterns", [])
+    
     # TODO: In production, this would use the pattern matching components
     # For now, return mock data
     return {

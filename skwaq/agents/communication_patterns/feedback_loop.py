@@ -468,19 +468,19 @@ class FeedbackLoopPattern:
         Returns:
             Improvement score between 0.0 and 1.0
         """
-        # Create a task for improvement calculation
-        improvement_task = Task(
-            task_id=f"{loop_id}_improvement_{iteration}",
-            task_type="calculate_improvement",
-            description="Calculate improvement between original and revised content",
-            parameters={
-                "original_content": original_content,
-                "revised_content": current_content,
-                "loop_id": loop_id,
-                "iteration": iteration,
-            },
-            status="pending",
-        )
+        # Task definition would go here in a full implementation
+        # We'd create a task for improvement calculation
+        task_id = f"{loop_id}_improvement_{iteration}"
+        task_type = "calculate_improvement"
+        task_description = "Calculate improvement between original and revised content"
+        task_parameters = {
+            "original_content": original_content,
+            "revised_content": current_content,
+            "loop_id": loop_id,
+            "iteration": iteration,
+        }
+        task_status = "pending"
+        # End of task definition
 
         # In a real implementation, we would have the reviewer agent
         # calculate the improvement. For simplicity, we're using a

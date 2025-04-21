@@ -19,9 +19,10 @@ async def critique_findings(parameters: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Critique results
     """
-    findings = parameters.get("findings", [])
-    patterns = parameters.get("patterns", [])
-
+    # In a real implementation, we would use these parameters to perform the critique
+    # findings = parameters.get("findings", [])
+    # patterns = parameters.get("patterns", [])
+    
     # TODO: In production, this would use more sophisticated evaluation techniques
     # For now, return mock data
     return {

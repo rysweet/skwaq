@@ -125,14 +125,8 @@ class AutogenAgentAdapter:
         if self.agent is not None:
             return self.agent
 
-        # Get LLM configuration
-        model_config = {
-            "model": self.model,
-            "api_key": self.openai_client.api_key,
-            "base_url": self.openai_client.api_base,
-            "api_type": self.openai_client.api_type,
-            "api_version": self.openai_client.api_version,
-        }
+        # We'll use just self.model directly as we're using Mock object for now
+        # Autogen core API changes frequently, so our implementation uses mock objects
 
         # Create the Agent with BaseAgent
         self.agent = BaseAgent(

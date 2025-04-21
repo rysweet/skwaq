@@ -345,19 +345,19 @@ class DebatePattern:
         Returns:
             Dictionary with conclusion information
         """
-        # Create a task for the mediator to generate a conclusion
-        conclusion_task = Task(
-            task_id=f"{debate_id}_conclusion",
-            task_type="generate_debate_conclusion",
-            description=f"Generate a conclusion for the debate on: {topic}",
-            parameters={
-                "debate_id": debate_id,
-                "topic": topic,
-                "rounds": debate_structure["rounds"],
-                "participants": debate_structure["participants"],
-            },
-            status="pending",
-        )
+        # Task definition would go here in a full implementation
+        # We'd create a task for the mediator to generate a conclusion
+        task_id = f"{debate_id}_conclusion"
+        task_type = "generate_debate_conclusion"
+        task_description = f"Generate a conclusion for the debate on: {topic}"
+        task_parameters = {
+            "debate_id": debate_id,
+            "topic": topic,
+            "rounds": debate_structure["rounds"],
+            "participants": debate_structure["participants"],
+        }
+        task_status = "pending"
+        # End of task definition
 
         # Create a conclusion event that the mediator will use to respond
         conclusion_event = DebateArgumentEvent(
