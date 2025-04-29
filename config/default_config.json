@@ -1,0 +1,59 @@
+{
+  "neo4j": {
+    "uri": "bolt://localhost:7687",
+    "user": "neo4j",
+    "password": "password",
+    "database": "neo4j"
+  },
+  "openai": {
+    "api_type": "azure",
+    "api_version": "2025-03-01-preview",
+    "chat_model": "o1",
+    "embedding_model": "text-embedding-ada-002"
+  },
+  "telemetry": {
+    "enabled": false
+  },
+  "deployment": {
+    "cloud": {
+      "provider": "azure",
+      "resources": {
+        "container_registry": "",
+        "app_service": "",
+        "cognitive_services": "",
+        "key_vault": ""
+      },
+      "scaling": {
+        "min_instances": 1,
+        "max_instances": 3,
+        "cpu_threshold": 70,
+        "memory_threshold": 80
+      }
+    },
+    "on_premises": {
+      "host_requirements": {
+        "min_cpu_cores": 4,
+        "min_memory_gb": 8,
+        "min_disk_space_gb": 20
+      },
+      "database": {
+        "port": 7687,
+        "data_dir": "/var/lib/neo4j/data",
+        "backup_dir": "/var/backups/neo4j"
+      }
+    },
+    "container": {
+      "registry": "docker.io/skwaq",
+      "base_image": "python:3.10-slim",
+      "ports": {
+        "api": 8000,
+        "ui": 8080,
+        "neo4j": 7687
+      },
+      "volumes": {
+        "data": "/app/data",
+        "config": "/app/config"
+      }
+    }
+  }
+}

@@ -1,0 +1,24 @@
+[
+  {
+    "id": "inv-12345",
+    "title": "Test Investigation 1",
+    "repository_id": "repo-123",
+    "repository_name": "Test Repository 1",
+    "creation_date": "2025-03-28T00:00:00",
+    "status": "new",
+    "findings_count": 2,
+    "vulnerabilities_count": 1,
+    "description": "This is test investigation 1"
+  },
+  {
+    "id": "inv-67890",
+    "title": "Test Investigation 2",
+    "repository_id": "repo-456",
+    "repository_name": "Test Repository 2",
+    "creation_date": "2025-03-27T00:00:00",
+    "status": "completed",
+    "findings_count": 0,
+    "vulnerabilities_count": 0,
+    "description": "This is test investigation 2"
+  }
+]

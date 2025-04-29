@@ -1,0 +1,335 @@
+.repositories-page {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.page-title {
+  font-size: 1.8rem;
+  margin: 0;
+  color: var(--text-color-primary);
+}
+
+.page-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.search-container {
+  position: relative;
+  width: 250px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 12px;
+  padding-right: 30px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-color-element);
+  color: var(--text-color-primary);
+}
+
+.search-button {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-color-secondary);
+  cursor: pointer;
+}
+
+.new-repository-button {
+  padding: 8px 12px;
+  border-radius: 4px;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.new-repository-button:hover {
+  background-color: var(--primary-color-dark);
+}
+
+.repositories-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(var(--primary-color-rgb), 0.2);
+  border-radius: 50%;
+  border-top-color: var(--primary-color);
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.repositories-error {
+  padding: 20px;
+  background-color: var(--error-color-bg);
+  color: var(--error-color);
+  border-radius: 4px;
+  text-align: center;
+}
+
+.no-repositories {
+  padding: 40px;
+  background-color: var(--bg-color-element);
+  border-radius: 8px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.repositories-count {
+  margin-bottom: 10px;
+  color: var(--text-color-secondary);
+}
+
+.repositories-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 20px;
+}
+
+.repository-card {
+  background-color: var(--bg-color-element);
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.repository-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.repository-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.repository-name {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--text-color-primary);
+}
+
+.repository-status {
+  font-size: 0.8rem;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.status-analyzing {
+  background-color: rgba(var(--primary-color-rgb), 0.1);
+  color: var(--primary-color);
+}
+
+.status-analyzed {
+  background-color: rgba(var(--success-color-rgb), 0.1);
+  color: var(--success-color);
+}
+
+.status-failed {
+  background-color: rgba(var(--error-color-rgb), 0.1);
+  color: var(--error-color);
+}
+
+.repository-description {
+  color: var(--text-color-secondary);
+  margin-bottom: 15px;
+  flex-grow: 1;
+}
+
+.repository-meta {
+  margin-bottom: 15px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.vulnerabilities-badge {
+  background-color: rgba(var(--warning-color-rgb), 0.1);
+  color: var(--warning-color);
+  font-size: 0.8rem;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.last-analyzed {
+  font-size: 0.8rem;
+  color: var(--text-color-tertiary);
+}
+
+.repository-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.action-button {
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-color-element);
+  color: var(--text-color-primary);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.analyze-button {
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color-dark);
+}
+
+.analyze-button:hover {
+  background-color: var(--primary-color-dark);
+}
+
+.add-repository-form {
+  background-color: var(--bg-color-primary);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.add-repository-form h2 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: var(--text-color-primary);
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-color-primary);
+  font-weight: 500;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-color-element);
+  color: var(--text-color-primary);
+}
+
+.form-hint {
+  font-size: 0.85rem;
+  color: var(--text-color-tertiary);
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+
+.form-error {
+  color: var(--error-color);
+  margin-bottom: 15px;
+  padding: 10px;
+  background-color: rgba(var(--error-color-rgb), 0.1);
+  border-radius: 4px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.cancel-button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-color-element);
+  color: var(--text-color-primary);
+  cursor: pointer;
+}
+
+.submit-button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.submit-button:hover {
+  background-color: var(--primary-color-dark);
+}
+
+.submit-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Responsive styling */
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+  
+  .page-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+  
+  .search-container {
+    width: 100%;
+  }
+  
+  .new-repository-button {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .repositories-grid {
+    grid-template-columns: 1fr;
+  }
+}

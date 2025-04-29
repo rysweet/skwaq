@@ -1,0 +1,35 @@
+"""Main entry point for the Skwaq CLI.
+
+This module provides the main entry point for the Skwaq CLI application,
+delegating to the refactored command handlers and modules.
+"""
+
+import sys
+from typing import List, Optional
+
+from .refactored_main import main as refactored_main, run as refactored_run
+
+async def main(args: Optional[List[str]] = None) -> int:
+    """Run the Skwaq CLI.
+    
+    This is a thin wrapper around the refactored main function to maintain
+    backwards compatibility.
+    
+    Args:
+        args: Command-line arguments (defaults to sys.argv[1:])
+        
+    Returns:
+        Exit code (0 for success, non-zero for errors)
+    """
+    return await refactored_main(args)
+
+def run() -> None:
+    """Run the CLI application.
+    
+    This is a thin wrapper around the refactored run function to maintain
+    backwards compatibility.
+    """
+    refactored_run()
+
+if __name__ == "__main__":
+    run()

@@ -1,0 +1,28 @@
+Testing visualization API for: http://localhost:5001/api/investigations/inv-ai-samples-8d357166/visualization
+Success! API returned 10 nodes and 15 links
+
+Node types:
+  DataFlowPath: 2
+  File: 1
+  Finding: 1
+  Investigation: 1
+  Repository: 1
+  Sink: 2
+  Source: 2
+
+Example nodes:
+  Investigation: AI Samples Demo (id: inv-ai-samples-8d357166)
+  Finding: Unknown (id: 4394690336)
+  File: Configuration.cs (id: 4394691008)
+  Repository: dotnet/ai-samples (id: 4394691632)
+  Source: User Input (id: 4395231008)
+  Sink: API Request (id: 4395234368)
+  DataFlowPath: Unknown (id: 4395321824)
+
+Link types:
+  FOUND_IN: 1
+  HAS_DATA_FLOW_PATH: 4
+  HAS_FINDING: 1
+  HAS_SINK: 4
+  HAS_SOURCE: 4
+  PART_OF: 1

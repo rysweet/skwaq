@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Direct Visualization for Investigation</title>
+    <script src="https://unpkg.com/3d-force-graph@1.71.4/dist/3d-force-graph.min.js"></script>
+    <style>
+        body { 
+            margin: 0; 
+            padding: 0; 
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        #graph {
+            width: 100vw;
+            height: 100vh;
+            background: #fafafa;
+        }
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+        }
+        button {
+            margin: 5px;
+            padding: 8px 12px;
+            background: #4b76e8;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #3a67c7;
+        }
+    </style>
+</head>
+<body>
+    <div id="graph"></div>
+    <div class="controls">
+        <button id="center-btn">Center Graph</button>
+        <button id="zoom-in-btn">Zoom In</button>
+        <button id="zoom-out-btn">Zoom Out</button>
+    </div>
+    
+    <script>
+        // Load the graph data from the JSON file
+        fetch('investigation-inv-ai-samples-8d357166.json')
+            .then(response => response.json())
+            .then(graphData => {
+                console.log('Loaded graph data:', graphData);
+                console.log(`Nodes: ${graphData.nodes.length}, Links: ${graphData.links.length}`);
+                
+                // Log node types
+                const nodeTypes = {};
+                graphData.nodes.forEach(node => {
+                    nodeTypes[node.type] = (nodeTypes[node.type] || 0) + 1;
+                });
+                console.log('Node types:', nodeTypes);
+                
+                // Initialize the 3D force graph
+                const graph = ForceGraph3D()
+                    .graphData(graphData)
+                    .nodeId('id')
+                    .nodeLabel(node => `${node.label || node.id} (${node.type})`)
+                    .nodeAutoColorBy('type')
+                    .nodeVal(node => node.is_funnel_identified ? 8 : 5)
+                    .linkSource('source')
+                    .linkTarget('target')
+                    .linkAutoColorBy('type')
+                    .linkWidth(1.5)
+                    .linkDirectionalParticles(2)
+                    .linkDirectionalParticleWidth(link => link.value || 1)
+                    .linkDirectionalParticleSpeed(0.01)
+                    .backgroundColor('#ffffff')
+                    .showNavInfo(true)
+                    (document.getElementById('graph'));
+                
+                // Add controls
+                document.getElementById('center-btn').addEventListener('click', () => {
+                    graph.zoomToFit(1000, 50);
+                });
+                
+                document.getElementById('zoom-in-btn').addEventListener('click', () => {
+                    graph.zoom(1.2);
+                });
+                
+                document.getElementById('zoom-out-btn').addEventListener('click', () => {
+                    graph.zoom(0.8);
+                });
+                
+                // Initial centering
+                setTimeout(() => {
+                    graph.zoomToFit(1000, 50);
+                }, 500);
+            })
+            .catch(error => {
+                console.error('Error loading graph data:', error);
+                document.getElementById('graph').innerHTML = `
+                    <div style="padding: 50px; text-align: center;">
+                        <h2>Error loading graph data</h2>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            });
+    </script>
+</body>
+</html>
