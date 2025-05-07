@@ -61,7 +61,7 @@ This file maintains a running history of user prompts and a brief summary of Cla
 - Created simplified Docker-based Blarify parser
 - Fixed issues with Neo4j syntax
 - Successfully ingested Flask repository
-- Generated graph visualization of Flask codebase
+- Generated graph visualization of investigation results
 - Created custom script for graph visualization
 
 ## Prompt 7 (2025-03-27) 
@@ -364,3 +364,77 @@ This file maintains a running history of user prompts and a brief summary of Cla
 - Committed updated lock file to fix the CI build failure
 - Continued monitoring CI jobs to verify fix worked
 - Maintained careful documentation of all changes in commit messages
+
+## Prompt 34 (2025-04-29)
+
+**Prompt**: "Please review the existing instructions and history from Specifications/prompt-history.md. We are going to revisit working on the CLI and Ingestion modules. we are going to try to use the cli to ingest a repository from https://dev.azure.com/MSFTRedTeam/Tools/_git/AttackBot. Once we have ingested the repository let's try to run an investogation flow similar to that documented in docs/demos/cli_demo2.md."
+
+**Response**:
+- Fixed Docker-based Blarify parser to work correctly in the ingestion pipeline
+- Successfully tested ingestion with GitHub repository as a proof of concept
+- Encountered authentication issue with Azure OpenAI client during summarization
+- Attempted to ingest Azure DevOps repository but encountered credential errors
+- Created a test script to verify Docker-based Blarify parser functionality
+- Identified key issue was the Azure DevOps authentication needed for repository access
+
+## Prompt 35 (2025-04-30)
+
+**Prompt**: "This session is being continued from a previous conversation that ran out of context. The conversation is summarized below: Let me analyze the conversation to ensure I capture all key aspects for a comprehensive summary:
+
+1. Main User Request:
+   - The user wants to use the Skwaq CLI to ingest a repository from Azure DevOps (AttackBot) and run a security analysis workflow
+   - Due to authentication issues with Azure DevOps, the user pivoted to using a local checkout of the repository
+   - We worked on getting the ingestion pipeline to properly extract and map AST nodes to files
+   - We aimed to run sources and sinks analysis on the ingested repository
+
+2. Technical Work Performed:
+   - Fixed the AST mapper to properly handle different file path property naming formats
+   - Modified relationship types and directions to correctly map AST nodes to files
+   - Created test scripts to verify the ingestion and visualization processes
+   - Investigated and fixed connection between code files and AST nodes
+   - Worked on generating proper code summaries for security analysis
+   - Implemented Docker-based parsing for macOS compatibility
+   - Created visualization scripts for repository and AST structure
+   - Updated Neo4j queries to handle deprecated functions
+
+3. Missing Information or Ambiguities:
+   - It's not entirely clear if the code summarization is working correctly since the sources and sinks workflow didn't find any sources or sinks
+   - Some details about the integration between Blarify parser and the rest of the system could be further clarified
+   - The exact structure of the AST nodes in the Neo4j database is not fully described. Please continue the conversation from where we left it off"
+
+**Response**:
+- Created a comprehensive software specification for the ingestion module
+- Detailed all components (Repository Handler, AST Parsers, AST Mapper, Code Summarizers)
+- Provided implementation details for AST-to-file mapping with multiple property handling
+- Specified bidirectional relationship requirements (PART_OF and DEFINES)
+- Documented Docker integration for macOS compatibility
+- Created comprehensive API specifications with detailed interface definitions
+- Provided detailed implementation guidance for all ingestion module components
+- Updated prompt-history.md to maintain continuity of conversation
+
+## Prompt 36 (2025-05-07)
+
+**Prompt**: "Please help me use the skwaq CLI to ingest the AttackBot codebase located at '../../msec/red/AttackBot' and create a visualization of the neo4j database after the code has been ingested and summarized using the blarify and summarization features."
+
+**Response**:
+- Examined skwaq CLI and identified the necessary commands for repository ingestion
+- Started Neo4j database using Docker Compose
+- Worked with the user to ingest the AttackBot repository via skwaq CLI
+- Discovered database visualization inconsistencies where investigation wasn't linked
+- Created custom visualization scripts to properly display repository and AST structures
+- Fixed issues with AST node display and connections in the visualization
+- Built a comprehensive script to show relationships between files and AST nodes
+
+## Prompt 37 (2025-05-07)
+
+**Prompt**: "As you answer the user's questions, you can use the following context: [directoryStructure information and git status]"
+
+**Response**:
+- Continued investigation into why AST nodes weren't properly linked to filesystem nodes
+- Examined the AST mapper and ingestion code to understand the relationship problem
+- Created a test repository to analyze how AST nodes are created and linked
+- Created multiple visualization scripts with progressive improvements
+- Fixed Neo4j query structures to work with the current database schema
+- Identified that AST nodes have DEFINES relationships but no PART_OF relationships
+- Created a final visualization script that properly shows files and AST nodes
+- Added visualization filtering and search capabilities for better usability
