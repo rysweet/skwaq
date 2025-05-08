@@ -189,7 +189,7 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
         
         setGraphData(defaultGraph);
       });
-  }, [investigationId]);
+  }, [investigationId, showASTNodes, showCodeSummaries]);
   
   // Function to handle physics settings changes
   const handlePhysicsChange = (setting: keyof PhysicsSettings, value: number) => {
@@ -313,7 +313,7 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
     });
     
     return { nodes: filteredNodes, links: filteredLinks };
-  }, [graphData, showSources, showSinks, showDataFlowPaths, showMethods]);
+  }, [graphData, showSources, showSinks, showDataFlowPaths, showMethods, showASTNodes, showFunctions, showClasses, showSummaries]);
   
   useEffect(() => {
     if (!graphContainerRef.current || isLoading || isDataLoading) return;

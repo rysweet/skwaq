@@ -140,7 +140,7 @@ const useInvestigationGraph = (
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showASTNodes, showCodeSummaries]);
   
   /**
    * Fetch graph data when investigationId or visualization options change
