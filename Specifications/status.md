@@ -1,6 +1,85 @@
 # Skwaq Project Status
 
-## Current Milestone: GUI Integration of AST Visualization - Completed ✅
+## Current Milestone: AST Visualization CLI Tools - Completed ✅
+
+We have successfully implemented enhanced command-line tools for AST visualization and summarization:
+
+- [x] Created standalone AST visualization tool
+  - Implemented create_ast_visualization.py with comprehensive options
+  - Added support for both repositories and investigations
+  - Created interactive D3.js visualization with filtering capabilities
+  - Enhanced search functionality for finding code elements
+  - Added tooltips showing code summaries and element relationships
+  - Implemented proper visualization of AST nodes, files, and AI summaries
+  - Added browser integration for immediate visualization viewing
+
+- [x] Enhanced AI summarization for AST nodes
+  - Improved generate_ast_summaries.py with better CLI interface
+  - Added command-line options for controlling batch size and concurrency
+  - Implemented visualization generation after summarization
+  - Enhanced code property extraction for more accurate summaries
+  - Improved error handling and progress reporting
+  - Added browser integration for immediate results viewing
+
+- [x] Added comprehensive documentation
+  - Created ast_visualization_guide.md with detailed usage instructions
+  - Added examples of using visualization for security analysis
+  - Documented all command-line options and visualization features
+  - Provided best practices for working with large codebases
+  - Added troubleshooting guide for common issues
+
+- [x] Implemented visualization interface improvements
+  - Added node type filtering through clickable legend
+  - Enhanced search functionality to find nodes by name or content
+  - Implemented detailed node information display with properties
+  - Added interactive highlighting of connected nodes when selecting a node
+  - Created zoom and pan capabilities for exploring large graphs
+  - Enhanced tooltips showing summaries on hover
+  - Added code syntax highlighting in node details
+
+These enhancements provide powerful tools for exploring code structure, understanding relationships between code elements, and identifying potential security issues through AI-powered summaries. The AST visualization tools make it easier for security researchers to analyze complex codebases, with interactive features that enable focusing on specific aspects of the code.
+
+## Previous Milestone: Service Management Enhancement - Completed ✅
+
+We have successfully implemented a comprehensive service management system for the skwaq CLI:
+
+- [x] Created ServiceManager class for managing project services
+  - Implemented service status detection for database, API, and GUI
+  - Added service dependency management (GUI → API → Database)
+  - Created robust service starting and stopping functionality
+  - Implemented health checks and service monitoring
+  - Added special handling for Neo4j database running in Docker
+  - Created logging system for service operations
+  - Implemented graceful error handling for service operations
+
+- [x] Enhanced CLI with service management commands
+  - Added service status command with detailed status reporting
+  - Implemented service start command with dependency handling
+  - Created service stop command with proper resource cleanup
+  - Added service restart command for maintenance operations
+  - Enhanced GUI command to automatically start required services
+  - Created tables for displaying service status information
+  - Added helpful usage examples in help text
+
+- [x] Created comprehensive documentation
+  - Added detailed service management guide with examples
+  - Updated CLI command reference with new commands
+  - Created troubleshooting guide for service issues
+  - Added examples of using service commands in workflows
+  - Documented logs location and usage for debugging
+  - Implemented usage scenarios for different user types
+
+- [x] Fixed key bugs in codebase
+  - Fixed syntax errors in ingestion.py with try/except structure
+  - Added missing NodeLabels and RelationshipTypes enums
+  - Fixed indentation issues in several Python files
+  - Improved error handling and reporting throughout
+  - Enhanced imports and module structure
+  - Fixed parameter handling for CLI commands
+
+This milestone significantly improves the developer experience by providing a single, integrated approach to starting, stopping, and managing all the components of the system. The skwaq CLI now automatically ensures that all required components are running when needed, and provides clear feedback about service status and issues.
+
+## Previous Milestone: GUI Integration of AST Visualization - Completed ✅
 
 We have successfully integrated AST visualization capabilities into the GUI frontend:
 

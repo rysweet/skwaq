@@ -1,20 +1,28 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
-Generate AST Summaries
+Generate AI-powered summaries for AST nodes in a codebase.
 
-This script generates AI summaries for AST nodes (Functions, Classes, Methods)
-in the database that don't have summaries yet.
+This script uses Azure OpenAI to generate summaries for AST nodes
+(Functions, Classes, Methods) in a specified repository or investigation.
+
+Usage:
+    python generate_ast_summaries.py <repo_id_or_investigation_id> [--type <repo|investigation>] [--limit <n>] [--batch-size <n>] [--concurrent <n>] [--visualize]
+
+Options:
+    --type TYPE             Specify the input ID type: 'repo' or 'investigation' (default: auto-detect)
+    --limit N               Maximum number of AST nodes to process (default: 100)
+    --batch-size N          Number of nodes to process in each batch (default: 10)
+    --concurrent N          Number of concurrent API calls (default: 3)
+    --visualize             Generate visualization after summarization
 """
 
 import argparse
 import asyncio
+import os
 import sys
 import time
-from pathlib import Path
+import webbrowser
 from typing import Dict, List, Optional, Any
-
-# Add the project root to the Python path
-sys.path.append(str(Path(__file__).parent))
 
 from skwaq.core.openai_client import get_openai_client
 from skwaq.db.neo4j_connector import get_connector
@@ -26,118 +34,176 @@ logger = get_logger(__name__)
 
 
 async def generate_ast_summaries(
-    investigation_id: Optional[str] = None,
-    repo_id: Optional[str] = None,
+    id_value: str,
+    id_type: str = "investigation",
     limit: int = 100,
     batch_size: int = 10,
     max_concurrent: int = 3,
+    visualize: bool = False
 ) -> Dict[str, int]:
     """Generate summaries for AST nodes without summaries.
     
     Args:
-        investigation_id: Optional ID of the investigation to process
-        repo_id: Optional ID of the repository to process
+        id_value: ID of the repository or investigation
+        id_type: Type of ID ('repository' or 'investigation')
         limit: Maximum number of AST nodes to process
-        batch_size: Number of AST nodes to process in each batch
-        max_concurrent: Maximum number of concurrent summary generation tasks
+        batch_size: Number of nodes to process in each batch
+        max_concurrent: Maximum number of concurrent API calls
+        visualize: Whether to generate visualization after summarization
         
     Returns:
         Dictionary with counts of processed and created summaries
     """
+    # Set up semaphore for concurrent API calls
+    semaphore = asyncio.Semaphore(max_concurrent)
+    
     try:
-        # Initialize the database connector
+        # Get database connector
         connector = get_connector()
         
         # Initialize OpenAI client
-        openai_client = await get_openai_client(async_mode=True)
+        print("Initializing OpenAI client...")
+        openai_client = get_openai_client(async_mode=True)
+        print("OpenAI client initialized.")
         
-        # First, check AST nodes and summaries
+        # First, check AST nodes and summaries before processing
         visualizer = ASTVisualizer()
-        counts = visualizer.check_ast_summaries(investigation_id)
-        logger.info(f"Before: {counts}")
+        if id_type == "investigation":
+            counts_before = visualizer.check_ast_summaries(id_value)
+        else:
+            counts_before = visualizer.check_ast_summaries()
         
-        # Build query to get AST nodes without summaries
-        query = """
-        MATCH (ast)
-        WHERE (ast:Function OR ast:Class OR ast:Method) 
-        AND ast.code IS NOT NULL
-        AND NOT (ast)<-[:DESCRIBES]-(:CodeSummary)
-        """
+        logger.info(f"Before generation - AST nodes: {counts_before['ast_count']}, with summaries: {counts_before['ast_with_summary_count']}")
         
-        if investigation_id:
-            # For a specific investigation
-            query += """
+        # Build query to get AST nodes without summaries based on ID type
+        if id_type == "investigation":
+            query = """
             MATCH (i:Investigation {id: $id})-[:HAS_FINDING]->(f:Finding)-[:FOUND_IN]->(file:File)
             MATCH (ast)-[:PART_OF]->(file)
+            WHERE (ast:Function OR ast:Class OR ast:Method) 
+            AND ast.code IS NOT NULL
+            AND NOT (ast)<-[:DESCRIBES]-(:CodeSummary)
+            RETURN 
+                elementId(ast) as ast_id, 
+                ast.name as name, 
+                ast.code as code,
+                labels(ast) as labels,
+                elementId(file) as file_id,
+                file.name as file_name,
+                file.path as file_path
+            LIMIT $limit
             """
-            params = {"id": investigation_id}
-        elif repo_id:
-            # For a specific repository
-            query += """
-            MATCH (r:Repository)-[:CONTAINS]->(file:File)
-            WHERE r.ingestion_id = $repo_id OR elementId(r) = $repo_id
+            params = {"id": id_value, "limit": limit}
+        else:  # repository
+            query = """
+            MATCH (repo:Repository)-[:CONTAINS*]->(file:File)
+            WHERE repo.ingestion_id = $id OR elementId(repo) = $id
             MATCH (ast)-[:PART_OF]->(file)
+            WHERE (ast:Function OR ast:Class OR ast:Method) 
+            AND ast.code IS NOT NULL
+            AND NOT (ast)<-[:DESCRIBES]-(:CodeSummary)
+            RETURN 
+                elementId(ast) as ast_id, 
+                ast.name as name, 
+                ast.code as code,
+                labels(ast) as labels,
+                elementId(file) as file_id,
+                file.name as file_name,
+                file.path as file_path
+            LIMIT $limit
             """
-            params = {"repo_id": repo_id}
-        else:
-            # For all AST nodes
-            params = {}
-        
-        query += """
-        RETURN 
-            elementId(ast) as ast_id, 
-            ast.name as name, 
-            ast.code as code,
-            labels(ast) as labels,
-            elementId(file) as file_id,
-            file.name as file_name,
-            file.path as file_path
-        LIMIT $limit
-        """
-        
-        params["limit"] = limit
+            params = {"id": id_value, "limit": limit}
         
         # Execute the query
+        print(f"Querying for AST nodes without summaries...")
         ast_nodes = connector.run_query(query, params)
-        logger.info(f"Found {len(ast_nodes)} AST nodes without summaries")
         
         if not ast_nodes:
+            print("No AST nodes without summaries found.")
             return {"processed": 0, "created": 0}
         
-        # Set up semaphore to limit concurrent tasks
-        semaphore = asyncio.Semaphore(max_concurrent)
+        print(f"Found {len(ast_nodes)} AST nodes without summaries.")
         
-        # Process AST nodes in batches
-        results = {"processed": 0, "created": 0}
+        # Process nodes in batches
+        processed = 0
+        created = 0
+        total_batches = (len(ast_nodes) + batch_size - 1) // batch_size
         
-        for i in range(0, len(ast_nodes), batch_size):
-            batch = ast_nodes[i:i + batch_size]
-            logger.info(f"Processing batch {i // batch_size + 1}/{(len(ast_nodes) + batch_size - 1) // batch_size}")
+        for batch_index in range(total_batches):
+            batch_start = batch_index * batch_size
+            batch_end = min(batch_start + batch_size, len(ast_nodes))
+            batch = ast_nodes[batch_start:batch_end]
             
-            # Create tasks for each AST node in the batch
+            print(f"Processing batch {batch_index + 1}/{total_batches} ({len(batch)} nodes)...")
+            
+            # Create tasks for each AST node in this batch
             tasks = []
             for ast_node in batch:
-                task = generate_ast_summary(ast_node, connector, openai_client, semaphore)
+                task = generate_ast_summary(
+                    ast_node, connector, openai_client, semaphore
+                )
                 tasks.append(task)
             
-            # Wait for all tasks in the batch to complete
+            # Run all tasks concurrently with semaphore limiting
             batch_results = await asyncio.gather(*tasks)
             
-            # Update results
+            # Count successes
             for result in batch_results:
                 if result:
-                    results["processed"] += 1
+                    processed += 1
                     if result.get("created"):
-                        results["created"] += 1
+                        created += 1
+                        print(f"Created summary for {result.get('ast_type', 'AST node')} '{result.get('ast_name', 'Unknown')}'")
             
-            logger.info(f"Completed batch: {results['created']} summaries created")
+            # Progress update
+            print(f"Progress: {processed}/{len(ast_nodes)} nodes processed, {created} summaries created")
         
-        # Get final counts
-        counts_after = visualizer.check_ast_summaries(investigation_id)
-        logger.info(f"After: {counts_after}")
+        # Check summary counts after processing
+        if id_type == "investigation":
+            counts_after = visualizer.check_ast_summaries(id_value)
+        else:
+            counts_after = visualizer.check_ast_summaries()
         
-        return results
-    
+        logger.info(f"After generation - AST nodes: {counts_after['ast_count']}, with summaries: {counts_after['ast_with_summary_count']}")
+        
+        # Generate visualization if requested
+        if visualize and created > 0:
+            print("Generating visualization...")
+            try:
+                if id_type == "investigation":
+                    output_path = f"investigation-{id_value}-ast-summaries-visualization.html"
+                    vis_path = visualizer.visualize_ast(
+                        investigation_id=id_value,
+                        include_files=True,
+                        include_summaries=True,
+                        output_path=output_path,
+                        title=f"AST with Summaries: {id_value}"
+                    )
+                else:
+                    output_path = f"repository-{id_value}-ast-summaries-visualization.html"
+                    vis_path = visualizer.visualize_ast(
+                        repo_id=id_value,
+                        include_files=True,
+                        include_summaries=True,
+                        output_path=output_path,
+                        title=f"AST with Summaries: {id_value}"
+                    )
+                
+                print(f"Visualization created: {vis_path}")
+                
+                # Try to open in browser
+                try:
+                    webbrowser.open(f"file://{os.path.abspath(vis_path)}")
+                    print(f"Visualization opened in browser")
+                except Exception as e:
+                    print(f"Could not open browser: {str(e)}")
+                    print(f"Please open the file manually: {os.path.abspath(vis_path)}")
+                    
+            except Exception as e:
+                print(f"Error creating visualization: {str(e)}")
+        
+        return {"processed": processed, "created": created}
+        
     except Exception as e:
         logger.error(f"Error generating AST summaries: {str(e)}")
         import traceback
@@ -227,80 +293,100 @@ async def generate_ast_summary(
             )
             
             logger.debug(f"Created summary for AST node: {ast_name}")
-            return {"processed": True, "created": True, "ast_name": ast_name, "summary_id": summary_node_id}
+            return {"processed": True, "created": True, "ast_name": ast_name, "ast_type": ast_type, "summary_id": summary_node_id}
             
         except Exception as e:
             logger.error(f"Error creating AST summary for {ast_node.get('name', 'unknown')}: {str(e)}")
             return {"processed": True, "created": False, "error": str(e)}
 
 
-async def main():
-    """Command-line interface for generating AST summaries."""
+def main():
+    """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Generate AI summaries for AST nodes without summaries"
+        description="Generate AI-powered summaries for AST nodes in a codebase."
     )
     parser.add_argument(
-        "--investigation",
-        "-i",
-        help="Investigation ID to generate summaries for",
+        "id", 
+        help="Repository ID or Investigation ID to process"
     )
     parser.add_argument(
-        "--repo",
-        "-r",
-        help="Repository ID to generate summaries for (alternative to investigation)",
+        "--type", 
+        choices=["repo", "investigation"],
+        help="Specify the input ID type: 'repo' or 'investigation' (default: auto-detect)"
     )
     parser.add_argument(
-        "--limit",
-        "-l",
-        type=int,
+        "--limit", 
+        type=int, 
         default=100,
-        help="Maximum number of AST nodes to process (default: 100)",
+        help="Maximum number of AST nodes to process (default: 100)"
     )
     parser.add_argument(
-        "--batch-size",
-        "-b",
-        type=int,
+        "--batch-size", 
+        type=int, 
         default=10,
-        help="Number of AST nodes to process in each batch (default: 10)",
+        help="Number of nodes to process in each batch (default: 10)"
     )
     parser.add_argument(
-        "--max-concurrent",
-        "-m",
-        type=int,
+        "--concurrent", 
+        type=int, 
         default=3,
-        help="Maximum number of concurrent summary generation tasks (default: 3)",
+        help="Number of concurrent API calls (default: 3)"
+    )
+    parser.add_argument(
+        "--visualize", 
+        action="store_true",
+        help="Generate visualization after summarization"
     )
     parser.add_argument(
         "--check",
-        "-c",
         action="store_true",
-        help="Only check AST nodes and summaries without generating new summaries",
+        help="Only check AST nodes and summaries without generating new summaries"
     )
-
+    
     args = parser.parse_args()
+    
+    # Determine ID type if not specified
+    id_type = args.type
+    input_id = args.id
+    
+    if not id_type:
+        # Auto-detect ID type based on format
+        if input_id.startswith("inv-"):
+            id_type = "investigation"
+            print(f"Auto-detected ID type: investigation (ID: {input_id})")
+        else:
+            id_type = "repo"
+            print(f"Auto-detected ID type: repository (ID: {input_id})")
     
     try:
         if args.check:
-            # Check AST nodes and summaries
+            # Just check AST nodes and summaries without generating new ones
             visualizer = ASTVisualizer()
-            id_to_check = args.investigation or args.repo
-            counts = visualizer.check_ast_summaries(id_to_check)
-            
-            print(f"\nAST Node Summary for {'investigation' if args.investigation else 'repository'} {id_to_check or 'all'}:")
+            if id_type == "investigation":
+                counts = visualizer.check_ast_summaries(input_id)
+            else:
+                # For repo, we'll look at all AST nodes since there's no direct way to query by repo ID
+                counts = visualizer.check_ast_summaries()
+                
+            print(f"\nAST Node Summary for {id_type} {input_id}:")
             print(f"AST Nodes: {counts['ast_count']}")
             print(f"AST Nodes with code: {counts['ast_with_code_count']}")
-            print(f"Summary count: {counts['summary_count']}")
-            print(f"AST nodes with summary: {counts['ast_with_summary_count']}")
+            print(f"AI summaries: {counts['summary_count']}")
+            print(f"AST nodes with summaries: {counts['ast_with_summary_count']}")
             return 0
+            
+        # Run the summarization process
+        print(f"Generating AST summaries for {id_type} {input_id}...")
         
-        # Generate AST summaries
-        logger.info("Generating AST summaries...")
-        result = await generate_ast_summaries(
-            investigation_id=args.investigation,
-            repo_id=args.repo,
-            limit=args.limit,
-            batch_size=args.batch_size,
-            max_concurrent=args.max_concurrent,
+        result = asyncio.run(
+            generate_ast_summaries(
+                id_value=input_id,
+                id_type=id_type,
+                limit=args.limit,
+                batch_size=args.batch_size,
+                max_concurrent=args.concurrent,
+                visualize=args.visualize
+            )
         )
         
         print(f"\nAST Summary Generation Results:")
@@ -310,16 +396,15 @@ async def main():
         if result.get("error"):
             print(f"Error: {result['error']}")
             return 1
-        
+            
         return 0
-    
+        
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        print(f"Error generating summaries: {str(e)}")
         import traceback
         traceback.print_exc()
         return 1
 
 
 if __name__ == "__main__":
-    exit_code = asyncio.run(main())
-    sys.exit(exit_code)
+    sys.exit(main())
