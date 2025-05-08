@@ -105,6 +105,35 @@ class ServiceManager:
         """
         service = self.services[service_type]
 
+        # Special case for database service (Neo4j)
+        if service_type == ServiceType.DATABASE:
+            # Check if Neo4j container is running using Docker
+            try:
+                result = subprocess.run(
+                    ["docker", "ps", "--filter", "name=neo4j", "--format", "{{.Names}}"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    check=False,
+                )
+                if "neo4j" in result.stdout:
+                    # Container is running, now check if the database is actually responsive
+                    if service.port:
+                        import socket
+                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                            sock.settimeout(1)
+                            result = sock.connect_ex(("localhost", service.port))
+                            if result == 0:  # Port is open
+                                return ServiceStatus.RUNNING
+                            else:
+                                return ServiceStatus.STARTING  # Container running but port not open yet
+                    return ServiceStatus.RUNNING  # Container running, no port specified
+                else:
+                    return ServiceStatus.STOPPED
+            except Exception:
+                logger.exception("Error checking Neo4j container status")
+                return ServiceStatus.UNKNOWN
+
         # Check if we're tracking a running process
         if service.process and service.process.poll() is None:
             # Process is running, but let's also check health endpoint if available
@@ -441,21 +470,34 @@ class ServiceManager:
         try:
             # Different stopping procedures for different service types
             if service_type == ServiceType.DATABASE:
-                # For Neo4j, use docker-compose to stop the container
-                logger.info(f"Stopping {service.name} using docker-compose")
+                # Check if Neo4j container is running
                 result = subprocess.run(
-                    ["docker-compose", "stop", "neo4j"],
+                    ["docker", "ps", "--filter", "name=neo4j", "--format", "{{.Names}}"],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
                     check=False,
-                    cwd=self.project_root,
                 )
                 
-                if result.returncode != 0:
-                    return False, f"Failed to stop {service.name}: {result.stderr}"
-                
-                return True, f"Successfully stopped {service.name}"
+                if "neo4j" in result.stdout:
+                    # For Neo4j, use docker-compose to stop the container
+                    logger.info(f"Stopping {service.name} using docker-compose")
+                    result = subprocess.run(
+                        ["docker-compose", "stop", "neo4j"],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        check=False,
+                        cwd=self.project_root,
+                    )
+                    
+                    if result.returncode != 0:
+                        return False, f"Failed to stop {service.name}: {result.stderr}"
+                    
+                    return True, f"Successfully stopped {service.name}"
+                else:
+                    logger.info(f"{service.name} is already stopped")
+                    return True, f"{service.name} is already stopped"
             
             else:  # API or GUI
                 # If we have a process object, use it to stop the service

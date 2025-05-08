@@ -24,11 +24,47 @@ def main():
         service = service_manager.services[service_type]
         print(f"  {service.name}: {status.value}")
     
-    # Test service status commands
+    # Test service URL
     print("\nService URLs:")
     for service_type in ServiceType:
         service = service_manager.services[service_type]
         print(f"  {service.name}: {service.url}")
+    
+    # Test Docker status
+    print("\nChecking Docker status:")
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["docker", "info"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            print("  Docker is running")
+        else:
+            print("  Docker is not running or not available")
+            print(f"  Error: {result.stderr}")
+    except Exception as e:
+        print(f"  Error checking Docker: {str(e)}")
+    
+    # Check Neo4j container status
+    print("\nChecking Neo4j container status:")
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "--filter", "name=neo4j", "--format", "{{.Names}}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        if "neo4j" in result.stdout:
+            print("  Neo4j container is running")
+        else:
+            print("  Neo4j container is not running")
+    except Exception as e:
+        print(f"  Error checking Neo4j container: {str(e)}")
     
     print("\nTest complete.")
 

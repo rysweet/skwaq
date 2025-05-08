@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple
 from rich.table import Table
 
 from ...shared.service_manager import ServiceManager, ServiceStatus, ServiceType
-from ..ui.console import console, error, info, success, warning, print_banner
+from ..ui.console import console, error, info, warning, print_banner
 from ..ui.progress import create_status_indicator
 from .base import CommandHandler, handle_command_error
 
@@ -297,7 +297,7 @@ class ServiceCommandHandler(CommandHandler):
 
             # Print summary if all services started
             console.print()
-            success("All services started successfully!")
+            console.print("[bold green]All services started successfully![/]")
             for service_enum in ServiceType:
                 service = service_manager.services[service_enum]
                 console.print(f"[bold]{service.name}:[/] [link={service.url}]{service.url}[/link]")
@@ -350,7 +350,7 @@ class ServiceCommandHandler(CommandHandler):
                         warning(f"Failed to stop {service.name}: {message}")
                         # Continue with other services even if one fails
 
-            success("All services stopped")
+            console.print("[bold green]All services stopped[/]")
 
     async def _handle_restart(
         self, service_manager: ServiceManager, service_type: Optional[str]
