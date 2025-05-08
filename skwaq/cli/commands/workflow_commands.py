@@ -1,12 +1,15 @@
 """Command handlers for workflow-related commands."""
 
+import asyncio
 import json
 import os
+import time
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from ...db.neo4j_connector import get_connector
+from ...db.neo4j_connector import Neo4jConnector, get_connector
+from ...db.schema import RelationshipTypes
 from ...workflows.guided_inquiry import GuidedInquiryWorkflow
 from ...workflows.qa_workflow import QAWorkflow
 from ...workflows.sources_and_sinks import SourcesAndSinksWorkflow
@@ -522,9 +525,147 @@ class InvestigationCommandHandler(CommandHandler):
             return await self._handle_delete()
         elif self.args.investigation_command == "visualize":
             return await self._handle_visualize()
+        elif self.args.investigation_command == "check-ast":
+            return await self._handle_check_ast()
+        elif self.args.investigation_command == "summarize-ast":
+            return await self._handle_summarize_ast()
         else:
             error(f"Unknown investigation command: {self.args.investigation_command}")
             return 1
+            
+    async def _handle_check_ast(self) -> int:
+        """Handle the check-ast command.
+
+        Returns:
+            Exit code (0 for success, non-zero for errors)
+        """
+        investigation_id = self.args.id
+        
+        # Verify investigation exists
+        investigation = await self._get_investigation(investigation_id)
+        
+        if not investigation:
+            error(f"Investigation not found: {investigation_id}")
+            return 1
+        
+        with create_status_indicator(
+            f"[bold blue]Checking AST nodes and summaries for investigation {investigation_id}...",
+            spinner="dots",
+        ) as status:
+            try:
+                # Import the AST visualizer
+                from ...visualization.ast_visualizer import ASTVisualizer
+                
+                # Create the visualizer and check AST summaries
+                visualizer = ASTVisualizer()
+                counts = visualizer.check_ast_summaries(investigation_id)
+                
+                status.update(f"[bold green]Check completed for investigation {investigation_id}")
+                
+                # Display the results
+                console.print(
+                    format_panel(
+                        f"AST Nodes: {counts['ast_count']}\n"
+                        f"AST Nodes with code: {counts['ast_with_code_count']}\n"
+                        f"Summary count: {counts['summary_count']}\n"
+                        f"AST nodes with summary: {counts['ast_with_summary_count']}",
+                        title=f"AST Summary for Investigation: {investigation['title']}",
+                        style="cyan",
+                    )
+                )
+                
+                # Show recommendations if there are AST nodes without summaries
+                if counts['ast_count'] > counts['ast_with_summary_count']:
+                    diff = counts['ast_count'] - counts['ast_with_summary_count']
+                    info(f"Found {diff} AST nodes without summaries.")
+                    info("To generate summaries, run: skwaq investigations summarize-ast " + investigation_id)
+                
+                return 0
+                
+            except Exception as e:
+                status.update("[bold red]Error checking AST nodes and summaries!")
+                error(f"Error: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                return 1
+                
+    async def _handle_summarize_ast(self) -> int:
+        """Handle the summarize-ast command.
+
+        Returns:
+            Exit code (0 for success, non-zero for errors)
+        """
+        investigation_id = self.args.id
+        limit = getattr(self.args, "limit", 100)
+        batch_size = getattr(self.args, "batch_size", 10)
+        max_concurrent = getattr(self.args, "max_concurrent", 3)
+        
+        # Verify investigation exists
+        investigation = await self._get_investigation(investigation_id)
+        
+        if not investigation:
+            error(f"Investigation not found: {investigation_id}")
+            return 1
+        
+        with create_status_indicator(
+            f"[bold blue]Generating AST summaries for investigation {investigation_id}...",
+            spinner="dots",
+        ) as status:
+            try:
+                # First check the current state
+                from ...visualization.ast_visualizer import ASTVisualizer
+                visualizer = ASTVisualizer()
+                
+                counts_before = visualizer.check_ast_summaries(investigation_id)
+                status.update(f"[bold blue]Found {counts_before['ast_count']} AST nodes, {counts_before['ast_with_summary_count']} with summaries")
+                
+                # If all nodes already have summaries, we're done
+                if counts_before['ast_count'] <= counts_before['ast_with_summary_count']:
+                    status.update("[bold green]All AST nodes already have summaries!")
+                    success("All AST nodes already have summaries!")
+                    return 0
+                
+                # Initialize OpenAI client
+                from ...core.openai_client import get_openai_client
+                openai_client = await get_openai_client(async_mode=True)
+                
+                # Use the generate_ast_summaries function
+                results = await self._generate_ast_summaries(
+                    investigation_id=investigation_id,
+                    limit=limit,
+                    openai_client=openai_client
+                )
+                
+                # Get final counts
+                counts_after = visualizer.check_ast_summaries(investigation_id)
+                status.update(f"[bold green]Generation completed: {results['created']} summaries created")
+                
+                # Display summary
+                console.print(
+                    format_panel(
+                        f"AST Nodes processed: {results['processed']}\n"
+                        f"Summaries created: {results['created']}\n\n"
+                        f"Before: {counts_before['ast_with_summary_count']} of {counts_before['ast_count']} nodes had summaries\n"
+                        f"After: {counts_after['ast_with_summary_count']} of {counts_after['ast_count']} nodes have summaries",
+                        title=f"AST Summary Generation: {investigation['title']}",
+                        style="green",
+                    )
+                )
+                
+                success(f"Generated {results['created']} new AST summaries.")
+                if counts_after['ast_count'] > counts_after['ast_with_summary_count']:
+                    diff = counts_after['ast_count'] - counts_after['ast_with_summary_count']
+                    info(f"There are still {diff} AST nodes without summaries.")
+                    info(f"Use --limit {diff} to generate the remaining summaries.")
+                
+                return 0
+                
+            except Exception as e:
+                status.update("[bold red]Error generating AST summaries!")
+                error(f"Error: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                return 1
 
     async def _handle_list(self) -> int:
         """Handle the list command.
@@ -723,6 +864,12 @@ class InvestigationCommandHandler(CommandHandler):
         include_vulnerabilities = self.args.include_vulnerabilities
         include_files = self.args.include_files
         max_nodes = self.args.max_nodes
+        
+        # New AST visualization options
+        visualization_type = getattr(self.args, "visualization_type", "standard")
+        with_summaries = getattr(self.args, "with_summaries", False)
+        generate_summaries = getattr(self.args, "generate_summaries", False)
+        open_in_browser = getattr(self.args, "open", False)
 
         # Verify investigation exists
         investigation = await self._get_investigation(investigation_id)
@@ -733,7 +880,53 @@ class InvestigationCommandHandler(CommandHandler):
 
         # Determine output path
         if not output_path:
-            output_path = f"investigation-{investigation_id}.{visualization_format}"
+            if visualization_type == "ast":
+                output_path = f"investigation-{investigation_id}-ast.{visualization_format}"
+            else:
+                output_path = f"investigation-{investigation_id}.{visualization_format}"
+
+        # If generating summaries is requested, do that first
+        if visualization_type == "ast" and generate_summaries:
+            with create_status_indicator(
+                f"[bold blue]Generating missing AST summaries for investigation {investigation_id}...",
+                spinner="dots",
+            ) as status:
+                try:
+                    from ...visualization.ast_visualizer import ASTVisualizer
+                    from ...core.openai_client import get_openai_client
+                    
+                    # Check current summary status
+                    visualizer = ASTVisualizer()
+                    counts_before = visualizer.check_ast_summaries(investigation_id)
+                    
+                    if counts_before['ast_count'] <= counts_before['ast_with_summary_count']:
+                        status.update("[bold green]All AST nodes already have summaries!")
+                    else:
+                        status.update(f"[bold blue]Found {counts_before['ast_count'] - counts_before['ast_with_summary_count']} AST nodes without summaries")
+                        
+                        # Initialize OpenAI client
+                        openai_client = await get_openai_client(async_mode=True)
+                        
+                        # Use the generate_ast_summaries function (will be implemented below)
+                        results = await self._generate_ast_summaries(
+                            investigation_id=investigation_id,
+                            limit=100,  # Reasonable default
+                            openai_client=openai_client
+                        )
+                        
+                        counts_after = visualizer.check_ast_summaries(investigation_id)
+                        status.update(f"[bold green]Generated {results['created']} summaries")
+                        
+                        # Show summary generation stats
+                        info(f"Generated {results['created']} new AST summaries.")
+                        if counts_after['ast_with_summary_count'] < counts_after['ast_count']:
+                            info(f"{counts_after['ast_count'] - counts_after['ast_with_summary_count']} AST nodes still need summaries.")
+                            info("Use 'investigations summarize-ast' command for more control.")
+                
+                except Exception as e:
+                    status.update("[bold red]Error generating AST summaries!")
+                    error(f"Error generating summaries: {str(e)}")
+                    # Continue with visualization regardless of summary generation success
 
         # Generate visualization
         with create_status_indicator(
@@ -741,53 +934,191 @@ class InvestigationCommandHandler(CommandHandler):
             spinner="dots",
         ) as status:
             try:
-                # Import here to avoid circular imports
-                from ...visualization.graph_visualizer import GraphVisualizer
-
-                # Initialize the graph visualizer
-                visualizer = GraphVisualizer()
-
-                # Get the graph data
-                status.update(
-                    "[bold blue]Querying database for investigation graph data..."
-                )
-                graph_data = visualizer.get_investigation_graph(
-                    investigation_id=investigation_id,
-                    include_findings=include_findings,
-                    include_vulnerabilities=include_vulnerabilities,
-                    include_files=include_files,
-                    include_sources_sinks=True,  # Always include sources and sinks for better visualization
-                    max_nodes=max_nodes,
-                )
-
-                # Export in the requested format
-                status.update(
-                    f"[bold blue]Generating {visualization_format} visualization..."
-                )
-
-                if visualization_format == "json":
-                    result_path = visualizer.export_graph_as_json(
-                        graph_data, output_path
+                # Choose visualization approach based on type
+                if visualization_type == "ast":
+                    # Use AST visualizer for AST-focused visualization
+                    from ...visualization.ast_visualizer import ASTVisualizer
+                    
+                    # Initialize the AST visualizer
+                    visualizer = ASTVisualizer()
+                    
+                    # Generate the visualization
+                    status.update(f"[bold blue]Creating AST visualization for investigation {investigation_id}...")
+                    
+                    # Use the specialized AST visualization method
+                    result_path = visualizer.visualize_ast(
+                        investigation_id=investigation_id,
+                        include_files=include_files,
+                        include_summaries=with_summaries,
+                        max_nodes=max_nodes,
+                        output_path=output_path,
+                        title=f"AST Visualization: {investigation_id}",
                     )
-                elif visualization_format == "html":
-                    result_path = visualizer.export_graph_as_html(
-                        graph_data,
-                        output_path,
-                        title=f"Investigation Graph: {investigation_id}",
+                    
+                    status.update(f"[bold green]AST visualization saved to {result_path}!")
+                    success(f"AST visualization saved to: {result_path}")
+                    
+                    # Show summary counts to inform the user
+                    ast_counts = visualizer.check_ast_summaries(investigation_id)
+                    info(f"AST Nodes: {ast_counts['ast_count']}, AST Nodes with summaries: {ast_counts['ast_with_summary_count']}")
+                    
+                else:
+                    # Use standard graph visualizer for regular visualization
+                    from ...visualization.graph_visualizer import GraphVisualizer
+
+                    # Initialize the graph visualizer
+                    visualizer = GraphVisualizer()
+
+                    # Get the graph data
+                    status.update(
+                        "[bold blue]Querying database for investigation graph data..."
                     )
-                else:  # SVG
-                    result_path = visualizer.export_graph_as_svg(
-                        graph_data, output_path
+                    graph_data = visualizer.get_investigation_graph(
+                        investigation_id=investigation_id,
+                        include_findings=include_findings,
+                        include_vulnerabilities=include_vulnerabilities,
+                        include_files=include_files,
+                        include_sources_sinks=True,  # Always include sources and sinks for better visualization
+                        max_nodes=max_nodes,
                     )
 
-                status.update(f"[bold green]Visualization saved to {result_path}!")
+                    # Also include AST nodes for connected files if include_files is True
+                    if include_files and graph_data['nodes']:
+                        # Extract file nodes
+                        file_nodes = [node for node in graph_data['nodes'] if node['type'] == 'File']
+                        
+                        if file_nodes:
+                            file_ids = [node['id'] for node in file_nodes]
+                            
+                            # Query for AST nodes with PART_OF relationships to these files
+                            connector = get_connector()
+                            ast_query = """
+                            MATCH (ast)-[:PART_OF]->(file)
+                            WHERE elementId(file) IN $file_ids AND (ast:Function OR ast:Class OR ast:Method)
+                            RETURN file.name as file_name, elementId(file) as file_id, 
+                                   ast.name as ast_name, elementId(ast) as ast_id, labels(ast) as ast_labels
+                            LIMIT 1000
+                            """
+                            
+                            ast_results = connector.run_query(ast_query, {"file_ids": file_ids})
+                            status.update(f"[bold blue]Found {len(ast_results)} AST nodes to include...")
+                            
+                            # Add AST nodes and relationships
+                            node_ids = set([node['id'] for node in graph_data['nodes']])
+                            
+                            for ast in ast_results:
+                                file_id = ast["file_id"]
+                                ast_id = str(ast["ast_id"])
+                                
+                                # Add AST node if not already added
+                                if ast_id not in node_ids:
+                                    node_ids.add(ast_id)
+                                    node_type = ast["ast_labels"][0] if ast["ast_labels"] else "Unknown"
+                                    
+                                    graph_data['nodes'].append({
+                                        "id": ast_id,
+                                        "label": ast["ast_name"],
+                                        "type": node_type,
+                                        "properties": {"file": ast["file_name"]},
+                                        "color": "#8da0cb" if node_type == "Function" else 
+                                                 "#e78ac3" if node_type == "Class" else
+                                                 "#a6d854" if node_type == "Method" else "#999999"
+                                    })
+                                
+                                # Add relationship in both directions
+                                graph_data['links'].append({
+                                    "source": str(file_id),
+                                    "target": ast_id,
+                                    "type": "DEFINES"
+                                })
+                                
+                                graph_data['links'].append({
+                                    "source": ast_id,
+                                    "target": str(file_id),
+                                    "type": "PART_OF"
+                                })
+                            
+                            # Get AI summaries for AST nodes if with_summaries is True
+                            if ast_results and with_summaries:
+                                ast_ids = [ast["ast_id"] for ast in ast_results]
+                                summary_query = """
+                                MATCH (summary:CodeSummary)-[r]->(ast)
+                                WHERE elementId(ast) IN $ast_ids
+                                RETURN summary.summary as summary_text, elementId(summary) as summary_id, 
+                                       elementId(ast) as ast_id, type(r) as relationship_type
+                                """
+                                
+                                summary_results = connector.run_query(summary_query, {"ast_ids": ast_ids})
+                                status.update(f"[bold blue]Found {len(summary_results)} AI summaries...")
+                                
+                                # Add AI summary nodes and relationships
+                                for summary in summary_results:
+                                    summary_id = str(summary["summary_id"])
+                                    ast_id = str(summary["ast_id"])
+                                    
+                                    # Add summary node if not already added
+                                    if summary_id not in node_ids:
+                                        node_ids.add(summary_id)
+                                        # Truncate summary text for label display
+                                        summary_text = summary["summary_text"]
+                                        short_summary = summary_text[:30] + "..." if summary_text and len(summary_text) > 30 else summary_text
+                                        
+                                        graph_data['nodes'].append({
+                                            "id": summary_id,
+                                            "label": f"Summary: {short_summary}",
+                                            "type": "CodeSummary",
+                                            "properties": {"summary": summary_text},
+                                            "color": "#ffd92f"
+                                        })
+                                    
+                                    # Add relationship
+                                    graph_data['links'].append({
+                                        "source": summary_id,
+                                        "target": ast_id,
+                                        "type": summary["relationship_type"]
+                                    })
 
-                success(f"Investigation visualization saved to: {result_path}")
+                    # Export in the requested format
+                    status.update(
+                        f"[bold blue]Generating {visualization_format} visualization..."
+                    )
 
-                # Show node statistics
-                info(
-                    f"Graph statistics: {len(graph_data['nodes'])} nodes, {len(graph_data['links'])} relationships"
-                )
+                    if visualization_format == "json":
+                        result_path = visualizer.export_graph_as_json(
+                            graph_data, output_path
+                        )
+                    elif visualization_format == "html":
+                        result_path = visualizer.export_graph_as_html(
+                            graph_data,
+                            output_path,
+                            title=f"Investigation Graph: {investigation_id}",
+                        )
+                    else:  # SVG
+                        result_path = visualizer.export_graph_as_svg(
+                            graph_data, output_path
+                        )
+
+                    status.update(f"[bold green]Visualization saved to {result_path}!")
+                    success(f"Investigation visualization saved to: {result_path}")
+
+                    # Show node statistics
+                    node_types = {}
+                    for node in graph_data['nodes']:
+                        node_type = node.get('type', 'Unknown')
+                        node_types[node_type] = node_types.get(node_type, 0) + 1
+                    
+                    node_stats = ", ".join([f"{count} {node_type}" for node_type, count in node_types.items()])
+                    info(f"Graph statistics: {len(graph_data['nodes'])} nodes ({node_stats}), {len(graph_data['links'])} relationships")
+
+                # Open in browser if requested
+                if open_in_browser:
+                    try:
+                        import webbrowser
+                        status.update("[bold blue]Opening visualization in browser...")
+                        webbrowser.open(f"file://{os.path.abspath(result_path)}")
+                    except Exception as e:
+                        status.update("[bold yellow]Could not open browser")
+                        info(f"Could not open browser: {str(e)}")
 
                 return 0
 
@@ -804,6 +1135,138 @@ class InvestigationCommandHandler(CommandHandler):
                 status.update("[bold red]Error generating visualization!")
                 error(f"Error generating visualization: {str(e)}")
                 return 1
+                
+    async def _generate_ast_summaries(
+        self, investigation_id: str, limit: int = 100, openai_client: Any = None
+    ) -> Dict[str, int]:
+        """Generate summaries for AST nodes without summaries.
+        
+        Args:
+            investigation_id: ID of the investigation to process
+            limit: Maximum number of AST nodes to process
+            openai_client: Initialized OpenAI client
+            
+        Returns:
+            Dictionary with counts of processed and created summaries
+        """
+        # Set up semaphore to limit concurrent tasks
+        semaphore = asyncio.Semaphore(3)  # Default concurrency
+        
+        # Get database connector
+        connector = get_connector()
+        
+        # Build query to get AST nodes without summaries
+        query = """
+        MATCH (i:Investigation {id: $id})-[:HAS_FINDING]->(f:Finding)-[:FOUND_IN]->(file:File)
+        MATCH (ast)-[:PART_OF]->(file)
+        WHERE (ast:Function OR ast:Class OR ast:Method) 
+        AND ast.code IS NOT NULL
+        AND NOT (ast)<-[:DESCRIBES]-(:CodeSummary)
+        RETURN 
+            elementId(ast) as ast_id, 
+            ast.name as name, 
+            ast.code as code,
+            labels(ast) as labels,
+            elementId(file) as file_id,
+            file.name as file_name,
+            file.path as file_path
+        LIMIT $limit
+        """
+        
+        # Execute the query
+        ast_nodes = connector.run_query(query, {"id": investigation_id, "limit": limit})
+        
+        if not ast_nodes:
+            return {"processed": 0, "created": 0}
+        
+        # Create tasks for each AST node
+        tasks = []
+        for ast_node in ast_nodes:
+            task = self._generate_single_ast_summary(ast_node, connector, openai_client, semaphore)
+            tasks.append(task)
+        
+        # Run all tasks concurrently with semaphore limiting
+        results = await asyncio.gather(*tasks)
+        
+        # Count successes
+        processed = 0
+        created = 0
+        for result in results:
+            if result:
+                processed += 1
+                if result.get("created"):
+                    created += 1
+        
+        return {"processed": processed, "created": created}
+    
+    async def _generate_single_ast_summary(
+        self, ast_node: Dict, connector: Any, model_client: Any, semaphore: asyncio.Semaphore
+    ) -> Optional[Dict]:
+        """Generate a summary for a single AST node."""
+        async with semaphore:
+            try:
+                ast_id = ast_node["ast_id"]
+                ast_name = ast_node["name"]
+                ast_code = ast_node["code"]
+                ast_type = ast_node["labels"][0] if ast_node["labels"] else "Unknown"
+                file_name = ast_node["file_name"] or "Unknown"
+                
+                if not ast_code or len(ast_code.strip()) < 10:
+                    return {"processed": True, "created": False, "reason": "insufficient_code"}
+                
+                # Create prompt
+                ast_prompt = f"""
+                You are analyzing a specific {ast_type} from a larger file.
+                
+                File name: {file_name}
+                {ast_type} name: {ast_name}
+                
+                Your task is to create a detailed, accurate summary of this {ast_type.lower()}'s:
+                1. Purpose and functionality 
+                2. Parameters, return values, and important logic
+                3. Role within the larger file
+                4. Any potential security implications
+                5. How it interacts with other components
+                
+                {ast_type} code:
+                ```
+                {ast_code}
+                ```
+                
+                Summary:
+                """
+                
+                # Generate summary
+                summary_start_time = time.time()
+                ast_summary = await model_client.get_completion(
+                    ast_prompt, temperature=0.3
+                )
+                summary_time = time.time() - summary_start_time
+                
+                # Create summary node
+                summary_node_id = connector.create_node(
+                    "CodeSummary",
+                    {
+                        "summary": ast_summary,
+                        "file_name": file_name,
+                        "ast_node_id": ast_id,  # Store reference to AST node
+                        "ast_name": ast_name,
+                        "ast_type": ast_type,
+                        "created_at": time.time(),
+                        "generation_time": summary_time,
+                        "summary_type": "ast",  # Mark this as an AST-level summary
+                    },
+                )
+                
+                # Create relationship to AST node
+                connector.create_relationship(
+                    summary_node_id, ast_id, RelationshipTypes.DESCRIBES
+                )
+                
+                return {"processed": True, "created": True}
+                
+            except Exception as e:
+                return {"processed": True, "created": False, "error": str(e)}
 
     async def _get_investigations(self) -> List[Dict[str, Any]]:
         """Get all investigations.
@@ -995,3 +1458,302 @@ class InvestigationCommandHandler(CommandHandler):
                 remediation="Avoid including sensitive information in error messages.",
             ),
         ]
+        
+        
+class ASTVisualizationCommandHandler(CommandHandler):
+    """Handler for the AST visualization command."""
+
+    @handle_command_error
+    async def handle(self) -> int:
+        """Handle the AST visualization command.
+
+        Returns:
+            Exit code (0 for success, non-zero for errors)
+        """
+        repo_id = self.args.repo_id
+        investigation_id = self.args.investigation_id
+        output_path = self.args.output
+        
+        with create_status_indicator(
+            "[bold blue]Creating enhanced AST visualization...", spinner="dots"
+        ) as status:
+            try:
+                # Import required modules
+                from ...db.neo4j_connector import get_connector
+                
+                connector = get_connector()
+                
+                # Create graph data structure
+                graph_data = {
+                    "nodes": [],
+                    "links": []
+                }
+                
+                status.update("[bold blue]Querying database for visualization data...")
+                
+                # Get repository information if repo_id is provided
+                repo_info = None
+                if repo_id:
+                    repo_query = """
+                    MATCH (r:Repository)
+                    WHERE r.ingestion_id = $repo_id OR elementId(r) = $repo_id
+                    RETURN r.name as name, elementId(r) as id, r.path as path
+                    """
+                    repo_results = connector.run_query(repo_query, {"repo_id": repo_id})
+                    if repo_results:
+                        repo_info = repo_results[0]
+                
+                # Get investigation information if investigation_id is provided
+                investigation_info = None
+                if investigation_id:
+                    inv_query = """
+                    MATCH (i:Investigation {id: $id})
+                    RETURN i.title as title, elementId(i) as id
+                    """
+                    inv_results = connector.run_query(inv_query, {"id": investigation_id})
+                    if inv_results:
+                        investigation_info = inv_results[0]
+                
+                # Set for tracking added node IDs
+                node_ids = set()
+                
+                # Add root node (repository or investigation)
+                root_id = "root"
+                root_label = "Code Graph"
+                root_type = "Root"
+                
+                if repo_info:
+                    root_id = str(repo_info["id"])
+                    root_label = f"Repository: {repo_info['name']}"
+                    root_type = "Repository"
+                elif investigation_info:
+                    root_id = str(investigation_info["id"])
+                    root_label = f"Investigation: {investigation_info['title']}"
+                    root_type = "Investigation"
+                
+                graph_data["nodes"].append({
+                    "id": root_id,
+                    "label": root_label,
+                    "type": root_type,
+                    "color": "#ff7f0e"
+                })
+                node_ids.add(root_id)
+                
+                # Query for files
+                file_query = """
+                MATCH (file:File)
+                """
+                
+                if repo_info:
+                    file_query += """
+                    MATCH (r:Repository)-[:CONTAINS]->(file)
+                    WHERE elementId(r) = $root_id
+                    """
+                elif investigation_id:
+                    file_query += """
+                    MATCH (i:Investigation {id: $investigation_id})-[:HAS_FILE]->(file)
+                    """
+                else:
+                    file_query += """
+                    WHERE true
+                    """
+                
+                file_query += """
+                RETURN 
+                    elementId(file) as file_id,
+                    file.name as file_name,
+                    file.path as file_path,
+                    file.summary as file_summary
+                LIMIT 100
+                """
+                
+                params = {}
+                if repo_info:
+                    params["root_id"] = repo_info["id"]
+                if investigation_id:
+                    params["investigation_id"] = investigation_id
+                
+                file_results = connector.run_query(file_query, params)
+                status.update(f"[bold blue]Found {len(file_results)} files...")
+                
+                # Add file nodes and connect to root
+                for file in file_results:
+                    file_id = str(file["file_id"])
+                    
+                    if file_id not in node_ids:
+                        node_ids.add(file_id)
+                        graph_data["nodes"].append({
+                            "id": file_id,
+                            "label": file["file_name"] or os.path.basename(file["file_path"] or "Unknown"),
+                            "type": "File",
+                            "properties": {
+                                "path": file["file_path"],
+                                "summary": file["file_summary"]
+                            },
+                            "color": "#66c2a5"
+                        })
+                        
+                        # Connect to root
+                        graph_data["links"].append({
+                            "source": root_id,
+                            "target": file_id,
+                            "type": "CONTAINS"
+                        })
+                
+                # Query for AST nodes connected to these files
+                if file_results:
+                    file_ids = [file["file_id"] for file in file_results]
+                    
+                    ast_query = """
+                    MATCH (ast)-[:PART_OF]->(file)
+                    WHERE elementId(file) IN $file_ids 
+                          AND (ast:Function OR ast:Class OR ast:Method)
+                    RETURN 
+                        elementId(ast) as ast_id,
+                        ast.name as ast_name,
+                        labels(ast) as ast_labels,
+                        ast.start_line as start_line,
+                        ast.end_line as end_line,
+                        elementId(file) as file_id
+                    LIMIT 300
+                    """
+                    
+                    ast_results = connector.run_query(ast_query, {"file_ids": file_ids})
+                    status.update(f"[bold blue]Found {len(ast_results)} AST nodes...")
+                    
+                    # Add AST nodes and connect to files
+                    for ast in ast_results:
+                        ast_id = str(ast["ast_id"])
+                        file_id = str(ast["file_id"])
+                        
+                        if ast_id not in node_ids:
+                            node_ids.add(ast_id)
+                            node_type = ast["ast_labels"][0] if ast["ast_labels"] else "Unknown"
+                            
+                            graph_data["nodes"].append({
+                                "id": ast_id,
+                                "label": ast["ast_name"] or "Unnamed AST Node",
+                                "type": node_type,
+                                "properties": {
+                                    "start_line": ast["start_line"],
+                                    "end_line": ast["end_line"]
+                                },
+                                "color": "#8da0cb" if node_type == "Function" else 
+                                        "#e78ac3" if node_type == "Class" else
+                                        "#a6d854" if node_type == "Method" else "#999999"
+                            })
+                            
+                            # Connect to file
+                            graph_data["links"].append({
+                                "source": ast_id,
+                                "target": file_id,
+                                "type": "PART_OF"
+                            })
+                            
+                            graph_data["links"].append({
+                                "source": file_id,
+                                "target": ast_id,
+                                "type": "DEFINES"
+                            })
+                
+                # Query for summary nodes
+                summary_query = """
+                MATCH (summary:CodeSummary)-[:DESCRIBES]->(target)
+                WHERE elementId(target) IN $node_ids
+                RETURN 
+                    elementId(summary) as summary_id,
+                    summary.summary as summary_text,
+                    summary.summary_type as summary_type,
+                    elementId(target) as target_id
+                """
+                
+                all_ids = [node_id for node_id in node_ids]
+                summary_results = connector.run_query(summary_query, {"node_ids": all_ids})
+                status.update(f"[bold blue]Found {len(summary_results)} code summaries...")
+                
+                # Add summary nodes
+                for summary in summary_results:
+                    summary_id = str(summary["summary_id"])
+                    target_id = str(summary["target_id"])
+                    
+                    if summary_id not in node_ids:
+                        node_ids.add(summary_id)
+                        summary_text = summary["summary_text"] or "No summary available"
+                        short_summary = summary_text[:30] + "..." if len(summary_text) > 30 else summary_text
+                        
+                        # Determine summary type and color
+                        summary_type = summary["summary_type"] or "unknown"
+                        summary_color = "#ffd92f"  # Default
+                        if summary_type == "file":
+                            summary_color = "#fc8d62"  # Orange-red for file summaries
+                        
+                        graph_data["nodes"].append({
+                            "id": summary_id,
+                            "label": f"Summary: {short_summary}",
+                            "type": "CodeSummary",
+                            "properties": {
+                                "summary": summary_text,
+                                "summary_type": summary_type
+                            },
+                            "color": summary_color
+                        })
+                        
+                        # Connect to target
+                        graph_data["links"].append({
+                            "source": summary_id,
+                            "target": target_id,
+                            "type": "DESCRIBES"
+                        })
+                
+                # Generate HTML with the advanced interactive visualization
+                if not output_path:
+                    # Default output name based on source
+                    if investigation_id:
+                        output_path = f"investigation-{investigation_id}-visualization.html"
+                    elif repo_id:
+                        output_path = f"repository-{repo_id}-visualization.html"
+                    else:
+                        output_path = "ast-visualization.html"
+                
+                status.update(f"[bold blue]Creating D3.js visualization ({len(graph_data['nodes'])} nodes, {len(graph_data['links'])} links)...")
+                
+                # Create visualization HTML
+                from ...visualization.graph_visualizer import create_interactive_html_visualization
+                
+                html_content = create_interactive_html_visualization(
+                    graph_data,
+                    title="AST Visualization with Code Summaries",
+                    enable_filtering=True,
+                    enable_search=True
+                )
+                
+                # Write to file
+                with open(output_path, "w") as f:
+                    f.write(html_content)
+                
+                status.update(f"[bold green]Visualization saved to {output_path}")
+                
+                # Show node statistics
+                node_types = {}
+                for node in graph_data['nodes']:
+                    node_type = node.get('type', 'Unknown')
+                    node_types[node_type] = node_types.get(node_type, 0) + 1
+                
+                node_stats = ", ".join([f"{count} {node_type}" for node_type, count in node_types.items()])
+                info(f"Graph statistics: {len(graph_data['nodes'])} nodes ({node_stats}), {len(graph_data['links'])} relationships")
+                
+                # Try to open in browser if GUI is available
+                try:
+                    import webbrowser
+                    webbrowser.open(f"file://{os.path.abspath(output_path)}")
+                except Exception:
+                    pass  # Silently fail if browser can't be opened
+                
+                return 0
+                
+            except Exception as e:
+                status.update("[bold red]Error creating visualization!")
+                error(f"Error creating AST visualization: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                return 1

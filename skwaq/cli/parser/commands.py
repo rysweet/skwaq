@@ -367,6 +367,69 @@ def register_workflow_parsers(parser: SkwaqArgumentParser) -> None:
         default=100,
         help="Maximum number of nodes to include in visualization",
     )
+    
+    visualize_parser.add_argument(
+        "--visualization-type",
+        choices=["standard", "ast"],
+        default="standard",
+        help="Type of visualization to generate (standard or AST-focused)",
+    )
+    
+    visualize_parser.add_argument(
+        "--with-summaries",
+        action="store_true",
+        help="Include code summaries in visualization (for AST visualization)",
+    )
+    
+    visualize_parser.add_argument(
+        "--generate-summaries",
+        action="store_true",
+        help="Generate missing code summaries for AST nodes before visualization",
+    )
+    
+    visualize_parser.add_argument(
+        "--open",
+        action="store_true",
+        help="Open visualization in browser after creation",
+    )
+    
+    # Check AST summaries for investigation
+    ast_parser = investigation_subparsers.add_parser(
+        "check-ast", help="Check AST nodes and summaries for an investigation"
+    )
+    
+    ast_parser.add_argument("id", help="Investigation ID to check")
+    
+    # Generate AST summaries for investigation
+    summarize_parser = investigation_subparsers.add_parser(
+        "summarize-ast", help="Generate AI summaries for AST nodes in an investigation"
+    )
+    
+    summarize_parser.add_argument("id", help="Investigation ID to summarize")
+    
+    summarize_parser.add_argument(
+        "--limit",
+        "-l",
+        type=int,
+        default=100,
+        help="Maximum number of AST nodes to summarize (default: 100)",
+    )
+    
+    summarize_parser.add_argument(
+        "--batch-size",
+        "-b",
+        type=int,
+        default=10,
+        help="Number of AST nodes to process in each batch (default: 10)",
+    )
+    
+    summarize_parser.add_argument(
+        "--max-concurrent",
+        "-m",
+        type=int,
+        default=3,
+        help="Maximum number of concurrent summary generation tasks (default: 3)",
+    )
 
 
 def register_all_parsers(parser: SkwaqArgumentParser) -> None:
