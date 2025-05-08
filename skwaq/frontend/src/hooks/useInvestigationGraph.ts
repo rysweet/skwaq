@@ -5,12 +5,23 @@ import { GraphData, GraphNode } from './useKnowledgeGraph';
  * Custom hook for handling investigation graph data
  * 
  * @param investigationId The ID of the investigation to visualize
+ * @param options Optional visualization configuration options
  */
-const useInvestigationGraph = (investigationId?: string) => {
+const useInvestigationGraph = (
+  investigationId?: string, 
+  options?: {
+    showASTNodes?: boolean;
+    showCodeSummaries?: boolean;
+  }
+) => {
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  
+  // Extract options with defaults
+  const showASTNodes = options?.showASTNodes || false;
+  const showCodeSummaries = options?.showCodeSummaries || false;
   
   /**
    * Fetch graph data for a specific investigation
@@ -20,8 +31,18 @@ const useInvestigationGraph = (investigationId?: string) => {
       setLoading(true);
       setError(null);
       
-      console.log(`[useInvestigationGraph] Fetching graph for ID: ${id}`);
-      const response = await fetch(`/api/investigations/${id}/visualization`);
+      // Build the API URL with query parameters for AST visualization if needed
+      const apiUrl = new URL(`/api/investigations/${id}/visualization`, window.location.origin);
+      
+      // Add visualization parameters if AST visualization is enabled
+      if (showASTNodes) {
+        apiUrl.searchParams.append("visualization_type", "ast");
+        apiUrl.searchParams.append("include_ast", "true");
+        apiUrl.searchParams.append("include_summaries", String(showCodeSummaries));
+      }
+      
+      console.log(`[useInvestigationGraph] Fetching graph for ID: ${id}, AST: ${showASTNodes}, Summaries: ${showCodeSummaries}`);
+      const response = await fetch(apiUrl.toString());
       
       if (!response.ok) {
         let errorMessage = `Error: ${response.status} ${response.statusText}`;
@@ -122,13 +143,13 @@ const useInvestigationGraph = (investigationId?: string) => {
   }, []);
   
   /**
-   * Fetch graph data when investigationId changes
+   * Fetch graph data when investigationId or visualization options change
    */
   useEffect(() => {
     if (investigationId) {
       fetchInvestigationGraph(investigationId);
     }
-  }, [investigationId, fetchInvestigationGraph]);
+  }, [investigationId, fetchInvestigationGraph, showASTNodes, showCodeSummaries]);
   
   return {
     graphData,

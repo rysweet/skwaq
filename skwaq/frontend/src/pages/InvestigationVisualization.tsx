@@ -19,6 +19,8 @@ const InvestigationVisualization: React.FC<InvestigationVisualizationProps> = ({
   const { investigationId } = useParams<{ investigationId: string }>();
   const navigate = useNavigate();
   const [investigationTitle, setInvestigationTitle] = useState<string>('Investigation');
+  const [showASTNodes, setShowASTNodes] = useState<boolean>(false);
+  const [showCodeSummaries, setShowCodeSummaries] = useState<boolean>(false);
   
   const {
     loading,
@@ -26,8 +28,19 @@ const InvestigationVisualization: React.FC<InvestigationVisualizationProps> = ({
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     error,
     selectedNode,
-    setSelectedNode
-  } = useInvestigationGraph(investigationId);
+    setSelectedNode,
+    fetchInvestigationGraph
+  } = useInvestigationGraph(investigationId, { 
+    showASTNodes,
+    showCodeSummaries
+  });
+  
+  // Refresh graph data when visualization options change
+  useEffect(() => {
+    if (investigationId) {
+      fetchInvestigationGraph(investigationId);
+    }
+  }, [showASTNodes, showCodeSummaries, fetchInvestigationGraph, investigationId]);
   
   // Fetch investigation details (title, etc.) when ID changes
   useEffect(() => {
@@ -81,20 +94,44 @@ const InvestigationVisualization: React.FC<InvestigationVisualizationProps> = ({
         <h3>{selectedNode.name}</h3>
         <div className="detail-row">
           <span className="detail-label">Type:</span>
-          <span className={`detail-value node-type-${selectedNode.type}`}>{selectedNode.type}</span>
+          <span className={`detail-value node-type-${selectedNode.type.toLowerCase()}`}>{selectedNode.type}</span>
         </div>
         <div className="detail-row">
           <span className="detail-label">ID:</span>
           <span className="detail-value">{selectedNode.id}</span>
         </div>
-        {selectedNode.properties && Object.entries(selectedNode.properties).map(([key, value]) => (
-          <div key={key} className="detail-row">
-            <span className="detail-label">{key}:</span>
-            <span className="detail-value">
-              {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-            </span>
+        
+        {/* Show code summary prominently if available */}
+        {selectedNode.properties?.summary && (
+          <div className="summary-section">
+            <h4>Summary</h4>
+            <div className="summary-content">
+              {selectedNode.properties.summary}
+            </div>
           </div>
-        ))}
+        )}
+        
+        {/* Show code section if available */}
+        {selectedNode.properties?.code && (
+          <div className="code-section">
+            <h4>Code</h4>
+            <pre className="code-content">
+              {selectedNode.properties.code}
+            </pre>
+          </div>
+        )}
+        
+        {/* Other properties, excluding code and summary which are shown above */}
+        {selectedNode.properties && Object.entries(selectedNode.properties)
+          .filter(([key]) => key !== 'code' && key !== 'summary')
+          .map(([key, value]) => (
+            <div key={key} className="detail-row">
+              <span className="detail-label">{key}:</span>
+              <span className="detail-value">
+                {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+              </span>
+            </div>
+          ))}
         
         <div className="detail-actions">
           {selectedNode.type === 'file' && selectedNode.properties?.path && (
@@ -136,6 +173,24 @@ const InvestigationVisualization: React.FC<InvestigationVisualizationProps> = ({
           <span className="investigation-id">ID: {investigationId}</span>
         </div>
         <div className="header-right">
+          <div className="visualization-options">
+            <label className="option-toggle">
+              <input
+                type="checkbox"
+                checked={showASTNodes}
+                onChange={(e) => setShowASTNodes(e.target.checked)}
+              />
+              Show AST Nodes
+            </label>
+            <label className="option-toggle">
+              <input
+                type="checkbox"
+                checked={showCodeSummaries}
+                onChange={(e) => setShowCodeSummaries(e.target.checked)}
+              />
+              Show Code Summaries
+            </label>
+          </div>
           <button 
             className="report-button"
             onClick={() => navigate(`/investigations/${investigationId}/report`)}
@@ -152,6 +207,8 @@ const InvestigationVisualization: React.FC<InvestigationVisualizationProps> = ({
             onNodeSelected={setSelectedNode}
             isLoading={loading}
             darkMode={darkMode}
+            showASTNodes={showASTNodes}
+            showCodeSummaries={showCodeSummaries}
           />
         </div>
         

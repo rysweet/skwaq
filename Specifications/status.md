@@ -1,6 +1,45 @@
 # Skwaq Project Status
 
-## Current Milestone: Visualization Enhancement - Completed ✅
+## Current Milestone: GUI Integration of AST Visualization - Completed ✅
+
+We have successfully integrated AST visualization capabilities into the GUI frontend:
+
+- [x] Enhanced API endpoint for AST visualization
+  - Added support for visualization_type parameter (standard/ast)
+  - Created parameters for including AST nodes and code summaries
+  - Implemented GraphVisualizer.get_ast_graph method for AST-focused visualization
+  - Added proper response formatting for different visualization types
+  - Enhanced error handling with detailed diagnostics
+  - Implemented query parameter validation with proper defaults
+  - Added logging for visualization request tracing
+
+- [x] Updated frontend components for AST visualization
+  - Enhanced InvestigationGraphVisualization component with AST support
+  - Added UI toggles for enabling AST nodes and code summaries
+  - Created styling for AST-specific node types (Function, Class, Method)
+  - Implemented filtering controls for AST node types
+  - Added support for code summary display in node details
+  - Enhanced the node detail view with syntax highlighting for code
+  - Created CSS styling for summary and code display
+
+- [x] Added comprehensive visualization controls
+  - Implemented toggles for different AST node types (functions, classes, methods)
+  - Added filtering for code summary nodes
+  - Enhanced legend with AST-specific node types
+  - Improved search functionality to include code content
+  - Added syntax highlighting for code in node details panel
+  - Enhanced tooltips to show summary snippets
+
+- [x] Created comprehensive documentation
+  - Added AST visualization guide for GUI users
+  - Created documentation on code summarization benefits
+  - Implemented examples of using AST visualization for security analysis
+  - Added troubleshooting guide for visualization issues
+  - Created usage scenarios and example workflows
+
+This milestone represents a significant enhancement to the user experience, allowing users to visualize and explore the code structure directly in the GUI. The integration of AST visualization with code summaries enables a deeper understanding of codebases, making it easier to identify potential security issues and understand complex code. The enhanced search and filtering capabilities provide a powerful tool for exploring large codebases and focusing on specific areas of interest.
+
+## Previous Milestone: Visualization Enhancement - Completed ✅
 
 We have successfully enhanced the visualization capabilities with advanced filtering, searching, and interactive features:
 
