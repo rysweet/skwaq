@@ -2,6 +2,59 @@
 
 This file maintains a running history of user prompts and a brief summary of Claude's responses and actions.
 
+## Prompt 42 (2025-05-08)
+
+**Prompt**: "Please continue the conversation from where we left it off without asking the user any further questions. Continue with the last task that you were asked to work on."
+
+**Response**:
+- Added a comprehensive interactive AST visualization function to GraphVisualizer class
+- Implemented node type filtering through a clickable legend interface
+- Added search functionality to find nodes by name or content
+- Created detailed node information display with relationships and properties
+- Added CSS styling for an improved visualization experience
+- Implemented tooltips showing summary information on node hover
+- Added highlighting of connected nodes when selecting a node
+- Updated prompt history to maintain continuity of conversation
+
+## Prompt 41 (2025-05-08)
+
+**Prompt**: "Please continue the conversation from where we left it off without asking the user any further questions. Continue with the last task that you were asked to work on."
+
+**Response**:
+- Fixed the create_and_visualize.py script to properly handle repository IDs in Neo4j
+- Updated the script to extract code properties from source files and attach them to AST nodes
+- Created a visualization script (visualize_ast_with_summaries.py) that displays AST nodes with their AI summaries
+- Generated AI summaries for AST nodes, creating CodeSummary nodes and DESCRIBES relationships
+- Successfully created an interactive visualization showing the code structure with AI-generated summaries
+
+## Prompt 40 (2025-05-07)
+
+**Prompt**: "Please continue the conversation from where we left it off without asking the user any further questions. Continue with the last task that you were asked to work on."
+
+**Response**:
+- Continued working on fixing issues with missing AI summaries in the visualization
+- Analyzed the LLM summarizer and OpenAI client implementation
+- Investigated why AST nodes don't have code property required for summarization
+- Created diagnostic scripts to check database configuration and AST node properties
+- Created fix_ast_nodes.py script to add missing code property to AST nodes
+- Developed run_summarization.py to trigger the AI summarization process independently
+- Created visualize_with_summaries.py for interactive visualization with AI summaries
+- Updated status.md to track progress on AI summarization fixes
+- Added comprehensive troubleshooting for AI summarization issues
+
+## Prompt 39 (2025-05-07)
+
+**Prompt**: "Please continue the conversation from where we left it off without asking the user any further questions. Continue with the last task that you were asked to work on."
+
+**Response**:
+- Continued enhancing the CLI visualization capabilities for AST nodes, files, and AI summaries
+- Analyzed the current database to check for AST nodes and relationship types
+- Created a comprehensive test script (test_ingestion_visualization.py) for ingestion and visualization
+- Fixed bidirectional relationships between AST nodes and files in the AST mapper
+- Enhanced InvestigationCommandHandler._handle_visualize to include AST nodes and AI summaries
+- Added comprehensive statistics display showing counts by node type
+- Prepared to perform a new ingestion of the AttackBot repository to test fixed relationships
+
 ## Prompt 1 (2025-03-27)
 
 **Prompt**: "We are working on the Ingestion Module, described in Specifications/Ingestion.md. It is mostly implemented. We are working on integration tests. Update the status after every time you return the prompt to me. 1) let's fix the neo4j deprecation warnings. 2) do the tests validate that the code summary graph entries, ast graph entries, and filesystem graph entries for a given module can all be linked together? the test may need to work with real data to make that happen. Lastly, is there a test that validates the documentation graph integration and relationship linking?"
@@ -438,3 +491,15 @@ This file maintains a running history of user prompts and a brief summary of Cla
 - Identified that AST nodes have DEFINES relationships but no PART_OF relationships
 - Created a final visualization script that properly shows files and AST nodes
 - Added visualization filtering and search capabilities for better usability
+
+## Prompt 38 (2025-05-07)
+
+**Prompt**: "please fix the way the CLI does it and then proceed with the next steps"
+
+**Response**:
+- Fixed the CLI's investigation visualization function to include AST nodes and AI summaries
+- Updated the code to query AST nodes with PART_OF relationships to files
+- Enhanced the visualization by adding proper relationship types between nodes
+- Improved statistics display to show counts by node type in the visualization
+- Added specific handling for CodeSummary nodes with proper display of summary text
+- Created more detailed node information display for better analysis
