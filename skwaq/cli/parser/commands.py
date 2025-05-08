@@ -3,6 +3,7 @@
 
 from .base import SkwaqArgumentParser
 
+
 # Analyze command removed
 
 
@@ -184,6 +185,65 @@ def register_gui_parser(parser: SkwaqArgumentParser) -> None:
 
     gui_parser.add_argument(
         "--no-browser", action="store_true", help="Don't open browser automatically"
+    )
+
+
+def register_service_parser(parser: SkwaqArgumentParser) -> None:
+    """Register the service command parser.
+
+    Args:
+        parser: Main argument parser
+    """
+    service_parser = parser.create_command_parser(
+        "service", "Manage Skwaq services"
+    )
+
+    service_subparsers = service_parser.add_subparsers(
+        dest="subcommand", required=True, help="Service command"
+    )
+
+    # Status command
+    status_parser = service_subparsers.add_parser(
+        "status", help="Check status of services"
+    )
+    status_parser.add_argument(
+        "service", 
+        nargs="?", 
+        choices=["database", "api", "gui"],
+        help="Specific service to check (default: all services)"
+    )
+
+    # Start command
+    start_parser = service_subparsers.add_parser(
+        "start", help="Start services"
+    )
+    start_parser.add_argument(
+        "service", 
+        nargs="?", 
+        choices=["database", "api", "gui"],
+        help="Specific service to start (default: all services)"
+    )
+
+    # Stop command
+    stop_parser = service_subparsers.add_parser(
+        "stop", help="Stop services"
+    )
+    stop_parser.add_argument(
+        "service", 
+        nargs="?", 
+        choices=["database", "api", "gui"],
+        help="Specific service to stop (default: all services)"
+    )
+
+    # Restart command
+    restart_parser = service_subparsers.add_parser(
+        "restart", help="Restart services"
+    )
+    restart_parser.add_argument(
+        "service", 
+        nargs="?", 
+        choices=["database", "api", "gui"],
+        help="Specific service to restart (default: all services)"
     )
 
 
@@ -442,4 +502,5 @@ def register_all_parsers(parser: SkwaqArgumentParser) -> None:
     register_ingest_parser(parser)
     register_config_parser(parser)
     register_gui_parser(parser)
+    register_service_parser(parser)
     register_workflow_parsers(parser)

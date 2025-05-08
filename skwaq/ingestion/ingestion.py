@@ -147,10 +147,14 @@ class Ingestion:
         self.branch = branch
         self.model_client = model_client
         self.max_parallel = max_parallel
+        
+        # If parse_only is explicitly set to True by the user, respect that
+        # Otherwise, ensure we generate summaries for AST nodes
+        self.parse_only = parse_only
+        self.summarize_ast = not parse_only
         self.doc_path = doc_path
         self.doc_uri = doc_uri
         self.context_token_limit = context_token_limit
-        self.parse_only = parse_only
 
         # Create components
         self.db_connector = get_connector()
@@ -347,39 +351,172 @@ class Ingestion:
                     file_query, {"repo_id": repo_node_id}
                 )
 
-                # Summarize files
+                # Summarize files and AST nodes
+                status.message = "Generating summaries for files and AST nodes"
+                status.progress = 70.0
                 summary_result = await summarizer.summarize_files(
                     file_nodes, fs, repo_node_id
                 )
-
+                
+                # Now find AST nodes that don't have summaries and generate them
+                status.message = "Generating summaries for remaining AST nodes"
+                status.progress = 80.0
+                
+                # Get AST nodes without summaries
+                ast_query = """
+                MATCH (repo:Repository)-[:CONTAINS]->(file:File)
+                WHERE id(repo) = $repo_id
+                MATCH (ast)-[:PART_OF]->(file)
+                WHERE (ast:Function OR ast:Class OR ast:Method) 
+                AND ast.code IS NOT NULL
+                AND NOT (ast)<-[:DESCRIBES]-(:CodeSummary)
+                RETURN 
+                    id(ast) as ast_id, 
+                    ast.name as name, 
+                    ast.code as code,
+                    labels(ast) as labels,
+                    id(file) as file_id,
+                    file.name as file_name,
+                    file.path as path
+                LIMIT 500
+                """
+                
+                ast_nodes = self.db_connector.run_query(
+                    ast_query, {"repo_id": repo_node_id}
+                )
+                
+                # Set up a semaphore to limit concurrent summarization tasks
+                semaphore = asyncio.Semaphore(self.max_parallel)
+                
+                # Create tasks for each AST node
+                ast_summary_tasks = []
+                for ast_node in ast_nodes:
+                    task = self._generate_ast_summary(
+                        ast_node, self.db_connector, self.model_client, semaphore
+                    )
+                    ast_summary_tasks.append(task)
+                
+                # Run all tasks concurrently with semaphore limiting
+                if ast_summary_tasks:
+                    ast_results = await asyncio.gather(*ast_summary_tasks)
+                    ast_summaries_created = sum(1 for result in ast_results if result and result.get("created"))
+                    
+                    # Add AST summary stats to summary result
+                    if "ast_summaries_created" not in summary_result["stats"]:
+                        summary_result["stats"]["ast_summaries_created"] = 0
+                    summary_result["stats"]["ast_summaries_created"] += ast_summaries_created
+                    
+                    status.message = f"Generated {ast_summaries_created} AST summaries"
+                
                 # Update summarization stats
                 status.summarization_stats = summary_result.get("stats", {})
                 status.files_processed += summary_result.get("files_processed", 0)
                 status.errors.extend(summary_result.get("errors", []))
-                status.message = f"Generated summaries for {summary_result.get('files_processed', 0)} files"
+                status.message = f"Generated summaries for {summary_result.get('files_processed', 0)} files and {summary_result.get('stats', {}).get('ast_summaries_created', 0)} AST nodes"
                 status.progress = 90.0
 
             # Final steps
             status.state = "completed"
             status.progress = 100.0
-            status.end_time = time.time()
-            status.message = "Ingestion completed successfully"
 
-            # Update the repository node with final status
+    async def _generate_ast_summary(
+        self, ast_node: Dict, connector: Any, model_client: Any, semaphore: asyncio.Semaphore
+    ) -> Dict:
+        """Generate a summary for a single AST node.
+        
+        Args:
+            ast_node: AST node data
+            connector: Database connector
+            model_client: OpenAI client
+            semaphore: Asyncio semaphore for limiting concurrency
+            
+        Returns:
+            Dictionary with result information
+        """
+        async with semaphore:
+            try:
+                ast_id = ast_node["ast_id"]
+                ast_name = ast_node["name"]
+                ast_code = ast_node["code"]
+                ast_type = ast_node["labels"][0] if ast_node["labels"] else "Unknown"
+                file_name = ast_node["file_name"] or "Unknown"
+                
+                if not ast_code or len(ast_code.strip()) < 10:
+                    return {"processed": True, "created": False, "reason": "insufficient_code"}
+                
+                # Create prompt
+                ast_prompt = f"""
+                You are analyzing a specific {ast_type} from a larger file.
+                
+                File name: {file_name}
+                {ast_type} name: {ast_name}
+                
+                Your task is to create a detailed, accurate summary of this {ast_type.lower()}'s:
+                1. Purpose and functionality 
+                2. Parameters, return values, and important logic
+                3. Role within the larger file
+                4. Any potential security implications
+                5. How it interacts with other components
+                
+                {ast_type} code:
+                ```
+                {ast_code}
+                ```
+                
+                Summary:
+                """
+                
+                # Generate summary
+                summary_start_time = time.time()
+                ast_summary = await model_client.get_completion(
+                    ast_prompt, temperature=0.3
+                )
+                summary_time = time.time() - summary_start_time
+                
+                # Create summary node
+                summary_node_id = connector.create_node(
+                    "CodeSummary",
+                    {
+                        "summary": ast_summary,
+                        "file_name": file_name,
+                        "ast_node_id": ast_id,
+                        "ast_name": ast_name,
+                        "ast_type": ast_type,
+                        "created_at": time.time(),
+                        "generation_time": summary_time,
+                        "summary_type": "ast",
+                    },
+                )
+                
+                # Create relationship to AST node
+                connector.create_relationship(
+                    summary_node_id, ast_id, RelationshipTypes.DESCRIBES
+                )
+                
+                return {"processed": True, "created": True}
+                
+            except Exception as e:
+                logger.error(f"Error creating AST summary: {str(e)}")
+                return {"processed": True, "created": False, "error": str(e)}
+
+        status.end_time = time.time()
+        status.message = "Ingestion completed successfully"
+
+        # Update the repository node with final status
+        self.repo_manager.update_status(repo_node_id, status.to_dict())
+
+    except Exception as e:
+        logger.error(f"Ingestion failed: {str(e)}", exc_info=True)
+        status.state = "failed"
+        status.error = str(e)
+        status.end_time = time.time()
+        status.message = f"Ingestion failed: {str(e)}"
+
+        # Update the repository node with error status if it was created
+        if "repo_node_id" in locals() and repo_node_id:
             self.repo_manager.update_status(repo_node_id, status.to_dict())
 
-        except Exception as e:
-            logger.error(f"Ingestion failed: {str(e)}", exc_info=True)
-            status.state = "failed"
-            status.error = str(e)
-            status.end_time = time.time()
-            status.message = f"Ingestion failed: {str(e)}"
-
-            # Update the repository node with error status if it was created
-            if "repo_node_id" in locals() and repo_node_id:
-                self.repo_manager.update_status(repo_node_id, status.to_dict())
-
-        finally:
-            # Clean up repository handler resources
-            if hasattr(self, "repo_handler"):
-                self.repo_handler.cleanup()
+    finally:
+        # Clean up repository handler resources
+        if hasattr(self, "repo_handler"):
+            self.repo_handler.cleanup()

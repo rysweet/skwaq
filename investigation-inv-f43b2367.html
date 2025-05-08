@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset='utf-8'>
+<title>Investigation Graph: inv-f43b2367</title>
+<script src='https://d3js.org/d3.v7.min.js'></script>
+<style>
+
+            body { margin: 0; font-family: Arial, sans-serif; overflow: hidden; }
+            .container { display: flex; height: 100vh; }
+            .graph { flex: 1; }
+            .sidebar { width: 300px; padding: 20px; background: #f8f9fa; overflow-y: auto; }
+            .node { stroke: #fff; stroke-width: 1.5px; }
+            .funnel-node { animation: pulse 2s infinite; }
+            .link { stroke: #999; stroke-opacity: 0.6; }
+            h1 { font-size: 24px; margin-top: 0; }
+            h2 { font-size: 18px; margin-top: 20px; }
+            pre { background: #f1f1f1; padding: 10px; overflow: auto; }
+            .controls { margin: 20px 0; }
+            button { background: #4b76e8; color: white; border: none; padding: 8px 12px; margin-right: 5px; cursor: pointer; }
+            button:hover { background: #3a5bbf; }
+            .node-details { margin-top: 20px; }
+            .legend { margin-top: 20px; }
+            .legend-item { display: flex; align-items: center; margin-bottom: 5px; }
+            .legend-color { width: 15px; height: 15px; margin-right: 8px; }
+            .legend-funnel { width: 15px; height: 15px; margin-right: 8px; border: 2px solid #FFD700; }
+            .zoom-controls { position: absolute; top: 20px; left: 20px; background: rgba(255,255,255,0.7); padding: 10px; border-radius: 5px; }
+            .tooltip { position: absolute; background: white; border: 1px solid #ddd; padding: 10px; border-radius: 5px; pointer-events: none; opacity: 0; }
+            @keyframes pulse {
+                0% {
+                    stroke-width: 1.5px;
+                    stroke-opacity: 1;
+                }
+                50% {
+                    stroke-width: 4px;
+                    stroke-opacity: 0.8;
+                }
+                100% {
+                    stroke-width: 1.5px;
+                    stroke-opacity: 1;
+                }
+            }
+        
+</style>
+</head>
+<body>
+<div class='container'>
+<div class='graph' id='graph'></div>
+<div class='sidebar'>
+<h1>Investigation Graph: inv-f43b2367</h1>
+<div class='controls'>
+<button id='zoom-in'>Zoom In</button>
+<button id='zoom-out'>Zoom Out</button>
+<button id='reset'>Reset</button>
+</div>
+<div class='controls'>
+<h3>Filter Nodes</h3>
+<div style='margin-bottom: 5px;'>
+<input type='checkbox' id='filter-funnel' checked>
+<label for='filter-funnel'>Highlight Funnel Nodes</label>
+</div>
+<div style='margin-bottom: 5px;'>
+<input type='checkbox' id='filter-source' checked>
+<label for='filter-source'>Show Sources</label>
+</div>
+<div style='margin-bottom: 5px;'>
+<input type='checkbox' id='filter-sink' checked>
+<label for='filter-sink'>Show Sinks</label>
+</div>
+<div style='margin-bottom: 5px;'>
+<input type='checkbox' id='filter-dataflow' checked>
+<label for='filter-dataflow'>Show Data Flow Paths</label>
+</div>
+<div style='margin-bottom: 5px;'>
+<input type='checkbox' id='filter-findings' checked>
+<label for='filter-findings'>Show Findings</label>
+</div>
+</div>
+<div class='legend'>
+<h2>Legend</h2>
+<div class='legend-item'>
+<div class='legend-color' style='background-color: #4b76e8;'></div>
+<div>Investigation</div>
+</div>
+<div class='legend-item'>
+<div class='legend-color' style='background-color: #f94144;'></div>
+<div>Finding</div>
+</div>
+<div class='legend-item'>
+<div class='legend-color' style='background-color: #e83e8c;'></div>
+<div>Vulnerability</div>
+</div>
+<div class='legend-item'>
+<div class='legend-color' style='background-color: #20c997;'></div>
+<div>File</div>
+</div>
+<div class='legend-item'>
+<div class='legend-color' style='background-color: #6610f2;'></div>
+<div>Repository</div>
+</div>
+<div class='legend-item'>
+<div class='legend-color' style='background-color: #02ccfa;'></div>
+<div>Source</div>
+</div>
+<div class='legend-item'>
+<div class='legend-color' style='background-color: #fa7602;'></div>
+<div>Sink</div>
+</div>
+<div class='legend-item'>
+<div class='legend-color' style='background-color: #fa0290;'></div>
+<div>DataFlowPath</div>
+</div>
+<h3>Funnel Identified Nodes</h3>
+<div class='legend-item'>
+<div class='legend-funnel' style='background-color: #02ccfa;'></div>
+<div>Source (Funnel Identified)</div>
+</div>
+<div class='legend-item'>
+<div class='legend-funnel' style='background-color: #fa7602;'></div>
+<div>Sink (Funnel Identified)</div>
+</div>
+</div>
+<div class='node-details'>
+<h2>Node Details</h2>
+<p id='node-description'>Click on a node to see details</p>
+<pre id='node-properties'></pre>
+</div>
+</div>
+</div>
+<div class='tooltip' id='tooltip'></div>
+<script>
+
+            // Graph data
+            const graphData = {"nodes": [{"id": "inv-f43b2367", "label": "AttackBot Analysis", "type": "Investigation", "is_funnel_identified": false, "properties": {"updated_at": "2025-05-07T16:10:11.015328", "finding_count": 0, "created_at": "2025-05-07T16:10:11.015318", "description": "Comprehensive analysis of the AttackBot repository", "title": "AttackBot Analysis", "status": "In Progress"}, "group": 1, "color": "#4b76e8"}], "links": []};
+            
+            // Set up the simulation
+            const width = document.getElementById('graph').clientWidth;
+            const height = document.getElementById('graph').clientHeight;
+            
+            const svg = d3.select('#graph')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+            
+            // Create zoom behavior
+            const zoom = d3.zoom()
+                .scaleExtent([0.1, 5])
+                .on('zoom', (event) => {
+                    g.attr('transform', event.transform);
+                });
+            
+            // Apply zoom to SVG
+            svg.call(zoom);
+            
+            // Create a group for the graph
+            const g = svg.append('g');
+            
+            // Initialize the simulation
+            const simulation = d3.forceSimulation(graphData.nodes)
+                .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(100))
+                .force('charge', d3.forceManyBody().strength(-300))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .on('tick', ticked);
+            
+            // Create links
+            const link = g.append('g')
+                .attr('class', 'links')
+                .selectAll('line')
+                .data(graphData.links)
+                .enter().append('line')
+                .attr('class', 'link')
+                .attr('stroke-width', 1);
+            
+            // Create nodes
+            const node = g.append('g')
+                .attr('class', 'nodes')
+                .selectAll('circle')
+                .data(graphData.nodes)
+                .enter().append('circle')
+                .attr('class', d => d.is_funnel_identified ? 'node funnel-node' : 'node')
+                .attr('r', d => getNodeRadius(d))
+                .attr('fill', d => d.color || '#999')
+                .attr('stroke', d => d.is_funnel_identified ? (d.stroke_color || '#FFD700') : '#fff')
+                .attr('stroke-width', d => d.is_funnel_identified ? (d.stroke_width || 3) : 1.5)
+                .call(d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended));
+            
+            // Add labels to nodes
+            const label = g.append('g')
+                .attr('class', 'labels')
+                .selectAll('text')
+                .data(graphData.nodes)
+                .enter().append('text')
+                .text(d => d.label)
+                .attr('font-size', '10px')
+                .attr('dx', 12)
+                .attr('dy', 4);
+            
+            // Add tooltips
+            const tooltip = d3.select('#tooltip');
+            
+            node
+                .on('mouseover', function(event, d) {
+                    tooltip.transition()
+                        .duration(200)
+                        .style('opacity', .9);
+                    
+                    // Create tooltip content
+                    let tooltipContent = `<strong>${d.label}</strong><br/>${d.type}`;
+                    
+                    // Add funnel identification badge if applicable
+                    if (d.is_funnel_identified) {
+                        tooltipContent += `<br/><span style="color: #FFD700; font-weight: bold;">⭐ Funnel Identified</span>`;
+                        
+                        // Add source or sink specific info
+                        if (d.type === 'Source') {
+                            tooltipContent += `<br/>Source Type: ${d.properties.source_type || 'Unknown'}`;
+                            tooltipContent += `<br/>Confidence: ${(d.properties.confidence * 100).toFixed(0)}%`;
+                        } else if (d.type === 'Sink') {
+                            tooltipContent += `<br/>Sink Type: ${d.properties.sink_type || 'Unknown'}`;
+                            tooltipContent += `<br/>Confidence: ${(d.properties.confidence * 100).toFixed(0)}%`;
+                        } else if (d.type === 'DataFlowPath') {
+                            tooltipContent += `<br/>Vulnerability: ${d.properties.vulnerability_type || 'Unknown'}`;
+                            tooltipContent += `<br/>Impact: ${d.properties.impact || 'Unknown'}`;
+                        }
+                    }
+                    
+                    tooltip.html(tooltipContent)
+                        .style('left', (event.pageX + 10) + 'px')
+                        .style('top', (event.pageY - 28) + 'px');
+                })
+                .on('mouseout', function() {
+                    tooltip.transition()
+                        .duration(500)
+                        .style('opacity', 0);
+                })
+                .on('click', showNodeDetails);
+            
+            // Simulation tick function
+            function ticked() {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+                
+                node
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y);
+                
+                label
+                    .attr('x', d => d.x)
+                    .attr('y', d => d.y);
+            }
+            
+            // Drag functions
+            function dragstarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+            
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+            
+            function dragended(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+            
+            // Helper to determine node radius based on type
+            function getNodeRadius(node) {
+                // If it's a funnel-identified node, make it slightly larger
+                const funnelBonus = node.is_funnel_identified ? 2 : 0;
+                
+                switch(node.type) {
+                    case 'Investigation':
+                        return 15;
+                    case 'Finding':
+                        return 10;
+                    case 'Vulnerability':
+                        return 12;
+                    case 'File':
+                        return 8;
+                    case 'Repository':
+                        return 13;
+                    case 'Source':
+                        return 12 + funnelBonus;
+                    case 'Sink':
+                        return 12 + funnelBonus;
+                    case 'DataFlowPath':
+                        return 10 + funnelBonus;
+                    default:
+                        return 8;
+                }
+            }
+            
+            // Show node details in sidebar
+            function showNodeDetails(event, d) {
+                document.getElementById('node-description').textContent = `${d.type}: ${d.label}`;
+                document.getElementById('node-properties').textContent = JSON.stringify(d.properties, null, 2);
+            }
+            
+            // Control buttons
+            document.getElementById('zoom-in').addEventListener('click', () => {
+                svg.transition().duration(500).call(zoom.scaleBy, 1.5);
+            });
+            
+            document.getElementById('zoom-out').addEventListener('click', () => {
+                svg.transition().duration(500).call(zoom.scaleBy, 0.75);
+            });
+            
+            document.getElementById('reset').addEventListener('click', () => {
+                svg.transition().duration(500).call(
+                    zoom.transform, 
+                    d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
+                );
+            });
+            
+            // Filter controls
+            function applyFilters() {
+                // Get filter states
+                const highlightFunnel = document.getElementById('filter-funnel').checked;
+                const showSources = document.getElementById('filter-source').checked;
+                const showSinks = document.getElementById('filter-sink').checked;
+                const showDataFlow = document.getElementById('filter-dataflow').checked;
+                const showFindings = document.getElementById('filter-findings').checked;
+                
+                // Apply node visibility
+                node.style('display', d => {
+                    if (d.type === 'Source' && !showSources) return 'none';
+                    if (d.type === 'Sink' && !showSinks) return 'none';
+                    if (d.type === 'DataFlowPath' && !showDataFlow) return 'none';
+                    if (d.type === 'Finding' && !showFindings) return 'none';
+                    return null;
+                });
+                
+                // Apply highlighting for funnel nodes
+                if (highlightFunnel) {
+                    node.attr('stroke', d => d.is_funnel_identified ? (d.stroke_color || '#FFD700') : '#fff')
+                        .attr('stroke-width', d => d.is_funnel_identified ? (d.stroke_width || 3) : 1.5)
+                        .classed('funnel-node', d => d.is_funnel_identified);
+                } else {
+                    node.attr('stroke', '#fff')
+                        .attr('stroke-width', 1.5)
+                        .classed('funnel-node', false);
+                }
+                
+                // Update links based on node visibility
+                link.style('display', d => {
+                    // Get the source and target nodes
+                    const sourceNode = graphData.nodes.find(n => n.id === d.source.id);
+                    const targetNode = graphData.nodes.find(n => n.id === d.target.id);
+                    
+                    // Hide link if either source or target is hidden
+                    if (sourceNode && targetNode) {
+                        if (sourceNode.type === 'Source' && !showSources) return 'none';
+                        if (sourceNode.type === 'Sink' && !showSinks) return 'none';
+                        if (sourceNode.type === 'DataFlowPath' && !showDataFlow) return 'none';
+                        if (sourceNode.type === 'Finding' && !showFindings) return 'none';
+                        
+                        if (targetNode.type === 'Source' && !showSources) return 'none';
+                        if (targetNode.type === 'Sink' && !showSinks) return 'none';
+                        if (targetNode.type === 'DataFlowPath' && !showDataFlow) return 'none';
+                        if (targetNode.type === 'Finding' && !showFindings) return 'none';
+                    }
+                    
+                    return null;
+                });
+                
+                // Update link style
+                link.attr('stroke', d => {
+                    // Get the source and target nodes
+                    const sourceNode = graphData.nodes.find(n => n.id === d.source.id);
+                    const targetNode = graphData.nodes.find(n => n.id === d.target.id);
+                    
+                    // Highlight links between funnel-identified nodes if highlighting is enabled
+                    if (highlightFunnel && sourceNode && targetNode) {
+                        if (sourceNode.is_funnel_identified && targetNode.is_funnel_identified) {
+                            return '#FFD700';  // Gold for funnel links
+                        }
+                    }
+                    
+                    return '#999';  // Default color
+                });
+            }
+            
+            // Add event listeners for filters
+            document.getElementById('filter-funnel').addEventListener('change', applyFilters);
+            document.getElementById('filter-source').addEventListener('change', applyFilters);
+            document.getElementById('filter-sink').addEventListener('change', applyFilters);
+            document.getElementById('filter-dataflow').addEventListener('change', applyFilters);
+            document.getElementById('filter-findings').addEventListener('change', applyFilters);
+            
+            // Apply filters on initial load
+            applyFilters();
+            
+            // Initial reset to center the graph
+            svg.call(
+                zoom.transform,
+                d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
+            );
+        
+</script>
+</body>
+</html>

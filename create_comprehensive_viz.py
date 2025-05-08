@@ -33,33 +33,51 @@ async def main():
     
     print(f"Generating comprehensive visualization for repository {repo_id}")
     
-    # Query to get all relevant nodes and relationships
+    # Query to get all relevant nodes and relationships (limited for performance)
     query = """
     // Starting with repository node
     MATCH (repo:Repository)
     WHERE repo.ingestion_id = $repo_id OR elementId(repo) = $repo_id
     
-    // Get all file nodes related to the repository
+    // Get a limited subset of files for visualization
     OPTIONAL MATCH (repo)-[:CONTAINS*]->(file:File)
+    // Limit by depth to get reasonable performance
+    WHERE size([(file)<-[:CONTAINS*]-(d:Directory) | d]) <= 3
+    WITH repo, file
+    LIMIT 1000
     
-    // Get all AST nodes (Function, Class, Method) and their relationship to files
-    OPTIONAL MATCH (ast)-[ast_rel:PART_OF]->(file)
-    WHERE ast:Function OR ast:Class OR ast:Method
+    // Get file-to-file relationships
+    OPTIONAL MATCH (file)-[:CONTAINS]->(child:File)
     
-    // Get all Code Summary nodes and their relationships
-    OPTIONAL MATCH (summary:AISummary)-[summary_rel]->(ast)
+    // Get file-to-AST relationships (since we only have DEFINES, not PART_OF)
+    OPTIONAL MATCH (file)-[defines:DEFINES]->(ast_node)
+    WHERE ast_node:Function OR ast_node:Class OR ast_node:Method
+    WITH repo, file, child, ast_node
+    LIMIT 2000
     
     // Return all nodes and relationships
     RETURN 
         collect(DISTINCT repo) AS repos,
         collect(DISTINCT file) AS files,
-        collect(DISTINCT ast) AS ast_nodes,
-        collect(DISTINCT summary) AS summaries,
-        collect(DISTINCT (repo)-[:CONTAINS]->(file)) AS repo_file_rels,
-        collect(DISTINCT (file)-[:CONTAINS]->(subfile:File)) AS file_file_rels,
-        collect(DISTINCT ast_rel) AS ast_file_rels,
-        collect(DISTINCT summary_rel) AS summary_rels,
-        collect(DISTINCT (file)-[:DEFINES]->(ast)) AS file_ast_rels
+        collect(DISTINCT ast_node) AS ast_nodes,
+        [] AS summaries,  // No AISummary nodes yet
+        collect(DISTINCT {
+            startNodeElementId: elementId(repo),
+            endNodeElementId: elementId(file),
+            type: "CONTAINS"
+        }) AS repo_file_rels,
+        collect(DISTINCT {
+            startNodeElementId: elementId(file),
+            endNodeElementId: elementId(child),
+            type: "CONTAINS"
+        }) AS file_file_rels,
+        [] AS ast_file_rels,  // No PART_OF relationships
+        [] AS summary_rels,   // No summary relationships
+        collect(DISTINCT {
+            startNodeElementId: elementId(file),
+            endNodeElementId: elementId(ast_node),
+            type: "DEFINES"
+        }) AS file_ast_rels
     """
     
     result = connector.run_query(query, {"repo_id": repo_id})
@@ -152,24 +170,39 @@ async def main():
 
 def process_relationships(relationships, all_links):
     """Process relationships and add them to all_links."""
-    for rel in relationships:
-        if not rel:
+    # Handle path relationships (arrays of relationships)
+    for rel_item in relationships:
+        if not rel_item:
             continue
         
-        source_id = rel.get("startNodeElementId")
-        target_id = rel.get("endNodeElementId")
-        rel_type = rel.get("type")
+        # Check if this is a path (array) or a single relationship
+        if isinstance(rel_item, list):
+            # Handle path relationships (like CONTAINS*)
+            for rel in rel_item:
+                process_single_relationship(rel, all_links)
+        else:
+            # Handle single relationship
+            process_single_relationship(rel_item, all_links)
+
+def process_single_relationship(rel, all_links):
+    """Process a single relationship and add it to all_links."""
+    if not rel:
+        return
         
-        if not source_id or not target_id or not rel_type:
-            continue
-        
-        link_data = {
-            "source": source_id,
-            "target": target_id,
-            "label": rel_type,
-            "properties": {k: v for k, v in rel.items() if k not in ["startNodeElementId", "endNodeElementId", "type"]}
-        }
-        all_links.append(link_data)
+    source_id = rel.get("startNodeElementId")
+    target_id = rel.get("endNodeElementId")
+    rel_type = rel.get("type")
+    
+    if not source_id or not target_id or not rel_type:
+        return
+    
+    link_data = {
+        "source": source_id,
+        "target": target_id,
+        "label": rel_type,
+        "properties": {k: v for k, v in rel.items() if k not in ["startNodeElementId", "endNodeElementId", "type"]}
+    }
+    all_links.append(link_data)
 
 
 def count_node_types(nodes):

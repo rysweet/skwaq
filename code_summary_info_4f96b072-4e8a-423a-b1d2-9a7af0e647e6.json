@@ -1,0 +1,15 @@
+{
+  "repository": "AttackBot",
+  "files": 20928,
+  "ast_nodes": 0,
+  "code_summaries": 0,
+  "ast_nodes_with_summaries": 0,
+  "ast_structure": {
+    "ast_counts": {
+      "Unknown": 0
+    },
+    "class_count": 0,
+    "method_in_class_count": 0,
+    "orphaned_method_count": 0
+  }
+}

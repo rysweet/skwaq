@@ -13,7 +13,7 @@ def main():
     MATCH (f:File)
     WHERE NOT (f:Directory)
     RETURN f.name as name, f.path as path, elementId(f) as id
-    LIMIT 100
+    LIMIT 250
     """
     
     files = connector.run_query(files_query)
@@ -25,12 +25,24 @@ def main():
     WHERE elementId(file) IN $file_ids AND (ast:Function OR ast:Class)
     RETURN file.name as file_name, elementId(file) as file_id, 
            ast.name as ast_name, elementId(ast) as ast_id, labels(ast) as ast_labels
-    LIMIT 1000
+    LIMIT 2000
     """
     
     file_ids = [file["id"] for file in files]
     ast_results = connector.run_query(ast_query, {"file_ids": file_ids})
     print(f"Found {len(ast_results)} AST nodes")
+    
+    # Get AI summaries for AST nodes
+    ast_ids = [ast["ast_id"] for ast in ast_results]
+    summary_query = """
+    MATCH (summary:CodeSummary)-[r]->(ast)
+    WHERE elementId(ast) IN $ast_ids
+    RETURN summary.summary as summary_text, elementId(summary) as summary_id, 
+           elementId(ast) as ast_id, type(r) as relationship_type
+    """
+    
+    summary_results = connector.run_query(summary_query, {"ast_ids": ast_ids})
+    print(f"Found {len(summary_results)} AI summaries")
     
     # Build visualization data
     nodes = []
@@ -70,6 +82,32 @@ def main():
             "source": file_id,
             "target": ast_id,
             "label": "DEFINES"
+        })
+        
+    # Add AI summary nodes and relationships
+    for summary in summary_results:
+        summary_id = summary["summary_id"]
+        ast_id = summary["ast_id"]
+        
+        # Add summary node if not already added
+        if summary_id not in node_ids:
+            node_ids.add(summary_id)
+            # Truncate summary text for label display
+            summary_text = summary["summary_text"]
+            short_summary = summary_text[:30] + "..." if summary_text and len(summary_text) > 30 else summary_text
+            
+            nodes.append({
+                "id": summary_id,
+                "label": f"Summary: {short_summary}",
+                "type": "CodeSummary",
+                "properties": {"summary": summary_text}
+            })
+        
+        # Add relationship
+        links.append({
+            "source": summary_id,
+            "target": ast_id,
+            "label": summary["relationship_type"]
         })
     
     # Create HTML visualization
@@ -199,6 +237,10 @@ def main():
                 <input type="checkbox" id="show-class" checked>
                 <label for="show-class">Class</label>
             </div>
+            <div>
+                <input type="checkbox" id="show-summary" checked>
+                <label for="show-summary">AI Summary</label>
+            </div>
             <hr>
             <div>
                 <button id="expand-graph">Expand Force</button>
@@ -222,6 +264,7 @@ def main():
             <div><span class="color-dot" style="background-color: #fc8d62;"></span> File</div>
             <div><span class="color-dot" style="background-color: #8da0cb;"></span> Function</div>
             <div><span class="color-dot" style="background-color: #e78ac3;"></span> Class</div>
+            <div><span class="color-dot" style="background-color: #ffd92f;"></span> AI Summary</div>
         </div>
         
         <script>
@@ -235,6 +278,7 @@ def main():
                 Function: "#8da0cb",
                 Class: "#e78ac3",
                 Method: "#a6d854",
+                CodeSummary: "#ffd92f",
                 Unknown: "#999999"
             };
             
@@ -244,6 +288,7 @@ def main():
                 Function: 5,
                 Class: 7,
                 Method: 5,
+                CodeSummary: 9,
                 Unknown: 5
             };
             
@@ -449,17 +494,20 @@ def main():
             document.getElementById("show-file").addEventListener("change", filterGraph);
             document.getElementById("show-function").addEventListener("change", filterGraph);
             document.getElementById("show-class").addEventListener("change", filterGraph);
+            document.getElementById("show-summary").addEventListener("change", filterGraph);
             
             function filterGraph() {
                 const showFile = document.getElementById("show-file").checked;
                 const showFunction = document.getElementById("show-function").checked;
                 const showClass = document.getElementById("show-class").checked;
+                const showSummary = document.getElementById("show-summary").checked;
                 
                 // Filter nodes
                 node.style("display", d => {
                     if (d.type === "File" && !showFile) return "none";
                     if (d.type === "Function" && !showFunction) return "none";
                     if (d.type === "Class" && !showClass) return "none";
+                    if (d.type === "CodeSummary" && !showSummary) return "none";
                     return null;
                 });
                 
@@ -468,6 +516,7 @@ def main():
                     if (d.type === "File" && !showFile) return "none";
                     if (d.type === "Function" && !showFunction) return "none";
                     if (d.type === "Class" && !showClass) return "none";
+                    if (d.type === "CodeSummary" && !showSummary) return "none";
                     return null;
                 });
                 
@@ -479,13 +528,15 @@ def main():
                     const sourceVisible = (
                         (sourceType === "File" && showFile) ||
                         (sourceType === "Function" && showFunction) ||
-                        (sourceType === "Class" && showClass)
+                        (sourceType === "Class" && showClass) ||
+                        (sourceType === "CodeSummary" && showSummary)
                     );
                     
                     const targetVisible = (
                         (targetType === "File" && showFile) ||
                         (targetType === "Function" && showFunction) ||
-                        (targetType === "Class" && showClass)
+                        (targetType === "Class" && showClass) ||
+                        (targetType === "CodeSummary" && showSummary)
                     );
                     
                     return sourceVisible && targetVisible ? null : "none";

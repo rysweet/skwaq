@@ -81,6 +81,8 @@ class LLMSummarizer(CodeSummarizer):
         # Set up statistics
         stats = {
             "files_processed": 0,
+            "file_summaries_created": 0,
+            "ast_summaries_created": 0,
             "errors": 0,
             "total_tokens": 0,
             "total_time": 0,
@@ -98,26 +100,15 @@ class LLMSummarizer(CodeSummarizer):
         for file_node in file_nodes:
             file_id = file_node["file_id"]
             file_path = file_node["path"]
-            language = file_node.get("language", "unknown")
+            # Use auto-detection for language instead of explicit filter
+            language = "auto"  # Auto-detect language
 
-            # Only process certain languages
-            if language in [
-                "python",
-                "javascript",
-                "typescript",
-                "java",
-                "csharp",
-                "go",
-                "cpp",
-                "c",
-                "php",
-                "ruby",
-            ]:
-                tasks.append(
-                    self._summarize_file(
-                        file_id, file_path, language, fs, stats, errors
-                    )
+            # Create task for file summarization
+            tasks.append(
+                self._summarize_file(
+                    file_id, file_path, language, fs, stats, errors
                 )
+            )
 
         # Run tasks with concurrency limit
         start_time = time.time()
@@ -126,12 +117,14 @@ class LLMSummarizer(CodeSummarizer):
         stats["total_time"] = time.time() - start_time
 
         logger.info(
-            f"Summarized {stats['files_processed']} files in {stats['total_time']:.2f} seconds"
+            f"Summarized {stats['files_processed']} files ({stats['file_summaries_created']} file summaries, {stats['ast_summaries_created']} AST node summaries) in {stats['total_time']:.2f} seconds"
         )
 
         return {
             "stats": stats,
             "files_processed": stats["files_processed"],
+            "file_summaries_created": stats["file_summaries_created"],
+            "ast_summaries_created": stats["ast_summaries_created"],
             "errors": errors,
         }
 
@@ -144,12 +137,12 @@ class LLMSummarizer(CodeSummarizer):
         stats: Dict[str, Any],
         errors: List[Dict[str, Any]],
     ) -> None:
-        """Summarize a single file using LLM.
+        """Summarize a single file and its AST nodes using LLM.
 
         Args:
             file_id: ID of the file node
             file_path: Path of the file to summarize
-            language: Programming language of the file
+            language: Programming language of the file (or "auto" to detect)
             fs: Filesystem interface for reading file contents
             stats: Dictionary to collect statistics
             errors: List to collect errors
@@ -179,8 +172,9 @@ class LLMSummarizer(CodeSummarizer):
                     return
 
                 # Truncate content if it's too large
-                if len(content) > 50000:
-                    content = content[:50000] + "... [truncated]"
+                max_content_size = 150000  # Increased from 50000 for more context
+                if len(content) > max_content_size:
+                    content = content[:max_content_size] + "... [truncated]"
 
                 # Extract file name and extension
                 file_name = os.path.basename(file_path)
@@ -188,54 +182,207 @@ class LLMSummarizer(CodeSummarizer):
                 # Add to context buffer
                 self._add_to_context(file_name, content)
 
-                # Create the prompt
-                prompt = self._create_summary_prompt(file_name, content, language)
-
-                # Generate summary
-                summary_start_time = time.time()
-                summary = await self.model_client.get_completion(
-                    prompt, temperature=0.3
-                )
-                summary_time = time.time() - summary_start_time
-
-                # Create summary node
-                summary_node_id = self.connector.create_node(
-                    "CodeSummary",
-                    {
-                        "summary": summary,
-                        "file_name": file_name,
-                        "language": language,
-                        "created_at": time.time(),
-                        "generation_time": summary_time,
-                    },
-                )
-
-                # Create relationship to file
-                self.connector.create_relationship(
-                    file_id, summary_node_id, RelationshipTypes.DESCRIBES
-                )
-
-                # Update file node with summary
-                query = (
-                    "MATCH (file:File) "
-                    "WHERE id(file) = $file_id "
-                    "SET file.summary = $summary"
-                )
-
-                self.connector.run_query(
-                    query, {"file_id": file_id, "summary": summary}
-                )
-
-                # Add to statistics
+                # 1. First, create a file-level summary
+                await self._create_file_summary(file_id, file_name, content, language, stats)
+                
+                # 2. Then, create AST-level summaries
+                await self._create_ast_summaries(file_id, file_name, content, language, stats)
+                
+                # Increment counter for files processed
                 stats["files_processed"] += 1
-                stats["total_tokens"] += len(prompt.split()) + len(summary.split())
-
-                logger.debug(f"Summarized file: {file_path}")
+                logger.debug(f"Summarized file and AST nodes: {file_path}")
 
             except Exception as e:
                 logger.error(f"Error summarizing file {file_path}: {str(e)}")
                 stats["errors"] += 1
                 errors.append({"file": file_path, "error": str(e)})
+    
+    async def _create_file_summary(
+        self,
+        file_id: int,
+        file_name: str,
+        content: str,
+        language: str,
+        stats: Dict[str, Any]
+    ) -> None:
+        """Create a summary for an entire file.
+
+        Args:
+            file_id: ID of the file node
+            file_name: Name of the file
+            content: Content of the file
+            language: Programming language or "auto"
+            stats: Dictionary to collect statistics
+        """
+        try:
+            # Create the prompt for file-level summary
+            prompt = self._create_summary_prompt(file_name, content, language)
+            prompt = prompt.replace(
+                "Analyze the following", 
+                "Analyze the ENTIRE following"
+            ).replace(
+                "summary, include:",
+                "FULL FILE summary, include:"
+            )
+
+            # Generate summary
+            summary_start_time = time.time()
+            summary = await self.model_client.get_completion(
+                prompt, temperature=0.3
+            )
+            summary_time = time.time() - summary_start_time
+
+            # Create summary node for the file
+            summary_node_id = self.connector.create_node(
+                "CodeSummary",
+                {
+                    "summary": summary,
+                    "file_name": file_name,
+                    "language": language if language != "auto" else "detected",
+                    "created_at": time.time(),
+                    "generation_time": summary_time,
+                    "summary_type": "file",  # Mark this as a file-level summary
+                },
+            )
+
+            # Create relationship to file
+            self.connector.create_relationship(
+                summary_node_id, file_id, RelationshipTypes.DESCRIBES
+            )
+
+            # Update file node with summary 
+            query = (
+                "MATCH (file:File) "
+                "WHERE id(file) = $file_id "
+                "SET file.summary = $summary"
+            )
+
+            self.connector.run_query(
+                query, {"file_id": file_id, "summary": summary}
+            )
+
+            # Add to statistics
+            stats["file_summaries_created"] += 1
+            stats["total_tokens"] += len(prompt.split()) + len(summary.split())
+
+        except Exception as e:
+            logger.error(f"Error creating file summary for {file_name}: {str(e)}")
+            
+    async def _create_ast_summaries(
+        self,
+        file_id: int,
+        file_name: str,
+        file_content: str,
+        language: str,
+        stats: Dict[str, Any]
+    ) -> None:
+        """Create summaries for AST nodes (functions, classes, methods) in a file.
+
+        Args:
+            file_id: ID of the file node
+            file_name: Name of the file
+            file_content: Content of the file (for context)
+            language: Programming language or "auto"
+            stats: Dictionary to collect statistics
+        """
+        try:
+            # Query for AST nodes related to this file
+            query = """
+            MATCH (ast)-[:PART_OF]->(file:File)
+            WHERE id(file) = $file_id AND (ast:Function OR ast:Class OR ast:Method) 
+            AND ast.code IS NOT NULL
+            AND NOT (ast)<-[:DESCRIBES]-(:CodeSummary) 
+            RETURN 
+                id(ast) as ast_id, 
+                ast.name as name, 
+                ast.code as code,
+                labels(ast) as labels,
+                ast.start_line as start_line,
+                ast.end_line as end_line
+            """
+            ast_nodes = self.connector.run_query(query, {"file_id": file_id})
+            
+            if not ast_nodes:
+                logger.debug(f"No AST nodes found for file {file_name}")
+                return
+                
+            logger.debug(f"Found {len(ast_nodes)} AST nodes to summarize for file {file_name}")
+            
+            # Create summaries for each AST node
+            for ast_node in ast_nodes:
+                ast_id = ast_node["ast_id"]
+                ast_name = ast_node["name"]
+                ast_code = ast_node["code"]
+                ast_type = ast_node["labels"][0] if ast_node["labels"] else "Unknown"
+                
+                if not ast_code or len(ast_code.strip()) < 10:
+                    logger.debug(f"Skipping AST node {ast_name} due to insufficient code")
+                    continue
+                
+                # Create prompt with file context
+                ast_prompt = f"""
+                You are analyzing a specific {ast_type} from a larger file.
+                
+                File name: {file_name}
+                {ast_type} name: {ast_name}
+                
+                Your task is to create a detailed, accurate summary of this {ast_type.lower()}'s:
+                1. Purpose and functionality 
+                2. Parameters, return values, and important logic
+                3. Role within the larger file
+                4. Any potential security implications
+                5. How it interacts with other components
+                
+                {ast_type} code:
+                ```
+                {ast_code}
+                ```
+                
+                Context from the file (for reference):
+                ```
+                {file_content[:1000]}... [truncated]
+                ```
+                
+                Summary:
+                """
+                
+                # Generate summary
+                try:
+                    summary_start_time = time.time()
+                    ast_summary = await self.model_client.get_completion(
+                        ast_prompt, temperature=0.3
+                    )
+                    summary_time = time.time() - summary_start_time
+                    
+                    # Create summary node
+                    summary_node_id = self.connector.create_node(
+                        "CodeSummary",
+                        {
+                            "summary": ast_summary,
+                            "file_name": file_name,
+                            "ast_name": ast_name,
+                            "ast_type": ast_type,
+                            "language": language if language != "auto" else "detected",
+                            "created_at": time.time(),
+                            "generation_time": summary_time,
+                            "summary_type": "ast",  # Mark this as an AST-level summary
+                        },
+                    )
+                    
+                    # Create relationship to AST node
+                    self.connector.create_relationship(
+                        summary_node_id, ast_id, RelationshipTypes.DESCRIBES
+                    )
+                    
+                    # Add to statistics
+                    stats["ast_summaries_created"] += 1
+                    stats["total_tokens"] += len(ast_prompt.split()) + len(ast_summary.split())
+                    
+                except Exception as e:
+                    logger.error(f"Error creating AST summary for {ast_name}: {str(e)}")
+                
+        except Exception as e:
+            logger.error(f"Error during AST summarization for file {file_name}: {str(e)}")
 
     def _create_summary_prompt(
         self, file_name: str, content: str, language: str
@@ -245,37 +392,119 @@ class LLMSummarizer(CodeSummarizer):
         Args:
             file_name: Name of the file
             content: Content of the file
-            language: Programming language of the file
+            language: Programming language of the file (or "auto" to detect)
 
         Returns:
             Prompt string for the LLM
         """
+        # Handle case where content is None or empty
+        if not content or len(content.strip()) < 10:
+            return f"""
+            Create a placeholder summary for an empty or minimal code file named '{file_name}'.
+            Indicate that the file appears to be empty or contains insufficient code to analyze.
+            Summary:
+            """
+        
+        # Detect language if "auto" is specified
+        detected_language = language
+        if language == "auto" or language == "unknown":
+            # Simple language detection based on file extension
+            ext = os.path.splitext(file_name)[1].lower()
+            language_map = {
+                '.py': 'Python',
+                '.js': 'JavaScript',
+                '.ts': 'TypeScript',
+                '.jsx': 'React JavaScript',
+                '.tsx': 'React TypeScript',
+                '.java': 'Java',
+                '.c': 'C',
+                '.cpp': 'C++',
+                '.h': 'C/C++ Header',
+                '.cs': 'C#',
+                '.php': 'PHP',
+                '.rb': 'Ruby',
+                '.go': 'Go',
+                '.rs': 'Rust',
+                '.swift': 'Swift',
+                '.kt': 'Kotlin',
+                '.scala': 'Scala',
+                '.m': 'Objective-C',
+                '.sh': 'Shell',
+                '.pl': 'Perl',
+                '.pm': 'Perl Module',
+                '.r': 'R',
+                '.html': 'HTML',
+                '.css': 'CSS',
+                '.scss': 'SCSS',
+                '.sql': 'SQL',
+                '.yml': 'YAML',
+                '.yaml': 'YAML',
+                '.json': 'JSON',
+                '.xml': 'XML',
+                '.md': 'Markdown',
+                '.rst': 'reStructuredText',
+                '.csproj': 'C# Project File',
+                '.vbproj': 'VB.NET Project File',
+                '.sln': 'Visual Studio Solution',
+                '.csproj': 'C# Project File',
+                '.vbproj': 'VB.NET Project File',
+                '.sln': 'Visual Studio Solution',
+            }
+            
+            detected_language = language_map.get(ext, 'Unknown')
+            
+            # If still unknown, try to detect from content patterns
+            if detected_language == 'Unknown' and content:
+                # Simple content-based detection
+                if "def " in content and ":" in content and "import " in content:
+                    detected_language = "Python"
+                elif "function " in content and "{" in content and "}" in content:
+                    detected_language = "JavaScript"
+                elif "class " in content and "extends " in content and "public " in content:
+                    detected_language = "Java"
+                elif "#include" in content and "{" in content and "}" in content:
+                    detected_language = "C/C++"
+                elif "namespace " in content and "using " in content:
+                    detected_language = "C#"
+                elif "<?php" in content:
+                    detected_language = "PHP"
+                elif "<html" in content or "<!DOCTYPE" in content:
+                    detected_language = "HTML"
+        
         # Start with basic file information
         prompt = f"""
-        Analyze the following {language} code file and provide a comprehensive summary:
+        You are a highly skilled software developer tasked with analyzing source code to provide comprehensive, accurate summaries.
         
-        File: {file_name}
-        Language: {language}
-        
+        Analyze the following {detected_language} code from file '{file_name}' and provide a detailed summary.
+                
         For your summary, include:
         1. Overall purpose and main functionality of the code
         2. Key classes, functions, or components and their roles
         3. Important data structures or algorithms used
         4. Any notable design patterns or architectural approaches
         5. Dependencies and interactions with other components (if evident)
-        6. Potential developer intent (what problem is this code solving)
+        6. Potential security implications (if any)
+        7. A hierarchical view of how this code fits into the larger system
+        
+        Make your summary detailed and technically precise. Focus on helping someone understand:
+        - What this code does
+        - How it works
+        - How it interacts with other components
+        - What role it plays in the larger system
         
         Code content:
-        ```{language}
+        ```{detected_language}
         {content}
         ```
         
-        Context from other files already processed (if relevant):
+        Context from other related files:
         """
 
         # Add context from other files if available
         if self._context_buffer:
             prompt += "\n" + "\n".join(self._context_buffer)
+        else:
+            prompt += "\nNo additional context available."
 
         prompt += "\n\nSummary:"
 

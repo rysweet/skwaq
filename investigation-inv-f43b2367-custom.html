@@ -1,0 +1,552 @@
+
+    <\!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Investigation Visualization</title>
+        <script src="https://d3js.org/d3.v7.min.js"></script>
+        <style>
+            body, html {
+                margin: 0;
+                padding: 0;
+                width: 100%;
+                height: 100%;
+                overflow: hidden;
+                font-family: Arial, sans-serif;
+            }
+            
+            #graph-container {
+                width: 100%;
+                height: 100%;
+                background-color: #f9f9f9;
+            }
+            
+            .node {
+                stroke: #fff;
+                stroke-width: 1.5px;
+            }
+            
+            .link {
+                stroke: #999;
+                stroke-opacity: 0.6;
+            }
+            
+            .node-label {
+                font-size: 12px;
+                pointer-events: none;
+                text-shadow: 1px 1px 2px white, -1px -1px 2px white, 1px -1px 2px white, -1px 1px 2px white;
+            }
+            
+            .link-label {
+                font-size: 10px;
+                pointer-events: none;
+                fill: #666;
+                text-shadow: 1px 1px 2px white, -1px -1px 2px white, 1px -1px 2px white, -1px 1px 2px white;
+            }
+            
+            #controls {
+                position: absolute;
+                top: 10px;
+                left: 10px;
+                background-color: rgba(255, 255, 255, 0.8);
+                padding: 10px;
+                border-radius: 5px;
+                box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+            }
+            
+            #search-box {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background-color: rgba(255, 255, 255, 0.8);
+                padding: 10px;
+                border-radius: 5px;
+                box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+            }
+            
+            .info-box {
+                position: absolute;
+                bottom: 10px;
+                left: 10px;
+                background-color: rgba(255, 255, 255, 0.8);
+                padding: 10px;
+                border-radius: 5px;
+                box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+                max-width: 300px;
+                max-height: 300px;
+                overflow: auto;
+                font-size: 12px;
+            }
+            
+            #legend {
+                position: absolute;
+                bottom: 10px;
+                right: 10px;
+                background-color: rgba(255, 255, 255, 0.8);
+                padding: 10px;
+                border-radius: 5px;
+                box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+            }
+            
+            .color-dot {
+                display: inline-block;
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                margin-right: 5px;
+            }
+            
+            .search-result {
+                cursor: pointer;
+                padding: 3px;
+                margin: 2px 0;
+            }
+            
+            .search-result:hover {
+                background-color: #eee;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="graph-container"></div>
+        
+        <div id="controls">
+            <h4>Investigation: AttackBot Analysis</h4>
+            <div>
+                <input type="checkbox" id="show-investigation" checked>
+                <label for="show-investigation">Investigation</label>
+            </div>
+            <div>
+                <input type="checkbox" id="show-file" checked>
+                <label for="show-file">File</label>
+            </div>
+            <div>
+                <input type="checkbox" id="show-function" checked>
+                <label for="show-function">Function</label>
+            </div>
+            <div>
+                <input type="checkbox" id="show-class" checked>
+                <label for="show-class">Class</label>
+            </div>
+            <div>
+                <input type="checkbox" id="show-method" checked>
+                <label for="show-method">Method</label>
+            </div>
+            <hr>
+            <div>
+                <button id="expand-graph">Expand Force</button>
+                <button id="collapse-graph">Collapse Force</button>
+            </div>
+        </div>
+        
+        <div id="search-box">
+            <h4>Search</h4>
+            <input type="text" id="search-input" placeholder="Search for nodes...">
+            <div id="search-results" style="max-height: 300px; overflow-y: auto;"></div>
+        </div>
+        
+        <div id="node-info" class="info-box" style="display: none;">
+            <h4>Node Information</h4>
+            <div id="info-content"></div>
+        </div>
+        
+        <div id="legend">
+            <h4>Legend</h4>
+            <div><span class="color-dot" style="background-color: #4b76e8;"></span> Investigation</div>
+            <div><span class="color-dot" style="background-color: #20c997;"></span> File</div>
+            <div><span class="color-dot" style="background-color: #8da0cb;"></span> Function</div>
+            <div><span class="color-dot" style="background-color: #e78ac3;"></span> Class</div>
+            <div><span class="color-dot" style="background-color: #a6d854;"></span> Method</div>
+        </div>
+        
+        <script>
+            // Node and link data
+            const nodesData = [{"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "label": "AttackBot Analysis", "type": "Investigation", "color": "#4b76e8", "properties": {"description": "Comprehensive analysis of the AttackBot repository", "status": "In Progress", "created_at": "2025-05-07T16:10:11.015318"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54738", "label": "TestGoalBuilder.cs", "type": "File", "color": "#20c997", "properties": {"path": "Test/AttackBot.Test.Shared/TestGoalBuilder.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54988", "label": "ICustomAttackSpecification.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/ICustomAttackSpecification.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54987", "label": "ICustomAttackPackage.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/ICustomAttackPackage.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54986", "label": "Interruption.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/Interruption.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54985", "label": "ICampaignTemplate.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/ICampaignTemplate.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54984", "label": "ICampaignStartupEndpoint.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/ICampaignStartupEndpoint.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54983", "label": "ICampaign.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/ICampaign.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54982", "label": "CampaignResult.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/CampaignResult.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54981", "label": "ICampaignStartupAadApplicationOAuthToken.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/ICampaignStartupAadApplicationOAuthToken.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54980", "label": "Cleanup.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/Cleanup.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54979", "label": "ICampaignStartupAadApplicationAuthenticationCertificate.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/ICampaignStartupAadApplicationAuthenticationCertificate.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54978", "label": "CampaignStatus.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/CampaignStatus.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54977", "label": "PayloadEncoding.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/PayloadEncoding.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54976", "label": "PayloadShape.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/PayloadShape.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54975", "label": "IControlPlaneAzureKeyVaultAccessTestRequest.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/IControlPlaneAzureKeyVaultAccessTestRequest.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54974", "label": "IControlPlaneAzureEventHubAccessTestRequest.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/IControlPlaneAzureEventHubAccessTestRequest.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54973", "label": "ControlPlaneAzureEventHubAccessTestResult.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/ControlPlaneAzureEventHubAccessTestResult.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54972", "label": "IStorageBlobUriResolvable.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/IStorageBlobUriResolvable.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54971", "label": "ControlPlaneAzureStorageBlobAccessTestResult.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/ControlPlaneAzureStorageBlobAccessTestResult.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54970", "label": "ControlPlaneAzureStorageBlobCatalogValidationTestResult.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/ControlPlaneAzureStorageBlobCatalogValidationTestResult.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54969", "label": "ControlPlaneAzureKeyVaultAccessTestResult.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/ControlPlaneAzureKeyVaultAccessTestResult.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54968", "label": "IControlPlaneAzureStorageBlobCatalogValidationTestRequest.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/IControlPlaneAzureStorageBlobCatalogValidationTestRequest.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54967", "label": "IControlPlaneIdentity.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/IControlPlaneIdentity.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54966", "label": "IControlPlaneAzureStorageBlobAccessTestRequest.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/IControlPlaneAzureStorageBlobAccessTestRequest.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54965", "label": "IKeyVaultStoredSecrets.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/KeyVaultSecretProperties/IKeyVaultStoredSecrets.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54964", "label": "IKeyVaultSecretProperty.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/KeyVaultSecretProperties/IKeyVaultSecretProperty.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54963", "label": "SignalDescriptorsUncategorized.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Signals/SignalDescriptorsUncategorized.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "SignalDescriptorsK8s.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Signals/SignalDescriptorsK8s.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54961", "label": "SignalDescriptor.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Signals/SignalDescriptor.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54960", "label": "SignalNames.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Signals/SignalNames.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "SignalDescriptorsAzure.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Signals/SignalDescriptorsAzure.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54958", "label": "SignalDescriptors.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Signals/SignalDescriptors.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "SignalDescriptorsEndpoint.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Signals/SignalDescriptorsEndpoint.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54956", "label": "SignalDescriptorsAad.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Signals/SignalDescriptorsAad.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54955", "label": "SignalDescriptorsMsGraph.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Signals/SignalDescriptorsMsGraph.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54954", "label": "IUser.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/IUser.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54953", "label": "ITeamPreferences.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ITeamPreferences.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54952", "label": "RegularExpressionAttributeConsts.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/RegularExpressionAttributeConsts.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54951", "label": "ITeam.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ITeam.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54950", "label": "ModelLimits.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ModelLimits.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54949", "label": "IGroupUserRoleAssignment.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/IGroupUserRoleAssignment.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54948", "label": "UserRole.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/UserRole.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54947", "label": "AttackBot.Shared.DataModel.csproj", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/AttackBot.Shared.DataModel.csproj"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54946", "label": "IObjectUserRoleAssignment.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/IObjectUserRoleAssignment.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54945", "label": "IPersistentSystemChangeData.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/IPersistentSystemChangeData.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54944", "label": "Consts.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Consts.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54943", "label": "IUserRoleAssignment.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/IUserRoleAssignment.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54942", "label": "OperatingSystems.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/OperatingSystems.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54941", "label": "AssemblyInfo.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/Cryptography/Properties/AssemblyInfo.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54940", "label": "packages.config", "type": "File", "color": "#20c997", "properties": {"path": "Shared/Cryptography/packages.config"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54939", "label": "AttackBot.Platform.Cryptography.csproj", "type": "File", "color": "#20c997", "properties": {"path": "Shared/Cryptography/AttackBot.Platform.Cryptography.csproj"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54938", "label": "config", "type": "File", "color": "#20c997", "properties": {"path": "Shared/config"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54937", "label": "AssemblyInfo.cs", "type": "File", "color": "#20c997", "properties": {"path": "WorldState/Properties/AssemblyInfo.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54936", "label": "WorldState.csproj", "type": "File", "color": "#20c997", "properties": {"path": "WorldState/WorldState.csproj"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54935", "label": "WorldState.cs", "type": "File", "color": "#20c997", "properties": {"path": "WorldState/WorldState.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54934", "label": "MsSqlConstants.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Storage/MsSqlConstants.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54933", "label": "DatabaseConfigurationStrategyFactory.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Storage/DatabaseConfigurationStrategyFactory.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54932", "label": "IndexAttribute.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Storage/IndexAttribute.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54931", "label": "Microsoft.Centauri.Storage.csproj", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Storage/Microsoft.Centauri.Storage.csproj"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54930", "label": "DbContextFactory.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Storage/DbContextFactory.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54929", "label": "IDbContext.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Storage/IDbContext.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54928", "label": "ConnectionStringDatabaseConfigurationStrategy.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Storage/ConnectionStringDatabaseConfigurationStrategy.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54927", "label": "DatabaseManager.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Storage/DatabaseManager.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54926", "label": "IDatabaseConfigurationStrategy.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Storage/IDatabaseConfigurationStrategy.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54925", "label": "ModelSerializer.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Storage/ModelSerializer.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54924", "label": "MssqlAadAuthenticatedDatabaseConfigurationStrategy.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Storage/MssqlAadAuthenticatedDatabaseConfigurationStrategy.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54923", "label": "ModelStorageContainer.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Storage/ModelStorageContainer.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54922", "label": "AssemblyInfo.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.PowerShell/Properties/AssemblyInfo.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54921", "label": "AttackBotPlatformCmdlet.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.PowerShell/AttackBotPlatformCmdlet.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54920", "label": "packages.config", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.PowerShell/packages.config"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54919", "label": "PowerShellPromptFactory.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.PowerShell/PowerShellPromptFactory.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54918", "label": "AssemblyVersionRedirector.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.PowerShell/AssemblyVersionRedirector.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54917", "label": "PowerShellHost.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.PowerShell/PowerShellHost.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54916", "label": "Microsoft.Centauri.PowerShell.csproj", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.PowerShell/Microsoft.Centauri.PowerShell.csproj"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54915", "label": "ValidateCmdletParameterAsAttribute.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.PowerShell/ValidateCmdletParameterAsAttribute.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54914", "label": "ISymmetricKeySource.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Cryptography/ISymmetricKeySource.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54913", "label": "EncryptedEnvelope.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Cryptography/EncryptedEnvelope.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54912", "label": "AesConstants.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Cryptography/AesConstants.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54911", "label": "HmacProvider.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Cryptography/HmacProvider.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54910", "label": "StringEncryptor.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Cryptography/StringEncryptor.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54909", "label": "Microsoft.Centauri.Cryptography.csproj", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Cryptography/Microsoft.Centauri.Cryptography.csproj"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54908", "label": "SymmetricKeySet.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Cryptography/SymmetricKeySet.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54907", "label": "AssemblyInfo.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Configuration.Tests/Properties/AssemblyInfo.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54906", "label": "ConfigurationReaderTests.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Configuration.Tests/ConfigurationReaderTests.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54905", "label": "packages.config", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Configuration.Tests/packages.config"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54904", "label": "app.config", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Configuration.Tests/app.config"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54903", "label": "Microsoft.Centauri.Configuration.Tests.csproj", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Configuration.Tests/Microsoft.Centauri.Configuration.Tests.csproj"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54902", "label": "AssemblyInfo.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.EventFramework.Tests/Properties/AssemblyInfo.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54901", "label": "EventDispatchTests.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.EventFramework.Tests/EventDispatchTests.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54900", "label": "packages.config", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.EventFramework.Tests/packages.config"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54899", "label": "app.config", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.EventFramework.Tests/app.config"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54898", "label": "Microsoft.Centauri.EventFramework.Tests.csproj", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.EventFramework.Tests/Microsoft.Centauri.EventFramework.Tests.csproj"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54897", "label": "JsonTypeConverter.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Serialization.Json/JsonTypeConverter.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54896", "label": "Microsoft.Centauri.Serialization.Json.csproj", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Serialization.Json/Microsoft.Centauri.Serialization.Json.csproj"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54895", "label": "CentauriJsonSerializer.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Serialization.Json/CentauriJsonSerializer.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54894", "label": "CentauriJsonSerializerSettings.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.Serialization.Json/CentauriJsonSerializerSettings.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54893", "label": "BaseEvent.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.EventFramework/BaseEvent.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54892", "label": "EventDispatchAttributes.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.EventFramework/EventDispatchAttributes.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54891", "label": "TimeIntervalEventEmitter.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.EventFramework/TimeIntervalEventEmitter.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54890", "label": "EventSubscription.cs", "type": "File", "color": "#20c997", "properties": {"path": "Centauri/Microsoft.Centauri.EventFramework/EventSubscription.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58352", "label": "GetTestLogEntries", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58353", "label": "LogEntryC2", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58354", "label": "LogEntryDiagnostic", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58355", "label": "LogEntryC2", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58356", "label": "MssqlServiceSharedDbContextLogsTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58349", "label": "GetDatabaseConfigurationStrategyForTestDatabase", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58350", "label": "MssqlStorageTestBase", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58346", "label": "GetTestUserRoleAssignment", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58347", "label": "MssqlApiDbContextUserRoleAssignmentTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58343", "label": "GetTestControlPlaneIdentity", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58344", "label": "MssqlServiceSharedDbContextControlPlaneIdentityTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58335", "label": "GetTestPayloadContainer", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58336", "label": "TestStorage_MssqlServiceSharedDbContext_PayloadCreate", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58337", "label": "TestStorage_MssqlServiceSharedDbContext_PayloadCreateExpired", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58338", "label": "TestStorage_MssqlServiceSharedDbContext_PayloadCreateDelete", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58339", "label": "TestStorage_MssqlServiceSharedDbContext_PayloadDeleteNotExists", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58340", "label": "TestStorage_MssqlServiceSharedDbContext_PayloadCreateDeleteExpire", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58341", "label": "MssqlServiceSharedDbContextPayloadsTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58331", "label": "GetTestCampaign", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58332", "label": "BlockingNewCampaignRecordVisitor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58333", "label": "MssqlServiceSharedDbContextCampaignTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58328", "label": "GetTestTeam", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58329", "label": "MssqlApiDbContextTeamTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58321", "label": "PurgeStorage", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58322", "label": "PopulateTestDataInAzureTable", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58323", "label": "DoGet", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58324", "label": "DoPost", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58325", "label": "DeserializeErrorMessage", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58326", "label": "TestHelpers", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58317", "label": "team", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58318", "label": "may", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58319", "label": "TestModelConstants", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58310", "label": "OutputCurrentConstruction", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58309", "label": "if", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58308", "label": "AssertAction", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58307", "label": "AssertReadCampaignLogs", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58306", "label": "AssertReadCampaign", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58305", "label": "AssertSubmitTemplate", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58304", "label": "AssertReadTemplate", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58303", "label": "TestClient_Campaign_EndorsedCampaignTemplateContributor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58302", "label": "TestClient_Campaign_EndorsePowershellTemplates", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58301", "label": "TestClient_Campaign_CampaignSubmittedFromTemplate_Common", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58300", "label": "TestClient_Campaign_CampaignSubmittedFromTemplate_ServicePrincipal", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58299", "label": "TestClient_Campaign_CampaignSubmittedFromTemplate_User", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58298", "label": "TestClient_Campaign_PowershellTemplates_AppAdminCreate", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58297", "label": "TestClient_Campaign_PowershellTemplates_CreateGetCrossTeam", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58296", "label": "TestClient_Campaign_PowershellTemplates_Overwrite", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58295", "label": "TestClient_Campaign_PowershellTemplates_CreateGetSameTeam", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58294", "label": "TestClient_Campaign_PowershellTemplates_NonexistantTeam", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58293", "label": "TestClient_Campaign_PowershellTemplates_NotFound", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58292", "label": "GetTemplate", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58291", "label": "GetTeamTemplates", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58290", "label": "GetTemplates", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58289", "label": "TestClient_Campaign_PowershellCampaign_Common", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58288", "label": "TestClient_Campaign_PowershellCampaign_ServicePrincipal", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58287", "label": "TestClient_Campaign_PowershellCampaign_User", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58311", "label": "Construct", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58312", "label": "TestClient_Campaign_PowershellCampaignConstruction", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58313", "label": "TestClient_Campaign_PowershellCampaignConstructionInvalidLogDestinationTargetUri", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58314", "label": "TestClient_Campaign_PowershellCampaignConstructionInvalidLogDestinationTargetLogLocation", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58315", "label": "ClientCampaignPowershellTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58286", "label": "PurgeTeamTemplates", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58280", "label": "AssertControlPlaneIentityCreateSuccess", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58281", "label": "TestClient_TeamControlPlaneIdentity_Lifecycle", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58282", "label": "TestClient_TeamControlPlaneIdentity_UpdateAuthenticationAssertion", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58283", "label": "TestClient_TeamControlPlaneIdentity_InvalidToken", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58284", "label": "PowerShellClientControlPlaneIdentityTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58277", "label": "TestClient_GetVersion", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58278", "label": "PowerShellClientVersionTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58271", "label": "TestClient_TestTeamControlPlaneKeyVaultSecretAccess_ExplicitIdentityName", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58272", "label": "TestClient_TestTeamControlPlaneKeyVaultSecretAccess_ExpiredAssertionToken", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58273", "label": "TestClient_TestTeamControlPlaneKeyVaultSecretAccess_TeamPreference", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58274", "label": "GetUriOfConfigSecret", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58275", "label": "PowerShellClientTestTeamControlPlaneKeyVaultSecretAccessTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58268", "label": "TestClient_Log_GetCampaignLogs", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58269", "label": "PowerShellClientLogTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58254", "label": "AssertCampaignHasControlPlaneIdentity", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58255", "label": "AssertTeamHasPreference", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58256", "label": "AssertTeamDoesNotHavePreference", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58257", "label": "TestClient_TeamPreferences_Lifecycle", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58258", "label": "TestClient_TeamPreferences_SetCampaignControlPlaneIdentityFromPreference", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58259", "label": "TestClient_TeamPreferences_CustomAttacksEnable", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58260", "label": "TestClient_TeamPreferences_CustomAttacksEnforceBlobVersioning", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58261", "label": "TestClient_TeamPreferences_CustomAttacksEnforceEndorsedTemplates", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58262", "label": "TestClient_TeamPreferences_CustomAttacksAllowListStorageAccountAdd", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58263", "label": "TestClient_TeamPreferences_CustomAttacksEnforcePackageSigning", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58264", "label": "TestClient_TeamPreferences_CustomAttacksTrustedThumbprintsAdd", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58265", "label": "TestClient_TeamPreferences_AzureOpenAiAgentEnable", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58266", "label": "PowerShellClientTeamPreferencesTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58249", "label": "TestClient_TestTeamControlPlaneStorageBlobAccess_ExplicitIdentityName", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58250", "label": "TestClient_TestTeamControlPlaneStorageBlobAccess_ExpiredAssertionToken", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58251", "label": "TestClient_TestTeamControlPlaneStorageBlobAccess_TeamPreference", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58252", "label": "StorageBlobResolverTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58243", "label": "TestClient_TestTeamControlPlaneEventHubAccess_ExplicitIdentityName", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58244", "label": "TestClient_TestTeamControlPlaneEventHubAccess_NonExplicitIdentityName", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58245", "label": "TestClient_TestTeamControlPlaneEventHubAccess_NonCompliantUri", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58246", "label": "TestClient_TestTeamControlPlaneKeyVaultSecretAccess_ExpiredAssertionToken", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58247", "label": "PowerShellClientTestTeamControlPlaneEventHubAccessTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58237", "label": "UsernamePasswordAadAuthenticationClient", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58238", "label": "GetTestCampaign", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58239", "label": "InsertAHundredAndOneCampaignsAsync", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58240", "label": "ApiClientCampaignTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58235", "label": "ApiClientTeamTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58233", "label": "UserRoleAssignmentMultiTenancyModelTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58230", "label": "TestMultiTenancyModel_Create_DenyReaderWrite", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58231", "label": "MultiTenancyModelTestBase", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58228", "label": "AadAuthenticationClientTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58222", "label": "GetVaultSymmetricKeySource", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58223", "label": "TestKeyVaultKeyWrapper_Get", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58224", "label": "TestKeyVaultKeyWrapper_Expiry", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58225", "label": "TestKeyVaultKeyWrapper_ExpiryMultipleWriters", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58226", "label": "KeyVaultSymmetricKeySourceTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58218", "label": "CampaignsControllerTestsInitialize", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58219", "label": "MediaTypeWithQualityHeaderValue", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58220", "label": "HttpClientServiceTestBase", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58212", "label": "DefaultAzureCredential", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58213", "label": "GetKustoAiActionClient", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58214", "label": "TestService_KustoAiActionClient_IsAadTenantAllowed", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58215", "label": "TestService_KustoAiActionClient_SniTrustingApplications", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58216", "label": "KustoAiActionClientTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58193", "label": "InitializeConfigSources", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58194", "label": "InitializeLocalAttackBot", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58195", "label": "ServiceTestCleanup", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58196", "label": "InitializeTestEnvironment", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58197", "label": "PopulateTestTeams", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58198", "label": "Log", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58199", "label": "AllTestsLog", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58200", "label": "GetClientApi", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58201", "label": "RestAPI", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58202", "label": "AddDefaultUsersToTeams", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58203", "label": "AddDefaultUsersToTeams", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58204", "label": "RemoveUserRole", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58205", "label": "AddUserRole", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58206", "label": "FlushTeamAuthorizationCache", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58207", "label": "GetTeamControlPlaneIdentityWithAssertion", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58208", "label": "SetControlPlaneIdentity", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58209", "label": "SwitchUserBetweenRoles", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58210", "label": "ServiceTestBase", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58188", "label": "GetAuthCert", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58189", "label": "ServicePrincipalAadAuthenticationClient", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58190", "label": "ServicePrincipalAadAuthenticationClient", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58191", "label": "ServicePrincipalAadAuthenticationClientTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58181", "label": "DefaultAzureCredential", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58182", "label": "GetHeliosInventoryAdvisor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58183", "label": "TestService_HeliosInventoryAdvisor_GetAttackBotAzureSubscriptions", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58184", "label": "TestService_HeliosInventoryAdvisor_IsArmSubscriptionAllowed", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58185", "label": "TestService_HeliosInventoryAdvisor_IsAadTenantAllowed", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58186", "label": "HeliosInventoryAdvisorTests", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58179", "label": "NoLocalAttackBotAttribute", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58169", "label": "TestEventHubClientWrappedWrite_MessageTooLarge_LogsException", "type": "Function", "color": "#8da0cb", "properties": {}}];
+            const linksData = [{"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54738", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54988", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54987", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54986", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54985", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54984", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54983", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54982", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54981", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54980", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54979", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54978", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54977", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54976", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54975", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54974", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54973", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54972", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54971", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54970", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54969", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54968", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54967", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54966", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54965", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54964", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54963", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54961", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54960", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54958", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54956", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54955", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54954", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54953", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54952", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54951", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54950", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54949", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54948", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54947", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54946", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54945", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54944", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54943", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54942", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54941", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54940", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54939", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54938", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54937", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54936", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54935", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54934", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54933", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54932", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54931", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54930", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54929", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54928", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54927", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54926", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54925", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54924", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54923", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54922", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54921", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54920", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54919", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54918", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54917", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54916", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54915", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54914", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54913", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54912", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54911", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54910", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54909", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54908", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54907", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54906", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54905", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54904", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54903", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54902", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54901", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54900", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54899", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54898", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54897", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54896", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54895", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54894", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54893", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54892", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54891", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54890", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58352", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58353", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58354", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58355", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58356", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58349", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58350", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58346", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58347", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58343", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58344", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58335", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58336", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58337", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58338", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58339", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58340", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58341", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58331", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58332", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58333", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58328", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58329", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58321", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58322", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58323", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58324", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58325", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58326", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58317", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58318", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58319", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58310", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58309", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58308", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58307", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58306", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58305", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58304", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58303", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58302", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58301", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58300", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58299", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58298", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58297", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58296", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58295", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58294", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58293", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58292", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58291", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58290", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58289", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58288", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58287", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58311", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58312", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58313", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58314", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58315", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58286", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58280", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58281", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58282", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58283", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58284", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58277", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58278", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58271", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58272", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58273", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58274", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58275", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58268", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58269", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58254", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58255", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58256", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58257", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58258", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58259", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58260", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58261", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58262", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58263", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58264", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58265", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58266", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58249", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58250", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58251", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58252", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58243", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58244", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58245", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58246", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58247", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58237", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58238", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58239", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58240", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58235", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58233", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58230", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58231", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58228", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58222", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58223", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58224", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58225", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58226", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58218", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58219", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58220", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58212", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58213", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58214", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58215", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58216", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58193", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58194", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58195", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58196", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58197", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58198", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58199", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58200", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58201", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58202", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58203", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58204", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58205", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58206", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58207", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58208", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58209", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58210", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58188", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58189", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58190", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58191", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58181", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58182", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58183", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58184", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58185", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58186", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58179", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58169", "label": "INCLUDES"}];
+            
+            // Node size by type
+            const sizeMap = {
+                Investigation: 15,
+                File: 8,
+                Function: 6,
+                Class: 7,
+                Method: 5
+            };
+            
+            // Set up the SVG
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            
+            const svg = d3.select("#graph-container")
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height);
+            
+            // Container for all graph elements (for zooming)
+            const container = svg.append("g");
+            
+            // Create the simulation
+            const simulation = d3.forceSimulation()
+                .force("link", d3.forceLink().id(d => d.id).distance(100))
+                .force("charge", d3.forceManyBody().strength(-300))
+                .force("center", d3.forceCenter(width / 2, height / 2))
+                .force("collision", d3.forceCollide().radius(d => getNodeSize(d) * 2));
+            
+            // Helper function to get node size
+            function getNodeSize(d) {
+                return sizeMap[d.type] || 5;
+            }
+            
+            // Create links
+            const link = container.append("g")
+                .selectAll("line")
+                .data(linksData)
+                .enter()
+                .append("line")
+                .attr("class", "link")
+                .attr("stroke-width", 1);
+            
+            // Create link labels
+            const linkLabel = container.append("g")
+                .selectAll("text")
+                .data(linksData)
+                .enter()
+                .append("text")
+                .attr("class", "link-label")
+                .attr("opacity", 0)  // Initially hidden
+                .text(d => d.label);
+            
+            // Create nodes
+            const node = container.append("g")
+                .selectAll("circle")
+                .data(nodesData)
+                .enter()
+                .append("circle")
+                .attr("class", "node")
+                .attr("r", getNodeSize)
+                .attr("fill", d => d.color || "#999")
+                .call(d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended))
+                .on("click", showNodeInfo)
+                .on("mouseover", handleMouseOver)
+                .on("mouseout", handleMouseOut);
+            
+            // Create node labels
+            const nodeLabel = container.append("g")
+                .selectAll("text")
+                .data(nodesData)
+                .enter()
+                .append("text")
+                .attr("class", "node-label")
+                .attr("dy", "-10")
+                .text(d => d.label || "")
+                .attr("opacity", 0);  // Initially hidden
+            
+            // Set up simulation
+            simulation
+                .nodes(nodesData)
+                .on("tick", ticked);
+            
+            simulation.force("link")
+                .links(linksData);
+            
+            // Function to update positions on tick
+            function ticked() {
+                link
+                    .attr("x1", d => d.source.x)
+                    .attr("y1", d => d.source.y)
+                    .attr("x2", d => d.target.x)
+                    .attr("y2", d => d.target.y);
+                
+                linkLabel
+                    .attr("x", d => (d.source.x + d.target.x) / 2)
+                    .attr("y", d => (d.source.y + d.target.y) / 2);
+                
+                node
+                    .attr("cx", d => d.x = Math.max(getNodeSize(d), Math.min(width - getNodeSize(d), d.x)))
+                    .attr("cy", d => d.y = Math.max(getNodeSize(d), Math.min(height - getNodeSize(d), d.y)));
+                
+                nodeLabel
+                    .attr("x", d => d.x)
+                    .attr("y", d => d.y);
+            }
+            
+            // Handle mouseover to highlight connections
+            function handleMouseOver(event, d) {
+                // Highlight the node
+                d3.select(this).attr("stroke", "#000").attr("stroke-width", 2);
+                
+                // Find connected links and nodes
+                const connectedLinks = linksData.filter(l => 
+                    (l.source.id === d.id || l.source === d.id) || 
+                    (l.target.id === d.id || l.target === d.id)
+                );
+                
+                const connectedNodeIds = new Set();
+                
+                connectedLinks.forEach(l => {
+                    // Get source and target IDs
+                    const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+                    const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+                    
+                    // Add connected node IDs
+                    if (sourceId === d.id) {
+                        connectedNodeIds.add(targetId);
+                    } else {
+                        connectedNodeIds.add(sourceId);
+                    }
+                    
+                    // Highlight link
+                    link.filter(link => link === l)
+                        .attr("stroke", "#000")
+                        .attr("stroke-width", 2);
+                    
+                    // Show link label
+                    linkLabel.filter(link => link === l)
+                        .attr("opacity", 1);
+                });
+                
+                // Highlight connected nodes
+                node.filter(n => connectedNodeIds.has(n.id))
+                    .attr("stroke", "#000")
+                    .attr("stroke-width", 2);
+                
+                // Show labels for this node and connected nodes
+                nodeLabel.filter(n => n.id === d.id || connectedNodeIds.has(n.id))
+                    .attr("opacity", 1);
+            }
+            
+            // Handle mouseout to reset highlights
+            function handleMouseOut() {
+                node.attr("stroke", "#fff").attr("stroke-width", 1.5);
+                link.attr("stroke", "#999").attr("stroke-width", 1);
+                linkLabel.attr("opacity", 0);
+                
+                // Only show labels when zoomed in
+                const currentZoom = d3.zoomTransform(svg.node()).k;
+                nodeLabel.attr("opacity", currentZoom > 1.5 ? 0.8 : 0);
+            }
+            
+            // Drag functions
+            function dragstarted(event, d) {
+                if (\!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+            
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+            
+            function dragended(event, d) {
+                if (\!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+            
+            // Show node info when clicked
+            function showNodeInfo(event, d) {
+                const infoBox = document.getElementById("node-info");
+                const infoContent = document.getElementById("info-content");
+                
+                infoBox.style.display = "block";
+                
+                let html = `<p><strong>ID:</strong> ${d.id}</p>`;
+                html += `<p><strong>Type:</strong> ${d.type}</p>`;
+                html += `<p><strong>Label:</strong> ${d.label}</p>`;
+                
+                if (d.properties) {
+                    html += "<p><strong>Properties:</strong></p><ul>";
+                    for (const [key, value] of Object.entries(d.properties)) {
+                        if (value \!== null && value \!== undefined) {
+                            html += `<li>${key}: ${value}</li>`;
+                        }
+                    }
+                    html += "</ul>";
+                }
+                
+                infoContent.innerHTML = html;
+            }
+            
+            // Set up node type filtering
+            document.getElementById("show-investigation").addEventListener("change", filterGraph);
+            document.getElementById("show-file").addEventListener("change", filterGraph);
+            document.getElementById("show-function").addEventListener("change", filterGraph);
+            document.getElementById("show-class").addEventListener("change", filterGraph);
+            document.getElementById("show-method").addEventListener("change", filterGraph);
+            
+            function filterGraph() {
+                const showInvestigation = document.getElementById("show-investigation").checked;
+                const showFile = document.getElementById("show-file").checked;
+                const showFunction = document.getElementById("show-function").checked;
+                const showClass = document.getElementById("show-class").checked;
+                const showMethod = document.getElementById("show-method").checked;
+                
+                // Filter nodes
+                node.style("display", d => {
+                    if (d.type === "Investigation" && \!showInvestigation) return "none";
+                    if (d.type === "File" && \!showFile) return "none";
+                    if (d.type === "Function" && \!showFunction) return "none";
+                    if (d.type === "Class" && \!showClass) return "none";
+                    if (d.type === "Method" && \!showMethod) return "none";
+                    return null;
+                });
+                
+                // Filter node labels
+                nodeLabel.style("display", d => {
+                    if (d.type === "Investigation" && \!showInvestigation) return "none";
+                    if (d.type === "File" && \!showFile) return "none";
+                    if (d.type === "Function" && \!showFunction) return "none";
+                    if (d.type === "Class" && \!showClass) return "none";
+                    if (d.type === "Method" && \!showMethod) return "none";
+                    return null;
+                });
+                
+                // Filter links based on visible nodes
+                link.style("display", d => {
+                    const sourceType = d.source.type;
+                    const targetType = d.target.type;
+                    
+                    const sourceVisible = (
+                        (sourceType === "Investigation" && showInvestigation) ||
+                        (sourceType === "File" && showFile) ||
+                        (sourceType === "Function" && showFunction) ||
+                        (sourceType === "Class" && showClass) ||
+                        (sourceType === "Method" && showMethod)
+                    );
+                    
+                    const targetVisible = (
+                        (targetType === "Investigation" && showInvestigation) ||
+                        (targetType === "File" && showFile) ||
+                        (targetType === "Function" && showFunction) ||
+                        (targetType === "Class" && showClass) ||
+                        (targetType === "Method" && showMethod)
+                    );
+                    
+                    return sourceVisible && targetVisible ? null : "none";
+                });
+                
+                // Filter link labels
+                linkLabel.style("display", d => {
+                    const sourceType = d.source.type;
+                    const targetType = d.target.type;
+                    
+                    const sourceVisible = (
+                        (sourceType === "Investigation" && showInvestigation) ||
+                        (sourceType === "File" && showFile) ||
+                        (sourceType === "Function" && showFunction) ||
+                        (sourceType === "Class" && showClass) ||
+                        (sourceType === "Method" && showMethod)
+                    );
+                    
+                    const targetVisible = (
+                        (targetType === "Investigation" && showInvestigation) ||
+                        (targetType === "File" && showFile) ||
+                        (targetType === "Function" && showFunction) ||
+                        (targetType === "Class" && showClass) ||
+                        (targetType === "Method" && showMethod)
+                    );
+                    
+                    return sourceVisible && targetVisible ? null : "none";
+                });
+            }
+            
+            // Add zoom functionality
+            const zoom = d3.zoom()
+                .scaleExtent([0.1, 10])
+                .on("zoom", zoomed);
+            
+            svg.call(zoom);
+            
+            function zoomed(event) {
+                container.attr("transform", event.transform);
+                
+                // Show node labels only when zoomed in sufficiently
+                const currentScale = event.transform.k;
+                nodeLabel.style("opacity", () => currentScale > 1.5 ? 0.8 : 0);
+            }
+            
+            // Buttons to adjust force layout
+            document.getElementById("expand-graph").addEventListener("click", () => {
+                simulation.force("charge").strength(-500);
+                simulation.alpha(1).restart();
+            });
+            
+            document.getElementById("collapse-graph").addEventListener("click", () => {
+                simulation.force("charge").strength(-100);
+                simulation.alpha(1).restart();
+            });
+            
+            // Search functionality
+            const searchInput = document.getElementById("search-input");
+            const searchResults = document.getElementById("search-results");
+            
+            searchInput.addEventListener("input", performSearch);
+            
+            function performSearch() {
+                const query = searchInput.value.toLowerCase();
+                if (query.length < 2) {
+                    searchResults.innerHTML = "";
+                    return;
+                }
+                
+                // Find matching nodes
+                const matches = nodesData.filter(node => {
+                    const label = (node.label || "").toLowerCase();
+                    
+                    // Check properties
+                    let propertiesMatch = false;
+                    if (node.properties) {
+                        for (const [key, value] of Object.entries(node.properties)) {
+                            if (value && String(value).toLowerCase().includes(query)) {
+                                propertiesMatch = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    return label.includes(query) || propertiesMatch;
+                }).slice(0, 20); // Limit to 20 results
+                
+                // Display results
+                searchResults.innerHTML = "";
+                if (matches.length === 0) {
+                    searchResults.innerHTML = "<div>No matches found</div>";
+                } else {
+                    matches.forEach(node => {
+                        const result = document.createElement("div");
+                        result.className = "search-result";
+                        result.innerHTML = `<span class="color-dot" style="background-color: ${node.color};"></span> ${node.type}: ${node.label}`;
+                        
+                        result.addEventListener("click", () => {
+                            // Center and highlight the node
+                            const transform = d3.zoomIdentity
+                                .translate(width/2 - node.x, height/2 - node.y)
+                                .scale(2);
+                                
+                            svg.transition()
+                                .duration(750)
+                                .call(zoom.transform, transform);
+                                
+                            // Simulate click to show info
+                            showNodeInfo({}, node);
+                            
+                            // Simulate mouseover to highlight connections
+                            d3.selectAll(".node").each(function(d) {
+                                if (d.id === node.id) {
+                                    handleMouseOver({}, d);
+                                }
+                            });
+                        });
+                        
+                        searchResults.appendChild(result);
+                    });
+                }
+            }
+        </script>
+    </body>
+    </html>
+    
