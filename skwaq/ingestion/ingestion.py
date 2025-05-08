@@ -1,183 +1,123 @@
-"""Core ingestion functionality for Skwaq vulnerability assessment copilot.
-
-This module provides the main Ingestion class that orchestrates the ingestion
-of codebases from local file systems or Git repositories.
-"""
+"""Code ingestion module for Skwaq."""
 
 import asyncio
+import logging
+import os
 import time
-import uuid
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from dataclasses import asdict, dataclass, field
+from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
-from skwaq.db.neo4j_connector import get_connector
-from skwaq.db.schema import NodeLabels
-from skwaq.utils.logging import get_logger
-
-from .ast_mapper import ASTFileMapper
-from .documentation import DocumentationProcessor
-from .filesystem import CodebaseFileSystem, FilesystemGraphBuilder
-from .parsers import get_parser, register_parsers
+from ..db.neo4j_connector import NodeLabels, RelationshipTypes, get_connector
+from .exceptions import IngestionError
+from .filesystem import CodebaseFileSystem
+from .parsers.blarify_parser import BlarifyParser
 from .repository import RepositoryHandler, RepositoryManager
-from .summarizers import get_summarizer, register_summarizers
+from .summarizers.llm_summarizer import LLMSummarizer
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @dataclass
 class IngestionStatus:
-    """Status of an ingestion process.
-
-    Attributes:
-        id: Unique identifier for the ingestion
-        state: Current state of the ingestion process (e.g., "initializing", "processing", "completed", "failed")
-        progress: Progress percentage (0-100)
-        start_time: Timestamp when ingestion started
-        end_time: Timestamp when ingestion completed or failed
-        error: Error message if ingestion failed
-        files_processed: Number of files processed so far
-        total_files: Total number of files to process
-        errors: List of errors encountered during ingestion
-        message: Current status message
-        parsing_stats: Statistics about parsing process
-        summarization_stats: Statistics about summarization process
-    """
+    """Status of an ingestion process."""
 
     id: str
-    state: str = "initializing"
+    state: str = "pending"
     progress: float = 0.0
     start_time: float = field(default_factory=time.time)
     end_time: Optional[float] = None
     error: Optional[str] = None
     files_processed: int = 0
     total_files: int = 0
-    errors: List[Dict[str, Any]] = field(default_factory=list)
-    message: str = "Initializing ingestion process"
+    errors: List[str] = field(default_factory=list)
+    message: str = "Pending"
     parsing_stats: Dict[str, Any] = field(default_factory=dict)
     summarization_stats: Dict[str, Any] = field(default_factory=dict)
 
-    @property
-    def time_elapsed(self) -> float:
-        """Calculate time elapsed since ingestion started.
-
-        Returns:
-            Time elapsed in seconds
-        """
-        if self.end_time:
-            return self.end_time - self.start_time
-        return time.time() - self.start_time
-
     def to_dict(self) -> Dict[str, Any]:
-        """Convert status to dictionary.
+        """Convert the status to a dictionary.
 
         Returns:
             Dictionary representation of the status
         """
-        result = {
-            "id": self.id,
-            "state": self.state,
-            "progress": self.progress,
-            "start_time": self.start_time,
-            "end_time": self.end_time,
-            "error": self.error,
-            "files_processed": self.files_processed,
-            "total_files": self.total_files,
-            "time_elapsed": self.time_elapsed,
-            "errors": self.errors,
-            "message": self.message,
-            "parsing_stats": self.parsing_stats,
-            "summarization_stats": self.summarization_stats,
-        }
-        return result
+        return asdict(self)
+
+
+class IngestionType(str, Enum):
+    """Type of ingestion."""
+
+    REPOSITORY = "repository"
+    KNOWLEDGE_BASE = "knowledge_base"
+    CVE = "cve"
+    AST = "ast"
 
 
 class Ingestion:
-    """Main ingestion class for handling codebase ingestion.
-
-    This class orchestrates the process of ingesting a codebase from a local file system
-    or Git repository and storing it in a graph database for analysis.
-
-    Attributes:
-        local_path: Path to a local codebase directory
-        repo: Git repository URL
-        branch: Git branch to clone
-        model_client: OpenAI model client for code summarization
-        max_parallel: Maximum number of parallel threads for processing
-        doc_path: Path to additional documentation
-        doc_uri: URI to additional documentation
-        context_token_limit: Maximum number of tokens to keep in context
-        parse_only: Flag to only parse the codebase without LLM summarization
-    """
+    """Ingestion process for code, knowledge, and other data."""
 
     def __init__(
         self,
-        local_path: Optional[str] = None,
+        ingestion_type: IngestionType,
         repo: Optional[str] = None,
+        local_path: Optional[str] = None,
         branch: Optional[str] = None,
-        model_client: Optional[Any] = None,
-        max_parallel: int = 3,
-        doc_path: Optional[str] = None,
-        doc_uri: Optional[str] = None,
-        context_token_limit: int = 20000,
+        include_patterns: Optional[List[str]] = None,
+        exclude_patterns: Optional[List[str]] = None,
         parse_only: bool = False,
+        max_parallel: int = 3,
     ):
         """Initialize the ingestion process.
 
         Args:
-            local_path: Path to a local codebase directory
-            repo: Git repository URL
-            branch: Git branch to clone
-            model_client: OpenAI model client for code summarization
-            max_parallel: Maximum number of parallel threads for processing
-            doc_path: Path to additional documentation
-            doc_uri: URI to additional documentation
-            context_token_limit: Maximum number of tokens to keep in context
-            parse_only: Flag to only parse the codebase without LLM summarization
-
-        Raises:
-            ValueError: If neither local_path nor repo is provided, or if both are provided
+            ingestion_type: Type of ingestion
+            repo: Repository URL (for repository ingestion)
+            local_path: Local path (for local ingestion)
+            branch: Git branch to checkout (for repository ingestion)
+            include_patterns: Glob patterns to include
+            exclude_patterns: Glob patterns to exclude
+            parse_only: Only parse the codebase, don't generate summaries
+            max_parallel: Maximum number of parallel tasks
         """
-        if not local_path and not repo:
-            raise ValueError("Either local_path or repo must be provided")
-        if local_path and repo:
-            raise ValueError("Only one of local_path or repo can be provided")
-
-        self.local_path = local_path
+        self.ingestion_type = ingestion_type
         self.repo = repo
+        self.local_path = local_path
         self.branch = branch
-        self.model_client = model_client
-        self.max_parallel = max_parallel
-        
-        # If parse_only is explicitly set to True by the user, respect that
-        # Otherwise, ensure we generate summaries for AST nodes
+        self.include_patterns = include_patterns or []
+        self.exclude_patterns = exclude_patterns or []
         self.parse_only = parse_only
-        self.summarize_ast = not parse_only
-        self.doc_path = doc_path
-        self.doc_uri = doc_uri
-        self.context_token_limit = context_token_limit
+        self.max_parallel = max_parallel
 
-        # Create components
+        # Set up database connector
         self.db_connector = get_connector()
-        self.repo_handler = RepositoryHandler()
+
+        # Set up repository manager
         self.repo_manager = RepositoryManager(self.db_connector)
 
-        # Initialize parsers and summarizers
-        register_parsers()
-        register_summarizers()
+        # Set up repository handler if needed
+        if ingestion_type == IngestionType.REPOSITORY and repo:
+            self.repo_handler = RepositoryHandler()
 
-        # Active ingestion processes tracked by ID
-        self._active_ingestions: Dict[str, IngestionStatus] = {}
+        # Set up model client for summarization if needed
+        if not parse_only:
+            from ...core.openai_client import get_client
 
-    async def ingest(self) -> str:
+            self.model_client = get_client()
+
+        # Active ingestion processes
+        self._active_ingestions = {}
+
+    def start_ingestion(self) -> str:
         """Start the ingestion process.
 
         Returns:
-            Ingestion ID that can be used to track the process
+            Ingestion ID
         """
-        # Generate a unique ID for this ingestion
-        ingestion_id = str(uuid.uuid4())
+        # Generate unique ingestion ID
+        ingestion_id = f"ing-{int(time.time())}"
 
-        # Create an initial status
+        # Create status
         status = IngestionStatus(id=ingestion_id)
         self._active_ingestions[ingestion_id] = status
 
@@ -186,14 +126,14 @@ class Ingestion:
 
         return ingestion_id
 
-    async def get_status(self, ingestion_id: str) -> IngestionStatus:
-        """Get the current status of an ingestion process.
+    def get_status(self, ingestion_id: str) -> IngestionStatus:
+        """Get the status of an ingestion process.
 
         Args:
             ingestion_id: ID of the ingestion process
 
         Returns:
-            Current status of the ingestion process
+            Status of the ingestion process
 
         Raises:
             ValueError: If the ingestion ID is not found
@@ -283,95 +223,69 @@ class Ingestion:
             fs = CodebaseFileSystem(codebase_path)
 
             # Count files
-            files = fs.get_all_files()
-            status.total_files = len(files)
-            status.message = f"Found {status.total_files} files in codebase"
-
-            # Create filesystem graph
-            fs_graph_builder = FilesystemGraphBuilder(self.db_connector)
-            file_nodes = await fs_graph_builder.build_graph(repo_node_id, fs)
-            status.message = "Created filesystem graph"
+            status.message = "Counting files..."
+            files_to_process = fs.find_files(
+                include_patterns=self.include_patterns,
+                exclude_patterns=self.exclude_patterns,
+            )
+            status.total_files = len(files_to_process)
+            status.message = f"Found {status.total_files} files to process"
             status.progress = 10.0
 
-            # Parse the codebase
-            parser = get_parser("blarify")
-            if not parser:
-                raise ValueError("Blarify parser not found")
+            # Use the Blarify parser
+            parser = BlarifyParser()
 
-            parse_result = await parser.parse(codebase_path)
+            # Parse files
+            status.message = "Parsing files..."
+            status.progress = 20.0
 
-            # Map AST nodes to filesystem
-            ast_mapper = ASTFileMapper(self.db_connector)
-            mapping_result = await ast_mapper.map_ast_to_files(repo_node_id, file_nodes)
+            parse_result = await parser.parse_files(
+                files_to_process,
+                repo_node_id,
+                codebase_path,
+                status_callback=lambda parsed, total, path: self._update_parsing_status(
+                    status, parsed, total, path
+                ),
+            )
 
-            # Update parsing stats
+            # Update status with parsing result
             status.parsing_stats = parse_result.get("stats", {})
-            status.parsing_stats.update({"ast_mapping": mapping_result})
             status.files_processed = parse_result.get("files_processed", 0)
+            status.errors.extend(parse_result.get("errors", []))
             status.message = f"Parsed {status.files_processed} files"
             status.progress = 50.0
 
-            # Process documentation if provided
-            if self.doc_path or self.doc_uri:
-                doc_processor = DocumentationProcessor(
-                    self.model_client, self.db_connector
-                )
-
-                if self.doc_path:
-                    await doc_processor.process_local_docs(self.doc_path, repo_node_id)
-
-                if self.doc_uri:
-                    await doc_processor.process_remote_docs(self.doc_uri, repo_node_id)
-
-                status.message = "Processed documentation"
+            # Generate summaries if not parse_only
+            if not self.parse_only:
+                status.message = "Generating summaries..."
                 status.progress = 60.0
 
-            # Generate code summaries using LLM if not parse_only
-            if not self.parse_only and self.model_client:
-                # Get the LLM summarizer
-                summarizer = get_summarizer("llm")
-                if not summarizer:
-                    raise ValueError("LLM summarizer not found")
-
-                # Configure the summarizer
-                summarizer.configure(
-                    model_client=self.model_client,
-                    max_parallel=self.max_parallel,
-                    context_token_limit=self.context_token_limit,
+                # Initialize summarizer
+                summarizer = LLMSummarizer(
+                    self.db_connector, self.model_client, max_concurrent=self.max_parallel
                 )
 
-                # Get file nodes
-                file_query = (
-                    "MATCH (repo:Repository)-[:CONTAINS*]->(file:File) "
-                    "WHERE id(repo) = $repo_id AND file.language in ['python', 'javascript', 'typescript', 'java', 'csharp', 'go', 'cpp', 'c', 'php', 'ruby'] "
-                    "RETURN id(file) as file_id, file.path as path, file.language as language"
+                # Generate summaries
+                summary_result = await summarizer.summarize_repository(
+                    repo_node_id,
+                    status_callback=lambda summarized, total, path: self._update_summarization_status(
+                        status, summarized, total, path
+                    ),
                 )
 
-                file_nodes = self.db_connector.run_query(
-                    file_query, {"repo_id": repo_node_id}
-                )
-
-                # Summarize files and AST nodes
-                status.message = "Generating summaries for files and AST nodes"
-                status.progress = 70.0
-                summary_result = await summarizer.summarize_files(
-                    file_nodes, fs, repo_node_id
-                )
-                
-                # Now find AST nodes that don't have summaries and generate them
-                status.message = "Generating summaries for remaining AST nodes"
-                status.progress = 80.0
-                
-                # Get AST nodes without summaries
+                # Get AST nodes for summarization
+                status.message = "Generating AST summaries..."
                 ast_query = """
-                MATCH (repo:Repository)-[:CONTAINS]->(file:File)
-                WHERE id(repo) = $repo_id
-                MATCH (ast)-[:PART_OF]->(file)
-                WHERE (ast:Function OR ast:Class OR ast:Method) 
-                AND ast.code IS NOT NULL
-                AND NOT (ast)<-[:DESCRIBES]-(:CodeSummary)
+                MATCH (repo:Repository)-[:CONTAINS]->(file:File)-[:CONTAINS]->(ast)
+                WHERE id(repo) = $repo_id AND 
+                      (
+                        'Function' IN labels(ast) OR 
+                        'Class' IN labels(ast) OR 
+                        'Method' IN labels(ast)
+                      ) AND
+                      NOT EXISTS((ast)<-[:DESCRIBES]-(:CodeSummary))
                 RETURN 
-                    id(ast) as ast_id, 
+                    id(ast) as ast_id,
                     ast.name as name, 
                     ast.code as code,
                     labels(ast) as labels,
@@ -418,6 +332,27 @@ class Ingestion:
             # Final steps
             status.state = "completed"
             status.progress = 100.0
+            status.end_time = time.time()
+            status.message = "Ingestion completed successfully"
+
+            # Update the repository node with final status
+            self.repo_manager.update_status(repo_node_id, status.to_dict())
+
+        except Exception as e:
+            logger.error(f"Ingestion failed: {str(e)}", exc_info=True)
+            status.state = "failed"
+            status.error = str(e)
+            status.end_time = time.time()
+            status.message = f"Ingestion failed: {str(e)}"
+
+            # Update the repository node with error status if it was created
+            if "repo_node_id" in locals() and repo_node_id:
+                self.repo_manager.update_status(repo_node_id, status.to_dict())
+
+        finally:
+            # Clean up repository handler resources
+            if hasattr(self, "repo_handler"):
+                self.repo_handler.cleanup()
 
     async def _generate_ast_summary(
         self, ast_node: Dict, connector: Any, model_client: Any, semaphore: asyncio.Semaphore
@@ -499,24 +434,33 @@ class Ingestion:
                 logger.error(f"Error creating AST summary: {str(e)}")
                 return {"processed": True, "created": False, "error": str(e)}
 
-        status.end_time = time.time()
-        status.message = "Ingestion completed successfully"
+    def _update_parsing_status(
+        self, status: IngestionStatus, parsed: int, total: int, current_file: str
+    ) -> None:
+        """Update the status during parsing.
 
-        # Update the repository node with final status
-        self.repo_manager.update_status(repo_node_id, status.to_dict())
+        Args:
+            status: Status object
+            parsed: Number of files parsed
+            total: Total number of files
+            current_file: Current file being parsed
+        """
+        status.files_processed = parsed
+        progress_ratio = parsed / total if total > 0 else 0
+        status.progress = 20 + progress_ratio * 30  # 20-50% progress range
+        status.message = f"Parsing files... {parsed}/{total} ({current_file})"
 
-    except Exception as e:
-        logger.error(f"Ingestion failed: {str(e)}", exc_info=True)
-        status.state = "failed"
-        status.error = str(e)
-        status.end_time = time.time()
-        status.message = f"Ingestion failed: {str(e)}"
+    def _update_summarization_status(
+        self, status: IngestionStatus, summarized: int, total: int, current_file: str
+    ) -> None:
+        """Update the status during summarization.
 
-        # Update the repository node with error status if it was created
-        if "repo_node_id" in locals() and repo_node_id:
-            self.repo_manager.update_status(repo_node_id, status.to_dict())
-
-    finally:
-        # Clean up repository handler resources
-        if hasattr(self, "repo_handler"):
-            self.repo_handler.cleanup()
+        Args:
+            status: Status object
+            summarized: Number of files summarized
+            total: Total number of files
+            current_file: Current file being summarized
+        """
+        progress_ratio = summarized / total if total > 0 else 0
+        status.progress = 60 + progress_ratio * 30  # 60-90% progress range
+        status.message = f"Generating summaries... {summarized}/{total} ({current_file})"
