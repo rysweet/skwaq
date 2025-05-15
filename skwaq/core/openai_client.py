@@ -3,6 +3,7 @@ This module provides a wrapper around the Azure OpenAI API with configuration
 specific to the Skwaq vulnerability assessment copilot.
 """
 
+import asyncio
 from typing import Dict, List, Optional
 
 # Direct OpenAI imports
@@ -308,14 +309,17 @@ class OpenAIClient:
             if is_azure:
                 kwargs["model"] = self.deployment
 
-                # Azure OpenAI API uses different parameter names
+                # Azure OpenAI API uses different parameter names for different models
                 if max_tokens is not None:
-                    kwargs["max_tokens"] = max_tokens
+                    # For o1 model, use max_completion_tokens instead of max_tokens
+                    if self.deployment == "o1" or self.model == "o1":
+                        kwargs["max_completion_tokens"] = max_tokens
+                    else:
+                        kwargs["max_tokens"] = max_tokens
 
-                # Temperature is supported for Azure OpenAI as well, but with some models
-                # it might use a different name or not be supported
-                # We include it by default but log any errors it might cause
-                kwargs["temperature"] = temperature
+                # Only include temperature if not using o1 model (which doesn't support it)
+                if self.deployment != "o1" and self.model != "o1":
+                    kwargs["temperature"] = temperature
             else:
                 # Regular OpenAI
                 kwargs["model"] = self.model
@@ -333,7 +337,16 @@ class OpenAIClient:
 
             # Make the API call
             try:
-                response = await self.client.chat.completions.create(**kwargs)
+                if hasattr(self.client.chat.completions, "create"):
+                    # Check if the create method is async or not
+                    if asyncio.iscoroutinefunction(self.client.chat.completions.create):
+                        response = await self.client.chat.completions.create(**kwargs)
+                    else:
+                        # Handle non-async create method
+                        response = self.client.chat.completions.create(**kwargs)
+                else:
+                    # Fallback to directly accessing the attribute
+                    response = self.client.chat.completions(**kwargs)
             except Exception as api_error:
                 # If there's an error with temperature in Azure, retry without it
                 if is_azure and "temperature" in str(api_error).lower():
@@ -341,16 +354,74 @@ class OpenAIClient:
                         f"Temperature parameter issue detected: {api_error}. Retrying without temperature parameter."
                     )
                     kwargs.pop("temperature", None)
-                    response = await self.client.chat.completions.create(**kwargs)
+                    if hasattr(self.client.chat.completions, "create"):
+                        if asyncio.iscoroutinefunction(self.client.chat.completions.create):
+                            response = await self.client.chat.completions.create(**kwargs)
+                        else:
+                            response = self.client.chat.completions.create(**kwargs)
+                    else:
+                        response = self.client.chat.completions(**kwargs)
                 else:
                     raise  # Re-raise if it's not a temperature issue or not Azure
 
-            if not response or not response.choices:
+            if not response:
                 raise ValueError("No completion received from the model")
 
-            # Get the message and convert to dict with role and content
-            message = response.choices[0].message
-            return {"role": message.role, "content": message.content}
+            # Handle different response formats
+            if hasattr(response, 'choices'):
+                if len(response.choices) == 0:
+                    raise ValueError("No choices in completion response")
+                
+                # Get the message based on response structure
+                if hasattr(response.choices[0], 'message'):
+                    message = response.choices[0].message
+                    if hasattr(message, 'role') and hasattr(message, 'content'):
+                        return {"role": message.role, "content": message.content}
+                    elif hasattr(message, 'get'):
+                        # Dictionary-like structure
+                        return {
+                            "role": message.get("role", "assistant"),
+                            "content": message.get("content", "")
+                        }
+                elif hasattr(response.choices[0], 'text'):
+                    # Completion API response
+                    return {"role": "assistant", "content": response.choices[0].text}
+                elif hasattr(response.choices[0], 'get'):
+                    # Dictionary-like choice
+                    choice = response.choices[0]
+                    if choice.get('message'):
+                        msg = choice.get('message')
+                        return {
+                            "role": msg.get("role", "assistant"),
+                            "content": msg.get("content", "")
+                        }
+                    elif choice.get('text'):
+                        return {"role": "assistant", "content": choice.get('text', "")}
+            
+            # Handle dictionary response format
+            if isinstance(response, dict):
+                if 'choices' in response:
+                    choices = response['choices']
+                    if choices and isinstance(choices, list) and len(choices) > 0:
+                        choice = choices[0]
+                        if isinstance(choice, dict):
+                            if 'message' in choice:
+                                msg = choice['message']
+                                return {
+                                    "role": msg.get("role", "assistant"),
+                                    "content": msg.get("content", "")
+                                }
+                            elif 'text' in choice:
+                                return {"role": "assistant", "content": choice.get('text', "")}
+            
+            # Fallback if we can't parse the response structure
+            logger.warning(f"Unexpected response format: {type(response)}. Attempting to extract content.")
+            try:
+                # Try to convert to string and return
+                return {"role": "assistant", "content": str(response)}
+            except Exception as e:
+                logger.error(f"Failed to extract content from response: {e}")
+                return {"role": "assistant", "content": "Error: Unable to parse response"}
 
         except Exception as e:
             logger.error(f"Error in chat_completion: {e}")

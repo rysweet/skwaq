@@ -1,0 +1,673 @@
+
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Investigation Visualization</title>
+            <script src="https://d3js.org/d3.v7.min.js"></script>
+            <style>
+                body, html {
+                    margin: 0;
+                    padding: 0;
+                    width: 100%;
+                    height: 100%;
+                    overflow: hidden;
+                    font-family: Arial, sans-serif;
+                }
+                
+                #graph-container {
+                    width: 100%;
+                    height: 100%;
+                    background-color: #f9f9f9;
+                }
+                
+                .node {
+                    stroke: #fff;
+                    stroke-width: 1.5px;
+                }
+                
+                .link {
+                    stroke: #999;
+                    stroke-opacity: 0.6;
+                }
+                
+                .node-label {
+                    font-size: 12px;
+                    pointer-events: none;
+                    text-shadow: 1px 1px 2px white, -1px -1px 2px white, 1px -1px 2px white, -1px 1px 2px white;
+                }
+                
+                .link-label {
+                    font-size: 10px;
+                    pointer-events: none;
+                    fill: #666;
+                    text-shadow: 1px 1px 2px white, -1px -1px 2px white, 1px -1px 2px white, -1px 1px 2px white;
+                }
+                
+                #controls {
+                    position: absolute;
+                    top: 10px;
+                    left: 10px;
+                    background-color: rgba(255, 255, 255, 0.8);
+                    padding: 10px;
+                    border-radius: 5px;
+                    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+                    max-width: 300px;
+                    z-index: 10;
+                }
+                
+                #search-box {
+                    position: absolute;
+                    top: 10px;
+                    right: 10px;
+                    background-color: rgba(255, 255, 255, 0.8);
+                    padding: 10px;
+                    border-radius: 5px;
+                    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+                    z-index: 10;
+                }
+                
+                .info-box {
+                    position: absolute;
+                    bottom: 10px;
+                    left: 10px;
+                    background-color: rgba(255, 255, 255, 0.8);
+                    padding: 10px;
+                    border-radius: 5px;
+                    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+                    max-width: 300px;
+                    max-height: 300px;
+                    overflow: auto;
+                    font-size: 12px;
+                    z-index: 10;
+                }
+                
+                #legend {
+                    position: absolute;
+                    bottom: 10px;
+                    right: 10px;
+                    background-color: rgba(255, 255, 255, 0.8);
+                    padding: 10px;
+                    border-radius: 5px;
+                    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+                    z-index: 10;
+                }
+                
+                .color-dot {
+                    display: inline-block;
+                    width: 10px;
+                    height: 10px;
+                    border-radius: 50%;
+                    margin-right: 5px;
+                }
+                
+                .search-result {
+                    cursor: pointer;
+                    padding: 3px;
+                    margin: 2px 0;
+                }
+                
+                .search-result:hover {
+                    background-color: #eee;
+                }
+                
+                .control-section {
+                    margin-bottom: 10px;
+                }
+                
+                .control-header {
+                    font-weight: bold;
+                    margin-bottom: 5px;
+                }
+                
+                button {
+                    margin-right: 5px;
+                    margin-bottom: 5px;
+                    padding: 5px 10px;
+                    background: #4b76e8;
+                    color: white;
+                    border: none;
+                    border-radius: 3px;
+                    cursor: pointer;
+                }
+                
+                button:hover {
+                    background: #3a64d8;
+                }
+                
+                #statistics {
+                    margin-top: 10px;
+                    font-size: 12px;
+                }
+            </style>
+        </head>
+        <body>
+            <div id="graph-container"></div>
+            
+            <div id="controls">
+                <h4>AttackBot Analysis</h4>
+                
+                <div class="control-section">
+                    <div class="control-header">Filter Nodes</div>
+                    <div>
+                        <input type="checkbox" id="show-investigation" checked>
+                        <label for="show-investigation">Investigation</label>
+                    </div>
+                    <div>
+                        <input type="checkbox" id="show-file" checked>
+                        <label for="show-file">File</label>
+                    </div>
+                    <div>
+                        <input type="checkbox" id="show-function" checked>
+                        <label for="show-function">Function</label>
+                    </div>
+                    <div>
+                        <input type="checkbox" id="show-class" checked>
+                        <label for="show-class">Class</label>
+                    </div>
+                    <div>
+                        <input type="checkbox" id="show-method" checked>
+                        <label for="show-method">Method</label>
+                    </div>
+                </div>
+                
+                <div class="control-section">
+                    <div class="control-header">Filter Links</div>
+                    <div>
+                        <input type="checkbox" id="show-includes" checked>
+                        <label for="show-includes">INCLUDES</label>
+                    </div>
+                    <div>
+                        <input type="checkbox" id="show-defines" checked>
+                        <label for="show-defines">DEFINES</label>
+                    </div>
+                    <div>
+                        <input type="checkbox" id="show-part-of" checked>
+                        <label for="show-part-of">PART_OF</label>
+                    </div>
+                </div>
+                
+                <div class="control-section">
+                    <div class="control-header">Layout Controls</div>
+                    <button id="expand-graph">Expand</button>
+                    <button id="collapse-graph">Collapse</button>
+                    <button id="reset-view">Reset View</button>
+                </div>
+                
+                <div id="statistics">
+                    <div class="control-header">Statistics</div>
+                    <div>Nodes: 151</div>
+                    <div>Links: 250</div>
+                </div>
+            </div>
+            
+            <div id="search-box">
+                <h4>Search</h4>
+                <input type="text" id="search-input" placeholder="Search for nodes...">
+                <div id="search-results" style="max-height: 300px; overflow-y: auto;"></div>
+            </div>
+            
+            <div id="node-info" class="info-box" style="display: none;">
+                <h4>Node Information</h4>
+                <div id="info-content"></div>
+            </div>
+            
+            <div id="legend">
+                <h4>Legend</h4>
+                <div><span class="color-dot" style="background-color: #4b76e8;"></span> Investigation</div>
+                <div><span class="color-dot" style="background-color: #20c997;"></span> File</div>
+                <div><span class="color-dot" style="background-color: #8da0cb;"></span> Function</div>
+                <div><span class="color-dot" style="background-color: #e78ac3;"></span> Class</div>
+                <div><span class="color-dot" style="background-color: #a6d854;"></span> Method</div>
+            </div>
+            
+            <script>
+                // Node and link data
+                const nodesData = [{"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "label": "AttackBot Analysis", "type": "Investigation", "color": "#4b76e8", "properties": {"description": "Comprehensive analysis of the AttackBot repository", "status": "In Progress", "created_at": "2025-05-07T16:10:11.015318"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54738", "label": "TestGoalBuilder.cs", "type": "File", "color": "#20c997", "properties": {"path": "Test/AttackBot.Test.Shared/TestGoalBuilder.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54988", "label": "ICustomAttackSpecification.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/ICustomAttackSpecification.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54987", "label": "ICustomAttackPackage.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/ICustomAttackPackage.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54986", "label": "Interruption.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/Interruption.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54985", "label": "ICampaignTemplate.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/ICampaignTemplate.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54984", "label": "ICampaignStartupEndpoint.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/ICampaignStartupEndpoint.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54983", "label": "ICampaign.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/ICampaign.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54982", "label": "CampaignResult.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/CampaignResult.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54981", "label": "ICampaignStartupAadApplicationOAuthToken.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/ICampaignStartupAadApplicationOAuthToken.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54980", "label": "Cleanup.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/Cleanup.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54979", "label": "ICampaignStartupAadApplicationAuthenticationCertificate.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/ICampaignStartupAadApplicationAuthenticationCertificate.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54978", "label": "CampaignStatus.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/CampaignStatus.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54977", "label": "PayloadEncoding.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/PayloadEncoding.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54976", "label": "PayloadShape.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Campaign/PayloadShape.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54975", "label": "IControlPlaneAzureKeyVaultAccessTestRequest.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/IControlPlaneAzureKeyVaultAccessTestRequest.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54974", "label": "IControlPlaneAzureEventHubAccessTestRequest.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/IControlPlaneAzureEventHubAccessTestRequest.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54973", "label": "ControlPlaneAzureEventHubAccessTestResult.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/ControlPlaneAzureEventHubAccessTestResult.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54972", "label": "IStorageBlobUriResolvable.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/IStorageBlobUriResolvable.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54971", "label": "ControlPlaneAzureStorageBlobAccessTestResult.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/ControlPlaneAzureStorageBlobAccessTestResult.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54970", "label": "ControlPlaneAzureStorageBlobCatalogValidationTestResult.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/ControlPlaneAzureStorageBlobCatalogValidationTestResult.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54969", "label": "ControlPlaneAzureKeyVaultAccessTestResult.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/ControlPlaneAzureKeyVaultAccessTestResult.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54968", "label": "IControlPlaneAzureStorageBlobCatalogValidationTestRequest.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/IControlPlaneAzureStorageBlobCatalogValidationTestRequest.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54967", "label": "IControlPlaneIdentity.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/IControlPlaneIdentity.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54966", "label": "IControlPlaneAzureStorageBlobAccessTestRequest.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ControlPlane/IControlPlaneAzureStorageBlobAccessTestRequest.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54965", "label": "IKeyVaultStoredSecrets.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/KeyVaultSecretProperties/IKeyVaultStoredSecrets.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54964", "label": "IKeyVaultSecretProperty.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/KeyVaultSecretProperties/IKeyVaultSecretProperty.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54963", "label": "SignalDescriptorsUncategorized.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Signals/SignalDescriptorsUncategorized.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "SignalDescriptorsK8s.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Signals/SignalDescriptorsK8s.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54961", "label": "SignalDescriptor.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Signals/SignalDescriptor.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54960", "label": "SignalNames.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Signals/SignalNames.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "SignalDescriptorsAzure.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Signals/SignalDescriptorsAzure.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54958", "label": "SignalDescriptors.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Signals/SignalDescriptors.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "SignalDescriptorsEndpoint.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Signals/SignalDescriptorsEndpoint.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54956", "label": "SignalDescriptorsAad.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Signals/SignalDescriptorsAad.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54955", "label": "SignalDescriptorsMsGraph.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Signals/SignalDescriptorsMsGraph.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54954", "label": "IUser.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/IUser.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54953", "label": "ITeamPreferences.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ITeamPreferences.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54952", "label": "RegularExpressionAttributeConsts.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/RegularExpressionAttributeConsts.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54951", "label": "ITeam.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ITeam.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54950", "label": "ModelLimits.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/ModelLimits.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54949", "label": "IGroupUserRoleAssignment.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/IGroupUserRoleAssignment.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54948", "label": "UserRole.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/UserRole.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54947", "label": "AttackBot.Shared.DataModel.csproj", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/AttackBot.Shared.DataModel.csproj"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54946", "label": "IObjectUserRoleAssignment.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/IObjectUserRoleAssignment.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54945", "label": "IPersistentSystemChangeData.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/IPersistentSystemChangeData.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54944", "label": "Consts.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/Consts.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54943", "label": "IUserRoleAssignment.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/IUserRoleAssignment.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54942", "label": "OperatingSystems.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/AttackBot.Shared.DataModel/OperatingSystems.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54941", "label": "AssemblyInfo.cs", "type": "File", "color": "#20c997", "properties": {"path": "Shared/Cryptography/Properties/AssemblyInfo.cs"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54940", "label": "packages.config", "type": "File", "color": "#20c997", "properties": {"path": "Shared/Cryptography/packages.config"}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58360", "label": "TestGoalBuilder", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58359", "label": "GoalExfil", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59390", "label": "ControlPlaneAzureEventHubAccessTestResult", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59387", "label": "ControlPlaneAzureStorageBlobAccessTestResult", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59385", "label": "ControlPlaneAzureStorageBlobCatalogValidationTestResult", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59383", "label": "ControlPlaneAzureKeyVaultAccessTestResult", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59376", "label": "SignalDescriptors", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59375", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59374", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59373", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59372", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59370", "label": "SignalDescriptors", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59369", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59368", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59367", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59366", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59365", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59364", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59363", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59362", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59361", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59360", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59359", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59358", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59357", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59356", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59355", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59354", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59352", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59350", "label": "SignalNames", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59345", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59348", "label": "SignalDescriptors", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59347", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59346", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59321", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59322", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59323", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59324", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59325", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59326", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59327", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59328", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59329", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59330", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59331", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59332", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59333", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59334", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59335", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59336", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59337", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59338", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59339", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59340", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59341", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59342", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59343", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59344", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59319", "label": "SignalDescriptors", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59270", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59317", "label": "SignalDescriptors", "type": "Class", "color": "#e78ac3", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59316", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59315", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59314", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59313", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59312", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59311", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59310", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59309", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59308", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59307", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59306", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59305", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59304", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59303", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59302", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59301", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59300", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59299", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59298", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59297", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59296", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59295", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59271", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59272", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59273", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59274", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59275", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59276", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59277", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59278", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59279", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59280", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59281", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59282", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59283", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59284", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59285", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59286", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}, {"id": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59287", "label": "SignalDescriptor", "type": "Function", "color": "#8da0cb", "properties": {}}];
+                const linksData = [{"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54738", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54988", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54987", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54986", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54985", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54984", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54983", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54982", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54981", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54980", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54979", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54978", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54977", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54976", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54975", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54974", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54973", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54972", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54971", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54970", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54969", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54968", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54967", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54966", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54965", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54964", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54963", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54961", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54960", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54958", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54956", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54955", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54954", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54953", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54952", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54951", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54950", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54949", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54948", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54947", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54946", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54945", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54944", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54943", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54942", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54941", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:78321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54940", "label": "INCLUDES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54738", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58360", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58360", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54738", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54738", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58359", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:58359", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54738", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54973", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59390", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59390", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54973", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54971", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59387", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59387", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54971", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54970", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59385", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59385", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54970", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54969", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59383", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59383", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54969", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54963", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59376", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59376", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54963", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54963", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59375", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59375", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54963", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54963", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59374", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59374", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54963", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54963", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59373", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59373", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54963", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54963", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59372", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59372", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54963", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59370", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59370", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59369", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59369", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59368", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59368", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59367", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59367", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59366", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59366", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59365", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59365", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59364", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59364", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59363", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59363", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59362", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59362", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59361", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59361", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59360", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59360", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59359", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59359", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59358", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59358", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59357", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59357", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59356", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59356", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59355", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59355", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59354", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59354", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54962", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54961", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59352", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59352", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54961", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54960", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59350", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59350", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54960", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59345", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59345", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59348", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59348", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59347", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59347", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59346", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59346", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59321", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59321", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59322", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59322", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59323", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59323", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59324", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59324", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59325", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59325", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59326", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59326", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59327", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59327", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59328", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59328", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59329", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59329", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59330", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59330", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59331", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59331", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59332", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59332", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59333", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59333", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59334", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59334", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59335", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59335", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59336", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59336", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59337", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59337", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59338", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59338", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59339", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59339", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59340", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59340", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59341", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59341", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59342", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59342", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59343", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59343", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59344", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59344", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54959", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54958", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59319", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59319", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54958", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59270", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59270", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59317", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59317", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59316", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59316", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59315", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59315", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59314", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59314", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59313", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59313", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59312", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59312", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59311", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59311", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59310", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59310", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59309", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59309", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59308", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59308", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59307", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59307", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59306", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59306", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59305", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59305", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59304", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59304", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59303", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59303", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59302", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59302", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59301", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59301", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59300", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59300", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59299", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59299", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59298", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59298", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59297", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59297", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59296", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59296", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59295", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59295", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59271", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59271", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59272", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59272", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59273", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59273", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59274", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59274", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59275", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59275", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59276", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59276", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59277", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59277", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59278", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59278", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59279", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59279", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59280", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59280", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59281", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59281", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59282", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59282", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59283", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59283", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59284", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59284", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59285", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59285", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59286", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59286", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59287", "label": "DEFINES"}, {"source": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:59287", "target": "4:9d745a79-5d80-468a-a3f9-3d8bc976b4df:54957", "label": "PART_OF"}];
+                
+                // Node size by type
+                const sizeMap = {
+                    Investigation: 15,
+                    File: 8,
+                    Function: 6,
+                    Class: 7,
+                    Method: 5
+                };
+                
+                // Link color by type
+                const linkColorMap = {
+                    INCLUDES: "#999",
+                    DEFINES: "#2ca02c",
+                    PART_OF: "#d62728"
+                };
+                
+                // Set up the SVG
+                const width = window.innerWidth;
+                const height = window.innerHeight;
+                
+                const svg = d3.select("#graph-container")
+                    .append("svg")
+                    .attr("width", width)
+                    .attr("height", height);
+                
+                // Container for all graph elements (for zooming)
+                const container = svg.append("g");
+                
+                // Create the simulation
+                const simulation = d3.forceSimulation()
+                    .force("link", d3.forceLink().id(d => d.id).distance(80))
+                    .force("charge", d3.forceManyBody().strength(-200))
+                    .force("center", d3.forceCenter(width / 2, height / 2))
+                    .force("collision", d3.forceCollide().radius(d => getNodeSize(d) * 2));
+                
+                // Helper function to get node size
+                function getNodeSize(d) {
+                    return sizeMap[d.type] || 5;
+                }
+                
+                // Create links with directionality markers
+                const linkGroup = container.append("g").attr("class", "links");
+                
+                // Add arrow markers for directed links
+                svg.append("defs").selectAll("marker")
+                    .data(["DEFINES", "PART_OF", "INCLUDES"])
+                    .enter().append("marker")
+                    .attr("id", d => `arrow-${d}`)
+                    .attr("viewBox", "0 -5 10 10")
+                    .attr("refX", 20)
+                    .attr("refY", 0)
+                    .attr("markerWidth", 6)
+                    .attr("markerHeight", 6)
+                    .attr("orient", "auto")
+                    .append("path")
+                    .attr("fill", d => linkColorMap[d] || "#999")
+                    .attr("d", "M0,-5L10,0L0,5");
+                
+                // Create the links
+                const link = linkGroup.selectAll("line")
+                    .data(linksData)
+                    .enter()
+                    .append("line")
+                    .attr("class", "link")
+                    .attr("stroke", d => linkColorMap[d.label] || "#999")
+                    .attr("stroke-width", 1.5)
+                    .attr("marker-end", d => `url(#arrow-${d.label})`)
+                    .attr("data-label", d => d.label);
+                
+                // Create link labels
+                const linkLabel = container.append("g")
+                    .selectAll("text")
+                    .data(linksData)
+                    .enter()
+                    .append("text")
+                    .attr("class", "link-label")
+                    .attr("opacity", 0)  // Initially hidden
+                    .text(d => d.label)
+                    .attr("data-label", d => d.label);
+                
+                // Create nodes
+                const node = container.append("g")
+                    .selectAll("circle")
+                    .data(nodesData)
+                    .enter()
+                    .append("circle")
+                    .attr("class", "node")
+                    .attr("r", getNodeSize)
+                    .attr("fill", d => d.color || "#999")
+                    .call(d3.drag()
+                        .on("start", dragstarted)
+                        .on("drag", dragged)
+                        .on("end", dragended))
+                    .on("click", showNodeInfo)
+                    .on("mouseover", handleMouseOver)
+                    .on("mouseout", handleMouseOut);
+                
+                // Create node labels
+                const nodeLabel = container.append("g")
+                    .selectAll("text")
+                    .data(nodesData)
+                    .enter()
+                    .append("text")
+                    .attr("class", "node-label")
+                    .attr("dy", "-10")
+                    .text(d => d.label || "")
+                    .attr("opacity", 0);  // Initially hidden
+                
+                // Set up simulation
+                simulation
+                    .nodes(nodesData)
+                    .on("tick", ticked);
+                
+                simulation.force("link")
+                    .links(linksData);
+                
+                // Function to update positions on tick
+                function ticked() {
+                    link
+                        .attr("x1", d => d.source.x)
+                        .attr("y1", d => d.source.y)
+                        .attr("x2", d => d.target.x)
+                        .attr("y2", d => d.target.y);
+                    
+                    linkLabel
+                        .attr("x", d => (d.source.x + d.target.x) / 2)
+                        .attr("y", d => (d.source.y + d.target.y) / 2);
+                    
+                    node
+                        .attr("cx", d => d.x = Math.max(getNodeSize(d), Math.min(width - getNodeSize(d), d.x)))
+                        .attr("cy", d => d.y = Math.max(getNodeSize(d), Math.min(height - getNodeSize(d), d.y)));
+                    
+                    nodeLabel
+                        .attr("x", d => d.x)
+                        .attr("y", d => d.y);
+                }
+                
+                // Handle mouseover to highlight connections
+                function handleMouseOver(event, d) {
+                    // Highlight the node
+                    d3.select(this).attr("stroke", "#000").attr("stroke-width", 2);
+                    
+                    // Find connected links and nodes
+                    const connectedLinks = linksData.filter(l => 
+                        (l.source.id === d.id || l.source === d.id) || 
+                        (l.target.id === d.id || l.target === d.id)
+                    );
+                    
+                    const connectedNodeIds = new Set();
+                    
+                    connectedLinks.forEach(l => {
+                        // Get source and target IDs
+                        const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+                        const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+                        
+                        // Add connected node IDs
+                        if (sourceId === d.id) {
+                            connectedNodeIds.add(targetId);
+                        } else {
+                            connectedNodeIds.add(sourceId);
+                        }
+                        
+                        // Highlight link
+                        link.filter(link => link === l)
+                            .attr("stroke", "#000")
+                            .attr("stroke-width", 2);
+                        
+                        // Show link label
+                        linkLabel.filter(link => link === l)
+                            .attr("opacity", 1);
+                    });
+                    
+                    // Highlight connected nodes
+                    node.filter(n => connectedNodeIds.has(n.id))
+                        .attr("stroke", "#000")
+                        .attr("stroke-width", 2);
+                    
+                    // Show labels for this node and connected nodes
+                    nodeLabel.filter(n => n.id === d.id || connectedNodeIds.has(n.id))
+                        .attr("opacity", 1);
+                }
+                
+                // Handle mouseout to reset highlights
+                function handleMouseOut() {
+                    node.attr("stroke", "#fff").attr("stroke-width", 1.5);
+                    
+                    link.attr("stroke", d => linkColorMap[d.label] || "#999")
+                        .attr("stroke-width", 1.5);
+                        
+                    linkLabel.attr("opacity", 0);
+                    
+                    // Only show labels when zoomed in
+                    const currentZoom = d3.zoomTransform(svg.node()).k;
+                    nodeLabel.attr("opacity", currentZoom > 1.5 ? 0.8 : 0);
+                }
+                
+                // Drag functions
+                function dragstarted(event, d) {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    d.fx = d.x;
+                    d.fy = d.y;
+                }
+                
+                function dragged(event, d) {
+                    d.fx = event.x;
+                    d.fy = event.y;
+                }
+                
+                function dragended(event, d) {
+                    if (!event.active) simulation.alphaTarget(0);
+                    d.fx = null;
+                    d.fy = null;
+                }
+                
+                // Show node info when clicked
+                function showNodeInfo(event, d) {
+                    const infoBox = document.getElementById("node-info");
+                    const infoContent = document.getElementById("info-content");
+                    
+                    infoBox.style.display = "block";
+                    
+                    let html = `<p><strong>ID:</strong> ${d.id}</p>`;
+                    html += `<p><strong>Type:</strong> ${d.type}</p>`;
+                    html += `<p><strong>Label:</strong> ${d.label}</p>`;
+                    
+                    if (d.properties) {
+                        html += "<p><strong>Properties:</strong></p><ul>";
+                        for (const [key, value] of Object.entries(d.properties)) {
+                            if (value !== null && value !== undefined) {
+                                html += `<li>${key}: ${value}</li>`;
+                            }
+                        }
+                        html += "</ul>";
+                    }
+                    
+                    infoContent.innerHTML = html;
+                }
+                
+                // Set up node type filtering
+                document.getElementById("show-investigation").addEventListener("change", filterGraph);
+                document.getElementById("show-file").addEventListener("change", filterGraph);
+                document.getElementById("show-function").addEventListener("change", filterGraph);
+                document.getElementById("show-class").addEventListener("change", filterGraph);
+                document.getElementById("show-method").addEventListener("change", filterGraph);
+                document.getElementById("show-includes").addEventListener("change", filterGraph);
+                document.getElementById("show-defines").addEventListener("change", filterGraph);
+                document.getElementById("show-part-of").addEventListener("change", filterGraph);
+                
+                function filterGraph() {
+                    const showInvestigation = document.getElementById("show-investigation").checked;
+                    const showFile = document.getElementById("show-file").checked;
+                    const showFunction = document.getElementById("show-function").checked;
+                    const showClass = document.getElementById("show-class").checked;
+                    const showMethod = document.getElementById("show-method").checked;
+                    const showIncludes = document.getElementById("show-includes").checked;
+                    const showDefines = document.getElementById("show-defines").checked;
+                    const showPartOf = document.getElementById("show-part-of").checked;
+                    
+                    // Filter nodes
+                    node.style("display", d => {
+                        if (d.type === "Investigation" && !showInvestigation) return "none";
+                        if (d.type === "File" && !showFile) return "none";
+                        if (d.type === "Function" && !showFunction) return "none";
+                        if (d.type === "Class" && !showClass) return "none";
+                        if (d.type === "Method" && !showMethod) return "none";
+                        return null;
+                    });
+                    
+                    // Filter node labels
+                    nodeLabel.style("display", d => {
+                        if (d.type === "Investigation" && !showInvestigation) return "none";
+                        if (d.type === "File" && !showFile) return "none";
+                        if (d.type === "Function" && !showFunction) return "none";
+                        if (d.type === "Class" && !showClass) return "none";
+                        if (d.type === "Method" && !showMethod) return "none";
+                        return null;
+                    });
+                    
+                    // Filter links based on relationship type
+                    link.style("display", d => {
+                        if (d.label === "INCLUDES" && !showIncludes) return "none";
+                        if (d.label === "DEFINES" && !showDefines) return "none";
+                        if (d.label === "PART_OF" && !showPartOf) return "none";
+                        
+                        // Also consider node visibility
+                        const sourceType = d.source.type;
+                        const targetType = d.target.type;
+                        
+                        const sourceVisible = (
+                            (sourceType === "Investigation" && showInvestigation) ||
+                            (sourceType === "File" && showFile) ||
+                            (sourceType === "Function" && showFunction) ||
+                            (sourceType === "Class" && showClass) ||
+                            (sourceType === "Method" && showMethod)
+                        );
+                        
+                        const targetVisible = (
+                            (targetType === "Investigation" && showInvestigation) ||
+                            (targetType === "File" && showFile) ||
+                            (targetType === "Function" && showFunction) ||
+                            (targetType === "Class" && showClass) ||
+                            (targetType === "Method" && showMethod)
+                        );
+                        
+                        return sourceVisible && targetVisible ? null : "none";
+                    });
+                    
+                    // Filter link labels with same logic
+                    linkLabel.style("display", d => {
+                        if (d.label === "INCLUDES" && !showIncludes) return "none";
+                        if (d.label === "DEFINES" && !showDefines) return "none";
+                        if (d.label === "PART_OF" && !showPartOf) return "none";
+                        
+                        const sourceType = d.source.type;
+                        const targetType = d.target.type;
+                        
+                        const sourceVisible = (
+                            (sourceType === "Investigation" && showInvestigation) ||
+                            (sourceType === "File" && showFile) ||
+                            (sourceType === "Function" && showFunction) ||
+                            (sourceType === "Class" && showClass) ||
+                            (sourceType === "Method" && showMethod)
+                        );
+                        
+                        const targetVisible = (
+                            (targetType === "Investigation" && showInvestigation) ||
+                            (targetType === "File" && showFile) ||
+                            (targetType === "Function" && showFunction) ||
+                            (targetType === "Class" && showClass) ||
+                            (targetType === "Method" && showMethod)
+                        );
+                        
+                        return sourceVisible && targetVisible ? null : "none";
+                    });
+                }
+                
+                // Add zoom functionality
+                const zoom = d3.zoom()
+                    .scaleExtent([0.1, 10])
+                    .on("zoom", zoomed);
+                
+                svg.call(zoom);
+                
+                function zoomed(event) {
+                    container.attr("transform", event.transform);
+                    
+                    // Show node labels only when zoomed in sufficiently
+                    const currentScale = event.transform.k;
+                    nodeLabel.style("opacity", () => currentScale > 1.5 ? 0.8 : 0);
+                }
+                
+                // Buttons to adjust force layout
+                document.getElementById("expand-graph").addEventListener("click", () => {
+                    simulation.force("charge").strength(-500);
+                    simulation.alpha(1).restart();
+                });
+                
+                document.getElementById("collapse-graph").addEventListener("click", () => {
+                    simulation.force("charge").strength(-100);
+                    simulation.alpha(1).restart();
+                });
+                
+                document.getElementById("reset-view").addEventListener("click", () => {
+                    svg.transition().duration(750).call(
+                        zoom.transform,
+                        d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
+                    );
+                });
+                
+                // Search functionality
+                const searchInput = document.getElementById("search-input");
+                const searchResults = document.getElementById("search-results");
+                
+                searchInput.addEventListener("input", performSearch);
+                
+                function performSearch() {
+                    const query = searchInput.value.toLowerCase();
+                    if (query.length < 2) {
+                        searchResults.innerHTML = "";
+                        return;
+                    }
+                    
+                    // Find matching nodes
+                    const matches = nodesData.filter(node => {
+                        const label = (node.label || "").toLowerCase();
+                        
+                        // Check properties
+                        let propertiesMatch = false;
+                        if (node.properties) {
+                            for (const [key, value] of Object.entries(node.properties)) {
+                                if (value && String(value).toLowerCase().includes(query)) {
+                                    propertiesMatch = true;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        return label.includes(query) || propertiesMatch;
+                    }).slice(0, 20); // Limit to 20 results
+                    
+                    // Display results
+                    searchResults.innerHTML = "";
+                    if (matches.length === 0) {
+                        searchResults.innerHTML = "<div>No matches found</div>";
+                    } else {
+                        matches.forEach(node => {
+                            const result = document.createElement("div");
+                            result.className = "search-result";
+                            result.innerHTML = `<span class="color-dot" style="background-color: ${node.color};"></span> ${node.type}: ${node.label}`;
+                            
+                            result.addEventListener("click", () => {
+                                // Center and highlight the node
+                                const transform = d3.zoomIdentity
+                                    .translate(width/2 - node.x, height/2 - node.y)
+                                    .scale(2);
+                                    
+                                svg.transition()
+                                    .duration(750)
+                                    .call(zoom.transform, transform);
+                                    
+                                // Simulate click to show info
+                                showNodeInfo({}, node);
+                                
+                                // Simulate mouseover to highlight connections
+                                d3.selectAll(".node").each(function(d) {
+                                    if (d.id === node.id) {
+                                        handleMouseOver({}, d);
+                                    }
+                                });
+                            });
+                            
+                            searchResults.appendChild(result);
+                        });
+                    }
+                }
+                
+                // Initial reset to center the graph
+                svg.call(
+                    zoom.transform,
+                    d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
+                );
+            </script>
+        </body>
+        </html>
+        

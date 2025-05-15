@@ -5,6 +5,7 @@ essential graph operations.
 """
 
 import time
+from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 from neo4j import GraphDatabase
@@ -15,6 +16,40 @@ from skwaq.utils.logging import get_logger
 
 # Get logger for this module
 logger = get_logger(__name__)
+
+
+class NodeLabels(str, Enum):
+    """Node labels for Neo4j graph."""
+
+    REPOSITORY = "Repository"
+    FILE = "File"
+    AST_NODE = "ASTNode"
+    FUNCTION = "Function"
+    CLASS = "Class"
+    METHOD = "Method"
+    VARIABLE = "Variable"
+    CODE_SUMMARY = "CodeSummary"
+    INVESTIGATION = "Investigation"
+    FINDING = "Finding"
+    VULNERABILITY = "Vulnerability"
+
+
+class RelationshipTypes(str, Enum):
+    """Relationship types for Neo4j graph."""
+
+    CONTAINS = "CONTAINS"
+    PART_OF = "PART_OF"
+    CALLS = "CALLS"
+    USES = "USES"
+    DEFINES = "DEFINES"
+    IMPORTS = "IMPORTS"
+    INHERITS_FROM = "INHERITS_FROM"
+    REFERENCES = "REFERENCES"
+    DESCRIBES = "DESCRIBES"
+    ANALYZES = "ANALYZES"
+    IDENTIFIES = "IDENTIFIES"
+    BELONGS_TO = "BELONGS_TO"
+    FOUND_IN = "FOUND_IN"
 
 
 class Neo4jConnector:

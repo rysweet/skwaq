@@ -361,15 +361,34 @@ def get_investigation_visualization(investigation_id):
         # Initialize the graph visualizer
         visualizer = GraphVisualizer()
 
-        # Use the same approach as the CLI to generate the graph
-        graph_data = visualizer.get_investigation_graph(
-            investigation_id=investigation_id,
-            include_findings=True,
-            include_vulnerabilities=True,
-            include_files=True,
-            include_sources_sinks=True,
-            max_nodes=100,
-        )
+        # Get query parameters
+        visualization_type = request.args.get("visualization_type", "standard")
+        include_ast = request.args.get("include_ast", "true").lower() == "true"
+        include_summaries = request.args.get("include_summaries", "true").lower() == "true"
+        
+        # Log the request parameters
+        logger.info(f"Visualization request for {investigation_id}: type={visualization_type}, include_ast={include_ast}, include_summaries={include_summaries}")
+        
+        # Choose the visualization approach based on type
+        if visualization_type == "ast":
+            # Use the AST-focused visualization
+            graph_data = visualizer.get_ast_graph(
+                investigation_id=investigation_id,
+                include_files=True,
+                include_summaries=include_summaries,
+                max_nodes=300,
+            )
+            logger.info(f"Generated AST graph for {investigation_id} with {len(graph_data.get('nodes', []))} nodes")
+        else:
+            # Use the standard comprehensive visualization
+            graph_data = visualizer.get_investigation_graph(
+                investigation_id=investigation_id,
+                include_findings=True,
+                include_vulnerabilities=True,
+                include_files=True,
+                include_sources_sinks=True,
+                max_nodes=150,
+            )
 
         # Use the custom encoder to handle serialization
         # Process the entire graph data using the custom JSON encoder

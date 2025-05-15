@@ -212,6 +212,19 @@
   background-color: rgba(147, 112, 219, 0.8); /* #9370db */
 }
 
+/* AST node types */
+.legend-color.function {
+  background-color: rgba(141, 160, 203, 0.8); /* #8da0cb */
+}
+
+.legend-color.class {
+  background-color: rgba(231, 138, 195, 0.8); /* #e78ac3 */
+}
+
+.legend-color.codeSummary {
+  background-color: rgba(255, 217, 47, 0.8); /* #ffd92f */
+}
+
 /* Funnel Identified Nodes */
 .funnel-section {
   grid-column: 1 / -1;

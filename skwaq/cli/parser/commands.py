@@ -3,6 +3,7 @@
 
 from .base import SkwaqArgumentParser
 
+
 # Analyze command removed
 
 
@@ -187,6 +188,65 @@ def register_gui_parser(parser: SkwaqArgumentParser) -> None:
     )
 
 
+def register_service_parser(parser: SkwaqArgumentParser) -> None:
+    """Register the service command parser.
+
+    Args:
+        parser: Main argument parser
+    """
+    service_parser = parser.create_command_parser(
+        "service", "Manage Skwaq services"
+    )
+
+    service_subparsers = service_parser.add_subparsers(
+        dest="subcommand", required=True, help="Service command"
+    )
+
+    # Status command
+    status_parser = service_subparsers.add_parser(
+        "status", help="Check status of services"
+    )
+    status_parser.add_argument(
+        "service", 
+        nargs="?", 
+        choices=["database", "api", "gui"],
+        help="Specific service to check (default: all services)"
+    )
+
+    # Start command
+    start_parser = service_subparsers.add_parser(
+        "start", help="Start services"
+    )
+    start_parser.add_argument(
+        "service", 
+        nargs="?", 
+        choices=["database", "api", "gui"],
+        help="Specific service to start (default: all services)"
+    )
+
+    # Stop command
+    stop_parser = service_subparsers.add_parser(
+        "stop", help="Stop services"
+    )
+    stop_parser.add_argument(
+        "service", 
+        nargs="?", 
+        choices=["database", "api", "gui"],
+        help="Specific service to stop (default: all services)"
+    )
+
+    # Restart command
+    restart_parser = service_subparsers.add_parser(
+        "restart", help="Restart services"
+    )
+    restart_parser.add_argument(
+        "service", 
+        nargs="?", 
+        choices=["database", "api", "gui"],
+        help="Specific service to restart (default: all services)"
+    )
+
+
 def register_workflow_parsers(parser: SkwaqArgumentParser) -> None:
     """Register workflow-related command parsers.
 
@@ -367,6 +427,69 @@ def register_workflow_parsers(parser: SkwaqArgumentParser) -> None:
         default=100,
         help="Maximum number of nodes to include in visualization",
     )
+    
+    visualize_parser.add_argument(
+        "--visualization-type",
+        choices=["standard", "ast"],
+        default="standard",
+        help="Type of visualization to generate (standard or AST-focused)",
+    )
+    
+    visualize_parser.add_argument(
+        "--with-summaries",
+        action="store_true",
+        help="Include code summaries in visualization (for AST visualization)",
+    )
+    
+    visualize_parser.add_argument(
+        "--generate-summaries",
+        action="store_true",
+        help="Generate missing code summaries for AST nodes before visualization",
+    )
+    
+    visualize_parser.add_argument(
+        "--open",
+        action="store_true",
+        help="Open visualization in browser after creation",
+    )
+    
+    # Check AST summaries for investigation
+    ast_parser = investigation_subparsers.add_parser(
+        "check-ast", help="Check AST nodes and summaries for an investigation"
+    )
+    
+    ast_parser.add_argument("id", help="Investigation ID to check")
+    
+    # Generate AST summaries for investigation
+    summarize_parser = investigation_subparsers.add_parser(
+        "summarize-ast", help="Generate AI summaries for AST nodes in an investigation"
+    )
+    
+    summarize_parser.add_argument("id", help="Investigation ID to summarize")
+    
+    summarize_parser.add_argument(
+        "--limit",
+        "-l",
+        type=int,
+        default=100,
+        help="Maximum number of AST nodes to summarize (default: 100)",
+    )
+    
+    summarize_parser.add_argument(
+        "--batch-size",
+        "-b",
+        type=int,
+        default=10,
+        help="Number of AST nodes to process in each batch (default: 10)",
+    )
+    
+    summarize_parser.add_argument(
+        "--max-concurrent",
+        "-m",
+        type=int,
+        default=3,
+        help="Maximum number of concurrent summary generation tasks (default: 3)",
+    )
 
 
 def register_all_parsers(parser: SkwaqArgumentParser) -> None:
@@ -379,4 +502,5 @@ def register_all_parsers(parser: SkwaqArgumentParser) -> None:
     register_ingest_parser(parser)
     register_config_parser(parser)
     register_gui_parser(parser)
+    register_service_parser(parser)
     register_workflow_parsers(parser)

@@ -1,6 +1,249 @@
 # Skwaq Project Status
 
-## Current Milestone: Frontend Integration - Completed ✅
+## Current Milestone: AST Visualization CLI Tools - Completed ✅
+
+We have successfully implemented enhanced command-line tools for AST visualization and summarization:
+
+- [x] Created standalone AST visualization tool
+  - Implemented create_ast_visualization.py with comprehensive options
+  - Added support for both repositories and investigations
+  - Created interactive D3.js visualization with filtering capabilities
+  - Enhanced search functionality for finding code elements
+  - Added tooltips showing code summaries and element relationships
+  - Implemented proper visualization of AST nodes, files, and AI summaries
+  - Added browser integration for immediate visualization viewing
+
+- [x] Enhanced AI summarization for AST nodes
+  - Improved generate_ast_summaries.py with better CLI interface
+  - Added command-line options for controlling batch size and concurrency
+  - Implemented visualization generation after summarization
+  - Enhanced code property extraction for more accurate summaries
+  - Improved error handling and progress reporting
+  - Added browser integration for immediate results viewing
+
+- [x] Added comprehensive documentation
+  - Created ast_visualization_guide.md with detailed usage instructions
+  - Added examples of using visualization for security analysis
+  - Documented all command-line options and visualization features
+  - Provided best practices for working with large codebases
+  - Added troubleshooting guide for common issues
+
+- [x] Implemented visualization interface improvements
+  - Added node type filtering through clickable legend
+  - Enhanced search functionality to find nodes by name or content
+  - Implemented detailed node information display with properties
+  - Added interactive highlighting of connected nodes when selecting a node
+  - Created zoom and pan capabilities for exploring large graphs
+  - Enhanced tooltips showing summaries on hover
+  - Added code syntax highlighting in node details
+
+These enhancements provide powerful tools for exploring code structure, understanding relationships between code elements, and identifying potential security issues through AI-powered summaries. The AST visualization tools make it easier for security researchers to analyze complex codebases, with interactive features that enable focusing on specific aspects of the code.
+
+## Previous Milestone: Service Management Enhancement - Completed ✅
+
+We have successfully implemented a comprehensive service management system for the skwaq CLI:
+
+- [x] Created ServiceManager class for managing project services
+  - Implemented service status detection for database, API, and GUI
+  - Added service dependency management (GUI → API → Database)
+  - Created robust service starting and stopping functionality
+  - Implemented health checks and service monitoring
+  - Added special handling for Neo4j database running in Docker
+  - Created logging system for service operations
+  - Implemented graceful error handling for service operations
+
+- [x] Enhanced CLI with service management commands
+  - Added service status command with detailed status reporting
+  - Implemented service start command with dependency handling
+  - Created service stop command with proper resource cleanup
+  - Added service restart command for maintenance operations
+  - Enhanced GUI command to automatically start required services
+  - Created tables for displaying service status information
+  - Added helpful usage examples in help text
+
+- [x] Created comprehensive documentation
+  - Added detailed service management guide with examples
+  - Updated CLI command reference with new commands
+  - Created troubleshooting guide for service issues
+  - Added examples of using service commands in workflows
+  - Documented logs location and usage for debugging
+  - Implemented usage scenarios for different user types
+
+- [x] Fixed key bugs in codebase
+  - Fixed syntax errors in ingestion.py with try/except structure
+  - Added missing NodeLabels and RelationshipTypes enums
+  - Fixed indentation issues in several Python files
+  - Improved error handling and reporting throughout
+  - Enhanced imports and module structure
+  - Fixed parameter handling for CLI commands
+
+This milestone significantly improves the developer experience by providing a single, integrated approach to starting, stopping, and managing all the components of the system. The skwaq CLI now automatically ensures that all required components are running when needed, and provides clear feedback about service status and issues.
+
+## Previous Milestone: GUI Integration of AST Visualization - Completed ✅
+
+We have successfully integrated AST visualization capabilities into the GUI frontend:
+
+- [x] Enhanced API endpoint for AST visualization
+  - Added support for visualization_type parameter (standard/ast)
+  - Created parameters for including AST nodes and code summaries
+  - Implemented GraphVisualizer.get_ast_graph method for AST-focused visualization
+  - Added proper response formatting for different visualization types
+  - Enhanced error handling with detailed diagnostics
+  - Implemented query parameter validation with proper defaults
+  - Added logging for visualization request tracing
+
+- [x] Updated frontend components for AST visualization
+  - Enhanced InvestigationGraphVisualization component with AST support
+  - Added UI toggles for enabling AST nodes and code summaries
+  - Created styling for AST-specific node types (Function, Class, Method)
+  - Implemented filtering controls for AST node types
+  - Added support for code summary display in node details
+  - Enhanced the node detail view with syntax highlighting for code
+  - Created CSS styling for summary and code display
+
+- [x] Added comprehensive visualization controls
+  - Implemented toggles for different AST node types (functions, classes, methods)
+  - Added filtering for code summary nodes
+  - Enhanced legend with AST-specific node types
+  - Improved search functionality to include code content
+  - Added syntax highlighting for code in node details panel
+  - Enhanced tooltips to show summary snippets
+
+- [x] Created comprehensive documentation
+  - Added AST visualization guide for GUI users
+  - Created documentation on code summarization benefits
+  - Implemented examples of using AST visualization for security analysis
+  - Added troubleshooting guide for visualization issues
+  - Created usage scenarios and example workflows
+
+This milestone represents a significant enhancement to the user experience, allowing users to visualize and explore the code structure directly in the GUI. The integration of AST visualization with code summaries enables a deeper understanding of codebases, making it easier to identify potential security issues and understand complex code. The enhanced search and filtering capabilities provide a powerful tool for exploring large codebases and focusing on specific areas of interest.
+
+## Previous Milestone: Visualization Enhancement - Completed ✅
+
+We have successfully enhanced the visualization capabilities with advanced filtering, searching, and interactive features:
+
+- [x] Added comprehensive interactive AST visualization 
+  - Implemented advanced D3.js visualization with robust filtering capabilities
+  - Created node type filtering through clickable legend interface
+  - Added search functionality to find nodes by name or content
+  - Implemented detailed node information display with properties and relationships
+  - Enhanced the UI with modern styling and interactive elements
+  - Added tooltips showing node summaries and key information on hover
+  - Created interactive highlighting of connected nodes when selecting a node
+  - Implemented zoom and pan capabilities for exploring large graphs
+
+- [x] Enhanced AST visualization in CLI
+  - Integrated visualization into the CLI workflow commands
+  - Created proper command handler for AST visualization
+  - Added visualization export options (HTML, JSON, SVG)
+  - Implemented proper handling of large code repositories
+  - Improved handling of Neo4j relationships for richer visualizations
+
+- [x] Fixed language detection and summarization
+  - Enhanced language detection using file extensions and content patterns
+  - Improved handling of empty or minimal code files
+  - Added file-level and AST-level summary generation
+  - Implemented context-aware summarization for better code understanding
+  - Fixed prompt handling to generate more useful code summaries
+  - Created hierarchical summary system (file > class > method)
+  - Enhanced error handling for robustness in production
+
+- [x] Improved code relationships in graph database
+  - Fixed bidirectional relationships (PART_OF and DEFINES)
+  - Enhanced Neo4j queries for better performance with large codebases
+  - Added proper error handling for database queries
+  - Improved node type detection and categorization
+  - Added support for showing relationship types in visualizations
+  - Created better color coding for different node and relationship types
+
+The completed Visualization Enhancement milestone has significantly improved the user experience for exploring and understanding codebases. The new interactive visualization features allow users to filter nodes by type, search for specific content, and explore relationships between different code elements. The enhanced language detection and summarization capabilities provide more accurate and useful code summaries, making it easier to understand complex codebases. These improvements make the tool much more effective for vulnerability research and code comprehension.
+
+## Previous Milestone: AI Summarization Fix - Completed ✅
+
+We have successfully fixed the issues with AST node code property population and AI summarization:
+
+- [x] Identified issues with AST-to-file relationships
+  - Fixed bidirectional relationships (PART_OF from AST to File and DEFINES from File to AST)
+  - Verified relationship creation in a single transaction
+  - Created scripts to validate and repair relationships between AST and File nodes
+  - Fixed visualization to properly display bidirectional relationships
+
+- [x] Enhanced visualization capabilities
+  - Created custom visualization scripts with D3.js
+  - Implemented proper relationship handling and display
+  - Added node filtering with support for different node types
+  - Created search functionality for finding specific nodes
+  - Enhanced node information display with summaries
+
+- [x] Fixed missing code property in AST nodes
+  - Created diagnostic scripts to check for code property in AST nodes
+  - Developed script to extract code from files and update AST nodes
+  - Implemented robust error handling for file path resolution
+  - Created verification scripts to ensure proper code extraction
+  - Added documentation for the repair process
+  - Successfully updated 1000+ AST nodes with code property
+
+- [x] Fixed AI summarization process
+  - Diagnosed and fixed issues with OpenAI API integration
+  - Created Python script to test OpenAI connection
+  - Enhanced LLMSummarizer to handle different code property formats
+  - Created standalone summarization tool for efficient testing
+  - Updated visualization to include AI summaries for code nodes
+  - Successfully generated AI summaries for AST nodes with code property
+  - Created interactive visualization showing code structure with AI-generated summaries
+
+The completed AI Summarization Fix milestone has resulted in a fully functional system for generating and visualizing AI-powered code summaries. The system now properly extracts code content from source files, attaches it to AST nodes in the Neo4j database, generates comprehensive summaries using Azure OpenAI, and provides interactive visualizations that display the code structure with AI-generated insights. This enhancement significantly improves code understanding and analysis capabilities, allowing for more effective security analysis and code comprehension.
+
+## Previous Milestone: Ingestion Module Enhancement - Completed ✅
+
+We have successfully enhanced the Ingestion Module with improved documentation, fixed key issues, and created a comprehensive specification:
+
+- [x] Created detailed software specification for the ingestion module
+  - Comprehensive component documentation (Repository Handler, AST Parsers, AST Mapper, Code Summarizers)
+  - Detailed API specifications with interface definitions
+  - Implementation guidance for all components
+  - Error handling recommendations
+  - Performance considerations
+  - Security considerations
+
+- [x] Fixed critical AST-to-file mapping issues
+  - Implemented handling for multiple property names (file_path, path, full_path)
+  - Added multiple path matching strategies (exact, suffix, normalized, basename)
+  - Ensured bidirectional relationships (PART_OF and DEFINES)
+  - Created robust path normalization for cross-platform compatibility
+  - Improved mapper statistics and error reporting
+
+- [x] Enhanced Docker-based Blarify parser for macOS compatibility
+  - Implemented automatic platform detection
+  - Added Docker availability checking
+  - Created fallback mechanisms for failed direct parsing
+  - Improved error handling and diagnostics
+  - Added test scripts for verification
+
+- [x] Fixed relationship handling in Neo4j queries
+  - Updated deprecated Neo4j function calls
+  - Modified queries to handle missing relationships gracefully
+  - Improved query robustness with optional matches
+  - Fixed path-direction issues in visualization queries
+  - Enhanced error handling for database queries
+
+- [x] Improved Azure OpenAI integration for code summarization
+  - Fixed parameter handling for different models
+  - Enhanced error handling for API calls
+  - Improved token limit management
+  - Added proper async handling of API calls
+  - Implemented robust retry logic
+
+- [x] Created visualization tools for repository structure and AST
+  - Implemented custom graph visualization scripts
+  - Added hierarchy-based layout for repository structure
+  - Created relationship-type filtering options
+  - Enhanced node and edge styling based on types
+  - Added interactive features for exploration
+
+The enhanced Ingestion Module now provides a robust foundation for security analysis workflows, with improved reliability and maintainability. The comprehensive specification serves as both documentation and a guide for future development.
+
+## Previous Milestone: Frontend Integration - Completed ✅
 
 We have successfully integrated the frontend with our newly reconstructed API:
 

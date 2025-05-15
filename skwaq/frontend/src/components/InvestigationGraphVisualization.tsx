@@ -9,6 +9,8 @@ interface InvestigationGraphVisualizationProps {
   onNodeSelected: (node: GraphNode) => void;
   isLoading: boolean;
   darkMode?: boolean;
+  showASTNodes?: boolean;  // Whether to show AST nodes (function, class, method)
+  showCodeSummaries?: boolean;  // Whether to show code summaries
 }
 
 interface PhysicsSettings {
@@ -25,7 +27,9 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
   investigationId,
   onNodeSelected,
   isLoading,
-  darkMode = false
+  darkMode = false,
+  showASTNodes = false,  // Whether to show AST nodes (function, class, method)
+  showCodeSummaries = false  // Whether to show code summaries
 }) => {
   const graphContainerRef = useRef<HTMLDivElement>(null);
   const graphInstanceRef = useRef<any>(null);
@@ -44,6 +48,9 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
   const [showSinks, setShowSinks] = useState<boolean>(true);
   const [showDataFlowPaths, setShowDataFlowPaths] = useState<boolean>(true);
   const [showMethods, setShowMethods] = useState<boolean>(true);
+  const [showFunctions, setShowFunctions] = useState<boolean>(true);
+  const [showClasses, setShowClasses] = useState<boolean>(true);
+  const [showSummaries, setShowSummaries] = useState<boolean>(true);
   const [highlightFunnel, setHighlightFunnel] = useState<boolean>(true);
   
   // Track data loading state separately from prop 
@@ -56,9 +63,18 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
     setIsDataLoading(true);
     setError(null);
     
+    // Determine the visualization type based on props
+    const visualizationType = showASTNodes ? "ast" : "standard";
+    
+    // Construct the API URL with query parameters
+    const apiUrl = new URL(`/api/investigations/${investigationId}/visualization`, window.location.origin);
+    apiUrl.searchParams.append("visualization_type", visualizationType);
+    apiUrl.searchParams.append("include_ast", String(showASTNodes));
+    apiUrl.searchParams.append("include_summaries", String(showCodeSummaries));
+    
     // Fetch graph data from the API
-    console.log(`Fetching graph data for investigation: ${investigationId}`);
-    fetch(`/api/investigations/${investigationId}/visualization`)
+    console.log(`Fetching graph data for investigation: ${investigationId}, type: ${visualizationType}`);
+    fetch(apiUrl.toString())
       .then(async response => {
         if (!response.ok) {
           // Try to get detailed error message from response
@@ -173,7 +189,7 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
         
         setGraphData(defaultGraph);
       });
-  }, [investigationId]);
+  }, [investigationId, showASTNodes, showCodeSummaries]);
   
   // Function to handle physics settings changes
   const handlePhysicsChange = (setting: keyof PhysicsSettings, value: number) => {
@@ -218,26 +234,53 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
       console.log(`Node ${index}: id=${node.id}, type=${node.type}, label=${node.name}`);
     });
     
-    // Apply filters
+    // Apply filters for standard node types
     if (!showSources) {
-      filteredNodes = filteredNodes.filter(node => node.type !== 'source');
+      filteredNodes = filteredNodes.filter(node => 
+        node.type.toLowerCase() !== 'source'
+      );
     }
     
     if (!showSinks) {
-      filteredNodes = filteredNodes.filter(node => node.type !== 'sink');
+      filteredNodes = filteredNodes.filter(node => 
+        node.type.toLowerCase() !== 'sink'
+      );
     }
     
     if (!showDataFlowPaths) {
       // Handle both capitalized and lowercase data flow path types
       filteredNodes = filteredNodes.filter(node => 
-        node.type !== 'dataflowpath' && 
-        node.type !== 'dataFlowPath' &&
-        node.type !== 'DataFlowPath'
+        node.type.toLowerCase() !== 'dataflowpath' && 
+        node.type.toLowerCase() !== 'dataflowpath' &&
+        node.type.toLowerCase() !== 'dataflowpath'
       );
     }
     
     if (!showMethods) {
-      filteredNodes = filteredNodes.filter(node => node.type !== 'method');
+      filteredNodes = filteredNodes.filter(node => 
+        node.type.toLowerCase() !== 'method'
+      );
+    }
+    
+    // Apply filters for AST-specific node types
+    if (showASTNodes) {
+      if (!showFunctions) {
+        filteredNodes = filteredNodes.filter(node => 
+          node.type.toLowerCase() !== 'function'
+        );
+      }
+      
+      if (!showClasses) {
+        filteredNodes = filteredNodes.filter(node => 
+          node.type.toLowerCase() !== 'class'
+        );
+      }
+      
+      if (!showSummaries) {
+        filteredNodes = filteredNodes.filter(node => 
+          node.type.toLowerCase() !== 'codesummary'
+        );
+      }
     }
     
     console.log('Node count after filtering:', filteredNodes.length);
@@ -270,7 +313,7 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
     });
     
     return { nodes: filteredNodes, links: filteredLinks };
-  }, [graphData, showSources, showSinks, showDataFlowPaths, showMethods]);
+  }, [graphData, showSources, showSinks, showDataFlowPaths, showMethods, showASTNodes, showFunctions, showClasses, showSummaries]);
   
   useEffect(() => {
     if (!graphContainerRef.current || isLoading || isDataLoading) return;
@@ -348,6 +391,12 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
             case 'sink': return 'rgba(250, 118, 2, 0.8)';            // #fa7602
             case 'dataflowpath': return 'rgba(250, 2, 144, 0.8)';    // #fa0290
             case 'method': return 'rgba(147, 112, 219, 0.8)';        // #9370db
+            
+            // AST node types
+            case 'function': return 'rgba(141, 160, 203, 0.8)';      // #8da0cb
+            case 'class': return 'rgba(231, 138, 195, 0.8)';         // #e78ac3
+            case 'codesummary': return 'rgba(255, 217, 47, 0.8)';    // #ffd92f
+            
             default: 
               console.log(`Unrecognized node type: "${nodeType}"`);
               return 'rgba(158, 158, 158, 0.8)';  // gray
@@ -660,6 +709,58 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
               </label>
             </div>
             
+            {/* AST-specific controls that show when AST nodes are enabled */}
+            {showASTNodes && (
+              <>
+                <h4>AST Node Controls</h4>
+                <div className="control-group">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={showFunctions}
+                      onChange={(e) => {
+                        setShowFunctions(e.target.checked);
+                        if (graphInstanceRef.current) {
+                          graphInstanceRef.current.refresh();
+                        }
+                      }}
+                    />
+                    Show Functions
+                  </label>
+                </div>
+                <div className="control-group">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={showClasses}
+                      onChange={(e) => {
+                        setShowClasses(e.target.checked);
+                        if (graphInstanceRef.current) {
+                          graphInstanceRef.current.refresh();
+                        }
+                      }}
+                    />
+                    Show Classes
+                  </label>
+                </div>
+                <div className="control-group">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={showSummaries}
+                      onChange={(e) => {
+                        setShowSummaries(e.target.checked);
+                        if (graphInstanceRef.current) {
+                          graphInstanceRef.current.refresh();
+                        }
+                      }}
+                    />
+                    Show Code Summaries
+                  </label>
+                </div>
+              </>
+            )}
+            
             <h3>Legend</h3>
             <div className="graph-legend">
               <div className="legend-item">
@@ -698,6 +799,24 @@ const InvestigationGraphVisualization: React.FC<InvestigationGraphVisualizationP
                 <span className="legend-color method"></span>
                 <span className="legend-label">Method</span>
               </div>
+              
+              {/* AST-specific legend items */}
+              {showASTNodes && (
+                <>
+                  <div className="legend-item">
+                    <span className="legend-color function"></span>
+                    <span className="legend-label">Function</span>
+                  </div>
+                  <div className="legend-item">
+                    <span className="legend-color class"></span>
+                    <span className="legend-label">Class</span>
+                  </div>
+                  <div className="legend-item">
+                    <span className="legend-color codeSummary"></span>
+                    <span className="legend-label">Code Summary</span>
+                  </div>
+                </>
+              )}
               
               {highlightFunnel && (
                 <div className="funnel-section">

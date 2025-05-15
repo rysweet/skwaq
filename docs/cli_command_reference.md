@@ -11,6 +11,8 @@ This document provides a quick reference of all available commands in the Skwaq 
 | `skwaq version` | Show version information | |
 | `skwaq init` | Initialize the Skwaq environment | |
 | `skwaq config` | Manage configuration | `--show`, `--edit` |
+| `skwaq gui` | Launch graphical user interface | `--no-browser` |
+| `skwaq service` | Manage system services | See Service Management section |
 
 ## Repository Management
 
@@ -46,6 +48,15 @@ This document provides a quick reference of all available commands in the Skwaq 
 | `skwaq investigations show` | Show investigation details | `--id` (required), `--format` (text, json) |
 | `skwaq investigations delete` | Delete an investigation | `--id` (required), `--force` |
 | `skwaq investigations visualize` | Generate visualization | `--id` (required), `--format` (html, json, svg), various include options |
+
+## Service Management
+
+| Command | Description | Options |
+|---------|-------------|---------|
+| `skwaq service status` | Check status of services | `[service]` (database, api, gui) |
+| `skwaq service start` | Start services | `[service]` (database, api, gui) |
+| `skwaq service stop` | Stop services | `[service]` (database, api, gui) |
+| `skwaq service restart` | Restart services | `[service]` (database, api, gui) |
 
 ## Common Options Explained
 
@@ -101,6 +112,13 @@ skwaq tool tool_name --repo 1 --args '{"param": "value"}'
 
 # Delete an investigation
 skwaq investigations delete --id inv-12345 --force
+
+# Managing services
+skwaq service status               # Check all service statuses
+skwaq service start                # Start all services
+skwaq service stop api             # Stop just the API service 
+skwaq service restart database     # Restart just the database service
+skwaq gui                          # Start the GUI (auto-starts required services)
 ```
 
 ## Output Indicators

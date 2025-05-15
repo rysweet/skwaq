@@ -4,8 +4,12 @@ import subprocess
 import sys
 import webbrowser
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
-from ..ui.console import console, error, info, print_banner
+from rich.table import Table
+
+from ...shared.service_manager import ServiceManager, ServiceStatus, ServiceType
+from ..ui.console import console, error, info, warning, print_banner
 from ..ui.progress import create_status_indicator
 from .base import CommandHandler, handle_command_error
 
@@ -82,125 +86,283 @@ class GuiCommandHandler(CommandHandler):
         """
         no_browser = self.args.no_browser
 
-        # Find the run_gui.sh script
-        script_path = (
-            Path(__file__).resolve().parents[3] / "scripts" / "dev" / "run_gui.sh"
-        )
+        # Create service manager
+        service_manager = ServiceManager()
 
-        if not script_path.exists():
-            error(f"GUI script not found at {script_path}")
+        # Start all required services with nice progress indicators
+        with create_status_indicator(
+            "[bold blue]Starting required services...", spinner="dots"
+        ) as status:
+            # First check database status
+            status.update("[bold blue]Checking database status...")
+            db_status = service_manager.check_service_status(ServiceType.DATABASE)
+            
+            if db_status != ServiceStatus.RUNNING:
+                status.update("[bold blue]Starting database service...")
+                success, message = service_manager.start_service(ServiceType.DATABASE, True, 60)
+                if not success:
+                    status.update("[bold red]Failed to start database service!")
+                    error(message)
+                    return 1
+                status.update("[bold green]Database service started successfully")
+            else:
+                status.update("[bold green]Database service is already running")
+                
+            # Next check API status
+            status.update("[bold blue]Checking API status...")
+            api_status = service_manager.check_service_status(ServiceType.API)
+            
+            if api_status != ServiceStatus.RUNNING:
+                status.update("[bold blue]Starting API service...")
+                success, message = service_manager.start_service(ServiceType.API, True, 60)
+                if not success:
+                    status.update("[bold red]Failed to start API service!")
+                    error(message)
+                    return 1
+                status.update("[bold green]API service started successfully")
+            else:
+                status.update("[bold green]API service is already running")
+                
+            # Finally start GUI
+            status.update("[bold blue]Starting GUI frontend...")
+            success, message = service_manager.start_service(ServiceType.GUI, True, 60)
+            
+            if not success:
+                status.update("[bold red]Failed to start GUI frontend!")
+                error(message)
+                return 1
+                
+            status.update("[bold green]GUI frontend started successfully")
+            
+        # All services started successfully
+        gui_service = service_manager.services[ServiceType.GUI]
+        api_service = service_manager.services[ServiceType.API]
+        
+        # Open browser if requested
+        if not no_browser and gui_service.url:
+            webbrowser.open(gui_service.url)
+            
+        # Print summary
+        console.print()
+        console.print(f"[bold green]All services started successfully![/]")
+        console.print(f"[bold]GUI:[/] [link={gui_service.url}]{gui_service.url}[/link]")
+        console.print(f"[bold]API:[/] [link={api_service.url}]{api_service.url}[/link]")
+        console.print()
+        console.print("Press Ctrl+C in the terminal where the services are running to stop them")
+        console.print("To stop services, use: skwaq service stop")
+
+        return 0
+
+
+class ServiceCommandHandler(CommandHandler):
+    """Handler for service management commands."""
+
+    @handle_command_error
+    async def handle(self) -> int:
+        """Handle service management commands.
+
+        Returns:
+            Exit code (0 for success, non-zero for errors)
+        """
+        subcommand = self.args.subcommand
+        service_type = self.args.service if hasattr(self.args, "service") else None
+
+        service_manager = ServiceManager()
+
+        # Handle different subcommands
+        if subcommand == "status":
+            await self._handle_status(service_manager, service_type)
+        elif subcommand == "start":
+            await self._handle_start(service_manager, service_type)
+        elif subcommand == "stop":
+            await self._handle_stop(service_manager, service_type)
+        elif subcommand == "restart":
+            await self._handle_restart(service_manager, service_type)
+        else:
+            error(f"Unknown subcommand: {subcommand}")
             return 1
 
-        # Launch GUI
-        with create_status_indicator(
-            "[bold blue]Starting GUI frontend...", spinner="dots"
-        ) as status:
+        return 0
+
+    async def _handle_status(
+        self, service_manager: ServiceManager, service_type: Optional[str]
+    ) -> None:
+        """Handle the status subcommand.
+
+        Args:
+            service_manager: Service manager instance.
+            service_type: Specific service to check, or None for all.
+        """
+        console.print("[bold]Service Status:[/]")
+
+        table = Table(show_header=True)
+        table.add_column("Service", style="cyan")
+        table.add_column("Status", style="")
+        table.add_column("URL", style="")
+
+        if service_type:
+            # Check specific service
             try:
-                # Default React port is 3000
-                port = 3000
-                host = "localhost"
-
-                status.update("[bold green]Launching GUI frontend...")
-
-                # Use subprocess to run the shell script
-                # We'll log the output for diagnostic purposes
-                process = subprocess.Popen(
-                    [str(script_path)],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    bufsize=1,  # Line buffered
+                service_enum = ServiceType(service_type)
+                status = service_manager.check_service_status(service_enum)
+                service = service_manager.services[service_enum]
+                
+                status_style = {
+                    ServiceStatus.RUNNING: "green",
+                    ServiceStatus.STOPPED: "red",
+                    ServiceStatus.STARTING: "yellow",
+                    ServiceStatus.ERROR: "red bold",
+                    ServiceStatus.UNKNOWN: "dim",
+                }
+                
+                table.add_row(
+                    service.name,
+                    f"[{status_style[status]}]{status.value}[/]",
+                    service.url or "N/A"
                 )
-
-                # Add a listener for the script output
-                import threading
-
-                def log_output(stream, prefix):
-                    for line in stream:
-                        if (
-                            "Installing" in line
-                            or "Starting" in line
-                            or "Error" in line
-                        ):
-                            if "Error" in line:
-                                error(f"{line.strip()}")
-                            else:
-                                info(f"{line.strip()}")
-
-                # Start threads to handle stdout and stderr
-                stdout_thread = threading.Thread(
-                    target=log_output, args=(process.stdout, "OUT")
+            except ValueError:
+                error(f"Unknown service type: {service_type}")
+                info(f"Available services: {', '.join([s.value for s in ServiceType])}")
+                return
+        else:
+            # Check all services
+            for service_enum in ServiceType:
+                status = service_manager.check_service_status(service_enum)
+                service = service_manager.services[service_enum]
+                
+                status_style = {
+                    ServiceStatus.RUNNING: "green",
+                    ServiceStatus.STOPPED: "red",
+                    ServiceStatus.STARTING: "yellow",
+                    ServiceStatus.ERROR: "red bold",
+                    ServiceStatus.UNKNOWN: "dim",
+                }
+                
+                table.add_row(
+                    service.name,
+                    f"[{status_style[status]}]{status.value}[/]",
+                    service.url or "N/A"
                 )
-                stderr_thread = threading.Thread(
-                    target=log_output, args=(process.stderr, "ERR")
-                )
-                stdout_thread.daemon = True
-                stderr_thread.daemon = True
-                stdout_thread.start()
-                stderr_thread.start()
+                
+        console.print(table)
 
-                # Wait for the React app to begin starting
-                import socket
-                import time
+    async def _handle_start(
+        self, service_manager: ServiceManager, service_type: Optional[str]
+    ) -> None:
+        """Handle the start subcommand.
 
-                # Function to check if port is in use (server is running)
-                def is_port_in_use(port, host="localhost"):
-                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                        try:
-                            s.settimeout(0.5)
-                            s.connect((host, port))
-                            return True
-                        except (socket.error, socket.timeout):
-                            return False
+        Args:
+            service_manager: Service manager instance.
+            service_type: Specific service to start, or None for all.
+        """
+        if service_type:
+            # Start specific service
+            try:
+                service_enum = ServiceType(service_type)
+                
+                with create_status_indicator(
+                    f"[bold blue]Starting {service_manager.services[service_enum].name}...",
+                    spinner="dots"
+                ) as status:
+                    success, message = service_manager.start_service(service_enum, True, 60)
+                    
+                    if success:
+                        status.update(f"[bold green]{message}")
+                    else:
+                        status.update(f"[bold red]Failed: {message}")
+                        
+            except ValueError:
+                error(f"Unknown service type: {service_type}")
+                info(f"Available services: {', '.join([s.value for s in ServiceType])}")
+                return
+                
+        else:
+            # Start all services in dependency order
+            for service_enum in [ServiceType.DATABASE, ServiceType.API, ServiceType.GUI]:
+                service = service_manager.services[service_enum]
+                
+                with create_status_indicator(
+                    f"[bold blue]Starting {service.name}...",
+                    spinner="dots"
+                ) as status:
+                    success, message = service_manager.start_service(service_enum, True, 60)
+                    
+                    if success:
+                        status.update(f"[bold green]{message}")
+                    else:
+                        status.update(f"[bold red]Failed: {message}")
+                        error(f"Failed to start {service.name}: {message}")
+                        error("Aborting startup of remaining services")
+                        return
 
-                # Wait for server to start (up to 60 seconds)
-                max_wait_time = 60  # seconds
-                start_time = time.time()
-                server_started = False
+            # Print summary if all services started
+            console.print()
+            console.print("[bold green]All services started successfully![/]")
+            for service_enum in ServiceType:
+                service = service_manager.services[service_enum]
+                console.print(f"[bold]{service.name}:[/] [link={service.url}]{service.url}[/link]")
 
-                while time.time() - start_time < max_wait_time:
-                    if is_port_in_use(port):
-                        server_started = True
-                        break
-                    time.sleep(1)
-                    status.update(
-                        f"[bold blue]Waiting for GUI server to start ({int(time.time() - start_time)}s)..."
-                    )
+    async def _handle_stop(
+        self, service_manager: ServiceManager, service_type: Optional[str]
+    ) -> None:
+        """Handle the stop subcommand.
 
-                if not server_started:
-                    status.update(
-                        f"[bold yellow]Server not detected within {max_wait_time} seconds, but it might still be starting..."
-                    )
-                    info(
-                        "The GUI server appears to be starting but may take longer to initialize"
-                    )
-                else:
-                    status.update(
-                        f"[bold green]GUI server detected running on port {port}!"
-                    )
+        Args:
+            service_manager: Service manager instance.
+            service_type: Specific service to stop, or None for all.
+        """
+        if service_type:
+            # Stop specific service
+            try:
+                service_enum = ServiceType(service_type)
+                
+                with create_status_indicator(
+                    f"[bold blue]Stopping {service_manager.services[service_enum].name}...",
+                    spinner="dots"
+                ) as status:
+                    success, message = service_manager.stop_service(service_enum)
+                    
+                    if success:
+                        status.update(f"[bold green]{message}")
+                    else:
+                        status.update(f"[bold red]Failed: {message}")
+                        
+            except ValueError:
+                error(f"Unknown service type: {service_type}")
+                info(f"Available services: {', '.join([s.value for s in ServiceType])}")
+                return
+                
+        else:
+            # Stop all services in reverse dependency order
+            for service_enum in [ServiceType.GUI, ServiceType.API, ServiceType.DATABASE]:
+                service = service_manager.services[service_enum]
+                
+                with create_status_indicator(
+                    f"[bold blue]Stopping {service.name}...",
+                    spinner="dots"
+                ) as status:
+                    success, message = service_manager.stop_service(service_enum)
+                    
+                    if success:
+                        status.update(f"[bold green]{message}")
+                    else:
+                        status.update(f"[bold red]Failed: {message}")
+                        warning(f"Failed to stop {service.name}: {message}")
+                        # Continue with other services even if one fails
 
-                # Open browser if requested
-                if not no_browser:
-                    url = f"http://{host}:{port}"
-                    status.update(f"[bold green]Opening browser to {url}")
-                    webbrowser.open(url)
+            console.print("[bold green]All services stopped[/]")
 
-                # Print instructions
-                console.print()
-                console.print(
-                    f"GUI is starting and will be available at [link=http://{host}:{port}]http://{host}:{port}[/link]"
-                )
-                console.print(
-                    "The React development server will open a browser window automatically"
-                )
-                console.print(
-                    "Press Ctrl+C in the terminal where the server is running to stop it"
-                )
+    async def _handle_restart(
+        self, service_manager: ServiceManager, service_type: Optional[str]
+    ) -> None:
+        """Handle the restart subcommand.
 
-                # Return immediately so user can continue using CLI
-                return 0
-
-            except Exception as e:
-                status.update("[bold red]Failed to start GUI!")
-                error(f"Failed to start GUI: {str(e)}")
-                return 1
+        Args:
+            service_manager: Service manager instance.
+            service_type: Specific service to restart, or None for all.
+        """
+        # First stop the service(s)
+        await self._handle_stop(service_manager, service_type)
+        
+        # Then start them again
+        await self._handle_start(service_manager, service_type)

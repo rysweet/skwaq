@@ -1,0 +1,22 @@
+FROM python:3.10-slim
+
+# Install minimal dependencies needed for file analysis
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        git \
+        build-essential \
+        libffi-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    clang \
+    libclang \
+    libcst \
+    networkx
+
+WORKDIR /app
+
+# Default command
+CMD ["python", "-c", "print('Blarify Docker environment ready')"]
