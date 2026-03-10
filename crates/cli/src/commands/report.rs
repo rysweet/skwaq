@@ -1,11 +1,14 @@
 //! `skwaq report` - generate analysis reports.
 //!
 //! Queries all findings for an investigation and outputs them in the
-//! requested format (JSON by default, SARIF and Markdown planned).
+//! requested format: JSON (default), SARIF, or Markdown.
 
 use skwaq_core::config::Config;
 use skwaq_core::graph::GraphDb;
-use skwaq_core::reporting::generate_report_for_investigation;
+use skwaq_core::reporting::{
+    generate_markdown_for_investigation, generate_report_for_investigation,
+    generate_sarif_for_investigation,
+};
 use std::path::PathBuf;
 
 /// Run the report command.
@@ -15,6 +18,7 @@ pub fn run(
     investigation_id: Option<&str>,
     json: bool,
     sarif: bool,
+    markdown: bool,
     output: Option<&PathBuf>,
 ) -> anyhow::Result<()> {
     let config = Config::load()?;
@@ -25,7 +29,6 @@ pub fn run(
     let inv_id = match investigation_id {
         Some(id) => id.to_string(),
         None => {
-            // Find the most recent investigation
             let id: String = db
                 .conn()
                 .query_row(
@@ -34,30 +37,37 @@ pub fn run(
                     |row| row.get(0),
                 )
                 .map_err(|_| {
-                    anyhow::anyhow!("No investigations found. Run `skwaq analyze --quick` first.")
+                    anyhow::anyhow!(
+                        "No investigations found. Run `skwaq analyze --quick` first."
+                    )
                 })?;
             id
         }
     };
 
-    if sarif {
-        println!("SARIF report generation is not yet implemented.");
-        println!("Use --json for JSON output.");
-        return Ok(());
-    }
+    let report = if sarif {
+        generate_sarif_for_investigation(&db, &inv_id)?
+    } else if markdown || (!json && !sarif) {
+        // Default to Markdown if no format specified
+        generate_markdown_for_investigation(&db, &inv_id)?
+    } else {
+        generate_report_for_investigation(&db, &inv_id)?
+    };
 
-    // Default to JSON if --json is set, or if no specific format requested
-    if json || !sarif {
-        let report = generate_report_for_investigation(&db, &inv_id)?;
-
-        match output {
-            Some(path) => {
-                std::fs::write(path, &report)?;
-                println!("Report written to {}", path.display());
-            }
-            None => {
-                println!("{report}");
-            }
+    match output {
+        Some(path) => {
+            std::fs::write(path, &report)?;
+            let format_name = if sarif {
+                "SARIF"
+            } else if json {
+                "JSON"
+            } else {
+                "Markdown"
+            };
+            println!("{format_name} report written to {}", path.display());
+        }
+        None => {
+            println!("{report}");
         }
     }
 

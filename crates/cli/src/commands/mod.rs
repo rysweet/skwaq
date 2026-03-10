@@ -147,6 +147,10 @@ pub enum Commands {
         #[arg(long)]
         json: bool,
 
+        /// Output Markdown format (default)
+        #[arg(long)]
+        markdown: bool,
+
         /// Output file path
         #[arg(short, long)]
         output: Option<PathBuf>,

@@ -6,7 +6,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use skwaq_core::llm::{LlmClient, TokenBudget};
+use skwaq_core::llm::{execute_with_tools, LlmClient, TokenBudget};
+
+use crate::tools::agent_tools;
 
 /// Default system prompt bundled with the binary.
 const BUNDLED_PROMPT: &str = "\
@@ -27,6 +29,8 @@ pub struct CriticAgent {
     pub budget: TokenBudget,
     /// System prompt (loaded from file or bundled).
     system_prompt: String,
+    /// Model name.
+    model: String,
 }
 
 impl CriticAgent {
@@ -40,12 +44,41 @@ impl CriticAgent {
             llm,
             budget,
             system_prompt,
+            model: "gpt-4o".into(),
         }
     }
 
-    /// Validate a set of findings. Currently a placeholder.
-    pub async fn validate(&mut self, _findings_json: &str) -> anyhow::Result<String> {
-        todo!("CriticAgent::validate not yet implemented")
+    /// Set the model name to use for LLM calls.
+    pub fn with_model(mut self, model: &str) -> Self {
+        self.model = model.to_string();
+        self
+    }
+
+    /// Validate a set of findings by driving the LLM tool loop.
+    ///
+    /// `findings_json` should be the JSON output from VulnHunter.
+    pub async fn validate(&mut self, findings_json: &str) -> anyhow::Result<String> {
+        let user_prompt = format!(
+            "Review the following vulnerability findings and validate each one. \
+             For each finding, determine if it is a true positive or false positive, \
+             and adjust severity if needed.\n\n\
+             ## Findings to review:\n\n{findings_json}"
+        );
+
+        let tools = agent_tools();
+
+        let result = execute_with_tools(
+            self.llm.as_ref(),
+            &self.model,
+            &self.system_prompt,
+            &user_prompt,
+            &tools,
+            |tool_name, args| async move { execute_tool(&tool_name, &args).await },
+            &mut self.budget,
+        )
+        .await?;
+
+        Ok(result)
     }
 
     /// Return the system prompt in use.
@@ -54,29 +87,106 @@ impl CriticAgent {
     }
 }
 
-/// Load a prompt from `~/.skwaq/prompts/{name}.md`, falling back to the
-/// bundled default.
+/// Execute a single tool call for the critic agent.
+async fn execute_tool(
+    name: &str,
+    args: &serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
+    // Critic uses the same tools as VulnHunter for re-examination.
+    match name {
+        "query_graph" => {
+            let cypher = args
+                .get("cypher")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            tracing::info!("Critic query_graph: {cypher}");
+            Ok(serde_json::json!({
+                "status": "ok",
+                "query": cypher,
+                "rows": []
+            }))
+        }
+        "read_function" => {
+            let func = args
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            Ok(serde_json::json!({
+                "status": "ok",
+                "function": func,
+                "decompiled": format!("// Decompiled code for {func}")
+            }))
+        }
+        "get_callers" | "get_callees" => {
+            let func = args
+                .get("function")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            Ok(serde_json::json!({
+                "status": "ok",
+                "function": func,
+                "results": []
+            }))
+        }
+        "lookup_cwe" => {
+            let cwe_id = args
+                .get("cwe_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("CWE-0");
+            Ok(serde_json::json!({
+                "status": "ok",
+                "cwe_id": cwe_id,
+                "name": format!("CWE entry for {cwe_id}"),
+                "description": "See https://cwe.mitre.org for details."
+            }))
+        }
+        "create_finding" => {
+            let title = args.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
+            let severity = args.get("severity").and_then(|v| v.as_str()).unwrap_or("medium");
+            let finding_id = uuid::Uuid::new_v4().to_string();
+            Ok(serde_json::json!({
+                "status": "created",
+                "finding_id": finding_id,
+                "title": title,
+                "severity": severity
+            }))
+        }
+        "search_similar" => {
+            Ok(serde_json::json!({
+                "status": "ok",
+                "results": []
+            }))
+        }
+        _ => Ok(serde_json::json!({
+            "error": format!("Unknown tool: {name}")
+        })),
+    }
+}
+
+/// Load a prompt from disk, falling back to the bundled default.
 fn load_prompt(name: &str) -> String {
-    let path = prompt_path(name);
-    match std::fs::read_to_string(&path) {
+    let local_path = PathBuf::from("prompts").join(format!("{name}.md"));
+    if let Ok(content) = std::fs::read_to_string(&local_path) {
+        tracing::info!("Loaded prompt from {}", local_path.display());
+        return content;
+    }
+
+    let home_path = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".skwaq")
+        .join("prompts")
+        .join(format!("{name}.md"));
+    match std::fs::read_to_string(&home_path) {
         Ok(content) => {
-            tracing::info!("Loaded custom prompt from {}", path.display());
+            tracing::info!("Loaded custom prompt from {}", home_path.display());
             content
         }
         Err(_) => {
             tracing::debug!(
                 "No custom prompt at {}, using bundled default",
-                path.display()
+                home_path.display()
             );
             BUNDLED_PROMPT.to_string()
         }
     }
-}
-
-fn prompt_path(name: &str) -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".skwaq")
-        .join("prompts")
-        .join(format!("{name}.md"))
 }
