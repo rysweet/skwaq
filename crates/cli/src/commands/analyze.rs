@@ -1,61 +1,132 @@
 //! `skwaq analyze` - vulnerability analysis command.
+//!
+//! When `--quick` is given, runs fast pattern-based analysis (no LLM).
+//! Without `--quick`, drives the VulnHunter agent through real LLM calls.
 
 use skwaq_core::analysis::{AnalysisOrchestrator, FindingStatus};
 use skwaq_core::config::Config;
 use skwaq_core::graph::GraphDb;
 
-pub fn run(investigation_id: Option<&str>, quick: bool, budget: Option<u64>) -> anyhow::Result<()> {
-    if !quick {
-        let budget_str = budget
-            .map(|b| format!(" (budget: {b} tokens)"))
-            .unwrap_or_default();
+/// Entry point for the analyze command. Delegates to the appropriate
+/// analysis mode based on the `quick` flag.
+pub async fn run(
+    investigation_id: Option<&str>,
+    quick: bool,
+    budget: Option<u64>,
+) -> anyhow::Result<()> {
+    if quick {
+        run_quick_analysis(investigation_id)
+    } else {
+        run_ai_analysis(investigation_id, budget).await
+    }
+}
+
+/// Run the LLM-driven VulnHunter agent for deep analysis.
+async fn run_ai_analysis(
+    investigation_id: Option<&str>,
+    budget: Option<u64>,
+) -> anyhow::Result<()> {
+    let config = Config::load()?;
+    let db_path = config.database_path();
+    let db = GraphDb::open(&db_path)?;
+
+    let inv_id = resolve_investigation_id(&db, investigation_id)?;
+
+    // Get the target name for the prompt
+    let target: String = db
+        .conn()
+        .query_row(
+            "SELECT COALESCE(target, name) FROM investigations WHERE id = ?1",
+            [&inv_id],
+            |row| row.get(0),
+        )
+        .unwrap_or_else(|_| inv_id.clone());
+
+    let budget_amount = budget.unwrap_or(config.analysis.default_token_budget);
+    let model = config.llm.copilot.model.clone();
+
+    println!("Running AI vulnerability analysis...");
+    println!("  Investigation: {inv_id}");
+    println!("  Model: {model}");
+    println!("  Token budget: {budget_amount}");
+    println!();
+
+    // Create the LLM client (CopilotClient authenticates lazily on first call)
+    let llm_client: std::sync::Arc<dyn skwaq_core::llm::LlmClient> =
+        std::sync::Arc::new(skwaq_core::llm::copilot::CopilotClient::new());
+
+    // Create and run VulnHunter
+    let mut hunter = skwaq_agents::vuln_hunter::VulnHunterAgent::new(
+        llm_client.clone(),
+        skwaq_core::llm::TokenBudget::new(budget_amount),
+    )
+    .with_model(&model);
+
+    let hunter_result = hunter.analyze(&target, &inv_id, &db).await?;
+
+    println!("--- VulnHunter Analysis ---");
+    println!("{hunter_result}");
+    println!();
+
+    // Query findings created by the agent
+    let mut stmt = db.conn().prepare(
+        "SELECT title, severity, category, evidence FROM findings \
+         WHERE investigation_id = ?1 AND agent = 'vuln_hunter' \
+         ORDER BY CASE severity \
+           WHEN 'critical' THEN 0 \
+           WHEN 'high' THEN 1 \
+           WHEN 'medium' THEN 2 \
+           WHEN 'low' THEN 3 \
+           ELSE 4 END",
+    )?;
+
+    let findings: Vec<(String, String, String, String)> = stmt
+        .query_map([&inv_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    if findings.is_empty() {
+        println!("No findings recorded by VulnHunter.");
+    } else {
+        println!("{} finding(s) recorded:\n", findings.len());
         println!(
-            "AI analysis requires LLM configuration{budget_str}. \
-             Run with --quick for pattern-based analysis."
+            "  {:<40} {:<10} {}",
+            "TITLE", "SEVERITY", "CATEGORY"
         );
-        return Ok(());
+        println!("  {}", "-".repeat(70));
+        for (title, severity, category, _evidence) in &findings {
+            println!(
+                "  {:<40} {:<10} {}",
+                truncate(title, 40),
+                severity,
+                category,
+            );
+        }
+        println!();
     }
 
+    println!("Investigation: {inv_id}");
+    println!("Run `skwaq report {inv_id} --json` to export results.");
+
+    Ok(())
+}
+
+/// Run quick pattern-based analysis (no LLM calls).
+fn run_quick_analysis(investigation_id: Option<&str>) -> anyhow::Result<()> {
     println!("Running multi-cycle analysis...\n");
 
     let config = Config::load()?;
     let db_path = config.database_path();
     let db = GraphDb::open(&db_path)?;
 
-    // Use provided investigation or find the most recent one
-    let inv_id = match investigation_id {
-        Some(id) => {
-            // Verify it exists
-            let count: i64 = db.conn().query_row(
-                "SELECT count(*) FROM investigations WHERE id = ?1",
-                [id],
-                |row| row.get(0),
-            )?;
-            if count == 0 {
-                anyhow::bail!("Investigation '{}' not found. Run `skwaq investigate list`.", id);
-            }
-            id.to_string()
-        }
-        None => {
-            // Find most recent investigation
-            let result: Result<String, _> = db.conn().query_row(
-                "SELECT id FROM investigations ORDER BY created_at DESC LIMIT 1",
-                [],
-                |row| row.get(0),
-            );
-            match result {
-                Ok(id) => {
-                    println!("Using most recent investigation: {id}\n");
-                    id
-                }
-                Err(_) => {
-                    anyhow::bail!(
-                        "No investigations found. Run `skwaq ingest binary <path>` first."
-                    );
-                }
-            }
-        }
-    };
+    let inv_id = resolve_investigation_id(&db, investigation_id)?;
 
     let max_cycles = 5;
     let orchestrator = AnalysisOrchestrator::new(&db, max_cycles);
@@ -166,6 +237,43 @@ pub fn run(investigation_id: Option<&str>, quick: bool, budget: Option<u64>) -> 
     println!("Run `skwaq report {inv_id} --json` to export results.");
 
     Ok(())
+}
+
+/// Resolve an investigation ID from an optional user-provided value.
+///
+/// If no ID is provided, uses the most recent investigation.
+fn resolve_investigation_id(db: &GraphDb, id: Option<&str>) -> anyhow::Result<String> {
+    match id {
+        Some(id) => {
+            let count: i64 = db.conn().query_row(
+                "SELECT count(*) FROM investigations WHERE id = ?1",
+                [id],
+                |row| row.get(0),
+            )?;
+            if count == 0 {
+                anyhow::bail!("Investigation '{}' not found. Run `skwaq investigate list`.", id);
+            }
+            Ok(id.to_string())
+        }
+        None => {
+            let result: Result<String, _> = db.conn().query_row(
+                "SELECT id FROM investigations ORDER BY created_at DESC LIMIT 1",
+                [],
+                |row| row.get(0),
+            );
+            match result {
+                Ok(id) => {
+                    println!("Using most recent investigation: {id}\n");
+                    Ok(id)
+                }
+                Err(_) => {
+                    anyhow::bail!(
+                        "No investigations found. Run `skwaq ingest binary <path>` first."
+                    );
+                }
+            }
+        }
+    }
 }
 
 /// Truncate a string to fit in a column width.

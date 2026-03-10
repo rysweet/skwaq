@@ -1,26 +1,73 @@
-//! GitHub Copilot LLM backend.
+//! GitHub Copilot / Models API LLM backend using RustyClawd for token discovery.
 //!
-//! Authenticates via `gh auth token` (or GITHUB_TOKEN env var), exchanges
-//! the GitHub token for a Copilot session token, then calls the
-//! OpenAI-compatible chat completions endpoint at api.githubcopilot.com.
+//! Uses `rustyclawd_core::client::copilot::get_github_token()` to find a
+//! GitHub token from multiple sources (env var, gh CLI, config files), then
+//! negotiates the endpoint (Copilot API with GitHub Models API fallback)
+//! and sends OpenAI-compatible chat completion requests.
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use tokio::sync::OnceCell;
 
 use super::traits::{LlmClient, LlmResponse, Message, ToolCall, ToolDefinition, TokenUsage};
 
-/// GitHub Copilot chat completions client.
-pub struct CopilotClient {
-    http: reqwest::Client,
-    /// Cached Copilot token + expiry.
-    token_cache: Mutex<Option<CopilotToken>>,
+const COPILOT_MODELS_URL: &str = "https://api.githubcopilot.com/models";
+const COPILOT_CHAT_URL: &str = "https://api.githubcopilot.com/chat/completions";
+// Kept for potential future use in model listing
+#[allow(dead_code)]
+const GITHUB_MODELS_LIST_URL: &str = "https://models.github.ai/inference/models";
+const GITHUB_MODELS_CHAT_URL: &str = "https://models.github.ai/inference/chat/completions";
+const GITHUB_MODELS_PREFIX: &str = "openai/";
+
+/// Which API endpoint is active.
+#[derive(Debug, Clone, Copy)]
+enum Endpoint {
+    Copilot,
+    GitHubModels,
 }
 
-#[derive(Clone)]
-struct CopilotToken {
+/// Cached auth state: token + validated endpoint.
+struct AuthState {
     token: String,
-    expires_at: i64,
+    endpoint: Endpoint,
+}
+
+impl AuthState {
+    fn chat_url(&self) -> &str {
+        match self.endpoint {
+            Endpoint::Copilot => COPILOT_CHAT_URL,
+            Endpoint::GitHubModels => GITHUB_MODELS_CHAT_URL,
+        }
+    }
+
+    fn qualify_model(&self, model: &str) -> String {
+        match self.endpoint {
+            Endpoint::Copilot => {
+                // Copilot API wants bare model names (e.g., "gpt-4o-mini")
+                model
+                    .strip_prefix(GITHUB_MODELS_PREFIX)
+                    .unwrap_or(model)
+                    .to_string()
+            }
+            Endpoint::GitHubModels => {
+                // GitHub Models API wants prefixed names (e.g., "openai/gpt-4o-mini")
+                if model.contains('/') {
+                    model.to_string()
+                } else {
+                    format!("{GITHUB_MODELS_PREFIX}{model}")
+                }
+            }
+        }
+    }
+}
+
+/// GitHub Copilot / Models API chat completions client.
+///
+/// On first use, discovers a GitHub token via RustyClawd and validates
+/// against the Copilot API (falling back to GitHub Models API).
+pub struct CopilotClient {
+    http: reqwest::Client,
+    auth: OnceCell<AuthState>,
 }
 
 // ── request types (OpenAI-compatible) ────────────────────────────
@@ -36,9 +83,26 @@ struct CompletionsRequest {
 #[derive(Serialize)]
 struct CompletionsMessage {
     role: String,
-    content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_calls: Option<Vec<CompletionsToolCall>>,
+}
+
+/// Tool call as sent in assistant messages.
+#[derive(Serialize)]
+struct CompletionsToolCall {
+    id: String,
+    r#type: String,
+    function: CompletionsToolCallFunction,
+}
+
+#[derive(Serialize)]
+struct CompletionsToolCallFunction {
+    name: String,
+    arguments: String,
 }
 
 #[derive(Serialize)]
@@ -96,13 +160,6 @@ struct UsageInfo {
     completion_tokens: u64,
 }
 
-/// Token exchange response from GitHub.
-#[derive(Deserialize)]
-struct TokenExchangeResponse {
-    token: String,
-    expires_at: i64,
-}
-
 // ── implementation ───────────────────────────────────────────────
 
 impl Default for CopilotClient {
@@ -112,106 +169,93 @@ impl Default for CopilotClient {
 }
 
 impl CopilotClient {
-    /// Create a new Copilot client.
+    /// Create a new CopilotClient.
+    ///
+    /// Authentication and endpoint negotiation are deferred to the first call.
     pub fn new() -> Self {
         Self {
             http: reqwest::Client::new(),
-            token_cache: Mutex::new(None),
+            auth: OnceCell::new(),
         }
     }
 
-    /// Obtain a GitHub personal access token from the environment or `gh` CLI.
-    fn github_token() -> anyhow::Result<String> {
-        // Try GITHUB_TOKEN env var first
-        if let Ok(token) = std::env::var("GITHUB_TOKEN") {
-            if !token.is_empty() {
-                return Ok(token);
-            }
-        }
+    /// Lazily discover and validate auth.
+    ///
+    /// Uses RustyClawd's `get_github_token()` to find a token, then validates
+    /// with a minimal chat request to the GitHub Models API. Falls back to
+    /// the Copilot API if the Models API is unavailable.
+    async fn ensure_auth(&self) -> anyhow::Result<&AuthState> {
+        self.auth
+            .get_or_try_init(|| async {
+                // Use RustyClawd to discover the GitHub token
+                let token = rustyclawd_core::client::copilot::get_github_token()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("GitHub token discovery failed: {e}"))?;
 
-        // Fall back to `gh auth token`
-        let output = std::process::Command::new("gh")
-            .args(["auth", "token"])
-            .output()
-            .map_err(|e| anyhow::anyhow!("Failed to run `gh auth token`: {e}"))?;
+                // Validate with a minimal chat request to GitHub Models API.
+                // The models list endpoint may return 404 even when chat works,
+                // so we probe the chat endpoint directly.
+                let probe_body = serde_json::json!({
+                    "model": "openai/gpt-4o-mini",
+                    "messages": [{"role": "user", "content": "hi"}],
+                    "max_tokens": 1
+                });
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!(
-                "gh auth token failed (exit {}): {stderr}",
-                output.status.code().unwrap_or(-1)
-            );
-        }
+                let models_resp = self
+                    .http
+                    .post(GITHUB_MODELS_CHAT_URL)
+                    .header("Authorization", format!("Bearer {token}"))
+                    .header("Content-Type", "application/json")
+                    .json(&probe_body)
+                    .send()
+                    .await;
 
-        let token = String::from_utf8(output.stdout)
-            .map_err(|_| anyhow::anyhow!("gh auth token returned non-UTF-8"))?
-            .trim()
-            .to_string();
+                let models_ok = models_resp
+                    .as_ref()
+                    .map(|r| r.status().is_success())
+                    .unwrap_or(false);
 
-        if token.is_empty() {
-            anyhow::bail!("No GitHub token available. Set GITHUB_TOKEN or run `gh auth login`.");
-        }
-
-        Ok(token)
-    }
-
-    /// Exchange a GitHub PAT for a Copilot session token.
-    async fn exchange_token(&self) -> anyhow::Result<CopilotToken> {
-        // Return cached token if still valid
-        match self.token_cache.lock() {
-            Ok(guard) => {
-                if let Some(ref cached) = *guard {
-                    let now = chrono::Utc::now().timestamp();
-                    if cached.expires_at > now + 60 {
-                        return Ok(cached.clone());
-                    }
+                if models_ok {
+                    tracing::info!("Authenticated via GitHub Models API");
+                    return Ok(AuthState {
+                        token,
+                        endpoint: Endpoint::GitHubModels,
+                    });
                 }
-            }
-            Err(e) => {
-                tracing::warn!("Token cache mutex poisoned, proceeding with fresh token exchange: {e}");
-            }
-        }
 
-        let gh_token = Self::github_token()?;
+                // Log the failure details
+                if let Ok(resp) = models_resp {
+                    let status = resp.status();
+                    tracing::debug!(
+                        "GitHub Models API probe returned {status}, trying Copilot API"
+                    );
+                }
 
-        let resp = self
-            .http
-            .get("https://api.github.com/copilot_internal/v2/token")
-            .header("Authorization", format!("token {gh_token}"))
-            .header("User-Agent", "skwaq/0.1")
-            .header("Accept", "application/json")
-            .send()
+                // Fall back: check Copilot API models list
+                let copilot_ok = self
+                    .http
+                    .get(COPILOT_MODELS_URL)
+                    .header("Authorization", format!("Bearer {token}"))
+                    .header("Accept", "application/json")
+                    .send()
+                    .await
+                    .map(|r| r.status().is_success())
+                    .unwrap_or(false);
+
+                if copilot_ok {
+                    tracing::info!("Authenticated via Copilot API");
+                    return Ok(AuthState {
+                        token,
+                        endpoint: Endpoint::Copilot,
+                    });
+                }
+
+                anyhow::bail!(
+                    "Neither GitHub Models API nor Copilot API accepted the token. \
+                     Ensure you have access and run: gh auth login"
+                );
+            })
             .await
-            .map_err(|e| anyhow::anyhow!("Copilot token exchange failed: {e}"))?;
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let mut text = resp.text().await.unwrap_or_default();
-            text.truncate(200);
-            anyhow::bail!("Copilot token exchange returned {status}: {text}");
-        }
-
-        let exchange: TokenExchangeResponse = resp
-            .json()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to parse token exchange response: {e}"))?;
-
-        let copilot_token = CopilotToken {
-            token: exchange.token,
-            expires_at: exchange.expires_at,
-        };
-
-        // Cache it
-        match self.token_cache.lock() {
-            Ok(mut guard) => {
-                *guard = Some(copilot_token.clone());
-            }
-            Err(e) => {
-                tracing::warn!("Token cache mutex poisoned, skipping cache update: {e}");
-            }
-        }
-
-        Ok(copilot_token)
     }
 }
 
@@ -223,14 +267,42 @@ impl LlmClient for CopilotClient {
         tools: &[ToolDefinition],
         model: &str,
     ) -> anyhow::Result<LlmResponse> {
-        let copilot_token = self.exchange_token().await?;
+        let auth = self.ensure_auth().await?;
+        let chat_url = auth.chat_url();
+        let qualified_model = auth.qualify_model(model);
 
         let chat_messages: Vec<CompletionsMessage> = messages
             .iter()
-            .map(|m| CompletionsMessage {
-                role: m.role.clone(),
-                content: m.content.clone(),
-                tool_call_id: m.tool_call_id.clone(),
+            .map(|m| {
+                // Convert tool_calls from our ToolCall format to the API format
+                let api_tool_calls = m.tool_calls.as_ref().map(|calls| {
+                    calls
+                        .iter()
+                        .map(|tc| CompletionsToolCall {
+                            id: tc.id.clone(),
+                            r#type: "function".into(),
+                            function: CompletionsToolCallFunction {
+                                name: tc.name.clone(),
+                                arguments: tc.arguments.to_string(),
+                            },
+                        })
+                        .collect()
+                });
+
+                // For assistant messages with tool_calls, content should be
+                // null (not empty string) per OpenAI API spec
+                let content = if m.role == "assistant" && api_tool_calls.is_some() && m.content.is_empty() {
+                    None
+                } else {
+                    Some(m.content.clone())
+                };
+
+                CompletionsMessage {
+                    role: m.role.clone(),
+                    content,
+                    tool_call_id: m.tool_call_id.clone(),
+                    tool_calls: api_tool_calls,
+                }
             })
             .collect();
 
@@ -247,42 +319,41 @@ impl LlmClient for CopilotClient {
             .collect();
 
         let body = CompletionsRequest {
-            model: model.to_string(),
+            model: qualified_model.clone(),
             messages: chat_messages,
             tools: copilot_tools,
         };
 
-        tracing::debug!("Copilot request -> chat/completions model={model}");
+        tracing::debug!("Copilot request -> {chat_url} model={qualified_model}");
 
         let resp = self
             .http
-            .post("https://api.githubcopilot.com/chat/completions")
-            .header("Authorization", format!("Bearer {}", copilot_token.token))
+            .post(chat_url)
+            .header("Authorization", format!("Bearer {}", auth.token))
             .header("Content-Type", "application/json")
-            .header("Editor-Version", "skwaq/0.1")
-            .header("Copilot-Integration-Id", "skwaq")
+            .header("Accept", "application/json")
             .json(&body)
             .send()
             .await
-            .map_err(|e| anyhow::anyhow!("Copilot chat request failed: {e}"))?;
+            .map_err(|e| anyhow::anyhow!("Copilot API request failed: {e}"))?;
 
         if !resp.status().is_success() {
             let status = resp.status();
             let mut text = resp.text().await.unwrap_or_default();
-            text.truncate(200);
-            anyhow::bail!("Copilot chat returned {status}: {text}");
+            text.truncate(500);
+            anyhow::bail!("Copilot API returned {status}: {text}");
         }
 
         let comp_resp: CompletionsResponse = resp
             .json()
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to parse Copilot response: {e}"))?;
+            .map_err(|e| anyhow::anyhow!("Failed to parse Copilot API response: {e}"))?;
 
         let choice = comp_resp
             .choices
             .into_iter()
             .next()
-            .ok_or_else(|| anyhow::anyhow!("Copilot returned no choices"))?;
+            .ok_or_else(|| anyhow::anyhow!("Copilot API returned no choices"))?;
 
         let tool_calls: Vec<ToolCall> = choice
             .message
@@ -290,7 +361,8 @@ impl LlmClient for CopilotClient {
             .into_iter()
             .map(|tc| {
                 let arguments: serde_json::Value =
-                    serde_json::from_str(&tc.function.arguments).unwrap_or(serde_json::Value::Null);
+                    serde_json::from_str(&tc.function.arguments)
+                        .unwrap_or(serde_json::Value::Null);
                 ToolCall {
                     id: tc.id,
                     name: tc.function.name,
@@ -379,5 +451,26 @@ mod tests {
             resp.choices[0].message.tool_calls[0].function.name,
             "read_function"
         );
+    }
+
+    #[test]
+    fn test_auth_state_qualify_model_copilot() {
+        let auth = AuthState {
+            token: "test".into(),
+            endpoint: Endpoint::Copilot,
+        };
+        assert_eq!(auth.qualify_model("gpt-4o"), "gpt-4o");
+        // Copilot strips the openai/ prefix
+        assert_eq!(auth.qualify_model("openai/gpt-4o"), "gpt-4o");
+    }
+
+    #[test]
+    fn test_auth_state_qualify_model_github_models() {
+        let auth = AuthState {
+            token: "test".into(),
+            endpoint: Endpoint::GitHubModels,
+        };
+        assert_eq!(auth.qualify_model("gpt-4o"), "openai/gpt-4o");
+        assert_eq!(auth.qualify_model("openai/gpt-4o"), "openai/gpt-4o");
     }
 }

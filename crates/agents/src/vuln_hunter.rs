@@ -2,7 +2,7 @@
 //!
 //! Drives an LLM tool loop to find security issues in code by
 //! querying the graph database, reading decompiled functions, and
-//! creating findings.
+//! creating findings. All tool calls execute against the real database.
 
 use std::sync::Arc;
 
@@ -19,7 +19,9 @@ CWE entries. Your goal is to find real, exploitable vulnerabilities by \
 systematically examining the attack surface.\n\n\
 Start by querying for dangerous API usage, then trace data flows from sources \
 to sinks, and validate each potential finding before reporting it.\n\n\
-Be precise. Avoid false positives. Explain your reasoning for each finding.";
+Be precise. Avoid false positives. Explain your reasoning for each finding.\n\n\
+When you find a vulnerability, use create_finding to record it. Include the \
+function name, severity, CWE ID, and a clear description of the issue.";
 
 /// The vulnerability hunting agent.
 pub struct VulnHunterAgent {
@@ -44,7 +46,7 @@ impl VulnHunterAgent {
             llm,
             budget,
             system_prompt,
-            model: "gpt-4o".into(),
+            model: "openai/gpt-4o-mini".into(),
         }
     }
 
@@ -58,6 +60,7 @@ impl VulnHunterAgent {
     ///
     /// Builds context from the graph database (functions, imports, taint paths)
     /// and drives the LLM tool loop until completion or budget exhaustion.
+    /// All tool calls query the real database.
     pub async fn analyze(
         &mut self,
         target: &str,
@@ -67,13 +70,22 @@ impl VulnHunterAgent {
         let user_prompt = build_analysis_prompt(target, investigation_id, db);
         let tools = agent_tools();
 
+        let inv_id = investigation_id.to_string();
+
         let result = execute_with_tools(
             self.llm.as_ref(),
             &self.model,
             &self.system_prompt,
             &user_prompt,
             &tools,
-            |tool_name, args| async move { execute_tool(&tool_name, &args).await },
+            |tool_name, args| {
+                let inv = inv_id.clone();
+                // Execute the tool synchronously against the real database.
+                // This is safe because execute_with_tools awaits the future
+                // directly (no spawn), and GraphDb is valid for the duration.
+                let result = crate::tool_executor::execute_tool(db, &inv, &tool_name, &args);
+                async move { result }
+            },
             &mut self.budget,
         )
         .await?;
@@ -184,6 +196,7 @@ fn build_analysis_prompt(target: &str, investigation_id: &str, db: &GraphDb) -> 
         }
     }
 
+    // Summarize hardening status
     parts.push(
         "\n\nStart your analysis. Use the tools to dig deeper, then create findings for \
          each confirmed vulnerability."
@@ -192,107 +205,3 @@ fn build_analysis_prompt(target: &str, investigation_id: &str, db: &GraphDb) -> 
 
     parts.join("\n")
 }
-
-/// Execute a single tool call.
-///
-/// In a full deployment this would query the real graph database.
-/// For now, tool calls return structured placeholder data to allow
-/// the agent loop to function end-to-end.
-async fn execute_tool(
-    name: &str,
-    args: &serde_json::Value,
-) -> anyhow::Result<serde_json::Value> {
-    match name {
-        "query_graph" => {
-            let cypher = args
-                .get("cypher")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            tracing::info!("Tool query_graph: {cypher}");
-            Ok(serde_json::json!({
-                "status": "ok",
-                "warning": "Tool not connected to live database in current agent context",
-                "query": cypher,
-                "rows": []
-            }))
-        }
-        "read_function" => {
-            let func = args
-                .get("name")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
-            tracing::info!("Tool read_function: {func}");
-            Ok(serde_json::json!({
-                "status": "ok",
-                "warning": "Tool not connected to live database in current agent context",
-                "function": func,
-                "decompiled": format!("// Decompiled code for {func} not available in this context")
-            }))
-        }
-        "get_callers" | "get_callees" => {
-            let func = args
-                .get("function")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
-            tracing::info!("Tool {name}: {func}");
-            Ok(serde_json::json!({
-                "status": "ok",
-                "warning": "Tool not connected to live database in current agent context",
-                "function": func,
-                "results": []
-            }))
-        }
-        "lookup_cwe" => {
-            let cwe_id = args
-                .get("cwe_id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("CWE-0");
-            tracing::info!("Tool lookup_cwe: {cwe_id}");
-            Ok(serde_json::json!({
-                "status": "ok",
-                "warning": "Tool not connected to live database in current agent context",
-                "cwe_id": cwe_id,
-                "name": format!("CWE entry for {cwe_id}"),
-                "description": "See https://cwe.mitre.org for details."
-            }))
-        }
-        "create_finding" => {
-            let title = args
-                .get("title")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Untitled");
-            let severity = args
-                .get("severity")
-                .and_then(|v| v.as_str())
-                .unwrap_or("medium");
-            tracing::info!("Tool create_finding: {title} [{severity}]");
-            let finding_id = uuid::Uuid::new_v4().to_string();
-            Ok(serde_json::json!({
-                "status": "ok",
-                "warning": "Tool not connected to live database in current agent context",
-                "finding_id": finding_id,
-                "title": title,
-                "severity": severity
-            }))
-        }
-        "search_similar" => {
-            let code = args
-                .get("code")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            tracing::info!("Tool search_similar: {}...", &code[..code.len().min(40)]);
-            Ok(serde_json::json!({
-                "status": "ok",
-                "warning": "Tool not connected to live database in current agent context",
-                "results": []
-            }))
-        }
-        _ => {
-            tracing::warn!("Unknown tool: {name}");
-            Ok(serde_json::json!({
-                "error": format!("Unknown tool: {name}")
-            }))
-        }
-    }
-}
-

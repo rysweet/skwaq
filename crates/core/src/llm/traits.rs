@@ -7,17 +7,44 @@ pub struct Message {
     pub content: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
+    /// Tool calls made by the assistant. Required by the OpenAI API when
+    /// the next messages are tool-result messages.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ToolCall>>,
 }
 
 impl Message {
     pub fn system(content: &str) -> Self {
-        Self { role: "system".into(), content: content.into(), tool_call_id: None }
+        Self {
+            role: "system".into(),
+            content: content.into(),
+            tool_call_id: None,
+            tool_calls: None,
+        }
     }
     pub fn user(content: &str) -> Self {
-        Self { role: "user".into(), content: content.into(), tool_call_id: None }
+        Self {
+            role: "user".into(),
+            content: content.into(),
+            tool_call_id: None,
+            tool_calls: None,
+        }
     }
     pub fn tool(content: &str, tool_call_id: &str) -> Self {
-        Self { role: "tool".into(), content: content.into(), tool_call_id: Some(tool_call_id.into()) }
+        Self {
+            role: "tool".into(),
+            content: content.into(),
+            tool_call_id: Some(tool_call_id.into()),
+            tool_calls: None,
+        }
+    }
+    pub fn assistant_with_tool_calls(content: Option<String>, calls: Vec<ToolCall>) -> Self {
+        Self {
+            role: "assistant".into(),
+            content: content.unwrap_or_default(),
+            tool_call_id: None,
+            tool_calls: if calls.is_empty() { None } else { Some(calls) },
+        }
     }
 }
 
@@ -125,14 +152,14 @@ where
             return Ok(response.content.unwrap_or_default());
         }
 
-        // Record assistant message
-        messages.push(Message {
-            role: "assistant".into(),
-            content: response.content.clone().unwrap_or_default(),
-            tool_call_id: None,
-        });
+        // Record assistant message with its tool_calls so the API knows
+        // the subsequent tool-role messages are responses to these calls.
+        messages.push(Message::assistant_with_tool_calls(
+            response.content.clone(),
+            response.tool_calls.clone(),
+        ));
 
-        // Execute each tool call
+        // Execute each tool call and add the results
         for call in &response.tool_calls {
             tracing::debug!("Tool call: {} args={}", call.name, call.arguments);
             let result = tool_executor(call.name.clone(), call.arguments.clone()).await?;

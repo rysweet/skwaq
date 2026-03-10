@@ -5,7 +5,7 @@ use tracing_subscriber::EnvFilter;
 
 use skwaq::commands::{Cli, Commands};
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
@@ -46,7 +46,7 @@ async fn main() -> anyhow::Result<()> {
             quick,
             budget,
         } => {
-            skwaq::commands::analyze::run(investigation.as_deref(), *quick, *budget)?;
+            skwaq::commands::analyze::run(investigation.as_deref(), *quick, *budget).await?;
         }
         Commands::Investigate { sub } => {
             skwaq::commands::investigate::run(sub)?;

@@ -4,5 +4,6 @@
 pub mod budget;
 pub mod critic;
 pub mod prompts;
+pub mod tool_executor;
 pub mod tools;
 pub mod vuln_hunter;

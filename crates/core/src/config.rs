@@ -39,10 +39,18 @@ pub struct LlmConfig {
     pub ollama: OllamaConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CopilotConfig {
     #[serde(default = "default_model")]
     pub model: String,
+}
+
+impl Default for CopilotConfig {
+    fn default() -> Self {
+        Self {
+            model: default_model(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,7 +94,7 @@ fn default_cache_path() -> String { ".skwaq/cache".into() }
 fn default_log_level() -> String { "info".into() }
 fn default_llm_backend() -> String { "copilot".into() }
 fn default_ollama() -> String { "ollama".into() }
-fn default_model() -> String { "gpt-4o".into() }
+fn default_model() -> String { "openai/gpt-4o-mini".into() }
 fn default_ollama_host() -> String { "http://localhost:11434".into() }
 fn default_ollama_model() -> String { "llama3.1".into() }
 fn default_embedding_model() -> String { "nomic-embed-text".into() }

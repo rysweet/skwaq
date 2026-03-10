@@ -10,6 +10,9 @@ authors = ["Ryan Sweet <rysweet@microsoft.com>"]
 repository = "https://github.com/rysweet/skwaq"
 
 [workspace.dependencies]
+# RustyClawd agent framework (using main until next version tag)
+rustyclawd-core = { git = "https://github.com/rysweet/RustyClawd", branch = "main" }
+
 # Async
 tokio = { version = "1", features = ["full"] }
 futures = "0.3"
