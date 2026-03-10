@@ -18,8 +18,19 @@ impl<'a> AttackSurfaceAnalyzer<'a> {
 
     /// Enumerate externally-reachable functions and score exposure risk.
     pub fn analyze(&self) -> anyhow::Result<Vec<SurfaceEntry>> {
-        let _ = self.db;
-        todo!("attack surface analysis not yet implemented")
+        // Find functions that are not called by any other function (potential entry points).
+        let mut stmt = self.db.conn().prepare(
+            "SELECT f.name FROM functions f \
+             WHERE f.id NOT IN (SELECT callee_id FROM calls)"
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(SurfaceEntry {
+                function_name: row.get::<_, String>(0)?,
+                entry_type: "uncalled".to_string(),
+                risk_score: 0.5,
+            })
+        })?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
     }
 }
 

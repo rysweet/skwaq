@@ -36,8 +36,12 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # HTTP
 reqwest = { version = "0.12", features = ["json", "stream"] }
 
-# Graph database (LadybugDB)
-kuzu = "0.11"
+# Graph database
+# LadybugDB (lbug crate) and kuzu both have CXX-bridge linking issues
+# in downstream crates as of March 2026. Using SQLite with a graph-like
+# schema as the working backend. Migration to LadybugDB is planned when
+# linking is fixed - the schema is designed for easy Cypher translation.
+rusqlite = { version = "0.31", features = ["bundled"] }
 
 # Binary analysis
 goblin = "0.10"

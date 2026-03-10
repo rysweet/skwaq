@@ -1,4 +1,4 @@
-//! Graph construction helpers for populating the Kùzu database with
+//! Graph construction helpers for populating the SQLite database with
 //! analysis artifacts such as functions, call edges, and extracted strings.
 
 use super::db::GraphDb;
@@ -20,22 +20,23 @@ impl<'a> GraphBuilder<'a> {
         id: &str,
         name: &str,
         address: &str,
-        file: &str,
+        _file: &str,
     ) -> anyhow::Result<()> {
-        let cypher = format!(
-            "CREATE (f:Function {{id: '{id}', name: '{name}', address: '{address}', \
-             file: '{file}', start_line: 0, end_line: 0, decompiled: ''}})"
-        );
-        self.db.mutate(&cypher)
+        self.db.execute(
+            "INSERT OR IGNORE INTO functions (id, name, address, decompiled, confidence) \
+             VALUES (?1, ?2, ?3, '', 0.0)",
+            &[&id, &name, &address],
+        )?;
+        Ok(())
     }
 
     /// Insert a CALLS relationship between two functions.
     pub fn insert_call(&self, caller_id: &str, callee_id: &str) -> anyhow::Result<()> {
-        let cypher = format!(
-            "MATCH (a:Function {{id: '{caller_id}'}}), (b:Function {{id: '{callee_id}'}}) \
-             CREATE (a)-[:CALLS]->(b)"
-        );
-        self.db.mutate(&cypher)
+        self.db.execute(
+            "INSERT OR IGNORE INTO calls (caller_id, callee_id) VALUES (?1, ?2)",
+            &[&caller_id, &callee_id],
+        )?;
+        Ok(())
     }
 
     /// Insert a DataSource node representing an extracted string or input.
@@ -45,10 +46,11 @@ impl<'a> GraphBuilder<'a> {
         name: &str,
         kind: &str,
     ) -> anyhow::Result<()> {
-        let cypher = format!(
-            "CREATE (s:DataSource {{id: '{id}', name: '{name}', kind: '{kind}'}})"
-        );
-        self.db.mutate(&cypher)
+        self.db.execute(
+            "INSERT OR IGNORE INTO data_sources (id, name, source_type) VALUES (?1, ?2, ?3)",
+            &[&id, &name, &kind],
+        )?;
+        Ok(())
     }
 
     /// Insert a DataSink node.
@@ -58,23 +60,25 @@ impl<'a> GraphBuilder<'a> {
         name: &str,
         kind: &str,
     ) -> anyhow::Result<()> {
-        let cypher = format!(
-            "CREATE (s:DataSink {{id: '{id}', name: '{name}', kind: '{kind}'}})"
-        );
-        self.db.mutate(&cypher)
+        self.db.execute(
+            "INSERT OR IGNORE INTO data_sinks (id, name, sink_type) VALUES (?1, ?2, ?3)",
+            &[&id, &name, &kind],
+        )?;
+        Ok(())
     }
 
-    /// Insert a TAINT_FLOW relationship between a source and sink.
+    /// Insert a taint flow relationship between a source and sink.
     pub fn insert_taint_flow(
         &self,
         source_id: &str,
         sink_id: &str,
         path: &str,
     ) -> anyhow::Result<()> {
-        let cypher = format!(
-            "MATCH (src:DataSource {{id: '{source_id}'}}), (snk:DataSink {{id: '{sink_id}'}}) \
-             CREATE (src)-[:TAINT_FLOW {{path: '{path}'}}]->(snk)"
-        );
-        self.db.mutate(&cypher)
+        self.db.execute(
+            "INSERT OR IGNORE INTO taint_flows (source_id, sink_id, path, sanitized) \
+             VALUES (?1, ?2, ?3, 0)",
+            &[&source_id, &sink_id, &path],
+        )?;
+        Ok(())
     }
 }
