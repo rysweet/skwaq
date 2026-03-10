@@ -178,8 +178,7 @@ pub fn generate_markdown_for_investigation(
                 "confidence": row.get::<_, f64>(8)?,
             }))
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     let mut md = String::new();
     md.push_str("# Vulnerability Assessment Report\n\n");
@@ -217,8 +216,7 @@ pub fn generate_markdown_for_investigation(
                 timestamp: row.get(4)?,
             })
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     // Append the generic vulnerability report content
     let findings_report = generate_markdown(&vulns)?;

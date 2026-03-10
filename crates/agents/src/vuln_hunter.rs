@@ -99,7 +99,9 @@ fn build_analysis_prompt(target: &str, db: &GraphDb) -> String {
                 row.get::<_, String>(1)?,
             ))
         }) {
-            let funcs: Vec<(String, String)> = rows.filter_map(|r| r.ok()).collect();
+            let funcs: Vec<(String, String)> = rows
+                        .collect::<Result<Vec<_>, _>>()
+                        .unwrap_or_default();
             if !funcs.is_empty() {
                 parts.push(format!("\n## Functions ({} shown):\n", funcs.len()));
                 for (name, addr) in &funcs {
@@ -123,7 +125,9 @@ fn build_analysis_prompt(target: &str, db: &GraphDb) -> String {
                 row.get::<_, String>(2)?,
             ))
         }) {
-            let flows: Vec<(String, String, String)> = rows.filter_map(|r| r.ok()).collect();
+            let flows: Vec<(String, String, String)> = rows
+                        .collect::<Result<Vec<_>, _>>()
+                        .unwrap_or_default();
             if !flows.is_empty() {
                 parts.push(format!("\n## Unsanitized taint flows ({}):\n", flows.len()));
                 for (src, sink, path) in &flows {
@@ -161,7 +165,9 @@ fn build_analysis_prompt(target: &str, db: &GraphDb) -> String {
                 row.get::<_, String>(1)?,
             ))
         }) {
-            let calls: Vec<(String, String)> = rows.filter_map(|r| r.ok()).collect();
+            let calls: Vec<(String, String)> = rows
+                        .collect::<Result<Vec<_>, _>>()
+                        .unwrap_or_default();
             if !calls.is_empty() {
                 parts.push(format!("\n## Dangerous API calls ({}):\n", calls.len()));
                 for (caller, callee) in &calls {

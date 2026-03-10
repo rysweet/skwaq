@@ -149,6 +149,7 @@ impl GraphDb {
                 description TEXT DEFAULT '',
                 status TEXT DEFAULT 'pending',
                 evidence TEXT DEFAULT '',
+                confidence REAL DEFAULT 0.0,
                 timestamp TEXT DEFAULT '',
                 investigation_id TEXT DEFAULT ''
             );

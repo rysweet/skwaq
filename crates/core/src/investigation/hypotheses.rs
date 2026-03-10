@@ -37,11 +37,16 @@ impl<'a> HypothesisManager<'a> {
     ) -> anyhow::Result<String> {
         let id = Uuid::new_v4().to_string();
         let now = Utc::now().to_rfc3339();
-        let evidence = format!("confidence={}", confidence);
         self.db.execute(
-            "INSERT INTO hypotheses (id, description, status, evidence, timestamp, investigation_id) \
+            "INSERT INTO hypotheses (id, description, status, confidence, timestamp, investigation_id) \
              VALUES (?1, ?2, 'pending', ?3, ?4, ?5)",
-            &[&id.as_str(), &statement, &evidence.as_str(), &now.as_str(), &investigation_id],
+            &[
+                &id.as_str() as &dyn rusqlite::types::ToSql,
+                &statement,
+                &confidence as &dyn rusqlite::types::ToSql,
+                &now.as_str(),
+                &investigation_id,
+            ],
         )?;
         Ok(id)
     }
@@ -53,10 +58,13 @@ impl<'a> HypothesisManager<'a> {
         status: &str,
         confidence: f64,
     ) -> anyhow::Result<()> {
-        let evidence = format!("confidence={}", confidence);
         let rows = self.db.execute(
-            "UPDATE hypotheses SET status = ?1, evidence = ?2 WHERE id = ?3",
-            &[&status, &evidence.as_str(), &hypothesis_id],
+            "UPDATE hypotheses SET status = ?1, confidence = ?2 WHERE id = ?3",
+            &[
+                &status as &dyn rusqlite::types::ToSql,
+                &confidence as &dyn rusqlite::types::ToSql,
+                &hypothesis_id,
+            ],
         )?;
         if rows == 0 {
             anyhow::bail!("hypothesis not found: {}", hypothesis_id);
@@ -67,20 +75,15 @@ impl<'a> HypothesisManager<'a> {
     /// List hypotheses for an investigation.
     pub fn list(&self, investigation_id: &str) -> anyhow::Result<Vec<Hypothesis>> {
         let mut stmt = self.db.conn().prepare(
-            "SELECT id, description, status, evidence, timestamp FROM hypotheses \
+            "SELECT id, description, status, confidence, timestamp FROM hypotheses \
              WHERE investigation_id = ?1 ORDER BY timestamp DESC"
         )?;
         let rows = stmt.query_map([investigation_id], |row| {
-            let evidence: String = row.get(3)?;
-            let confidence = evidence
-                .strip_prefix("confidence=")
-                .and_then(|v| v.parse::<f64>().ok())
-                .unwrap_or(0.0);
             Ok(Hypothesis {
                 id: row.get(0)?,
                 statement: row.get(1)?,
                 status: row.get(2)?,
-                confidence,
+                confidence: row.get(3)?,
                 created_at: row.get(4)?,
             })
         })?;

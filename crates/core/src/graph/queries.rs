@@ -20,7 +20,7 @@ pub fn get_call_graph(db: &GraphDb, investigation_id: &str) -> anyhow::Result<Ve
         "SELECT f1.name, f2.name FROM calls c \
          JOIN functions f1 ON c.caller_id = f1.id \
          JOIN functions f2 ON c.callee_id = f2.id \
-         WHERE f1.investigation_id = ?1"
+         WHERE f1.investigation_id = ?1 AND f2.investigation_id = ?1"
     )?;
     let rows = stmt.query_map([investigation_id], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
@@ -29,15 +29,15 @@ pub fn get_call_graph(db: &GraphDb, investigation_id: &str) -> anyhow::Result<Ve
     Ok(results)
 }
 
-/// Return unsanitized taint flow paths.
-pub fn get_taint_paths(db: &GraphDb) -> anyhow::Result<Vec<(String, String, String)>> {
+/// Return unsanitized taint flow paths for a given investigation.
+pub fn get_taint_paths(db: &GraphDb, investigation_id: &str) -> anyhow::Result<Vec<(String, String, String)>> {
     let mut stmt = db.conn().prepare(
         "SELECT s.name, k.name, tf.path FROM taint_flows tf \
          JOIN data_sources s ON tf.source_id = s.id \
          JOIN data_sinks k ON tf.sink_id = k.id \
-         WHERE tf.sanitized = 0"
+         WHERE tf.sanitized = 0 AND s.investigation_id = ?1"
     )?;
-    let rows = stmt.query_map([], |row| {
+    let rows = stmt.query_map([investigation_id], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
     })?;
     let results = rows.collect::<Result<Vec<_>, rusqlite::Error>>()?;

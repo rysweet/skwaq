@@ -15,8 +15,7 @@ pub fn run(function: &str) -> anyhow::Result<()> {
     )?;
     let callers: Vec<String> = stmt
         .query_map([function, inv_id.as_str()], |row| row.get::<_, String>(0))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     // Find callees of this function
     let mut stmt = db.conn().prepare(
@@ -27,8 +26,7 @@ pub fn run(function: &str) -> anyhow::Result<()> {
     )?;
     let callees: Vec<String> = stmt
         .query_map([function, inv_id.as_str()], |row| row.get::<_, String>(0))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     println!(
         "Cross-references for '{}' (investigation {}):\n",

@@ -284,8 +284,7 @@ pub fn generate_sarif_for_investigation(
                 "confidence": row.get::<_, f64>(8)?,
             }))
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     // Also query the findings table (populated by `analyze --quick`)
     let mut find_stmt = db.conn().prepare(
@@ -314,8 +313,7 @@ pub fn generate_sarif_for_investigation(
                 "rule_id": rule_id,
             }))
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     // Combine vulnerabilities and findings
     let mut all: Vec<Value> = vulns;

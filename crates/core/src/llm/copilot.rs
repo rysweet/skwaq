@@ -158,12 +158,17 @@ impl CopilotClient {
     /// Exchange a GitHub PAT for a Copilot session token.
     async fn exchange_token(&self) -> anyhow::Result<CopilotToken> {
         // Return cached token if still valid
-        if let Ok(guard) = self.token_cache.lock() {
-            if let Some(ref cached) = *guard {
-                let now = chrono::Utc::now().timestamp();
-                if cached.expires_at > now + 60 {
-                    return Ok(cached.clone());
+        match self.token_cache.lock() {
+            Ok(guard) => {
+                if let Some(ref cached) = *guard {
+                    let now = chrono::Utc::now().timestamp();
+                    if cached.expires_at > now + 60 {
+                        return Ok(cached.clone());
+                    }
                 }
+            }
+            Err(e) => {
+                tracing::warn!("Token cache mutex poisoned, proceeding with fresh token exchange: {e}");
             }
         }
 
@@ -197,8 +202,13 @@ impl CopilotClient {
         };
 
         // Cache it
-        if let Ok(mut guard) = self.token_cache.lock() {
-            *guard = Some(copilot_token.clone());
+        match self.token_cache.lock() {
+            Ok(mut guard) => {
+                *guard = Some(copilot_token.clone());
+            }
+            Err(e) => {
+                tracing::warn!("Token cache mutex poisoned, skipping cache update: {e}");
+            }
         }
 
         Ok(copilot_token)

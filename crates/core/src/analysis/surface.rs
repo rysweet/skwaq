@@ -102,7 +102,7 @@ impl<'a> AttackSurfaceAnalyzer<'a> {
                 risk_score: 0.5,
             })
         })?;
-        Ok(rows.filter_map(|r| r.ok()).collect())
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
 }
 

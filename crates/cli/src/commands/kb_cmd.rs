@@ -124,8 +124,7 @@ pub fn run_search(query: &str) -> anyhow::Result<()> {
                 row.get::<_, String>(2)?,
             ))
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     if results.is_empty() {
         println!("No CWE entries matching '{query}'.");

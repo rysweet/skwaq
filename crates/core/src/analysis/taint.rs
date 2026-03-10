@@ -66,7 +66,7 @@ impl<'a> TaintAnalyzer<'a> {
                 sanitized: false,
             })
         })?;
-        Ok(rows.filter_map(|r| r.ok()).collect())
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
 
     /// Use a recursive CTE to trace call chains from functions matching
@@ -81,8 +81,7 @@ impl<'a> TaintAnalyzer<'a> {
             .prepare("SELECT DISTINCT name FROM data_sources")?;
         let sources: Vec<String> = src_stmt
             .query_map([], |row| row.get::<_, String>(0))?
-            .filter_map(|r| r.ok())
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
 
         // Get all data sink function names
         let mut sink_stmt = self
@@ -91,8 +90,7 @@ impl<'a> TaintAnalyzer<'a> {
             .prepare("SELECT DISTINCT name FROM data_sinks")?;
         let sinks: Vec<String> = sink_stmt
             .query_map([], |row| row.get::<_, String>(0))?
-            .filter_map(|r| r.ok())
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
 
         if sources.is_empty() || sinks.is_empty() {
             return Ok(Vec::new());
@@ -109,13 +107,11 @@ impl<'a> TaintAnalyzer<'a> {
                 .prepare("SELECT id FROM functions WHERE name = ?1")?;
             let source_ids: Vec<String> = id_stmt
                 .query_map([source.as_str()], |row| row.get::<_, String>(0))?
-                .filter_map(|r| r.ok())
-                .collect();
+                .collect::<Result<Vec<_>, _>>()?;
 
             for source_id in &source_ids {
                 // Recursive CTE to walk the call graph
-                let sql = format!(
-                    "WITH RECURSIVE call_chain(func_id, func_name, path, depth) AS ( \
+                let sql = "WITH RECURSIVE call_chain(func_id, func_name, path, depth) AS ( \
                          SELECT f.id, f.name, f.name, 0 \
                          FROM functions f WHERE f.id = ?1 \
                          UNION ALL \
@@ -123,13 +119,12 @@ impl<'a> TaintAnalyzer<'a> {
                          FROM calls c \
                          JOIN call_chain cc ON c.caller_id = cc.func_id \
                          JOIN functions f2 ON c.callee_id = f2.id \
-                         WHERE cc.depth < {max_depth} \
+                         WHERE cc.depth < ?2 \
                      ) \
-                     SELECT func_name, path FROM call_chain WHERE depth > 0"
-                );
+                     SELECT func_name, path FROM call_chain WHERE depth > 0";
 
-                let mut cte_stmt = self.db.conn().prepare(&sql)?;
-                let rows = cte_stmt.query_map([source_id.as_str()], |row| {
+                let mut cte_stmt = self.db.conn().prepare(sql)?;
+                let rows = cte_stmt.query_map(rusqlite::params![source_id.as_str(), max_depth], |row| {
                     Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
                 })?;
 

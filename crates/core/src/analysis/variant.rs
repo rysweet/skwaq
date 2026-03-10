@@ -50,7 +50,7 @@ impl<'a> VariantAnalyzer<'a> {
                 description: format!("Shares callee pattern with {}", func_name),
             })
         })?;
-        Ok(rows.filter_map(|r| r.ok()).collect())
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
 }
 

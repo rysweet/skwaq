@@ -1,10 +1,11 @@
 //! Shared helpers used by multiple command modules.
 
+use skwaq_core::config::Config;
 use skwaq_core::graph::GraphDb;
 
-/// Open the graph database from `.skwaq/graph/` under the current directory.
+/// Open the graph database using the configured database path.
 pub fn open_db() -> anyhow::Result<GraphDb> {
-    let db_dir = std::env::current_dir()?.join(".skwaq").join("graph");
+    let db_dir = Config::load()?.database_path();
     if !db_dir.join("skwaq.db").exists() {
         anyhow::bail!("No database found. Run `skwaq ingest binary <path>` first.");
     }
@@ -20,8 +21,13 @@ pub fn most_recent_investigation(db: &GraphDb) -> anyhow::Result<String> {
             [],
             |row| row.get(0),
         )
-        .map_err(|_| {
-            anyhow::anyhow!("No investigations found. Run `skwaq ingest binary <path>` first.")
+        .map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("Query returned no rows") {
+                anyhow::anyhow!("No investigations found. Run `skwaq ingest binary <path>` first.")
+            } else {
+                anyhow::anyhow!("Failed to query investigations: {e}")
+            }
         })?;
     Ok(id)
 }

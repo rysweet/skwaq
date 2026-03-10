@@ -84,8 +84,7 @@ pub fn generate_report_for_investigation(
                 investigation_id: row.get(9)?,
             })
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     // Query findings
     let mut find_stmt = db.conn().prepare(
@@ -104,8 +103,7 @@ pub fn generate_report_for_investigation(
                 investigation_id: row.get(5)?,
             })
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     let report = JsonReport {
         investigation_id: investigation_id.to_string(),

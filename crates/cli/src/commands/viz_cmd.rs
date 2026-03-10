@@ -22,8 +22,7 @@ pub fn run_findings() -> anyhow::Result<()> {
                 row.get::<_, String>(3)?,
             ))
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     if findings.is_empty() {
         println!("No findings for investigation {inv_id}.");
@@ -40,13 +39,13 @@ pub fn run_findings() -> anyhow::Result<()> {
 
     for (id, title, agent, evidence) in &findings {
         let short_id = if id.len() > 8 { &id[..8] } else { id };
-        let short_title = if title.len() > 38 {
-            format!("{}...", &title[..35])
+        let short_title = if title.chars().count() > 38 {
+            format!("{}...", title.chars().take(35).collect::<String>())
         } else {
             title.clone()
         };
-        let short_evidence = if evidence.len() > 40 {
-            format!("{}...", &evidence[..37])
+        let short_evidence = if evidence.chars().count() > 40 {
+            format!("{}...", evidence.chars().take(37).collect::<String>())
         } else {
             evidence.clone()
         };
@@ -76,8 +75,7 @@ pub fn run_callgraph(root_filter: Option<&str>) -> anyhow::Result<()> {
         .query_map([inv_id.as_str()], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     if edges.is_empty() {
         println!("No call graph data for investigation {inv_id}.");
@@ -99,7 +97,7 @@ pub fn run_callgraph(root_filter: Option<&str>) -> anyhow::Result<()> {
     // Dangerous function names for marking with [!]
     let dangerous: HashSet<&str> = [
         "strcpy", "strcat", "gets", "sprintf", "system", "popen", "exec", "execve", "execvp",
-        "memcpy", "scanf", "gets",
+        "memcpy", "scanf",
     ]
     .iter()
     .copied()

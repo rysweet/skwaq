@@ -1,17 +1,23 @@
 //! `skwaq investigate` - investigation management.
 
+use super::common::open_db;
 use super::InvestigateSub;
-use skwaq_core::graph::db::GraphDb;
 use skwaq_core::graph::queries::get_investigations;
-use std::path::PathBuf;
+use skwaq_core::investigation::InvestigationManager;
 
 pub fn run(sub: &InvestigateSub) -> anyhow::Result<()> {
     match sub {
         InvestigateSub::New { name } => {
-            anyhow::bail!("Investigation creation not yet implemented. Name: {name}");
+            let db = open_db()?;
+            let mgr = InvestigationManager::new(&db);
+            let id = mgr.create(name)?;
+            println!("Created investigation '{name}' with ID: {id}");
         }
         InvestigateSub::Resume { id } => {
-            anyhow::bail!("Investigation resume not yet implemented. ID: {id}");
+            let db = open_db()?;
+            let mgr = InvestigationManager::new(&db);
+            mgr.resume(id)?;
+            println!("Resumed investigation {id}.");
         }
         InvestigateSub::List => {
             list_investigations()?;
@@ -28,13 +34,7 @@ pub fn run(sub: &InvestigateSub) -> anyhow::Result<()> {
 }
 
 fn list_investigations() -> anyhow::Result<()> {
-    let db_dir = graph_db_path()?;
-    if !db_dir.join("skwaq.db").exists() {
-        println!("No investigations found. Run `skwaq ingest binary <path>` first.");
-        return Ok(());
-    }
-
-    let db = GraphDb::open(&db_dir)?;
+    let db = open_db()?;
     let investigations = get_investigations(&db)?;
 
     if investigations.is_empty() {
@@ -56,9 +56,4 @@ fn list_investigations() -> anyhow::Result<()> {
     println!("\n{} investigation(s) found.", investigations.len());
 
     Ok(())
-}
-
-fn graph_db_path() -> anyhow::Result<PathBuf> {
-    let dir = std::env::current_dir()?.join(".skwaq").join("graph");
-    Ok(dir)
 }

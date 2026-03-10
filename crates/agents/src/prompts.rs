@@ -22,22 +22,22 @@ pub fn load_prompt(name: &str, bundled_default: &str) -> String {
     }
 
     // Then try ~/.skwaq/prompts/
-    let home_path = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".skwaq")
-        .join("prompts")
-        .join(format!("{name}.md"));
-    match std::fs::read_to_string(&home_path) {
-        Ok(content) => {
+    if let Some(home) = dirs::home_dir() {
+        let home_path = home
+            .join(".skwaq")
+            .join("prompts")
+            .join(format!("{name}.md"));
+        if let Ok(content) = std::fs::read_to_string(&home_path) {
             tracing::info!("Loaded custom prompt from {}", home_path.display());
-            content
+            return content;
         }
-        Err(_) => {
-            tracing::debug!(
-                "No custom prompt at {}, using bundled default",
-                home_path.display()
-            );
-            bundled_default.to_string()
-        }
+        tracing::debug!(
+            "No custom prompt at {}, using bundled default",
+            home_path.display()
+        );
+    } else {
+        tracing::debug!("Could not determine home directory, skipping home prompt check");
     }
+
+    bundled_default.to_string()
 }

@@ -20,8 +20,7 @@ pub fn run(source_filter: Option<&str>, sink_filter: Option<&str>) -> anyhow::Re
                 row.get::<_, i64>(3)? != 0,
             ))
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     if flows.is_empty() {
         println!("No taint flows found.");

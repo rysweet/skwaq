@@ -21,8 +21,7 @@ pub fn run() -> anyhow::Result<()> {
                 row.get::<_, String>(2)?,
             ))
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     if sources.is_empty() {
         println!("  No data sources (entry points) found.");
@@ -51,8 +50,7 @@ pub fn run() -> anyhow::Result<()> {
                 row.get::<_, String>(3)?,
             ))
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     if sinks.is_empty() {
         println!("  No data sinks (dangerous functions) found.");
