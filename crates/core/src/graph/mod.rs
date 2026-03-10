@@ -8,6 +8,6 @@ pub mod db;
 pub mod queries;
 pub mod types;
 
-pub use builder::{GraphBuilder, InsertCounts};
+pub use builder::{GraphBuilder, InsertCounts, SourceInsertCounts};
 pub use db::GraphDb;
 pub use types::{NodeLabel, RelationshipType};

@@ -116,7 +116,12 @@ impl GraphDb {
                 evidence TEXT DEFAULT '',
                 agent TEXT DEFAULT '',
                 timestamp TEXT DEFAULT '',
-                investigation_id TEXT DEFAULT ''
+                investigation_id TEXT DEFAULT '',
+                status TEXT DEFAULT 'new',
+                cycle_discovered INTEGER DEFAULT 1,
+                cycle_last_updated INTEGER DEFAULT 1,
+                severity TEXT DEFAULT '',
+                category TEXT DEFAULT ''
             );
 
             CREATE TABLE IF NOT EXISTS cwes (

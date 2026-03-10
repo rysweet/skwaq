@@ -1,9 +1,8 @@
 //! `skwaq analyze` - vulnerability analysis command.
 
-use skwaq_core::analysis::{DangerousApiDetector, TaintAnalyzer};
+use skwaq_core::analysis::{AnalysisOrchestrator, FindingStatus};
 use skwaq_core::config::Config;
 use skwaq_core::graph::GraphDb;
-use uuid::Uuid;
 
 pub fn run(investigation_id: Option<&str>, quick: bool, budget: Option<u64>) -> anyhow::Result<()> {
     if !quick {
@@ -17,7 +16,7 @@ pub fn run(investigation_id: Option<&str>, quick: bool, budget: Option<u64>) -> 
         return Ok(());
     }
 
-    println!("Running quick analysis (pattern detection + taint analysis)...\n");
+    println!("Running multi-cycle analysis...\n");
 
     let config = Config::load()?;
     let db_path = config.database_path();
@@ -58,92 +57,122 @@ pub fn run(investigation_id: Option<&str>, quick: bool, budget: Option<u64>) -> 
         }
     };
 
-    let now = chrono::Utc::now().to_rfc3339();
+    let max_cycles = 5;
+    let orchestrator = AnalysisOrchestrator::new(&db, max_cycles);
+    let cycles = orchestrator.run_quick_analysis(&inv_id)?;
 
-    // Phase 1: Dangerous API detection
-    println!("Phase 1: Dangerous API detection");
-    let detector = DangerousApiDetector::new();
-    let api_hits = detector.detect(&db)?;
+    // Display cycle-by-cycle progress
+    for cycle in &cycles {
+        let label = match cycle.cycle_number {
+            1 => "Pattern Detection + Taint Analysis",
+            2 => "Data Flow Validation",
+            _ => "Context Analysis",
+        };
+        println!("Cycle {}: {}", cycle.cycle_number, label);
 
-    if api_hits.is_empty() {
-        println!("  No dangerous API usage detected.\n");
-    } else {
-        println!("  Found {} dangerous API usage(s):\n", api_hits.len());
+        if cycle.cycle_number == 1 {
+            println!("  Found {} potential issues\n", cycle.new_findings);
+        } else {
+            let confirmed = cycle
+                .findings
+                .iter()
+                .filter(|f| f.status == FindingStatus::Confirmed)
+                .count();
+            let challenged = cycle
+                .findings
+                .iter()
+                .filter(|f| f.status == FindingStatus::Challenged)
+                .count();
+            let invalidated = cycle
+                .findings
+                .iter()
+                .filter(|f| f.status == FindingStatus::Invalidated)
+                .count();
+
+            let mut parts = Vec::new();
+            if confirmed > 0 {
+                parts.push(format!("confirmed {}", confirmed));
+            }
+            if challenged > 0 {
+                parts.push(format!("challenged {}", challenged));
+            }
+            if invalidated > 0 {
+                parts.push(format!("invalidated {}", invalidated));
+            }
+            if cycle.new_findings > 0 {
+                parts.push(format!("{} new findings", cycle.new_findings));
+            }
+            if parts.is_empty() {
+                parts.push("no changes".to_string());
+            }
+            println!("  {}\n", parts.join(", "));
+        }
+    }
+
+    // Summary
+    let total_cycles = cycles.len();
+    if let Some(last) = cycles.last() {
+        let confirmed = last
+            .findings
+            .iter()
+            .filter(|f| f.status == FindingStatus::Confirmed)
+            .count();
+        let invalidated = last
+            .findings
+            .iter()
+            .filter(|f| f.status == FindingStatus::Invalidated)
+            .count();
+        let still_new = last
+            .findings
+            .iter()
+            .filter(|f| f.status == FindingStatus::New)
+            .count();
+        let active = confirmed + still_new;
+
+        println!("Analysis converged after {} cycle(s).", total_cycles);
         println!(
-            "  {:<25} {:<15} {:<10} {}",
-            "FUNCTION", "CATEGORY", "SEVERITY", "REASON"
+            "Final: {} confirmed finding(s), {} invalidated (false positives filtered)",
+            active, invalidated
         );
-        println!("  {}", "-".repeat(85));
-        for hit in &api_hits {
-            println!(
-                "  {:<25} {:<15} {:<10} {}",
-                hit.function_name, hit.danger_category, hit.severity, hit.reason
-            );
-        }
-        println!();
 
-        for hit in &api_hits {
-            let finding_id = Uuid::new_v4().to_string();
-            db.execute(
-                "INSERT INTO findings (id, title, evidence, agent, timestamp, investigation_id) \
-                 VALUES (?1, ?2, ?3, 'pattern-detector', ?4, ?5)",
-                &[
-                    &finding_id.as_str(),
-                    &format!("Dangerous API: {}", hit.function_name).as_str(),
-                    &format!(
-                        "category={}, severity={}, reason={}",
-                        hit.danger_category, hit.severity, hit.reason
-                    )
-                    .as_str(),
-                    &now.as_str(),
-                    &inv_id.as_str(),
-                ],
-            )?;
+        // Show detailed findings
+        let active_findings: Vec<_> = last
+            .findings
+            .iter()
+            .filter(|f| f.status != FindingStatus::Invalidated)
+            .collect();
+
+        if !active_findings.is_empty() {
+            println!();
+            println!(
+                "  {:<35} {:<15} {:<10} {}",
+                "FINDING", "CATEGORY", "SEVERITY", "STATUS"
+            );
+            println!("  {}", "-".repeat(85));
+            for finding in &active_findings {
+                println!(
+                    "  {:<35} {:<15} {:<10} {}",
+                    truncate(&finding.title, 35),
+                    finding.category,
+                    finding.severity,
+                    finding.status,
+                );
+            }
+            println!();
         }
     }
 
-    // Phase 2: Taint analysis
-    println!("Phase 2: Taint analysis");
-    let max_depth = config.analysis.max_taint_depth;
-    let taint = TaintAnalyzer::new(&db, max_depth);
-    let taint_paths = taint.find_unsanitized_paths()?;
-
-    if taint_paths.is_empty() {
-        println!("  No unsanitized taint paths detected.\n");
-    } else {
-        println!("  Found {} unsanitized taint path(s):\n", taint_paths.len());
-        println!("  {:<20} {:<20} {}", "SOURCE", "SINK", "PATH");
-        println!("  {}", "-".repeat(70));
-        for tp in &taint_paths {
-            println!(
-                "  {:<20} {:<20} {}",
-                tp.source,
-                tp.sink,
-                tp.hops.join(" -> ")
-            );
-        }
-        println!();
-
-        for tp in &taint_paths {
-            let finding_id = Uuid::new_v4().to_string();
-            db.execute(
-                "INSERT INTO findings (id, title, evidence, agent, timestamp, investigation_id) \
-                 VALUES (?1, ?2, ?3, 'taint-analyzer', ?4, ?5)",
-                &[
-                    &finding_id.as_str(),
-                    &format!("Unsanitized flow: {} -> {}", tp.source, tp.sink).as_str(),
-                    &format!("path: {}", tp.hops.join(" -> ")).as_str(),
-                    &now.as_str(),
-                    &inv_id.as_str(),
-                ],
-            )?;
-        }
-    }
-
-    let total = api_hits.len() + taint_paths.len();
-    println!("Analysis complete: {} finding(s) stored.", total);
     println!("Investigation: {inv_id}");
     println!("Run `skwaq report {inv_id} --json` to export results.");
 
     Ok(())
+}
+
+/// Truncate a string to fit in a column width.
+fn truncate(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max - 3])
+    }
 }

@@ -2,4 +2,7 @@
 
 pub mod parser;
 
-pub use parser::{detect_language, parse_file, ParsedFile, ParsedFunction};
+pub use parser::{
+    detect_language, is_source_file, parse_file, parse_source, ExtractedCall, ExtractedFunction,
+    ExtractedString, ParsedFile, ParsedFunction, ParsedSource, SOURCE_EXTENSIONS,
+};
