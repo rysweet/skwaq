@@ -1,0 +1,57 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/agents", "crates/cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["Ryan Sweet <rysweet@microsoft.com>"]
+repository = "https://github.com/rysweet/skwaq"
+
+[workspace.dependencies]
+# Async
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+async-trait = "0.1"
+
+# CLI + TUI
+clap = { version = "4", features = ["derive", "cargo"] }
+ratatui = "0.29"
+crossterm = "0.29"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# HTTP
+reqwest = { version = "0.12", features = ["json", "stream"] }
+
+# Graph database (LadybugDB)
+kuzu = "0.11"
+
+# Binary analysis
+goblin = "0.10"
+
+# Utilities
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+sha2 = "0.10"
+tempfile = "3"
+shellexpand = "3"
+dirs = "6"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
