@@ -155,7 +155,7 @@ pub fn generate_sarif(findings: &[Value]) -> anyhow::Result<String> {
             .unwrap_or(0.0);
 
         let rule_id = if cwe_id.is_empty() || cwe_id == "CWE-0" {
-            title.replace(' ', "-").to_lowercase()
+            title_to_rule_id(title)
         } else {
             cwe_id.to_string()
         };
@@ -226,6 +226,38 @@ pub fn generate_sarif(findings: &[Value]) -> anyhow::Result<String> {
     serde_json::to_string_pretty(&doc).map_err(Into::into)
 }
 
+/// Parse a severity string from finding evidence text.
+///
+/// Looks for patterns like "severity=critical" or "severity=high" in the
+/// evidence string. Falls back to "medium" if no severity is found.
+fn parse_severity_from_evidence(evidence: &str) -> &str {
+    let lower = evidence.to_lowercase();
+    if lower.contains("severity=critical") || lower.contains("critical") {
+        "critical"
+    } else if lower.contains("severity=high") || lower.contains("high") {
+        "high"
+    } else if lower.contains("severity=low") || lower.contains("low") {
+        "low"
+    } else if lower.contains("severity=info") || lower.contains("informational") {
+        "info"
+    } else {
+        "medium"
+    }
+}
+
+/// Convert a finding title to a SARIF-style rule ID (e.g. "Dangerous API - system" -> "dangerous-api-system").
+fn title_to_rule_id(title: &str) -> String {
+    title
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
 /// Generate a SARIF report for a given investigation from the graph DB.
 pub fn generate_sarif_for_investigation(
     db: &GraphDb,
@@ -255,7 +287,41 @@ pub fn generate_sarif_for_investigation(
         .filter_map(|r| r.ok())
         .collect();
 
-    generate_sarif(&vulns)
+    // Also query the findings table (populated by `analyze --quick`)
+    let mut find_stmt = db.conn().prepare(
+        "SELECT id, title, evidence, agent, timestamp \
+         FROM findings WHERE investigation_id = ?1 \
+         ORDER BY timestamp DESC",
+    )?;
+
+    let findings_as_values: Vec<Value> = find_stmt
+        .query_map([investigation_id], |row| {
+            let title: String = row.get(1)?;
+            let evidence: String = row.get(2)?;
+            let agent: String = row.get(3)?;
+            let severity = parse_severity_from_evidence(&evidence);
+            let rule_id = title_to_rule_id(&title);
+            Ok(serde_json::json!({
+                "id": row.get::<_, String>(0)?,
+                "title": title,
+                "description": evidence,
+                "severity": severity,
+                "cvss": 0.0,
+                "cwe_id": "",
+                "function_id": agent,
+                "evidence": evidence,
+                "confidence": 0.5,
+                "rule_id": rule_id,
+            }))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    // Combine vulnerabilities and findings
+    let mut all: Vec<Value> = vulns;
+    all.extend(findings_as_values);
+
+    generate_sarif(&all)
 }
 
 #[cfg(test)]
@@ -384,5 +450,99 @@ mod tests {
         let results = doc["runs"][0]["results"].as_array().unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0]["ruleId"], "CWE-122");
+    }
+
+    #[test]
+    fn test_sarif_includes_findings_table() {
+        let db = GraphDb::in_memory().unwrap();
+        db.execute(
+            "INSERT INTO investigations (id, name, status, created_at) VALUES (?1, ?2, ?3, ?4)",
+            &[&"inv2", &"Quick Analysis", &"active", &"2026-03-10"],
+        )
+        .unwrap();
+
+        // Insert a finding (from analyze --quick)
+        db.execute(
+            "INSERT INTO findings (id, title, evidence, agent, timestamp, investigation_id) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            &[
+                &"f1",
+                &"Dangerous API - system",
+                &"Call to system() with user input; severity=critical",
+                &"quick-analyzer",
+                &"2026-03-10T12:00:00Z",
+                &"inv2",
+            ],
+        )
+        .unwrap();
+
+        let result = generate_sarif_for_investigation(&db, "inv2").unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&result).unwrap();
+        let results = doc["runs"][0]["results"].as_array().unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0]["ruleId"], "dangerous-api-system");
+        assert_eq!(results[0]["level"], "error"); // critical -> error
+    }
+
+    #[test]
+    fn test_sarif_combines_vulns_and_findings() {
+        let db = GraphDb::in_memory().unwrap();
+        db.execute(
+            "INSERT INTO investigations (id, name, status, created_at) VALUES (?1, ?2, ?3, ?4)",
+            &[&"inv3", &"Combined", &"active", &"2026-03-10"],
+        )
+        .unwrap();
+
+        db.execute(
+            "INSERT INTO vulnerabilities (id, title, description, severity, cvss, cwe_id, function_id, evidence, confidence, investigation_id) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            &[
+                &"v1" as &dyn rusqlite::types::ToSql,
+                &"Buffer overflow",
+                &"Heap overflow",
+                &"high",
+                &8.0_f64 as &dyn rusqlite::types::ToSql,
+                &"CWE-122",
+                &"parse_header",
+                &"evidence",
+                &0.9_f64 as &dyn rusqlite::types::ToSql,
+                &"inv3",
+            ],
+        )
+        .unwrap();
+
+        db.execute(
+            "INSERT INTO findings (id, title, evidence, agent, timestamp, investigation_id) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            &[
+                &"f1",
+                &"Format string bug",
+                &"printf with user input; severity=high",
+                &"quick-analyzer",
+                &"2026-03-10T12:00:00Z",
+                &"inv3",
+            ],
+        )
+        .unwrap();
+
+        let result = generate_sarif_for_investigation(&db, "inv3").unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&result).unwrap();
+        let results = doc["runs"][0]["results"].as_array().unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_title_to_rule_id() {
+        assert_eq!(title_to_rule_id("Dangerous API - system"), "dangerous-api-system");
+        assert_eq!(title_to_rule_id("Buffer Overflow"), "buffer-overflow");
+        assert_eq!(title_to_rule_id("simple"), "simple");
+    }
+
+    #[test]
+    fn test_parse_severity_from_evidence() {
+        assert_eq!(parse_severity_from_evidence("severity=critical something"), "critical");
+        assert_eq!(parse_severity_from_evidence("severity=high"), "high");
+        assert_eq!(parse_severity_from_evidence("severity=low minor"), "low");
+        assert_eq!(parse_severity_from_evidence("no severity marker"), "medium");
     }
 }

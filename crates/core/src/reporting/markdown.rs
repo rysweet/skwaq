@@ -192,13 +192,77 @@ pub fn generate_markdown_for_investigation(
     md.push_str(&format!("| Functions analyzed | {func_count} |\n"));
     md.push_str(&format!("| Investigation ID | `{investigation_id}` |\n\n"));
 
-    // Append the generic report content
+    // Query the findings table (populated by `analyze --quick`)
+    let mut find_stmt = db.conn().prepare(
+        "SELECT id, title, evidence, agent, timestamp \
+         FROM findings WHERE investigation_id = ?1 \
+         ORDER BY timestamp DESC",
+    )?;
+
+    struct FindingRow {
+        id: String,
+        title: String,
+        evidence: String,
+        agent: String,
+        timestamp: String,
+    }
+
+    let findings_rows: Vec<FindingRow> = find_stmt
+        .query_map([investigation_id], |row| {
+            Ok(FindingRow {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                evidence: row.get(2)?,
+                agent: row.get(3)?,
+                timestamp: row.get(4)?,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    // Append the generic vulnerability report content
     let findings_report = generate_markdown(&vulns)?;
     // Skip the title line from the generic report since we already have one
     if let Some(pos) = findings_report.find("## Summary") {
         md.push_str(&findings_report[pos..]);
     } else {
         md.push_str(&findings_report);
+    }
+
+    // Append findings section if there are any
+    if !findings_rows.is_empty() {
+        md.push_str("## Quick Analysis Findings\n\n");
+        md.push_str(&format!(
+            "The quick analysis produced **{}** finding(s).\n\n",
+            findings_rows.len()
+        ));
+        md.push_str("| # | Title | Agent | Timestamp |\n");
+        md.push_str("| --- | --- | --- | --- |\n");
+
+        for (i, f) in findings_rows.iter().enumerate() {
+            md.push_str(&format!(
+                "| {} | {} | {} | {} |\n",
+                i + 1,
+                f.title,
+                f.agent,
+                f.timestamp,
+            ));
+        }
+        md.push('\n');
+
+        // Detailed findings
+        md.push_str("### Finding Details\n\n");
+        for (i, f) in findings_rows.iter().enumerate() {
+            md.push_str(&format!("#### {}. {}\n\n", i + 1, f.title));
+            md.push_str(&format!("- **Agent**: {}\n", f.agent));
+            md.push_str(&format!("- **Timestamp**: {}\n", f.timestamp));
+            md.push_str(&format!("- **ID**: `{}`\n\n", f.id));
+            if !f.evidence.is_empty() {
+                md.push_str("**Evidence**:\n\n");
+                md.push_str(&format!("```\n{}\n```\n\n", f.evidence));
+            }
+            md.push_str("---\n\n");
+        }
     }
 
     Ok(md)
@@ -355,5 +419,85 @@ mod tests {
         assert!(md.contains("Test"));
         assert!(md.contains("`/usr/bin/test`"));
         assert!(md.contains("Test vuln"));
+    }
+
+    #[test]
+    fn test_markdown_includes_findings_table() {
+        let db = GraphDb::in_memory().unwrap();
+        db.execute(
+            "INSERT INTO investigations (id, name, target, status, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            &[&"inv2", &"Quick Test", &"/usr/bin/quick", &"active", &"2026-03-10"],
+        )
+        .unwrap();
+
+        db.execute(
+            "INSERT INTO findings (id, title, evidence, agent, timestamp, investigation_id) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            &[
+                &"f1",
+                &"Dangerous API - system",
+                &"Call to system() with user input",
+                &"quick-analyzer",
+                &"2026-03-10T12:00:00Z",
+                &"inv2",
+            ],
+        )
+        .unwrap();
+
+        let md = generate_markdown_for_investigation(&db, "inv2").unwrap();
+        assert!(md.contains("Quick Analysis Findings"));
+        assert!(md.contains("Dangerous API - system"));
+        assert!(md.contains("quick-analyzer"));
+        assert!(md.contains("Call to system() with user input"));
+    }
+
+    #[test]
+    fn test_markdown_combines_vulns_and_findings() {
+        let db = GraphDb::in_memory().unwrap();
+        db.execute(
+            "INSERT INTO investigations (id, name, target, status, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            &[&"inv3", &"Combined", &"/usr/bin/combo", &"active", &"2026-03-10"],
+        )
+        .unwrap();
+
+        db.execute(
+            "INSERT INTO vulnerabilities (id, title, description, severity, cvss, cwe_id, function_id, evidence, confidence, investigation_id) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            &[
+                &"v1" as &dyn rusqlite::types::ToSql,
+                &"Buffer overflow",
+                &"Heap overflow",
+                &"high",
+                &8.0_f64 as &dyn rusqlite::types::ToSql,
+                &"CWE-787",
+                &"main",
+                &"evidence",
+                &0.80_f64 as &dyn rusqlite::types::ToSql,
+                &"inv3",
+            ],
+        )
+        .unwrap();
+
+        db.execute(
+            "INSERT INTO findings (id, title, evidence, agent, timestamp, investigation_id) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            &[
+                &"f1",
+                &"Format string bug",
+                &"printf with user input",
+                &"quick-analyzer",
+                &"2026-03-10T12:00:00Z",
+                &"inv3",
+            ],
+        )
+        .unwrap();
+
+        let md = generate_markdown_for_investigation(&db, "inv3").unwrap();
+        // Should contain both vulnerability and finding
+        assert!(md.contains("Buffer overflow"));
+        assert!(md.contains("Format string bug"));
+        assert!(md.contains("Quick Analysis Findings"));
     }
 }
