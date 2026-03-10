@@ -58,8 +58,13 @@ impl VulnHunterAgent {
     ///
     /// Builds context from the graph database (functions, imports, taint paths)
     /// and drives the LLM tool loop until completion or budget exhaustion.
-    pub async fn analyze(&mut self, target: &str, db: &GraphDb) -> anyhow::Result<String> {
-        let user_prompt = build_analysis_prompt(target, db);
+    pub async fn analyze(
+        &mut self,
+        target: &str,
+        investigation_id: &str,
+        db: &GraphDb,
+    ) -> anyhow::Result<String> {
+        let user_prompt = build_analysis_prompt(target, investigation_id, db);
         let tools = agent_tools();
 
         let result = execute_with_tools(
@@ -83,7 +88,7 @@ impl VulnHunterAgent {
 }
 
 /// Build the initial user prompt with context from the graph database.
-fn build_analysis_prompt(target: &str, db: &GraphDb) -> String {
+fn build_analysis_prompt(target: &str, investigation_id: &str, db: &GraphDb) -> String {
     let mut parts = vec![format!(
         "Analyze the binary target: {target}\n\nHere is what we know from the graph database:\n"
     )];
@@ -91,9 +96,9 @@ fn build_analysis_prompt(target: &str, db: &GraphDb) -> String {
     // Summarize functions
     if let Ok(mut stmt) =
         db.conn()
-            .prepare("SELECT name, address FROM functions ORDER BY name LIMIT 50")
+            .prepare("SELECT name, address FROM functions WHERE investigation_id = ?1 ORDER BY name LIMIT 50")
     {
-        if let Ok(rows) = stmt.query_map([], |row| {
+        if let Ok(rows) = stmt.query_map([investigation_id], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
@@ -116,9 +121,9 @@ fn build_analysis_prompt(target: &str, db: &GraphDb) -> String {
         "SELECT s.name, k.name, tf.path FROM taint_flows tf \
          JOIN data_sources s ON tf.source_id = s.id \
          JOIN data_sinks k ON tf.sink_id = k.id \
-         WHERE tf.sanitized = 0 LIMIT 20",
+         WHERE tf.sanitized = 0 AND s.investigation_id = ?1 LIMIT 20",
     ) {
-        if let Ok(rows) = stmt.query_map([], |row| {
+        if let Ok(rows) = stmt.query_map([investigation_id], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
@@ -146,17 +151,19 @@ fn build_analysis_prompt(target: &str, db: &GraphDb) -> String {
         .map(|i| format!("?{}", i + 1))
         .collect::<Vec<_>>()
         .join(", ");
+    let inv_param = format!("?{}", dangerous.len() + 1);
     let sql = format!(
         "SELECT f1.name, f2.name FROM calls c \
          JOIN functions f1 ON c.caller_id = f1.id \
          JOIN functions f2 ON c.callee_id = f2.id \
-         WHERE f2.name IN ({param_placeholders}) LIMIT 30"
+         WHERE f2.name IN ({param_placeholders}) AND f1.investigation_id = {inv_param} LIMIT 30"
     );
     if let Ok(mut stmt) = db.conn().prepare(&sql) {
-        let params: Vec<Box<dyn rusqlite::types::ToSql>> = dangerous
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = dangerous
             .iter()
             .map(|n| Box::new(n.to_string()) as Box<dyn rusqlite::types::ToSql>)
             .collect();
+        params.push(Box::new(investigation_id.to_string()) as Box<dyn rusqlite::types::ToSql>);
         let params_refs: Vec<&dyn rusqlite::types::ToSql> =
             params.iter().map(|p| p.as_ref()).collect();
         if let Ok(rows) = stmt.query_map(params_refs.as_slice(), |row| {
@@ -204,9 +211,9 @@ async fn execute_tool(
             tracing::info!("Tool query_graph: {cypher}");
             Ok(serde_json::json!({
                 "status": "ok",
+                "warning": "Tool not connected to live database in current agent context",
                 "query": cypher,
-                "rows": [],
-                "note": "Graph query executed (no live DB in this context)"
+                "rows": []
             }))
         }
         "read_function" => {
@@ -217,6 +224,7 @@ async fn execute_tool(
             tracing::info!("Tool read_function: {func}");
             Ok(serde_json::json!({
                 "status": "ok",
+                "warning": "Tool not connected to live database in current agent context",
                 "function": func,
                 "decompiled": format!("// Decompiled code for {func} not available in this context")
             }))
@@ -229,6 +237,7 @@ async fn execute_tool(
             tracing::info!("Tool {name}: {func}");
             Ok(serde_json::json!({
                 "status": "ok",
+                "warning": "Tool not connected to live database in current agent context",
                 "function": func,
                 "results": []
             }))
@@ -241,6 +250,7 @@ async fn execute_tool(
             tracing::info!("Tool lookup_cwe: {cwe_id}");
             Ok(serde_json::json!({
                 "status": "ok",
+                "warning": "Tool not connected to live database in current agent context",
                 "cwe_id": cwe_id,
                 "name": format!("CWE entry for {cwe_id}"),
                 "description": "See https://cwe.mitre.org for details."
@@ -258,7 +268,8 @@ async fn execute_tool(
             tracing::info!("Tool create_finding: {title} [{severity}]");
             let finding_id = uuid::Uuid::new_v4().to_string();
             Ok(serde_json::json!({
-                "status": "created",
+                "status": "ok",
+                "warning": "Tool not connected to live database in current agent context",
                 "finding_id": finding_id,
                 "title": title,
                 "severity": severity
@@ -272,6 +283,7 @@ async fn execute_tool(
             tracing::info!("Tool search_similar: {}...", &code[..code.len().min(40)]);
             Ok(serde_json::json!({
                 "status": "ok",
+                "warning": "Tool not connected to live database in current agent context",
                 "results": []
             }))
         }

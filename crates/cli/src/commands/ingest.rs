@@ -3,6 +3,7 @@
 use super::IngestSub;
 use skwaq_core::analysis::surface::identify_attack_surface;
 use skwaq_core::binary::native::parse_binary;
+use skwaq_core::config::Config;
 use skwaq_core::graph::builder::GraphBuilder;
 use skwaq_core::graph::db::GraphDb;
 use std::path::PathBuf;
@@ -48,8 +49,8 @@ fn ingest_binary(path: &PathBuf) -> anyhow::Result<()> {
     // 4. Generate investigation ID.
     let inv_id = format!("inv-{}", &uuid::Uuid::new_v4().to_string()[..8]);
 
-    // 5. Open graph DB.
-    let db_dir = graph_db_path()?;
+    // 5. Open graph DB via Config (creates directory if needed).
+    let db_dir = Config::load()?.database_path();
     let db = GraphDb::open(&db_dir)?;
 
     // 6. Create investigation record.
@@ -100,10 +101,4 @@ fn ingest_binary(path: &PathBuf) -> anyhow::Result<()> {
     println!("Ready. Run: skwaq analyze --investigation {}", inv_id);
 
     Ok(())
-}
-
-/// Return the default graph DB directory: `.skwaq/graph/` under current dir.
-fn graph_db_path() -> anyhow::Result<PathBuf> {
-    let dir = std::env::current_dir()?.join(".skwaq").join("graph");
-    Ok(dir)
 }

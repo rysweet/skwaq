@@ -101,6 +101,7 @@ async fn execute_tool(
             tracing::info!("Critic query_graph: {cypher}");
             Ok(serde_json::json!({
                 "status": "ok",
+                "warning": "Tool not connected to live database in current agent context",
                 "query": cypher,
                 "rows": []
             }))
@@ -112,6 +113,7 @@ async fn execute_tool(
                 .unwrap_or("unknown");
             Ok(serde_json::json!({
                 "status": "ok",
+                "warning": "Tool not connected to live database in current agent context",
                 "function": func,
                 "decompiled": format!("// Decompiled code for {func}")
             }))
@@ -123,6 +125,7 @@ async fn execute_tool(
                 .unwrap_or("unknown");
             Ok(serde_json::json!({
                 "status": "ok",
+                "warning": "Tool not connected to live database in current agent context",
                 "function": func,
                 "results": []
             }))
@@ -134,6 +137,7 @@ async fn execute_tool(
                 .unwrap_or("CWE-0");
             Ok(serde_json::json!({
                 "status": "ok",
+                "warning": "Tool not connected to live database in current agent context",
                 "cwe_id": cwe_id,
                 "name": format!("CWE entry for {cwe_id}"),
                 "description": "See https://cwe.mitre.org for details."
@@ -144,7 +148,8 @@ async fn execute_tool(
             let severity = args.get("severity").and_then(|v| v.as_str()).unwrap_or("medium");
             let finding_id = uuid::Uuid::new_v4().to_string();
             Ok(serde_json::json!({
-                "status": "created",
+                "status": "ok",
+                "warning": "Tool not connected to live database in current agent context",
                 "finding_id": finding_id,
                 "title": title,
                 "severity": severity
@@ -153,6 +158,7 @@ async fn execute_tool(
         "search_similar" => {
             Ok(serde_json::json!({
                 "status": "ok",
+                "warning": "Tool not connected to live database in current agent context",
                 "results": []
             }))
         }
