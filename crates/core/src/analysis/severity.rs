@@ -3,15 +3,17 @@
 //! Produces a numeric severity score (0.0 – 10.0) aligned with CVSS
 //! conventions given a vulnerability's characteristics.
 
+use serde::{Deserialize, Serialize};
+
 /// Input characteristics for severity scoring.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SeverityInput {
     pub attack_vector: AttackVector,
     pub requires_auth: bool,
     pub data_impact: DataImpact,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum AttackVector {
     Network,
     Adjacent,
@@ -19,7 +21,7 @@ pub enum AttackVector {
     Physical,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum DataImpact {
     None,
     Low,

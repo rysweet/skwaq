@@ -5,6 +5,7 @@
 
 use crate::graph::GraphDb;
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Manages annotation records in the graph.
@@ -13,7 +14,7 @@ pub struct AnnotationManager<'a> {
 }
 
 /// A single annotation record.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Annotation {
     pub id: String,
     pub content: String,
@@ -57,6 +58,7 @@ impl<'a> AnnotationManager<'a> {
                 created_at: row.get(3)?,
             })
         })?;
-        Ok(rows.filter_map(|r| r.ok()).collect())
+        let results = rows.collect::<Result<Vec<_>, rusqlite::Error>>()?;
+        Ok(results)
     }
 }

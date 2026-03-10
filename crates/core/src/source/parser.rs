@@ -27,7 +27,7 @@ pub struct ParsedFunction {
 ///
 /// Uses tree-sitter under the hood (to be wired up).
 pub fn parse_file(_path: &Path) -> anyhow::Result<ParsedFile> {
-    todo!("tree-sitter parsing not yet implemented")
+    Err(anyhow::anyhow!("tree-sitter source parsing not yet implemented"))
 }
 
 /// Detect the programming language from a file extension.

@@ -35,7 +35,7 @@ pub struct ToolCall {
     pub arguments: serde_json::Value,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LlmResponse {
     pub content: Option<String>,
     pub tool_calls: Vec<ToolCall>,

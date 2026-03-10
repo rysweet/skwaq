@@ -18,6 +18,7 @@ pub trait SubprocessTool: Send + Sync {
 }
 
 /// Result of a health check on an external tool.
+#[derive(Debug, Clone)]
 pub struct ToolHealth {
     pub available: bool,
     pub version: Option<String>,
@@ -26,6 +27,7 @@ pub struct ToolHealth {
 }
 
 /// Output from a subprocess execution.
+#[derive(Debug, Clone)]
 pub struct ToolOutput {
     pub stdout: String,
     pub stderr: String,

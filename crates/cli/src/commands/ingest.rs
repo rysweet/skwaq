@@ -11,12 +11,16 @@ pub fn run(sub: &IngestSub) -> anyhow::Result<()> {
     match sub {
         IngestSub::Binary { path } => ingest_binary(path),
         IngestSub::Source { path } => {
-            println!("skwaq ingest source: coming soon ({})", path.display());
-            Ok(())
+            anyhow::bail!(
+                "Source code ingestion not yet implemented. Path: {}",
+                path.display()
+            );
         }
         IngestSub::Sarif { path } => {
-            println!("skwaq ingest sarif: coming soon ({})", path.display());
-            Ok(())
+            anyhow::bail!(
+                "SARIF report ingestion not yet implemented. Path: {}",
+                path.display()
+            );
         }
     }
 }

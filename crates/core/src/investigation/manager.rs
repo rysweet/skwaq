@@ -5,6 +5,7 @@
 
 use crate::graph::GraphDb;
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Manages investigation records in the graph.
@@ -13,7 +14,7 @@ pub struct InvestigationManager<'a> {
 }
 
 /// Summary of an investigation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InvestigationSummary {
     pub id: String,
     pub name: String,
@@ -52,7 +53,8 @@ impl<'a> InvestigationManager<'a> {
                 created_at: row.get(3)?,
             })
         })?;
-        Ok(rows.filter_map(|r| r.ok()).collect())
+        let results = rows.collect::<Result<Vec<_>, rusqlite::Error>>()?;
+        Ok(results)
     }
 
     /// Retrieve a single investigation by id.

@@ -4,9 +4,10 @@
 use super::db::GraphDb;
 use crate::analysis::surface::{SINK_PATTERNS, SOURCE_PATTERNS};
 use crate::binary::types::BinaryInfo;
+use serde::Serialize;
 
 /// Counts of nodes inserted by `build_from_binary_info`.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct InsertCounts {
     pub functions: usize,
     pub imports: usize,

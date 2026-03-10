@@ -20,7 +20,6 @@ chrono = { workspace = true }
 uuid = { workspace = true }
 sha2 = { workspace = true }
 tempfile = { workspace = true }
-shellexpand = { workspace = true }
 dirs = { workspace = true }
 
 [dev-dependencies]

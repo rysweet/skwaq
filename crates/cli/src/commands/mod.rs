@@ -1,14 +1,23 @@
 //! CLI command definitions using clap derive.
 
 pub mod analyze;
+pub mod annotate_cmd;
 pub mod checksec_cmd;
+pub mod common;
+pub mod config_cmd;
 pub mod doctor;
+pub mod hypothesize_cmd;
 pub mod ingest;
 pub mod investigate;
+pub mod kb_cmd;
 pub mod report;
 pub mod strings_cmd;
+pub mod surface_cmd;
 pub mod symbols_cmd;
+pub mod taint_cmd;
 pub mod version_cmd;
+pub mod viz_cmd;
+pub mod xrefs_cmd;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;

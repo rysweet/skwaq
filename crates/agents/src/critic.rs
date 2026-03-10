@@ -3,7 +3,6 @@
 //! After VulnHunter produces candidate findings, the Critic reviews each
 //! one for accuracy, severity calibration, and false-positive likelihood.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use skwaq_core::llm::{execute_with_tools, LlmClient, TokenBudget};
@@ -39,7 +38,7 @@ impl CriticAgent {
     /// Attempts to load the system prompt from `~/.skwaq/prompts/critic.md`,
     /// falling back to the bundled default.
     pub fn new(llm: Arc<dyn LlmClient>, budget: TokenBudget) -> Self {
-        let system_prompt = load_prompt("critic");
+        let system_prompt = crate::prompts::load_prompt("critic", BUNDLED_PROMPT);
         Self {
             llm,
             budget,
@@ -163,30 +162,3 @@ async fn execute_tool(
     }
 }
 
-/// Load a prompt from disk, falling back to the bundled default.
-fn load_prompt(name: &str) -> String {
-    let local_path = PathBuf::from("prompts").join(format!("{name}.md"));
-    if let Ok(content) = std::fs::read_to_string(&local_path) {
-        tracing::info!("Loaded prompt from {}", local_path.display());
-        return content;
-    }
-
-    let home_path = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".skwaq")
-        .join("prompts")
-        .join(format!("{name}.md"));
-    match std::fs::read_to_string(&home_path) {
-        Ok(content) => {
-            tracing::info!("Loaded custom prompt from {}", home_path.display());
-            content
-        }
-        Err(_) => {
-            tracing::debug!(
-                "No custom prompt at {}, using bundled default",
-                home_path.display()
-            );
-            BUNDLED_PROMPT.to_string()
-        }
-    }
-}

@@ -10,7 +10,8 @@ pub fn get_functions(db: &GraphDb, investigation_id: &str) -> anyhow::Result<Vec
     let rows = stmt.query_map([investigation_id], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
     })?;
-    Ok(rows.filter_map(|r| r.ok()).collect())
+    let results = rows.collect::<Result<Vec<_>, rusqlite::Error>>()?;
+    Ok(results)
 }
 
 /// Return the call graph as (caller_name, callee_name) pairs.
@@ -24,7 +25,8 @@ pub fn get_call_graph(db: &GraphDb, investigation_id: &str) -> anyhow::Result<Ve
     let rows = stmt.query_map([investigation_id], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
     })?;
-    Ok(rows.filter_map(|r| r.ok()).collect())
+    let results = rows.collect::<Result<Vec<_>, rusqlite::Error>>()?;
+    Ok(results)
 }
 
 /// Return unsanitized taint flow paths.
@@ -38,7 +40,8 @@ pub fn get_taint_paths(db: &GraphDb) -> anyhow::Result<Vec<(String, String, Stri
     let rows = stmt.query_map([], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
     })?;
-    Ok(rows.filter_map(|r| r.ok()).collect())
+    let results = rows.collect::<Result<Vec<_>, rusqlite::Error>>()?;
+    Ok(results)
 }
 
 /// Return all vulnerabilities with severity.
@@ -55,7 +58,8 @@ pub fn get_vulnerabilities(db: &GraphDb, investigation_id: &str) -> anyhow::Resu
             row.get::<_, f64>(3)?,
         ))
     })?;
-    Ok(rows.filter_map(|r| r.ok()).collect())
+    let results = rows.collect::<Result<Vec<_>, rusqlite::Error>>()?;
+    Ok(results)
 }
 
 /// Get all investigations.
@@ -71,7 +75,8 @@ pub fn get_investigations(db: &GraphDb) -> anyhow::Result<Vec<(String, String, S
             row.get::<_, String>(3)?,
         ))
     })?;
-    Ok(rows.filter_map(|r| r.ok()).collect())
+    let results = rows.collect::<Result<Vec<_>, rusqlite::Error>>()?;
+    Ok(results)
 }
 
 /// Return functions that call known dangerous APIs.
@@ -80,20 +85,30 @@ pub fn get_dangerous_calls(
     dangerous_names: &[&str],
     investigation_id: &str,
 ) -> anyhow::Result<Vec<(String, String)>> {
-    let placeholders: String = dangerous_names.iter()
-        .map(|n| format!("'{}'", n))
+    if dangerous_names.is_empty() {
+        return Ok(Vec::new());
+    }
+    let placeholders: String = (0..dangerous_names.len())
+        .map(|i| format!("?{}", i + 2)) // ?1 is investigation_id
         .collect::<Vec<_>>()
         .join(", ");
     let sql = format!(
         "SELECT f1.name, f2.name FROM calls c \
          JOIN functions f1 ON c.caller_id = f1.id \
          JOIN functions f2 ON c.callee_id = f2.id \
-         WHERE f2.name IN ({}) AND f1.investigation_id = ?1",
-        placeholders
+         WHERE f2.name IN ({placeholders}) AND f1.investigation_id = ?1"
     );
+    let mut all_params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+    all_params.push(Box::new(investigation_id.to_string()));
+    for name in dangerous_names {
+        all_params.push(Box::new(name.to_string()));
+    }
+    let params_refs: Vec<&dyn rusqlite::types::ToSql> =
+        all_params.iter().map(|p| p.as_ref()).collect();
     let mut stmt = db.conn().prepare(&sql)?;
-    let rows = stmt.query_map([investigation_id], |row| {
+    let rows = stmt.query_map(params_refs.as_slice(), |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
     })?;
-    Ok(rows.filter_map(|r| r.ok()).collect())
+    let results = rows.collect::<Result<Vec<_>, rusqlite::Error>>()?;
+    Ok(results)
 }

@@ -6,6 +6,13 @@ use std::path::Path;
 
 /// Parse a binary file using goblin and extract metadata.
 pub fn parse_binary(path: &Path) -> anyhow::Result<BinaryInfo> {
+    let metadata = std::fs::metadata(path)?;
+    if metadata.len() > 500 * 1024 * 1024 {
+        anyhow::bail!("Binary exceeds 500 MB limit");
+    }
+    if !metadata.is_file() {
+        anyhow::bail!("Path is not a regular file: {}", path.display());
+    }
     let data = std::fs::read(path)?;
     let object = Object::parse(&data)?;
 
@@ -125,21 +132,8 @@ fn parse_pe(pe: &goblin::pe::PE, data: &[u8]) -> anyhow::Result<BinaryInfo> {
     })
 }
 
-fn parse_mach(_mach: &goblin::mach::Mach, data: &[u8]) -> anyhow::Result<BinaryInfo> {
-    let strings = extract_strings(data, 4);
-    Ok(BinaryInfo {
-        format: BinaryFormat::MachO,
-        architecture: "unknown".into(),
-        bits: 64,
-        endianness: "little".into(),
-        is_stripped: false,
-        entry_point: 0,
-        sections: Vec::new(),
-        symbols: Vec::new(),
-        imports: Vec::new(),
-        strings,
-        hardening: HardeningInfo::default(),
-    })
+fn parse_mach(_mach: &goblin::mach::Mach, _data: &[u8]) -> anyhow::Result<BinaryInfo> {
+    anyhow::bail!("Mach-O binary analysis is not yet supported. ELF and PE are supported.")
 }
 
 /// Extract printable ASCII strings of minimum length from binary data.

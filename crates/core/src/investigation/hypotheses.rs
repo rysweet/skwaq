@@ -5,6 +5,7 @@
 
 use crate::graph::GraphDb;
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Manages hypothesis records in the graph.
@@ -13,7 +14,7 @@ pub struct HypothesisManager<'a> {
 }
 
 /// A single hypothesis record.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Hypothesis {
     pub id: String,
     pub statement: String,
@@ -36,14 +37,12 @@ impl<'a> HypothesisManager<'a> {
     ) -> anyhow::Result<String> {
         let id = Uuid::new_v4().to_string();
         let now = Utc::now().to_rfc3339();
+        let evidence = format!("confidence={}", confidence);
         self.db.execute(
             "INSERT INTO hypotheses (id, description, status, evidence, timestamp, investigation_id) \
-             VALUES (?1, ?2, 'pending', '', ?3, ?4)",
-            &[&id.as_str(), &statement, &now.as_str(), &investigation_id],
+             VALUES (?1, ?2, 'pending', ?3, ?4, ?5)",
+            &[&id.as_str(), &statement, &evidence.as_str(), &now.as_str(), &investigation_id],
         )?;
-        // Store confidence as part of evidence field or extend schema; for now
-        // confidence is tracked at the application layer.
-        let _ = confidence;
         Ok(id)
     }
 
@@ -52,11 +51,12 @@ impl<'a> HypothesisManager<'a> {
         &self,
         hypothesis_id: &str,
         status: &str,
-        _confidence: f64,
+        confidence: f64,
     ) -> anyhow::Result<()> {
+        let evidence = format!("confidence={}", confidence);
         let rows = self.db.execute(
-            "UPDATE hypotheses SET status = ?1 WHERE id = ?2",
-            &[&status, &hypothesis_id],
+            "UPDATE hypotheses SET status = ?1, evidence = ?2 WHERE id = ?3",
+            &[&status, &evidence.as_str(), &hypothesis_id],
         )?;
         if rows == 0 {
             anyhow::bail!("hypothesis not found: {}", hypothesis_id);
@@ -67,18 +67,24 @@ impl<'a> HypothesisManager<'a> {
     /// List hypotheses for an investigation.
     pub fn list(&self, investigation_id: &str) -> anyhow::Result<Vec<Hypothesis>> {
         let mut stmt = self.db.conn().prepare(
-            "SELECT id, description, status, timestamp FROM hypotheses \
+            "SELECT id, description, status, evidence, timestamp FROM hypotheses \
              WHERE investigation_id = ?1 ORDER BY timestamp DESC"
         )?;
         let rows = stmt.query_map([investigation_id], |row| {
+            let evidence: String = row.get(3)?;
+            let confidence = evidence
+                .strip_prefix("confidence=")
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or(0.0);
             Ok(Hypothesis {
                 id: row.get(0)?,
                 statement: row.get(1)?,
                 status: row.get(2)?,
-                confidence: 0.0,
-                created_at: row.get(3)?,
+                confidence,
+                created_at: row.get(4)?,
             })
         })?;
-        Ok(rows.filter_map(|r| r.ok()).collect())
+        let results = rows.collect::<Result<Vec<_>, rusqlite::Error>>()?;
+        Ok(results)
     }
 }

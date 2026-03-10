@@ -21,7 +21,7 @@ pub struct CweDatabase {
 impl CweDatabase {
     /// Load CWE definitions from a JSON file or embedded data.
     pub fn load(_path: &str) -> anyhow::Result<Self> {
-        todo!("CWE database loading not yet implemented")
+        Err(anyhow::anyhow!("CWE database loading not yet implemented"))
     }
 
     /// Create an empty database (useful for tests).

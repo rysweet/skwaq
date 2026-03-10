@@ -8,10 +8,10 @@ use std::path::PathBuf;
 pub fn run(sub: &InvestigateSub) -> anyhow::Result<()> {
     match sub {
         InvestigateSub::New { name } => {
-            println!("skwaq investigate new: coming soon ({name})");
+            anyhow::bail!("Investigation creation not yet implemented. Name: {name}");
         }
         InvestigateSub::Resume { id } => {
-            println!("skwaq investigate resume: coming soon ({id})");
+            anyhow::bail!("Investigation resume not yet implemented. ID: {id}");
         }
         InvestigateSub::List => {
             list_investigations()?;
@@ -21,7 +21,7 @@ pub fn run(sub: &InvestigateSub) -> anyhow::Result<()> {
                 .as_ref()
                 .map(|p| p.display().to_string())
                 .unwrap_or_else(|| "stdout".into());
-            println!("skwaq investigate export: coming soon ({id} -> {out})");
+            anyhow::bail!("Investigation export not yet implemented. ID: {id} -> {out}");
         }
     }
     Ok(())

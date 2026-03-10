@@ -4,7 +4,6 @@
 //! querying the graph database, reading decompiled functions, and
 //! creating findings.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use skwaq_core::graph::GraphDb;
@@ -40,7 +39,7 @@ impl VulnHunterAgent {
     /// Attempts to load the system prompt from `~/.skwaq/prompts/vuln_hunter.md`,
     /// falling back to the bundled default.
     pub fn new(llm: Arc<dyn LlmClient>, budget: TokenBudget) -> Self {
-        let system_prompt = load_prompt("vuln_hunter");
+        let system_prompt = crate::prompts::load_prompt("vuln_hunter", BUNDLED_PROMPT);
         Self {
             llm,
             budget,
@@ -135,23 +134,28 @@ fn build_analysis_prompt(target: &str, db: &GraphDb) -> String {
     }
 
     // Summarize dangerous API calls
-    let dangerous = [
+    let dangerous: Vec<&str> = vec![
         "strcpy", "strcat", "sprintf", "gets", "scanf", "system", "exec",
         "popen", "memcpy", "memmove", "recv", "read",
     ];
-    let placeholders: String = dangerous
-        .iter()
-        .map(|n| format!("'{n}'"))
+    let param_placeholders: String = (0..dangerous.len())
+        .map(|i| format!("?{}", i + 1))
         .collect::<Vec<_>>()
         .join(", ");
     let sql = format!(
         "SELECT f1.name, f2.name FROM calls c \
          JOIN functions f1 ON c.caller_id = f1.id \
          JOIN functions f2 ON c.callee_id = f2.id \
-         WHERE f2.name IN ({placeholders}) LIMIT 30"
+         WHERE f2.name IN ({param_placeholders}) LIMIT 30"
     );
     if let Ok(mut stmt) = db.conn().prepare(&sql) {
-        if let Ok(rows) = stmt.query_map([], |row| {
+        let params: Vec<Box<dyn rusqlite::types::ToSql>> = dangerous
+            .iter()
+            .map(|n| Box::new(n.to_string()) as Box<dyn rusqlite::types::ToSql>)
+            .collect();
+        let params_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params.iter().map(|p| p.as_ref()).collect();
+        if let Ok(rows) = stmt.query_map(params_refs.as_slice(), |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
@@ -274,33 +278,3 @@ async fn execute_tool(
     }
 }
 
-/// Load a prompt from `~/.skwaq/prompts/{name}.md`, falling back to the
-/// bundled default.
-fn load_prompt(name: &str) -> String {
-    // Try project-local prompts directory first
-    let local_path = PathBuf::from("prompts").join(format!("{name}.md"));
-    if let Ok(content) = std::fs::read_to_string(&local_path) {
-        tracing::info!("Loaded prompt from {}", local_path.display());
-        return content;
-    }
-
-    // Then try ~/.skwaq/prompts/
-    let home_path = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".skwaq")
-        .join("prompts")
-        .join(format!("{name}.md"));
-    match std::fs::read_to_string(&home_path) {
-        Ok(content) => {
-            tracing::info!("Loaded custom prompt from {}", home_path.display());
-            content
-        }
-        Err(_) => {
-            tracing::debug!(
-                "No custom prompt at {}, using bundled default",
-                home_path.display()
-            );
-            BUNDLED_PROMPT.to_string()
-        }
-    }
-}

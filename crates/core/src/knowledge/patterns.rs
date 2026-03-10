@@ -29,7 +29,7 @@ impl VulnerabilityPatterns {
 
     /// Load patterns from a configuration source.
     pub fn load(_path: &str) -> anyhow::Result<Self> {
-        todo!("vulnerability pattern loading not yet implemented")
+        Err(anyhow::anyhow!("Vulnerability pattern loading not yet implemented"))
     }
 
     /// Return all patterns whose indicators overlap with `terms`.

@@ -105,6 +105,12 @@ struct TokenExchangeResponse {
 
 // ── implementation ───────────────────────────────────────────────
 
+impl Default for CopilotClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CopilotClient {
     /// Create a new Copilot client.
     pub fn new() -> Self {
@@ -175,7 +181,8 @@ impl CopilotClient {
 
         if !resp.status().is_success() {
             let status = resp.status();
-            let text = resp.text().await.unwrap_or_default();
+            let mut text = resp.text().await.unwrap_or_default();
+            text.truncate(200);
             anyhow::bail!("Copilot token exchange returned {status}: {text}");
         }
 
@@ -251,7 +258,8 @@ impl LlmClient for CopilotClient {
 
         if !resp.status().is_success() {
             let status = resp.status();
-            let text = resp.text().await.unwrap_or_default();
+            let mut text = resp.text().await.unwrap_or_default();
+            text.truncate(200);
             anyhow::bail!("Copilot chat returned {status}: {text}");
         }
 

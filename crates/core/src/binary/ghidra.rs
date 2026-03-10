@@ -51,10 +51,7 @@ impl GhidraRunner {
     }
 
     fn headless_path(&self) -> Option<PathBuf> {
-        let base = self.ghidra_path.as_ref().or_else(|| {
-            // Re-check at runtime
-            None
-        })?;
+        let base = self.ghidra_path.as_ref()?;
         let path = base.join("support/analyzeHeadless");
         if path.exists() { Some(path) } else { None }
     }
@@ -72,10 +69,10 @@ impl GhidraRunner {
         // For now, use a simple analysis that exports JSON
         let mut cmd = tokio::process::Command::new(&headless);
         cmd.args([
-            project_dir.path().to_str().unwrap(),
+            project_dir.path().to_str().ok_or_else(|| anyhow::anyhow!("non-UTF-8 path"))?,
             "skwaq_project",
             "-import",
-            binary_path.to_str().unwrap(),
+            binary_path.to_str().ok_or_else(|| anyhow::anyhow!("non-UTF-8 path"))?,
             "-analysisTimeoutPerFile",
             &timeout_secs.to_string(),
         ]);
@@ -110,8 +107,9 @@ impl SubprocessTool for GhidraRunner {
     async fn health_check(&self) -> ToolHealth {
         match Self::find_ghidra() {
             Some(path) => {
+                let headless_str = path.join("support/analyzeHeadless");
                 let version = get_version(
-                    path.join("support/analyzeHeadless").to_str().unwrap_or(""),
+                    headless_str.to_str().unwrap_or(""),
                     &[],
                 ).await;
                 ToolHealth {

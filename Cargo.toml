@@ -51,7 +51,6 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 sha2 = "0.10"
 tempfile = "3"
-shellexpand = "3"
 dirs = "6"
 
 [profile.release]
