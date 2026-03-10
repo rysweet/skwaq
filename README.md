@@ -1,0 +1,134 @@
+# Skwaq
+
+AI-powered vulnerability discovery CLI for binaries and source code.
+
+Skwaq builds a Code Property Graph from binary analysis, detects dangerous API usage patterns, traces taint flows, and uses AI agents to reason about vulnerabilities. It complements tools like Ghidra and IDA Pro - it's the reasoning layer on top.
+
+The name comes from the Lushootseed word for Raven - the trickster who reveals hidden truths.
+
+## Quick Start
+
+```bash
+# Analyze a binary
+skwaq ingest binary /usr/bin/target
+skwaq analyze --quick
+skwaq report --sarif
+
+# Check binary hardening
+skwaq checksec /usr/bin/target
+
+# View findings
+skwaq viz findings
+skwaq report --json
+```
+
+## Install
+
+### From Source
+
+```bash
+git clone https://github.com/rysweet/skwaq
+cd skwaq
+cargo build --release
+# Binary at ./target/release/skwaq
+```
+
+### Prerequisites
+
+- **Rust 1.70+** (for building)
+- **Ghidra** (optional, for decompilation) - set `GHIDRA_INSTALL_DIR`
+- **Python 3.10+** (optional, for angr symbolic execution)
+- **Semgrep** (optional, for pattern matching) - `pip install semgrep`
+
+Run `skwaq doctor` to check what's available.
+
+## Commands
+
+### Ingestion
+```bash
+skwaq ingest binary <path>     # Ingest ELF/PE binary
+skwaq ingest source <path>     # Ingest source code (coming soon)
+```
+
+### Binary Inspection
+```bash
+skwaq checksec <binary>        # Binary hardening assessment
+skwaq strings <binary>         # Extract printable strings
+skwaq symbols <binary>         # List symbols and imports
+skwaq surface                  # Show attack surface
+skwaq xrefs <function>         # Cross-references
+```
+
+### Analysis
+```bash
+skwaq analyze --quick          # Pattern detection + taint analysis
+skwaq analyze --investigation <id>  # Analyze specific investigation
+```
+
+### Investigation
+```bash
+skwaq investigate list         # List investigations
+skwaq annotate <addr> "note"   # Add annotation
+skwaq hypothesize "theory"     # Record hypothesis
+```
+
+### Reporting
+```bash
+skwaq report                   # Markdown report (default)
+skwaq report --sarif           # SARIF for CI/CD
+skwaq report --json            # JSON output
+```
+
+### Visualization
+```bash
+skwaq viz findings             # Findings table
+skwaq viz callgraph            # Call graph tree
+```
+
+### Knowledge Base
+```bash
+skwaq kb init                  # Load CWE database
+skwaq kb search "buffer"       # Search CWEs
+```
+
+### System
+```bash
+skwaq doctor                   # Check prerequisites
+skwaq config show              # Show configuration
+skwaq version                  # Show version
+```
+
+## Architecture
+
+Three Rust crates:
+
+- **skwaq-core**: Binary parsing (goblin), graph database (SQLite), analysis engine, LLM client traits, reporting
+- **skwaq-agents**: VulnHunter + Critic AI agents with tool-loop pattern
+- **skwaq** (cli): clap-based CLI with 20+ commands
+
+```
+CLI (clap) -> Analysis Engine -> Graph DB (SQLite)
+                |                    |
+          LLM Agents          Binary Parser
+        (Copilot/Ollama)        (goblin)
+```
+
+## Configuration
+
+Create `skwaq.toml` in your project directory:
+
+```toml
+[llm]
+reasoning = "ollama"        # or "copilot"
+
+[llm.ollama]
+host = "http://localhost:11434"
+model = "llama3.1"
+
+[binary]
+ghidra_path = "/opt/ghidra"
+```
+
+## License
+
+MIT OR Apache-2.0
