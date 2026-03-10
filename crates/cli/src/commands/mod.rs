@@ -5,6 +5,7 @@ pub mod checksec_cmd;
 pub mod doctor;
 pub mod ingest;
 pub mod investigate;
+pub mod report;
 pub mod strings_cmd;
 pub mod symbols_cmd;
 pub mod version_cmd;
@@ -81,6 +82,10 @@ pub enum Commands {
 
     /// Run AI-driven vulnerability analysis
     Analyze {
+        /// Investigation ID to analyze (uses most recent if omitted)
+        #[arg(long)]
+        investigation: Option<String>,
+
         /// Quick scan (reduced depth)
         #[arg(long)]
         quick: bool,
@@ -131,6 +136,9 @@ pub enum Commands {
 
     /// Generate reports
     Report {
+        /// Investigation ID (uses most recent if omitted)
+        investigation_id: Option<String>,
+
         /// Output SARIF format
         #[arg(long)]
         sarif: bool,

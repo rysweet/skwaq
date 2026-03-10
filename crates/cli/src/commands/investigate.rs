@@ -1,6 +1,9 @@
-//! `skwaq investigate` - investigation management (stub).
+//! `skwaq investigate` - investigation management.
 
 use super::InvestigateSub;
+use skwaq_core::graph::db::GraphDb;
+use skwaq_core::graph::queries::get_investigations;
+use std::path::PathBuf;
 
 pub fn run(sub: &InvestigateSub) -> anyhow::Result<()> {
     match sub {
@@ -11,7 +14,7 @@ pub fn run(sub: &InvestigateSub) -> anyhow::Result<()> {
             println!("skwaq investigate resume: coming soon ({id})");
         }
         InvestigateSub::List => {
-            println!("skwaq investigate list: coming soon");
+            list_investigations()?;
         }
         InvestigateSub::Export { id, output } => {
             let out = output
@@ -22,4 +25,40 @@ pub fn run(sub: &InvestigateSub) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+fn list_investigations() -> anyhow::Result<()> {
+    let db_dir = graph_db_path()?;
+    if !db_dir.join("skwaq.db").exists() {
+        println!("No investigations found. Run `skwaq ingest binary <path>` first.");
+        return Ok(());
+    }
+
+    let db = GraphDb::open(&db_dir)?;
+    let investigations = get_investigations(&db)?;
+
+    if investigations.is_empty() {
+        println!("No investigations found. Run `skwaq ingest binary <path>` first.");
+        return Ok(());
+    }
+
+    // Print table header.
+    println!(
+        "{:<20} {:<30} {:<10} {}",
+        "ID", "NAME", "STATUS", "CREATED"
+    );
+    println!("{}", "-".repeat(80));
+
+    for (id, name, status, created) in &investigations {
+        println!("{:<20} {:<30} {:<10} {}", id, name, status, created);
+    }
+
+    println!("\n{} investigation(s) found.", investigations.len());
+
+    Ok(())
+}
+
+fn graph_db_path() -> anyhow::Result<PathBuf> {
+    let dir = std::env::current_dir()?.join(".skwaq").join("graph");
+    Ok(dir)
 }

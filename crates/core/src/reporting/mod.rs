@@ -4,6 +4,6 @@ pub mod json;
 pub mod markdown;
 pub mod sarif;
 
-pub use json::generate_json;
+pub use json::{generate_json, generate_report_for_investigation};
 pub use markdown::generate_markdown;
 pub use sarif::generate_sarif;

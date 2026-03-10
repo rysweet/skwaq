@@ -10,9 +10,9 @@ pub mod taint;
 pub mod variant;
 
 pub use hardening::format_hardening;
-pub use patterns::DangerousApiDetector;
+pub use patterns::{DangerousApiDetector, DangerousApiHit, DangerCategory, Severity};
 pub use semgrep::SemgrepRunner;
 pub use severity::compute_severity;
-pub use surface::AttackSurfaceAnalyzer;
-pub use taint::TaintAnalyzer;
+pub use surface::{identify_attack_surface, AttackSurface, AttackSurfaceAnalyzer};
+pub use taint::{TaintAnalyzer, TaintPath};
 pub use variant::VariantAnalyzer;

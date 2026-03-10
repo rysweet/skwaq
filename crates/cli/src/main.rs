@@ -41,8 +41,8 @@ async fn main() -> anyhow::Result<()> {
         Commands::Ingest { sub } => {
             skwaq::commands::ingest::run(sub)?;
         }
-        Commands::Analyze { quick, budget } => {
-            skwaq::commands::analyze::run(*quick, *budget)?;
+        Commands::Analyze { investigation, quick, budget } => {
+            skwaq::commands::analyze::run(investigation.as_deref(), *quick, *budget)?;
         }
         Commands::Investigate { sub } => {
             skwaq::commands::investigate::run(sub)?;
@@ -79,19 +79,18 @@ async fn main() -> anyhow::Result<()> {
                 focus.as_deref().unwrap_or("all")
             );
         }
-        Commands::Report { sarif, json, output } => {
-            let fmt = if *sarif {
-                "sarif"
-            } else if *json {
-                "json"
-            } else {
-                "text"
-            };
-            let dest = output
-                .as_ref()
-                .map(|p| p.display().to_string())
-                .unwrap_or_else(|| "stdout".into());
-            println!("skwaq report ({fmt} -> {dest}): coming soon");
+        Commands::Report {
+            investigation_id,
+            sarif,
+            json,
+            output,
+        } => {
+            skwaq::commands::report::run(
+                investigation_id.as_deref(),
+                *json,
+                *sarif,
+                output.as_ref(),
+            )?;
         }
         Commands::Viz { sub } => {
             use skwaq::commands::VizSub;
