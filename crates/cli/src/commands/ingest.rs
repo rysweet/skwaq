@@ -3,6 +3,8 @@
 use super::IngestSub;
 use skwaq_core::analysis::patterns::DangerousApiDetector;
 use skwaq_core::analysis::surface::identify_attack_surface;
+use skwaq_core::binary::cache::AnalysisCache;
+use skwaq_core::binary::ghidra::GhidraRunner;
 use skwaq_core::binary::native::parse_binary;
 use skwaq_core::config::Config;
 use skwaq_core::graph::builder::GraphBuilder;
@@ -10,9 +12,9 @@ use skwaq_core::graph::db::GraphDb;
 use skwaq_core::source::{detect_language, is_source_file, parse_file};
 use std::path::PathBuf;
 
-pub fn run(sub: &IngestSub) -> anyhow::Result<()> {
+pub async fn run(sub: &IngestSub) -> anyhow::Result<()> {
     match sub {
-        IngestSub::Binary { path } => ingest_binary(path),
+        IngestSub::Binary { path } => ingest_binary(path).await,
         IngestSub::Source { path } => ingest_source(path),
         IngestSub::Sarif { path } => {
             anyhow::bail!(
@@ -23,7 +25,7 @@ pub fn run(sub: &IngestSub) -> anyhow::Result<()> {
     }
 }
 
-fn ingest_binary(path: &PathBuf) -> anyhow::Result<()> {
+async fn ingest_binary(path: &PathBuf) -> anyhow::Result<()> {
     // 1. Parse the binary.
     let info = parse_binary(path)?;
 
@@ -87,7 +89,10 @@ fn ingest_binary(path: &PathBuf) -> anyhow::Result<()> {
         surface.input.len(),
     );
 
-    // 9. Print DB summary.
+    // 9. Ghidra decompilation (optional, cached).
+    run_ghidra_enrichment(path, &inv_id, &builder).await;
+
+    // 10. Print DB summary.
     println!(
         "[db]      Investigation {} stored in {}",
         inv_id,
@@ -98,6 +103,94 @@ fn ingest_binary(path: &PathBuf) -> anyhow::Result<()> {
     println!("Ready. Run: skwaq analyze --investigation {}", inv_id);
 
     Ok(())
+}
+
+/// Run Ghidra analysis if available, enriching the graph with decompiled code.
+/// Failures are non-fatal - Ghidra is optional.
+async fn run_ghidra_enrichment(
+    binary_path: &PathBuf,
+    investigation_id: &str,
+    builder: &GraphBuilder<'_>,
+) {
+    // Check if Ghidra is available
+    let ghidra_path = match GhidraRunner::find_ghidra() {
+        Some(path) => path,
+        None => {
+            println!(
+                "[ghidra]  Not found (optional). Install Ghidra and set GHIDRA_INSTALL_DIR for decompiled source."
+            );
+            return;
+        }
+    };
+
+    // Set up cache in the .skwaq directory
+    let cache_dir = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".skwaq")
+        .join("cache")
+        .join("ghidra");
+    let cache = AnalysisCache::new(cache_dir);
+
+    // Check cache first
+    if let Some(cached) = cache.get(binary_path) {
+        println!(
+            "[ghidra]  Using cached analysis ({} functions)",
+            cached.functions.len(),
+        );
+        store_ghidra_results(builder, &cached, investigation_id);
+        return;
+    }
+
+    // Run Ghidra analysis
+    println!("[ghidra]  Decompiling with Ghidra (this may take a minute)...");
+
+    let runner = GhidraRunner::new(Some(ghidra_path));
+    let timeout_secs = 300; // 5 minute analysis timeout
+
+    match runner.analyze(binary_path, timeout_secs).await {
+        Ok(analysis) => {
+            let decompiled_count = analysis.functions.iter()
+                .filter(|f| f.decompiled.is_some())
+                .count();
+            println!(
+                "[ghidra]  {} functions analyzed, {} with decompiled source",
+                analysis.functions.len(),
+                decompiled_count,
+            );
+
+            // Cache the results
+            if let Err(e) = cache.put(binary_path, &analysis) {
+                tracing::warn!("Failed to cache Ghidra results: {}", e);
+            }
+
+            // Store in graph
+            store_ghidra_results(builder, &analysis, investigation_id);
+        }
+        Err(e) => {
+            println!("[ghidra]  Analysis failed: {}. Continuing without decompilation.", e);
+        }
+    }
+}
+
+/// Store Ghidra analysis results in the graph database.
+fn store_ghidra_results(
+    builder: &GraphBuilder<'_>,
+    analysis: &skwaq_core::binary::types::GhidraAnalysis,
+    investigation_id: &str,
+) {
+    match builder.build_from_ghidra_analysis(analysis, investigation_id) {
+        Ok(gcounts) => {
+            println!(
+                "[ghidra]  Graph: {} functions updated, {} new functions, {} call edges",
+                gcounts.functions_updated,
+                gcounts.functions_added,
+                gcounts.calls_added,
+            );
+        }
+        Err(e) => {
+            println!("[ghidra]  Failed to store results in graph: {}", e);
+        }
+    }
 }
 
 fn ingest_source(path: &PathBuf) -> anyhow::Result<()> {

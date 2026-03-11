@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
             skwaq::commands::symbols_cmd::run(binary)?;
         }
         Commands::Ingest { sub } => {
-            skwaq::commands::ingest::run(sub)?;
+            skwaq::commands::ingest::run(sub).await?;
         }
         Commands::Analyze {
             investigation,

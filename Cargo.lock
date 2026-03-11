@@ -1894,6 +1894,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "dirs",
  "serde",
  "serde_json",
  "skwaq-agents",

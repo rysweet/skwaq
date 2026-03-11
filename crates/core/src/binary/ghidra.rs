@@ -20,7 +20,7 @@ impl GhidraRunner {
     pub fn find_ghidra() -> Option<PathBuf> {
         // Check env var first
         if let Ok(path) = std::env::var("GHIDRA_INSTALL_DIR") {
-            let p = PathBuf::from(path);
+            let p = PathBuf::from(&path);
             if p.join("support/analyzeHeadless").exists() {
                 return Some(p);
             }
@@ -50,6 +50,50 @@ impl GhidraRunner {
         None
     }
 
+    /// Find the ghidra-scripts/ directory containing extract_analysis.py.
+    fn find_scripts_dir() -> Option<PathBuf> {
+        // 1. SKWAQ_SCRIPTS_DIR env var
+        if let Ok(path) = std::env::var("SKWAQ_SCRIPTS_DIR") {
+            let p = PathBuf::from(&path);
+            if p.join("extract_analysis.py").exists() {
+                return Some(p);
+            }
+        }
+
+        // 2. Current directory / ghidra-scripts
+        let cwd = std::env::current_dir().ok()?;
+        let p = cwd.join("ghidra-scripts");
+        if p.join("extract_analysis.py").exists() {
+            return Some(p);
+        }
+
+        // 3. Next to the binary
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(parent) = exe.parent() {
+                let p = parent.join("ghidra-scripts");
+                if p.join("extract_analysis.py").exists() {
+                    return Some(p);
+                }
+                // Also check one level up (e.g. target/debug/../ghidra-scripts)
+                if let Some(grandparent) = parent.parent() {
+                    let p = grandparent.join("ghidra-scripts");
+                    if p.join("extract_analysis.py").exists() {
+                        return Some(p);
+                    }
+                    // And two levels up (target/debug/../../ghidra-scripts)
+                    if let Some(ggp) = grandparent.parent() {
+                        let p = ggp.join("ghidra-scripts");
+                        if p.join("extract_analysis.py").exists() {
+                            return Some(p);
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
     fn headless_path(&self) -> Option<PathBuf> {
         let base = self.ghidra_path.as_ref()?;
         let path = base.join("support/analyzeHeadless");
@@ -57,47 +101,133 @@ impl GhidraRunner {
     }
 
     /// Run Ghidra headless analysis on a binary.
-    /// Returns parsed analysis output.
+    /// Returns parsed analysis output with decompiled functions.
     pub async fn analyze(&self, binary_path: &Path, timeout_secs: u64) -> anyhow::Result<GhidraAnalysis> {
         let headless = self.headless_path()
             .ok_or_else(|| anyhow::anyhow!("Ghidra not found. Set GHIDRA_INSTALL_DIR"))?;
 
-        let project_dir = tempfile::tempdir()?;
-        let output_file = project_dir.path().join("output.json");
+        let scripts_dir = Self::find_scripts_dir()
+            .ok_or_else(|| anyhow::anyhow!(
+                "ghidra-scripts/extract_analysis.py not found. \
+                 Set SKWAQ_SCRIPTS_DIR or run from the skwaq project root."
+            ))?;
 
-        // TODO: Bundle Python post-scripts with the binary
-        // For now, use a simple analysis that exports JSON
+        let project_dir = tempfile::tempdir()?;
+        let output_file = project_dir.path().join("ghidra_output.json");
+
+        let binary_abs = std::fs::canonicalize(binary_path)
+            .map_err(|e| anyhow::anyhow!("Cannot resolve binary path {}: {}", binary_path.display(), e))?;
+
         let mut cmd = tokio::process::Command::new(&headless);
         cmd.args([
             project_dir.path().to_str().ok_or_else(|| anyhow::anyhow!("non-UTF-8 path"))?,
-            "skwaq_project",
+            "SkwaqProject",
             "-import",
-            binary_path.to_str().ok_or_else(|| anyhow::anyhow!("non-UTF-8 path"))?,
+            binary_abs.to_str().ok_or_else(|| anyhow::anyhow!("non-UTF-8 binary path"))?,
+            "-postScript",
+            "extract_analysis.py",
+            output_file.to_str().ok_or_else(|| anyhow::anyhow!("non-UTF-8 output path"))?,
+            "-scriptPath",
+            scripts_dir.to_str().ok_or_else(|| anyhow::anyhow!("non-UTF-8 scripts path"))?,
             "-analysisTimeoutPerFile",
             &timeout_secs.to_string(),
+            "-deleteProject",  // Clean up Ghidra project files automatically
         ]);
 
         let _output = run_tool(
             &mut cmd,
             "Ghidra",
-            Duration::from_secs(timeout_secs),
+            Duration::from_secs(timeout_secs + 60), // Extra buffer beyond analysis timeout
             Some(project_dir.path()),
         ).await?;
 
-        // Parse output if available
+        // Parse the JSON output from the post-script
         if output_file.exists() {
             let data = tokio::fs::read_to_string(&output_file).await?;
-            let analysis: GhidraAnalysis = serde_json::from_str(&data)?;
+            let raw: serde_json::Value = serde_json::from_str(&data)?;
+            let analysis = parse_ghidra_json(&raw)?;
             Ok(analysis)
         } else {
-            // Return empty analysis if no post-script output
-            Ok(GhidraAnalysis {
-                functions: Vec::new(),
-                strings: Vec::new(),
-                imports: Vec::new(),
-            })
+            anyhow::bail!(
+                "Ghidra analysis completed but no output file was produced. \
+                 Check that extract_analysis.py ran correctly."
+            )
         }
     }
+}
+
+/// Parse raw Ghidra JSON output into typed GhidraAnalysis.
+///
+/// The Python script may produce string offsets (e.g. "00401234") instead of
+/// numeric offsets. This function handles both formats.
+fn parse_ghidra_json(raw: &serde_json::Value) -> anyhow::Result<GhidraAnalysis> {
+    let functions: Vec<GhidraFunction> = raw.get("functions")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter().filter_map(|f| {
+                Some(GhidraFunction {
+                    name: f.get("name")?.as_str()?.to_string(),
+                    address: f.get("address")?.as_str()?.to_string(),
+                    size: f.get("size").and_then(|v| v.as_u64()).unwrap_or(0),
+                    decompiled: f.get("decompiled").and_then(|v| v.as_str()).map(String::from),
+                    calls: f.get("calls")
+                        .and_then(|v| v.as_array())
+                        .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                        .unwrap_or_default(),
+                    called_by: f.get("called_by")
+                        .and_then(|v| v.as_array())
+                        .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                        .unwrap_or_default(),
+                    parameter_count: f.get("parameter_count").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+                })
+            }).collect()
+        })
+        .unwrap_or_default();
+
+    let strings: Vec<ExtractedString> = raw.get("strings")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter().filter_map(|s| {
+                let value = s.get("value")?.as_str()?.to_string();
+                // offset may be a hex string (from Ghidra addresses) or a number
+                let offset = s.get("offset")
+                    .map(|v| {
+                        if let Some(n) = v.as_u64() {
+                            n
+                        } else if let Some(s) = v.as_str() {
+                            // Parse hex address like "00401234"
+                            u64::from_str_radix(s.trim_start_matches("0x"), 16).unwrap_or(0)
+                        } else {
+                            0
+                        }
+                    })
+                    .unwrap_or(0);
+                let encoding = s.get("encoding")
+                    .and_then(|v| v.as_str())
+                    .map(|e| match e {
+                        "utf16le" | "utf16" => StringEncoding::Utf16Le,
+                        "ascii" => StringEncoding::Ascii,
+                        _ => StringEncoding::Utf8,
+                    })
+                    .unwrap_or(StringEncoding::Utf8);
+                Some(ExtractedString { value, offset, encoding })
+            }).collect()
+        })
+        .unwrap_or_default();
+
+    let imports: Vec<ImportInfo> = raw.get("imports")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter().filter_map(|i| {
+                Some(ImportInfo {
+                    name: i.get("name")?.as_str()?.to_string(),
+                    library: i.get("library").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                })
+            }).collect()
+        })
+        .unwrap_or_default();
+
+    Ok(GhidraAnalysis { functions, strings, imports })
 }
 
 #[async_trait]
@@ -134,5 +264,90 @@ impl SubprocessTool for GhidraRunner {
 
     fn install_hint(&self) -> &str {
         "Download from https://ghidra-sre.org/ and set GHIDRA_INSTALL_DIR"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_find_ghidra_respects_env() {
+        // If GHIDRA_INSTALL_DIR is set to a valid path, find_ghidra should return it
+        let existing = std::env::var("GHIDRA_INSTALL_DIR").ok();
+        // Test with invalid path - should not find it via env
+        std::env::set_var("GHIDRA_INSTALL_DIR", "/nonexistent/ghidra");
+        // find_ghidra may still find it at /opt/ghidra etc, so we just ensure it doesn't crash
+        let _ = GhidraRunner::find_ghidra();
+        // Restore
+        if let Some(val) = existing {
+            std::env::set_var("GHIDRA_INSTALL_DIR", val);
+        } else {
+            std::env::remove_var("GHIDRA_INSTALL_DIR");
+        }
+    }
+
+    #[test]
+    fn test_parse_ghidra_json_minimal() {
+        let json = serde_json::json!({
+            "functions": [
+                {
+                    "name": "main",
+                    "address": "00401000",
+                    "size": 42,
+                    "decompiled": "int main(int argc, char **argv) { return 0; }",
+                    "calls": ["00401100"],
+                    "called_by": [],
+                    "parameter_count": 2
+                }
+            ],
+            "strings": [
+                {
+                    "value": "/bin/sh",
+                    "offset": "00402000",
+                    "encoding": "ascii"
+                }
+            ],
+            "imports": [
+                {
+                    "name": "system",
+                    "library": "libc.so.6"
+                }
+            ]
+        });
+
+        let analysis = parse_ghidra_json(&json).unwrap();
+        assert_eq!(analysis.functions.len(), 1);
+        assert_eq!(analysis.functions[0].name, "main");
+        assert_eq!(analysis.functions[0].decompiled.as_deref(), Some("int main(int argc, char **argv) { return 0; }"));
+        assert_eq!(analysis.functions[0].calls.len(), 1);
+        assert_eq!(analysis.strings.len(), 1);
+        assert_eq!(analysis.strings[0].value, "/bin/sh");
+        assert_eq!(analysis.imports.len(), 1);
+        assert_eq!(analysis.imports[0].name, "system");
+    }
+
+    #[test]
+    fn test_parse_ghidra_json_empty() {
+        let json = serde_json::json!({
+            "functions": [],
+            "strings": [],
+            "imports": []
+        });
+        let analysis = parse_ghidra_json(&json).unwrap();
+        assert!(analysis.functions.is_empty());
+        assert!(analysis.strings.is_empty());
+        assert!(analysis.imports.is_empty());
+    }
+
+    #[test]
+    fn test_parse_ghidra_json_numeric_offset() {
+        let json = serde_json::json!({
+            "functions": [],
+            "strings": [{"value": "hello", "offset": 12345, "encoding": "utf8"}],
+            "imports": []
+        });
+        let analysis = parse_ghidra_json(&json).unwrap();
+        assert_eq!(analysis.strings[0].offset, 12345);
     }
 }
