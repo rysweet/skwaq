@@ -42,12 +42,37 @@ impl Gym {
                 skwaq_root.join("tests/fixtures"),
             ))];
 
-        // Add Juliet adapter if manifest exists
-        let juliet_manifest = gt_dir.join("juliet.toml");
-        if juliet_manifest.exists() {
-            adapter_list.push(Box::new(adapters::juliet::JulietAdapter::new(
-                juliet_manifest,
-            )));
+        // Add industry benchmark adapters if their manifests exist
+        for (name, constructor) in [
+            (
+                "juliet",
+                Box::new(|p: PathBuf| -> Box<dyn BenchmarkAdapter> {
+                    Box::new(adapters::juliet::JulietAdapter::new(p))
+                }) as Box<dyn Fn(PathBuf) -> Box<dyn BenchmarkAdapter>>,
+            ),
+            (
+                "cgc",
+                Box::new(|p: PathBuf| -> Box<dyn BenchmarkAdapter> {
+                    Box::new(adapters::cgc::CgcAdapter::new(p))
+                }) as Box<dyn Fn(PathBuf) -> Box<dyn BenchmarkAdapter>>,
+            ),
+            (
+                "cyberseceval",
+                Box::new(|p: PathBuf| -> Box<dyn BenchmarkAdapter> {
+                    Box::new(adapters::cyberseceval::CyberSecEvalAdapter::new(p))
+                }) as Box<dyn Fn(PathBuf) -> Box<dyn BenchmarkAdapter>>,
+            ),
+            (
+                "owasp",
+                Box::new(|p: PathBuf| -> Box<dyn BenchmarkAdapter> {
+                    Box::new(adapters::owasp::OwaspBenchmarkAdapter::new(p))
+                }) as Box<dyn Fn(PathBuf) -> Box<dyn BenchmarkAdapter>>,
+            ),
+        ] {
+            let manifest = gt_dir.join(format!("{}.toml", name));
+            if manifest.exists() {
+                adapter_list.push(constructor(manifest));
+            }
         }
 
         let adapters = adapter_list;

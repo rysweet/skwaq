@@ -1,0 +1,356 @@
+suite = "cgc"
+version = "cb-multios"
+download_url = ""
+download_sha256 = ""
+
+[[cases]]
+id = "3D_Image_Toolkit"
+path = "challenges/3D_Image_Toolkit/src/main.c"
+expected_cwes = [125]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "AIS-Lite"
+path = "challenges/AIS-Lite/src/sentence.c"
+expected_cwes = [20, 120, 122, 129, 788]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "ASCII_Content_Server"
+path = "challenges/ASCII_Content_Server/src/page.c"
+expected_cwes = [195, 476, 787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "ASL6parse"
+path = "challenges/ASL6parse/src/main.c"
+expected_cwes = [125]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Accel"
+path = "challenges/Accel/src/main.c"
+expected_cwes = [193, 457]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Audio_Visualizer"
+path = "challenges/Audio_Visualizer/src/main.c"
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Barcoder"
+path = "challenges/Barcoder/src/main.c"
+expected_cwes = [121, 134, 839]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "BitBlaster"
+path = "challenges/BitBlaster/src/main.c"
+expected_cwes = [476, 824]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Bloomy_Sunday"
+path = "challenges/Bloomy_Sunday/src/main.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Board_Game"
+path = "challenges/Board_Game/src/moves.c"
+expected_cwes = [787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "BudgIT"
+path = "challenges/BudgIT/src/map.c"
+expected_cwes = [122, 125, 131, 193, 469, 787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CGC_Board"
+path = "challenges/CGC_Board/src/main.c"
+expected_cwes = [122, 823]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CGC_File_System"
+path = "challenges/CGC_File_System/src/recv.c"
+expected_cwes = [125]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CGC_Hangman_Game"
+path = "challenges/CGC_Hangman_Game/src/words.c"
+expected_cwes = [121, 134]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CGC_Image_Parser"
+path = "challenges/CGC_Image_Parser/src/tpai_image_data.c"
+expected_cwes = [129, 416]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CGC_Planet_Markup_Language_Parser"
+path = "challenges/CGC_Planet_Markup_Language_Parser/src/planetParsers.c"
+expected_cwes = [120, 122, 476]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CGC_Symbol_Viewer_CSV"
+path = "challenges/CGC_Symbol_Viewer_CSV/src/main.c"
+expected_cwes = [190, 839]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CGC_Video_Format_Parser_and_Viewer"
+path = "challenges/CGC_Video_Format_Parser_and_Viewer/src/bitstream.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CLOUDCOMPUTE"
+path = "challenges/CLOUDCOMPUTE/src/service.c"
+expected_cwes = [122, 843]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CNMP"
+path = "challenges/CNMP/src/service.c"
+expected_cwes = [134]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "COLLIDEOSCOPE"
+path = "challenges/COLLIDEOSCOPE/src/parser.c"
+expected_cwes = [119, 703, 704, 843]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CTTP"
+path = "challenges/CTTP/src/service.c"
+expected_cwes = [121, 125, 822]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CableGrind"
+path = "challenges/CableGrind/src/cablegrind.c"
+expected_cwes = [121, 131]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CableGrindLlama"
+path = "challenges/CableGrindLlama/src/cablegrind.c"
+expected_cwes = [122, 131]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Carbonate"
+path = "challenges/Carbonate/src/scramble_gen.c"
+expected_cwes = [129]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Casino_Games"
+path = "challenges/Casino_Games/src/casino.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Cereal_Mixup__A_Cereal_Vending_Machine_Controller"
+path = "challenges/Cereal_Mixup__A_Cereal_Vending_Machine_Controller/src/breakfast.c"
+expected_cwes = [502, 822]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Character_Statistics"
+path = "challenges/Character_Statistics/src/charstats.c"
+expected_cwes = [189, 681]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Charter"
+path = "challenges/Charter/src/bars.c"
+expected_cwes = [120, 122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Checkmate"
+path = "challenges/Checkmate/src/ai.c"
+expected_cwes = [20, 134, 201]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Childs_Game"
+path = "challenges/Childs_Game/src/main.c"
+expected_cwes = [121, 839]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Corinth"
+path = "challenges/Corinth/src/monte.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Cromulence_All_Service"
+path = "challenges/Cromulence_All_Service/src/encode_data.c"
+expected_cwes = [121, 131, 190, 195]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Diary_Parser"
+path = "challenges/Diary_Parser/src/service.c"
+expected_cwes = [121, 125, 476]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Differ"
+path = "challenges/Differ/src/main.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Diophantine_Password_Wallet"
+path = "challenges/Diophantine_Password_Wallet/src/main.c"
+expected_cwes = [476, 824]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Dive_Logger"
+path = "challenges/Dive_Logger/src/ui.c"
+expected_cwes = [787, 839]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Document_Rendering_Engine"
+path = "challenges/Document_Rendering_Engine/src/service.c"
+expected_cwes = [121, 122, 125, 131, 787, 788]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Dungeon_Master"
+path = "challenges/Dungeon_Master/src/dungeon.c"
+expected_cwes = [121, 125, 170, 193, 787, 788]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Eddy"
+path = "challenges/Eddy/src/editor.c"
+expected_cwes = [120, 122, 201, 787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Email_System_2"
+path = "challenges/Email_System_2/src/message.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Enslavednode_chat"
+path = "challenges/Enslavednode_chat/src/main.c"
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Estadio"
+path = "challenges/Estadio/src/messages.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "EternalPass"
+path = "challenges/EternalPass/src/adverbs.c"
+expected_cwes = [822]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "FISHYXML"
+path = "challenges/FISHYXML/src/hand.c"
+expected_cwes = [20, 122, 129, 131, 787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "FSK_BBS"
+path = "challenges/FSK_BBS/src/modem.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "FSK_Messaging_Service"
+path = "challenges/FSK_Messaging_Service/src/packet.c"
+expected_cwes = [120, 122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "FUN"
+path = "challenges/FUN/src/main.c"
+expected_cwes = [788]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "FablesReport"
+path = "challenges/FablesReport/src/service.c"
+expected_cwes = [122, 123, 190, 763, 788]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "FaceMag"
+path = "challenges/FaceMag/src/stickyposts.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+# Total challenges with CWE info: 195

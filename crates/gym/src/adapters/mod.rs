@@ -1,7 +1,10 @@
 //! Benchmark adapter trait and implementations.
 
+pub mod cgc;
+pub mod cyberseceval;
 pub mod fixtures;
 pub mod juliet;
+pub mod owasp;
 
 use crate::ground_truth::{GroundTruth, TestCase};
 use async_trait::async_trait;

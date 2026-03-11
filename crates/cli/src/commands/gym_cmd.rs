@@ -10,7 +10,7 @@ pub enum GymSub {
 
     /// Run benchmarks
     Run {
-        /// Suite name (fixtures). Omit for all.
+        /// Suite name (fixtures, juliet, cgc, cyberseceval, owasp). Omit for all.
         suite: Option<String>,
 
         /// Filter to specific CWE (e.g., CWE-119)
