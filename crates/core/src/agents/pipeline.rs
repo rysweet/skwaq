@@ -178,14 +178,17 @@ pub fn deep_pipeline() -> AnalysisPipeline {
                         .into(),
                 },
             },
+            // Synthesis: final verdict based on all validation perspectives
             PipelineStage {
-                agent_name: "cwe-classifier".into(),
+                agent_name: "verdict-synthesizer".into(),
                 context_mode: ContextMode::FromPreviousResults {
-                    preamble: "Review each vulnerability finding and its validation results below. \
-                               Verify the CWE classification, calibrate severity, check evidence quality, \
-                               and flag duplicates. Only CONFIRM findings that have been validated by \
-                               the exploit analyst and defense analyst. REJECT findings that were \
-                               marked as not exploitable or fully mitigated by both validators."
+                    preamble: "You have received the complete output from all agents in the pipeline: \
+                               attack-surface mapping, vulnerability hunting, exploit analysis, and \
+                               defense analysis. Synthesize ALL perspectives into final verdicts. \
+                               For each finding that is genuinely exploitable (confirmed by exploit-analyst \
+                               AND not fully mitigated per defense-analyst), use create_finding to record \
+                               the confirmed vulnerability. Reject false positives and explain why. \
+                               Be decisive — false positives damage credibility more than false negatives."
                         .into(),
                 },
             },

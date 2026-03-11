@@ -95,9 +95,17 @@ pub async fn run_agentic_source_analysis(
     let _cycles = orchestrator.run_quick_analysis(&inv_id)?;
 
     // --- Layer 4: LLM agent pipeline ---
+    // The LLM agents will create their own findings via create_finding tool.
+    // Mark existing pattern findings as 'challenged' so the LLM pipeline
+    // can confirm or reject them through the validation panel.
+    let _ = db.execute(
+        "UPDATE findings SET status = 'challenged' WHERE investigation_id = ?1 AND status = 'new'",
+        &[&inv_id],
+    );
+
     run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await;
 
-    // Collect all non-invalidated findings
+    // Collect findings: both LLM-confirmed and pattern findings that survived
     collect_findings_from_db(&db, &inv_id)
 }
 
