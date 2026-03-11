@@ -105,7 +105,7 @@ fn default_ollama() -> String {
     "ollama".into()
 }
 fn default_model() -> String {
-    "openai/gpt-4o-mini".into()
+    "openai/gpt-4o".into()
 }
 fn default_ollama_host() -> String {
     "http://localhost:11434".into()

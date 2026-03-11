@@ -1,7 +1,7 @@
 ---
 name: attack-surface
 description: Attack surface mapper
-model: openai/gpt-4o-mini
+model: openai/gpt-4o
 tools:
   - query_graph
   - read_function
