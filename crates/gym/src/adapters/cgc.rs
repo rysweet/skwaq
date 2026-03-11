@@ -60,14 +60,37 @@ impl BenchmarkAdapter for CgcAdapter {
         &self,
         case: &TestCase,
         data_dir: &Path,
-        config: &BenchmarkConfig,
+        _config: &BenchmarkConfig,
     ) -> anyhow::Result<Vec<DetectedFinding>> {
+        // CGC challenges span multiple source files. Analyze ALL .c files
+        // in the challenge's src/ directory, not just the one listed in path.
         let source_path = data_dir.join(&case.path);
-        if config.quick_mode {
-            run_source_pattern_detection(&source_path)
-        } else {
-            crate::agentic::run_agentic_source_analysis(&source_path, config.timeout_secs).await
+        let challenge_src_dir = source_path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."));
+
+        let mut all_findings = Vec::new();
+
+        // Collect all .c files in the challenge source directory
+        if challenge_src_dir.is_dir() {
+            for entry in std::fs::read_dir(challenge_src_dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("c") {
+                    match run_source_pattern_detection(&path) {
+                        Ok(findings) => all_findings.extend(findings),
+                        Err(e) => tracing::debug!("CGC file {} failed: {}", path.display(), e),
+                    }
+                }
+            }
         }
+
+        // Fallback: analyze just the listed file if directory walk found nothing
+        if all_findings.is_empty() && source_path.exists() {
+            all_findings = run_source_pattern_detection(&source_path)?;
+        }
+
+        Ok(all_findings)
     }
 
     fn map_finding_to_cwes(&self, finding: &DetectedFinding) -> Vec<u32> {
