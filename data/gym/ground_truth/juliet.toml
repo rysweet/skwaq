@@ -4,6 +4,76 @@ download_url = "https://samate.nist.gov/SARD/downloads/test-suites/2017-10-01-ju
 download_sha256 = "ada9d7e1c323d283446df3f55bdee0d00bda1fed786785fe98764d58688f38eb"
 
 [[cases]]
+id = "CWE15_External_Control_of_System_or_Configuration_Setting__w32_01"
+path = "testcases/CWE15_External_Control_of_System_or_Configuration_Setting/CWE15_External_Control_of_System_or_Configuration_Setting__w32_01.c"
+expected_cwes = [15]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE15_External_Control_of_System_or_Configuration_Setting__w32_02"
+path = "testcases/CWE15_External_Control_of_System_or_Configuration_Setting/CWE15_External_Control_of_System_or_Configuration_Setting__w32_02.c"
+expected_cwes = [15]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE15_External_Control_of_System_or_Configuration_Setting__w32_03"
+path = "testcases/CWE15_External_Control_of_System_or_Configuration_Setting/CWE15_External_Control_of_System_or_Configuration_Setting__w32_03.c"
+expected_cwes = [15]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE15_External_Control_of_System_or_Configuration_Setting__w32_04"
+path = "testcases/CWE15_External_Control_of_System_or_Configuration_Setting/CWE15_External_Control_of_System_or_Configuration_Setting__w32_04.c"
+expected_cwes = [15]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE15_External_Control_of_System_or_Configuration_Setting__w32_05"
+path = "testcases/CWE15_External_Control_of_System_or_Configuration_Setting/CWE15_External_Control_of_System_or_Configuration_Setting__w32_05.c"
+expected_cwes = [15]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE15_External_Control_of_System_or_Configuration_Setting__w32_06"
+path = "testcases/CWE15_External_Control_of_System_or_Configuration_Setting/CWE15_External_Control_of_System_or_Configuration_Setting__w32_06.c"
+expected_cwes = [15]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE15_External_Control_of_System_or_Configuration_Setting__w32_07"
+path = "testcases/CWE15_External_Control_of_System_or_Configuration_Setting/CWE15_External_Control_of_System_or_Configuration_Setting__w32_07.c"
+expected_cwes = [15]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE15_External_Control_of_System_or_Configuration_Setting__w32_08"
+path = "testcases/CWE15_External_Control_of_System_or_Configuration_Setting/CWE15_External_Control_of_System_or_Configuration_Setting__w32_08.c"
+expected_cwes = [15]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE15_External_Control_of_System_or_Configuration_Setting__w32_09"
+path = "testcases/CWE15_External_Control_of_System_or_Configuration_Setting/CWE15_External_Control_of_System_or_Configuration_Setting__w32_09.c"
+expected_cwes = [15]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE15_External_Control_of_System_or_Configuration_Setting__w32_10"
+path = "testcases/CWE15_External_Control_of_System_or_Configuration_Setting/CWE15_External_Control_of_System_or_Configuration_Setting__w32_10.c"
+expected_cwes = [15]
+is_negative = false
+language = "c"
+
+[[cases]]
 id = "CWE78_OS_Command_Injection__char_connect_socket_execl_01"
 path = "testcases/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_01.c"
 expected_cwes = [78]
@@ -39,6 +109,181 @@ is_negative = false
 language = "c"
 
 [[cases]]
+id = "CWE78_OS_Command_Injection__char_connect_socket_execl_06"
+path = "testcases/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_06.c"
+expected_cwes = [78]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE78_OS_Command_Injection__char_connect_socket_execl_07"
+path = "testcases/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_07.c"
+expected_cwes = [78]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE78_OS_Command_Injection__char_connect_socket_execl_08"
+path = "testcases/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_08.c"
+expected_cwes = [78]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE78_OS_Command_Injection__char_connect_socket_execl_09"
+path = "testcases/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_09.c"
+expected_cwes = [78]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE78_OS_Command_Injection__char_connect_socket_execl_10"
+path = "testcases/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_execl_10.c"
+expected_cwes = [78]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE90_LDAP_Injection__w32_char_connect_socket_01"
+path = "testcases/CWE90_LDAP_Injection/CWE90_LDAP_Injection__w32_char_connect_socket_01.c"
+expected_cwes = [90]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE90_LDAP_Injection__w32_char_connect_socket_02"
+path = "testcases/CWE90_LDAP_Injection/CWE90_LDAP_Injection__w32_char_connect_socket_02.c"
+expected_cwes = [90]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE90_LDAP_Injection__w32_char_connect_socket_03"
+path = "testcases/CWE90_LDAP_Injection/CWE90_LDAP_Injection__w32_char_connect_socket_03.c"
+expected_cwes = [90]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE90_LDAP_Injection__w32_char_connect_socket_04"
+path = "testcases/CWE90_LDAP_Injection/CWE90_LDAP_Injection__w32_char_connect_socket_04.c"
+expected_cwes = [90]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE90_LDAP_Injection__w32_char_connect_socket_05"
+path = "testcases/CWE90_LDAP_Injection/CWE90_LDAP_Injection__w32_char_connect_socket_05.c"
+expected_cwes = [90]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE90_LDAP_Injection__w32_char_connect_socket_06"
+path = "testcases/CWE90_LDAP_Injection/CWE90_LDAP_Injection__w32_char_connect_socket_06.c"
+expected_cwes = [90]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE90_LDAP_Injection__w32_char_connect_socket_07"
+path = "testcases/CWE90_LDAP_Injection/CWE90_LDAP_Injection__w32_char_connect_socket_07.c"
+expected_cwes = [90]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE90_LDAP_Injection__w32_char_connect_socket_08"
+path = "testcases/CWE90_LDAP_Injection/CWE90_LDAP_Injection__w32_char_connect_socket_08.c"
+expected_cwes = [90]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE90_LDAP_Injection__w32_char_connect_socket_09"
+path = "testcases/CWE90_LDAP_Injection/CWE90_LDAP_Injection__w32_char_connect_socket_09.c"
+expected_cwes = [90]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE90_LDAP_Injection__w32_char_connect_socket_10"
+path = "testcases/CWE90_LDAP_Injection/CWE90_LDAP_Injection__w32_char_connect_socket_10.c"
+expected_cwes = [90]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE114_Process_Control__w32_char_connect_socket_01"
+path = "testcases/CWE114_Process_Control/CWE114_Process_Control__w32_char_connect_socket_01.c"
+expected_cwes = [114]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE114_Process_Control__w32_char_connect_socket_02"
+path = "testcases/CWE114_Process_Control/CWE114_Process_Control__w32_char_connect_socket_02.c"
+expected_cwes = [114]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE114_Process_Control__w32_char_connect_socket_03"
+path = "testcases/CWE114_Process_Control/CWE114_Process_Control__w32_char_connect_socket_03.c"
+expected_cwes = [114]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE114_Process_Control__w32_char_connect_socket_04"
+path = "testcases/CWE114_Process_Control/CWE114_Process_Control__w32_char_connect_socket_04.c"
+expected_cwes = [114]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE114_Process_Control__w32_char_connect_socket_05"
+path = "testcases/CWE114_Process_Control/CWE114_Process_Control__w32_char_connect_socket_05.c"
+expected_cwes = [114]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE114_Process_Control__w32_char_connect_socket_06"
+path = "testcases/CWE114_Process_Control/CWE114_Process_Control__w32_char_connect_socket_06.c"
+expected_cwes = [114]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE114_Process_Control__w32_char_connect_socket_07"
+path = "testcases/CWE114_Process_Control/CWE114_Process_Control__w32_char_connect_socket_07.c"
+expected_cwes = [114]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE114_Process_Control__w32_char_connect_socket_08"
+path = "testcases/CWE114_Process_Control/CWE114_Process_Control__w32_char_connect_socket_08.c"
+expected_cwes = [114]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE114_Process_Control__w32_char_connect_socket_09"
+path = "testcases/CWE114_Process_Control/CWE114_Process_Control__w32_char_connect_socket_09.c"
+expected_cwes = [114]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE114_Process_Control__w32_char_connect_socket_10"
+path = "testcases/CWE114_Process_Control/CWE114_Process_Control__w32_char_connect_socket_10.c"
+expected_cwes = [114]
+is_negative = false
+language = "c"
+
+[[cases]]
 id = "CWE121_Stack_Based_Buffer_Overflow__CWE129_connect_socket_01"
 path = "testcases/CWE121_Stack_Based_Buffer_Overflow/s01/CWE121_Stack_Based_Buffer_Overflow__CWE129_connect_socket_01.c"
 expected_cwes = [121]
@@ -69,6 +314,41 @@ language = "c"
 [[cases]]
 id = "CWE121_Stack_Based_Buffer_Overflow__CWE129_connect_socket_05"
 path = "testcases/CWE121_Stack_Based_Buffer_Overflow/s01/CWE121_Stack_Based_Buffer_Overflow__CWE129_connect_socket_05.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE121_Stack_Based_Buffer_Overflow__CWE129_connect_socket_06"
+path = "testcases/CWE121_Stack_Based_Buffer_Overflow/s01/CWE121_Stack_Based_Buffer_Overflow__CWE129_connect_socket_06.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE121_Stack_Based_Buffer_Overflow__CWE129_connect_socket_07"
+path = "testcases/CWE121_Stack_Based_Buffer_Overflow/s01/CWE121_Stack_Based_Buffer_Overflow__CWE129_connect_socket_07.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE121_Stack_Based_Buffer_Overflow__CWE129_connect_socket_08"
+path = "testcases/CWE121_Stack_Based_Buffer_Overflow/s01/CWE121_Stack_Based_Buffer_Overflow__CWE129_connect_socket_08.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE121_Stack_Based_Buffer_Overflow__CWE129_connect_socket_09"
+path = "testcases/CWE121_Stack_Based_Buffer_Overflow/s01/CWE121_Stack_Based_Buffer_Overflow__CWE129_connect_socket_09.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE121_Stack_Based_Buffer_Overflow__CWE129_connect_socket_10"
+path = "testcases/CWE121_Stack_Based_Buffer_Overflow/s01/CWE121_Stack_Based_Buffer_Overflow__CWE129_connect_socket_10.c"
 expected_cwes = [121]
 is_negative = false
 language = "c"
@@ -109,6 +389,321 @@ is_negative = false
 language = "c"
 
 [[cases]]
+id = "CWE122_Heap_Based_Buffer_Overflow__char_type_overrun_memcpy_06"
+path = "testcases/CWE122_Heap_Based_Buffer_Overflow/s01/CWE122_Heap_Based_Buffer_Overflow__char_type_overrun_memcpy_06.c"
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE122_Heap_Based_Buffer_Overflow__char_type_overrun_memcpy_07"
+path = "testcases/CWE122_Heap_Based_Buffer_Overflow/s01/CWE122_Heap_Based_Buffer_Overflow__char_type_overrun_memcpy_07.c"
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE122_Heap_Based_Buffer_Overflow__char_type_overrun_memcpy_08"
+path = "testcases/CWE122_Heap_Based_Buffer_Overflow/s01/CWE122_Heap_Based_Buffer_Overflow__char_type_overrun_memcpy_08.c"
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE122_Heap_Based_Buffer_Overflow__char_type_overrun_memcpy_09"
+path = "testcases/CWE122_Heap_Based_Buffer_Overflow/s01/CWE122_Heap_Based_Buffer_Overflow__char_type_overrun_memcpy_09.c"
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE122_Heap_Based_Buffer_Overflow__char_type_overrun_memcpy_10"
+path = "testcases/CWE122_Heap_Based_Buffer_Overflow/s01/CWE122_Heap_Based_Buffer_Overflow__char_type_overrun_memcpy_10.c"
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE123_Write_What_Where_Condition__connect_socket_01"
+path = "testcases/CWE123_Write_What_Where_Condition/CWE123_Write_What_Where_Condition__connect_socket_01.c"
+expected_cwes = [123]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE123_Write_What_Where_Condition__connect_socket_02"
+path = "testcases/CWE123_Write_What_Where_Condition/CWE123_Write_What_Where_Condition__connect_socket_02.c"
+expected_cwes = [123]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE123_Write_What_Where_Condition__connect_socket_03"
+path = "testcases/CWE123_Write_What_Where_Condition/CWE123_Write_What_Where_Condition__connect_socket_03.c"
+expected_cwes = [123]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE123_Write_What_Where_Condition__connect_socket_04"
+path = "testcases/CWE123_Write_What_Where_Condition/CWE123_Write_What_Where_Condition__connect_socket_04.c"
+expected_cwes = [123]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE123_Write_What_Where_Condition__connect_socket_05"
+path = "testcases/CWE123_Write_What_Where_Condition/CWE123_Write_What_Where_Condition__connect_socket_05.c"
+expected_cwes = [123]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE123_Write_What_Where_Condition__connect_socket_06"
+path = "testcases/CWE123_Write_What_Where_Condition/CWE123_Write_What_Where_Condition__connect_socket_06.c"
+expected_cwes = [123]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE123_Write_What_Where_Condition__connect_socket_07"
+path = "testcases/CWE123_Write_What_Where_Condition/CWE123_Write_What_Where_Condition__connect_socket_07.c"
+expected_cwes = [123]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE123_Write_What_Where_Condition__connect_socket_08"
+path = "testcases/CWE123_Write_What_Where_Condition/CWE123_Write_What_Where_Condition__connect_socket_08.c"
+expected_cwes = [123]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE123_Write_What_Where_Condition__connect_socket_09"
+path = "testcases/CWE123_Write_What_Where_Condition/CWE123_Write_What_Where_Condition__connect_socket_09.c"
+expected_cwes = [123]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE123_Write_What_Where_Condition__connect_socket_10"
+path = "testcases/CWE123_Write_What_Where_Condition/CWE123_Write_What_Where_Condition__connect_socket_10.c"
+expected_cwes = [123]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE124_Buffer_Underwrite__CWE839_connect_socket_01"
+path = "testcases/CWE124_Buffer_Underwrite/s01/CWE124_Buffer_Underwrite__CWE839_connect_socket_01.c"
+expected_cwes = [124]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE124_Buffer_Underwrite__CWE839_connect_socket_02"
+path = "testcases/CWE124_Buffer_Underwrite/s01/CWE124_Buffer_Underwrite__CWE839_connect_socket_02.c"
+expected_cwes = [124]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE124_Buffer_Underwrite__CWE839_connect_socket_03"
+path = "testcases/CWE124_Buffer_Underwrite/s01/CWE124_Buffer_Underwrite__CWE839_connect_socket_03.c"
+expected_cwes = [124]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE124_Buffer_Underwrite__CWE839_connect_socket_04"
+path = "testcases/CWE124_Buffer_Underwrite/s01/CWE124_Buffer_Underwrite__CWE839_connect_socket_04.c"
+expected_cwes = [124]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE124_Buffer_Underwrite__CWE839_connect_socket_05"
+path = "testcases/CWE124_Buffer_Underwrite/s01/CWE124_Buffer_Underwrite__CWE839_connect_socket_05.c"
+expected_cwes = [124]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE124_Buffer_Underwrite__CWE839_connect_socket_06"
+path = "testcases/CWE124_Buffer_Underwrite/s01/CWE124_Buffer_Underwrite__CWE839_connect_socket_06.c"
+expected_cwes = [124]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE124_Buffer_Underwrite__CWE839_connect_socket_07"
+path = "testcases/CWE124_Buffer_Underwrite/s01/CWE124_Buffer_Underwrite__CWE839_connect_socket_07.c"
+expected_cwes = [124]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE124_Buffer_Underwrite__CWE839_connect_socket_08"
+path = "testcases/CWE124_Buffer_Underwrite/s01/CWE124_Buffer_Underwrite__CWE839_connect_socket_08.c"
+expected_cwes = [124]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE124_Buffer_Underwrite__CWE839_connect_socket_09"
+path = "testcases/CWE124_Buffer_Underwrite/s01/CWE124_Buffer_Underwrite__CWE839_connect_socket_09.c"
+expected_cwes = [124]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE124_Buffer_Underwrite__CWE839_connect_socket_10"
+path = "testcases/CWE124_Buffer_Underwrite/s01/CWE124_Buffer_Underwrite__CWE839_connect_socket_10.c"
+expected_cwes = [124]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE126_Buffer_Overread__CWE129_connect_socket_01"
+path = "testcases/CWE126_Buffer_Overread/s01/CWE126_Buffer_Overread__CWE129_connect_socket_01.c"
+expected_cwes = [126]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE126_Buffer_Overread__CWE129_connect_socket_02"
+path = "testcases/CWE126_Buffer_Overread/s01/CWE126_Buffer_Overread__CWE129_connect_socket_02.c"
+expected_cwes = [126]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE126_Buffer_Overread__CWE129_connect_socket_03"
+path = "testcases/CWE126_Buffer_Overread/s01/CWE126_Buffer_Overread__CWE129_connect_socket_03.c"
+expected_cwes = [126]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE126_Buffer_Overread__CWE129_connect_socket_04"
+path = "testcases/CWE126_Buffer_Overread/s01/CWE126_Buffer_Overread__CWE129_connect_socket_04.c"
+expected_cwes = [126]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE126_Buffer_Overread__CWE129_connect_socket_05"
+path = "testcases/CWE126_Buffer_Overread/s01/CWE126_Buffer_Overread__CWE129_connect_socket_05.c"
+expected_cwes = [126]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE126_Buffer_Overread__CWE129_connect_socket_06"
+path = "testcases/CWE126_Buffer_Overread/s01/CWE126_Buffer_Overread__CWE129_connect_socket_06.c"
+expected_cwes = [126]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE126_Buffer_Overread__CWE129_connect_socket_07"
+path = "testcases/CWE126_Buffer_Overread/s01/CWE126_Buffer_Overread__CWE129_connect_socket_07.c"
+expected_cwes = [126]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE126_Buffer_Overread__CWE129_connect_socket_08"
+path = "testcases/CWE126_Buffer_Overread/s01/CWE126_Buffer_Overread__CWE129_connect_socket_08.c"
+expected_cwes = [126]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE126_Buffer_Overread__CWE129_connect_socket_09"
+path = "testcases/CWE126_Buffer_Overread/s01/CWE126_Buffer_Overread__CWE129_connect_socket_09.c"
+expected_cwes = [126]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE126_Buffer_Overread__CWE129_connect_socket_10"
+path = "testcases/CWE126_Buffer_Overread/s01/CWE126_Buffer_Overread__CWE129_connect_socket_10.c"
+expected_cwes = [126]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE127_Buffer_Underread__CWE839_connect_socket_01"
+path = "testcases/CWE127_Buffer_Underread/s01/CWE127_Buffer_Underread__CWE839_connect_socket_01.c"
+expected_cwes = [127]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE127_Buffer_Underread__CWE839_connect_socket_02"
+path = "testcases/CWE127_Buffer_Underread/s01/CWE127_Buffer_Underread__CWE839_connect_socket_02.c"
+expected_cwes = [127]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE127_Buffer_Underread__CWE839_connect_socket_03"
+path = "testcases/CWE127_Buffer_Underread/s01/CWE127_Buffer_Underread__CWE839_connect_socket_03.c"
+expected_cwes = [127]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE127_Buffer_Underread__CWE839_connect_socket_04"
+path = "testcases/CWE127_Buffer_Underread/s01/CWE127_Buffer_Underread__CWE839_connect_socket_04.c"
+expected_cwes = [127]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE127_Buffer_Underread__CWE839_connect_socket_05"
+path = "testcases/CWE127_Buffer_Underread/s01/CWE127_Buffer_Underread__CWE839_connect_socket_05.c"
+expected_cwes = [127]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE127_Buffer_Underread__CWE839_connect_socket_06"
+path = "testcases/CWE127_Buffer_Underread/s01/CWE127_Buffer_Underread__CWE839_connect_socket_06.c"
+expected_cwes = [127]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE127_Buffer_Underread__CWE839_connect_socket_07"
+path = "testcases/CWE127_Buffer_Underread/s01/CWE127_Buffer_Underread__CWE839_connect_socket_07.c"
+expected_cwes = [127]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE127_Buffer_Underread__CWE839_connect_socket_08"
+path = "testcases/CWE127_Buffer_Underread/s01/CWE127_Buffer_Underread__CWE839_connect_socket_08.c"
+expected_cwes = [127]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE127_Buffer_Underread__CWE839_connect_socket_09"
+path = "testcases/CWE127_Buffer_Underread/s01/CWE127_Buffer_Underread__CWE839_connect_socket_09.c"
+expected_cwes = [127]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE127_Buffer_Underread__CWE839_connect_socket_10"
+path = "testcases/CWE127_Buffer_Underread/s01/CWE127_Buffer_Underread__CWE839_connect_socket_10.c"
+expected_cwes = [127]
+is_negative = false
+language = "c"
+
+[[cases]]
 id = "CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_01"
 path = "testcases/CWE134_Uncontrolled_Format_String/s01/CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_01.c"
 expected_cwes = [134]
@@ -140,6 +735,181 @@ language = "c"
 id = "CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_05"
 path = "testcases/CWE134_Uncontrolled_Format_String/s01/CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_05.c"
 expected_cwes = [134]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_06"
+path = "testcases/CWE134_Uncontrolled_Format_String/s01/CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_06.c"
+expected_cwes = [134]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_07"
+path = "testcases/CWE134_Uncontrolled_Format_String/s01/CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_07.c"
+expected_cwes = [134]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_08"
+path = "testcases/CWE134_Uncontrolled_Format_String/s01/CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_08.c"
+expected_cwes = [134]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_09"
+path = "testcases/CWE134_Uncontrolled_Format_String/s01/CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_09.c"
+expected_cwes = [134]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_10"
+path = "testcases/CWE134_Uncontrolled_Format_String/s01/CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_10.c"
+expected_cwes = [134]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE176_Improper_Handling_of_Unicode_Encoding__w32_01"
+path = "testcases/CWE176_Improper_Handling_of_Unicode_Encoding/CWE176_Improper_Handling_of_Unicode_Encoding__w32_01.c"
+expected_cwes = [176]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE176_Improper_Handling_of_Unicode_Encoding__w32_02"
+path = "testcases/CWE176_Improper_Handling_of_Unicode_Encoding/CWE176_Improper_Handling_of_Unicode_Encoding__w32_02.c"
+expected_cwes = [176]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE176_Improper_Handling_of_Unicode_Encoding__w32_03"
+path = "testcases/CWE176_Improper_Handling_of_Unicode_Encoding/CWE176_Improper_Handling_of_Unicode_Encoding__w32_03.c"
+expected_cwes = [176]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE176_Improper_Handling_of_Unicode_Encoding__w32_04"
+path = "testcases/CWE176_Improper_Handling_of_Unicode_Encoding/CWE176_Improper_Handling_of_Unicode_Encoding__w32_04.c"
+expected_cwes = [176]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE176_Improper_Handling_of_Unicode_Encoding__w32_05"
+path = "testcases/CWE176_Improper_Handling_of_Unicode_Encoding/CWE176_Improper_Handling_of_Unicode_Encoding__w32_05.c"
+expected_cwes = [176]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE176_Improper_Handling_of_Unicode_Encoding__w32_06"
+path = "testcases/CWE176_Improper_Handling_of_Unicode_Encoding/CWE176_Improper_Handling_of_Unicode_Encoding__w32_06.c"
+expected_cwes = [176]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE176_Improper_Handling_of_Unicode_Encoding__w32_07"
+path = "testcases/CWE176_Improper_Handling_of_Unicode_Encoding/CWE176_Improper_Handling_of_Unicode_Encoding__w32_07.c"
+expected_cwes = [176]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE176_Improper_Handling_of_Unicode_Encoding__w32_08"
+path = "testcases/CWE176_Improper_Handling_of_Unicode_Encoding/CWE176_Improper_Handling_of_Unicode_Encoding__w32_08.c"
+expected_cwes = [176]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE176_Improper_Handling_of_Unicode_Encoding__w32_09"
+path = "testcases/CWE176_Improper_Handling_of_Unicode_Encoding/CWE176_Improper_Handling_of_Unicode_Encoding__w32_09.c"
+expected_cwes = [176]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE176_Improper_Handling_of_Unicode_Encoding__w32_10"
+path = "testcases/CWE176_Improper_Handling_of_Unicode_Encoding/CWE176_Improper_Handling_of_Unicode_Encoding__w32_10.c"
+expected_cwes = [176]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE188_Reliance_on_Data_Memory_Layout__modify_local_01"
+path = "testcases/CWE188_Reliance_on_Data_Memory_Layout/CWE188_Reliance_on_Data_Memory_Layout__modify_local_01.c"
+expected_cwes = [188]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE188_Reliance_on_Data_Memory_Layout__modify_local_02"
+path = "testcases/CWE188_Reliance_on_Data_Memory_Layout/CWE188_Reliance_on_Data_Memory_Layout__modify_local_02.c"
+expected_cwes = [188]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE188_Reliance_on_Data_Memory_Layout__modify_local_03"
+path = "testcases/CWE188_Reliance_on_Data_Memory_Layout/CWE188_Reliance_on_Data_Memory_Layout__modify_local_03.c"
+expected_cwes = [188]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE188_Reliance_on_Data_Memory_Layout__modify_local_04"
+path = "testcases/CWE188_Reliance_on_Data_Memory_Layout/CWE188_Reliance_on_Data_Memory_Layout__modify_local_04.c"
+expected_cwes = [188]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE188_Reliance_on_Data_Memory_Layout__modify_local_05"
+path = "testcases/CWE188_Reliance_on_Data_Memory_Layout/CWE188_Reliance_on_Data_Memory_Layout__modify_local_05.c"
+expected_cwes = [188]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE188_Reliance_on_Data_Memory_Layout__modify_local_06"
+path = "testcases/CWE188_Reliance_on_Data_Memory_Layout/CWE188_Reliance_on_Data_Memory_Layout__modify_local_06.c"
+expected_cwes = [188]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE188_Reliance_on_Data_Memory_Layout__modify_local_07"
+path = "testcases/CWE188_Reliance_on_Data_Memory_Layout/CWE188_Reliance_on_Data_Memory_Layout__modify_local_07.c"
+expected_cwes = [188]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE188_Reliance_on_Data_Memory_Layout__modify_local_08"
+path = "testcases/CWE188_Reliance_on_Data_Memory_Layout/CWE188_Reliance_on_Data_Memory_Layout__modify_local_08.c"
+expected_cwes = [188]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE188_Reliance_on_Data_Memory_Layout__modify_local_09"
+path = "testcases/CWE188_Reliance_on_Data_Memory_Layout/CWE188_Reliance_on_Data_Memory_Layout__modify_local_09.c"
+expected_cwes = [188]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE188_Reliance_on_Data_Memory_Layout__modify_local_10"
+path = "testcases/CWE188_Reliance_on_Data_Memory_Layout/CWE188_Reliance_on_Data_Memory_Layout__modify_local_10.c"
+expected_cwes = [188]
 is_negative = false
 language = "c"
 
@@ -179,6 +949,2491 @@ is_negative = false
 language = "c"
 
 [[cases]]
+id = "CWE190_Integer_Overflow__char_fscanf_add_06"
+path = "testcases/CWE190_Integer_Overflow/s01/CWE190_Integer_Overflow__char_fscanf_add_06.c"
+expected_cwes = [190]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE190_Integer_Overflow__char_fscanf_add_07"
+path = "testcases/CWE190_Integer_Overflow/s01/CWE190_Integer_Overflow__char_fscanf_add_07.c"
+expected_cwes = [190]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE190_Integer_Overflow__char_fscanf_add_08"
+path = "testcases/CWE190_Integer_Overflow/s01/CWE190_Integer_Overflow__char_fscanf_add_08.c"
+expected_cwes = [190]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE190_Integer_Overflow__char_fscanf_add_09"
+path = "testcases/CWE190_Integer_Overflow/s01/CWE190_Integer_Overflow__char_fscanf_add_09.c"
+expected_cwes = [190]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE190_Integer_Overflow__char_fscanf_add_10"
+path = "testcases/CWE190_Integer_Overflow/s01/CWE190_Integer_Overflow__char_fscanf_add_10.c"
+expected_cwes = [190]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE191_Integer_Underflow__char_fscanf_multiply_01"
+path = "testcases/CWE191_Integer_Underflow/s01/CWE191_Integer_Underflow__char_fscanf_multiply_01.c"
+expected_cwes = [191]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE191_Integer_Underflow__char_fscanf_multiply_02"
+path = "testcases/CWE191_Integer_Underflow/s01/CWE191_Integer_Underflow__char_fscanf_multiply_02.c"
+expected_cwes = [191]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE191_Integer_Underflow__char_fscanf_multiply_03"
+path = "testcases/CWE191_Integer_Underflow/s01/CWE191_Integer_Underflow__char_fscanf_multiply_03.c"
+expected_cwes = [191]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE191_Integer_Underflow__char_fscanf_multiply_04"
+path = "testcases/CWE191_Integer_Underflow/s01/CWE191_Integer_Underflow__char_fscanf_multiply_04.c"
+expected_cwes = [191]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE191_Integer_Underflow__char_fscanf_multiply_05"
+path = "testcases/CWE191_Integer_Underflow/s01/CWE191_Integer_Underflow__char_fscanf_multiply_05.c"
+expected_cwes = [191]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE191_Integer_Underflow__char_fscanf_multiply_06"
+path = "testcases/CWE191_Integer_Underflow/s01/CWE191_Integer_Underflow__char_fscanf_multiply_06.c"
+expected_cwes = [191]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE191_Integer_Underflow__char_fscanf_multiply_07"
+path = "testcases/CWE191_Integer_Underflow/s01/CWE191_Integer_Underflow__char_fscanf_multiply_07.c"
+expected_cwes = [191]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE191_Integer_Underflow__char_fscanf_multiply_08"
+path = "testcases/CWE191_Integer_Underflow/s01/CWE191_Integer_Underflow__char_fscanf_multiply_08.c"
+expected_cwes = [191]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE191_Integer_Underflow__char_fscanf_multiply_09"
+path = "testcases/CWE191_Integer_Underflow/s01/CWE191_Integer_Underflow__char_fscanf_multiply_09.c"
+expected_cwes = [191]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE191_Integer_Underflow__char_fscanf_multiply_10"
+path = "testcases/CWE191_Integer_Underflow/s01/CWE191_Integer_Underflow__char_fscanf_multiply_10.c"
+expected_cwes = [191]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE194_Unexpected_Sign_Extension__connect_socket_malloc_01"
+path = "testcases/CWE194_Unexpected_Sign_Extension/s01/CWE194_Unexpected_Sign_Extension__connect_socket_malloc_01.c"
+expected_cwes = [194]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE194_Unexpected_Sign_Extension__connect_socket_malloc_02"
+path = "testcases/CWE194_Unexpected_Sign_Extension/s01/CWE194_Unexpected_Sign_Extension__connect_socket_malloc_02.c"
+expected_cwes = [194]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE194_Unexpected_Sign_Extension__connect_socket_malloc_03"
+path = "testcases/CWE194_Unexpected_Sign_Extension/s01/CWE194_Unexpected_Sign_Extension__connect_socket_malloc_03.c"
+expected_cwes = [194]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE194_Unexpected_Sign_Extension__connect_socket_malloc_04"
+path = "testcases/CWE194_Unexpected_Sign_Extension/s01/CWE194_Unexpected_Sign_Extension__connect_socket_malloc_04.c"
+expected_cwes = [194]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE194_Unexpected_Sign_Extension__connect_socket_malloc_05"
+path = "testcases/CWE194_Unexpected_Sign_Extension/s01/CWE194_Unexpected_Sign_Extension__connect_socket_malloc_05.c"
+expected_cwes = [194]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE194_Unexpected_Sign_Extension__connect_socket_malloc_06"
+path = "testcases/CWE194_Unexpected_Sign_Extension/s01/CWE194_Unexpected_Sign_Extension__connect_socket_malloc_06.c"
+expected_cwes = [194]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE194_Unexpected_Sign_Extension__connect_socket_malloc_07"
+path = "testcases/CWE194_Unexpected_Sign_Extension/s01/CWE194_Unexpected_Sign_Extension__connect_socket_malloc_07.c"
+expected_cwes = [194]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE194_Unexpected_Sign_Extension__connect_socket_malloc_08"
+path = "testcases/CWE194_Unexpected_Sign_Extension/s01/CWE194_Unexpected_Sign_Extension__connect_socket_malloc_08.c"
+expected_cwes = [194]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE194_Unexpected_Sign_Extension__connect_socket_malloc_09"
+path = "testcases/CWE194_Unexpected_Sign_Extension/s01/CWE194_Unexpected_Sign_Extension__connect_socket_malloc_09.c"
+expected_cwes = [194]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE194_Unexpected_Sign_Extension__connect_socket_malloc_10"
+path = "testcases/CWE194_Unexpected_Sign_Extension/s01/CWE194_Unexpected_Sign_Extension__connect_socket_malloc_10.c"
+expected_cwes = [194]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_01"
+path = "testcases/CWE195_Signed_to_Unsigned_Conversion_Error/s01/CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_01.c"
+expected_cwes = [195]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_02"
+path = "testcases/CWE195_Signed_to_Unsigned_Conversion_Error/s01/CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_02.c"
+expected_cwes = [195]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_03"
+path = "testcases/CWE195_Signed_to_Unsigned_Conversion_Error/s01/CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_03.c"
+expected_cwes = [195]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_04"
+path = "testcases/CWE195_Signed_to_Unsigned_Conversion_Error/s01/CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_04.c"
+expected_cwes = [195]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_05"
+path = "testcases/CWE195_Signed_to_Unsigned_Conversion_Error/s01/CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_05.c"
+expected_cwes = [195]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_06"
+path = "testcases/CWE195_Signed_to_Unsigned_Conversion_Error/s01/CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_06.c"
+expected_cwes = [195]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_07"
+path = "testcases/CWE195_Signed_to_Unsigned_Conversion_Error/s01/CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_07.c"
+expected_cwes = [195]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_08"
+path = "testcases/CWE195_Signed_to_Unsigned_Conversion_Error/s01/CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_08.c"
+expected_cwes = [195]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_09"
+path = "testcases/CWE195_Signed_to_Unsigned_Conversion_Error/s01/CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_09.c"
+expected_cwes = [195]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_10"
+path = "testcases/CWE195_Signed_to_Unsigned_Conversion_Error/s01/CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_10.c"
+expected_cwes = [195]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE196_Unsigned_to_Signed_Conversion_Error__basic_01"
+path = "testcases/CWE196_Unsigned_to_Signed_Conversion_Error/CWE196_Unsigned_to_Signed_Conversion_Error__basic_01.c"
+expected_cwes = [196]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE196_Unsigned_to_Signed_Conversion_Error__basic_02"
+path = "testcases/CWE196_Unsigned_to_Signed_Conversion_Error/CWE196_Unsigned_to_Signed_Conversion_Error__basic_02.c"
+expected_cwes = [196]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE196_Unsigned_to_Signed_Conversion_Error__basic_03"
+path = "testcases/CWE196_Unsigned_to_Signed_Conversion_Error/CWE196_Unsigned_to_Signed_Conversion_Error__basic_03.c"
+expected_cwes = [196]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE196_Unsigned_to_Signed_Conversion_Error__basic_04"
+path = "testcases/CWE196_Unsigned_to_Signed_Conversion_Error/CWE196_Unsigned_to_Signed_Conversion_Error__basic_04.c"
+expected_cwes = [196]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE196_Unsigned_to_Signed_Conversion_Error__basic_05"
+path = "testcases/CWE196_Unsigned_to_Signed_Conversion_Error/CWE196_Unsigned_to_Signed_Conversion_Error__basic_05.c"
+expected_cwes = [196]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE196_Unsigned_to_Signed_Conversion_Error__basic_06"
+path = "testcases/CWE196_Unsigned_to_Signed_Conversion_Error/CWE196_Unsigned_to_Signed_Conversion_Error__basic_06.c"
+expected_cwes = [196]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE196_Unsigned_to_Signed_Conversion_Error__basic_07"
+path = "testcases/CWE196_Unsigned_to_Signed_Conversion_Error/CWE196_Unsigned_to_Signed_Conversion_Error__basic_07.c"
+expected_cwes = [196]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE196_Unsigned_to_Signed_Conversion_Error__basic_08"
+path = "testcases/CWE196_Unsigned_to_Signed_Conversion_Error/CWE196_Unsigned_to_Signed_Conversion_Error__basic_08.c"
+expected_cwes = [196]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE196_Unsigned_to_Signed_Conversion_Error__basic_09"
+path = "testcases/CWE196_Unsigned_to_Signed_Conversion_Error/CWE196_Unsigned_to_Signed_Conversion_Error__basic_09.c"
+expected_cwes = [196]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE196_Unsigned_to_Signed_Conversion_Error__basic_10"
+path = "testcases/CWE196_Unsigned_to_Signed_Conversion_Error/CWE196_Unsigned_to_Signed_Conversion_Error__basic_10.c"
+expected_cwes = [196]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_01"
+path = "testcases/CWE197_Numeric_Truncation_Error/s01/CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_01.c"
+expected_cwes = [197]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_02"
+path = "testcases/CWE197_Numeric_Truncation_Error/s01/CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_02.c"
+expected_cwes = [197]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_03"
+path = "testcases/CWE197_Numeric_Truncation_Error/s01/CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_03.c"
+expected_cwes = [197]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_04"
+path = "testcases/CWE197_Numeric_Truncation_Error/s01/CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_04.c"
+expected_cwes = [197]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_05"
+path = "testcases/CWE197_Numeric_Truncation_Error/s01/CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_05.c"
+expected_cwes = [197]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_06"
+path = "testcases/CWE197_Numeric_Truncation_Error/s01/CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_06.c"
+expected_cwes = [197]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_07"
+path = "testcases/CWE197_Numeric_Truncation_Error/s01/CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_07.c"
+expected_cwes = [197]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_08"
+path = "testcases/CWE197_Numeric_Truncation_Error/s01/CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_08.c"
+expected_cwes = [197]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_09"
+path = "testcases/CWE197_Numeric_Truncation_Error/s01/CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_09.c"
+expected_cwes = [197]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_10"
+path = "testcases/CWE197_Numeric_Truncation_Error/s01/CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_10.c"
+expected_cwes = [197]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE222_Truncation_of_Security_Relevant_Information__w32_01"
+path = "testcases/CWE222_Truncation_of_Security_Relevant_Information/CWE222_Truncation_of_Security_Relevant_Information__w32_01.c"
+expected_cwes = [222]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE222_Truncation_of_Security_Relevant_Information__w32_02"
+path = "testcases/CWE222_Truncation_of_Security_Relevant_Information/CWE222_Truncation_of_Security_Relevant_Information__w32_02.c"
+expected_cwes = [222]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE222_Truncation_of_Security_Relevant_Information__w32_03"
+path = "testcases/CWE222_Truncation_of_Security_Relevant_Information/CWE222_Truncation_of_Security_Relevant_Information__w32_03.c"
+expected_cwes = [222]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE222_Truncation_of_Security_Relevant_Information__w32_04"
+path = "testcases/CWE222_Truncation_of_Security_Relevant_Information/CWE222_Truncation_of_Security_Relevant_Information__w32_04.c"
+expected_cwes = [222]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE222_Truncation_of_Security_Relevant_Information__w32_05"
+path = "testcases/CWE222_Truncation_of_Security_Relevant_Information/CWE222_Truncation_of_Security_Relevant_Information__w32_05.c"
+expected_cwes = [222]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE222_Truncation_of_Security_Relevant_Information__w32_06"
+path = "testcases/CWE222_Truncation_of_Security_Relevant_Information/CWE222_Truncation_of_Security_Relevant_Information__w32_06.c"
+expected_cwes = [222]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE222_Truncation_of_Security_Relevant_Information__w32_07"
+path = "testcases/CWE222_Truncation_of_Security_Relevant_Information/CWE222_Truncation_of_Security_Relevant_Information__w32_07.c"
+expected_cwes = [222]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE222_Truncation_of_Security_Relevant_Information__w32_08"
+path = "testcases/CWE222_Truncation_of_Security_Relevant_Information/CWE222_Truncation_of_Security_Relevant_Information__w32_08.c"
+expected_cwes = [222]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE222_Truncation_of_Security_Relevant_Information__w32_09"
+path = "testcases/CWE222_Truncation_of_Security_Relevant_Information/CWE222_Truncation_of_Security_Relevant_Information__w32_09.c"
+expected_cwes = [222]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE222_Truncation_of_Security_Relevant_Information__w32_10"
+path = "testcases/CWE222_Truncation_of_Security_Relevant_Information/CWE222_Truncation_of_Security_Relevant_Information__w32_10.c"
+expected_cwes = [222]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE223_Omission_of_Security_Relevant_Information__w32_01"
+path = "testcases/CWE223_Omission_of_Security_Relevant_Information/CWE223_Omission_of_Security_Relevant_Information__w32_01.c"
+expected_cwes = [223]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE223_Omission_of_Security_Relevant_Information__w32_02"
+path = "testcases/CWE223_Omission_of_Security_Relevant_Information/CWE223_Omission_of_Security_Relevant_Information__w32_02.c"
+expected_cwes = [223]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE223_Omission_of_Security_Relevant_Information__w32_03"
+path = "testcases/CWE223_Omission_of_Security_Relevant_Information/CWE223_Omission_of_Security_Relevant_Information__w32_03.c"
+expected_cwes = [223]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE223_Omission_of_Security_Relevant_Information__w32_04"
+path = "testcases/CWE223_Omission_of_Security_Relevant_Information/CWE223_Omission_of_Security_Relevant_Information__w32_04.c"
+expected_cwes = [223]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE223_Omission_of_Security_Relevant_Information__w32_05"
+path = "testcases/CWE223_Omission_of_Security_Relevant_Information/CWE223_Omission_of_Security_Relevant_Information__w32_05.c"
+expected_cwes = [223]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE223_Omission_of_Security_Relevant_Information__w32_06"
+path = "testcases/CWE223_Omission_of_Security_Relevant_Information/CWE223_Omission_of_Security_Relevant_Information__w32_06.c"
+expected_cwes = [223]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE223_Omission_of_Security_Relevant_Information__w32_07"
+path = "testcases/CWE223_Omission_of_Security_Relevant_Information/CWE223_Omission_of_Security_Relevant_Information__w32_07.c"
+expected_cwes = [223]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE223_Omission_of_Security_Relevant_Information__w32_08"
+path = "testcases/CWE223_Omission_of_Security_Relevant_Information/CWE223_Omission_of_Security_Relevant_Information__w32_08.c"
+expected_cwes = [223]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE223_Omission_of_Security_Relevant_Information__w32_09"
+path = "testcases/CWE223_Omission_of_Security_Relevant_Information/CWE223_Omission_of_Security_Relevant_Information__w32_09.c"
+expected_cwes = [223]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE223_Omission_of_Security_Relevant_Information__w32_10"
+path = "testcases/CWE223_Omission_of_Security_Relevant_Information/CWE223_Omission_of_Security_Relevant_Information__w32_10.c"
+expected_cwes = [223]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_01"
+path = "testcases/CWE226_Sensitive_Information_Uncleared_Before_Release/CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_01.c"
+expected_cwes = [226]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_02"
+path = "testcases/CWE226_Sensitive_Information_Uncleared_Before_Release/CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_02.c"
+expected_cwes = [226]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_03"
+path = "testcases/CWE226_Sensitive_Information_Uncleared_Before_Release/CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_03.c"
+expected_cwes = [226]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_04"
+path = "testcases/CWE226_Sensitive_Information_Uncleared_Before_Release/CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_04.c"
+expected_cwes = [226]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_05"
+path = "testcases/CWE226_Sensitive_Information_Uncleared_Before_Release/CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_05.c"
+expected_cwes = [226]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_06"
+path = "testcases/CWE226_Sensitive_Information_Uncleared_Before_Release/CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_06.c"
+expected_cwes = [226]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_07"
+path = "testcases/CWE226_Sensitive_Information_Uncleared_Before_Release/CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_07.c"
+expected_cwes = [226]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_08"
+path = "testcases/CWE226_Sensitive_Information_Uncleared_Before_Release/CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_08.c"
+expected_cwes = [226]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_09"
+path = "testcases/CWE226_Sensitive_Information_Uncleared_Before_Release/CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_09.c"
+expected_cwes = [226]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_10"
+path = "testcases/CWE226_Sensitive_Information_Uncleared_Before_Release/CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_10.c"
+expected_cwes = [226]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE242_Use_of_Inherently_Dangerous_Function__basic_01"
+path = "testcases/CWE242_Use_of_Inherently_Dangerous_Function/CWE242_Use_of_Inherently_Dangerous_Function__basic_01.c"
+expected_cwes = [242]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE242_Use_of_Inherently_Dangerous_Function__basic_02"
+path = "testcases/CWE242_Use_of_Inherently_Dangerous_Function/CWE242_Use_of_Inherently_Dangerous_Function__basic_02.c"
+expected_cwes = [242]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE242_Use_of_Inherently_Dangerous_Function__basic_03"
+path = "testcases/CWE242_Use_of_Inherently_Dangerous_Function/CWE242_Use_of_Inherently_Dangerous_Function__basic_03.c"
+expected_cwes = [242]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE242_Use_of_Inherently_Dangerous_Function__basic_04"
+path = "testcases/CWE242_Use_of_Inherently_Dangerous_Function/CWE242_Use_of_Inherently_Dangerous_Function__basic_04.c"
+expected_cwes = [242]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE242_Use_of_Inherently_Dangerous_Function__basic_05"
+path = "testcases/CWE242_Use_of_Inherently_Dangerous_Function/CWE242_Use_of_Inherently_Dangerous_Function__basic_05.c"
+expected_cwes = [242]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE242_Use_of_Inherently_Dangerous_Function__basic_06"
+path = "testcases/CWE242_Use_of_Inherently_Dangerous_Function/CWE242_Use_of_Inherently_Dangerous_Function__basic_06.c"
+expected_cwes = [242]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE242_Use_of_Inherently_Dangerous_Function__basic_07"
+path = "testcases/CWE242_Use_of_Inherently_Dangerous_Function/CWE242_Use_of_Inherently_Dangerous_Function__basic_07.c"
+expected_cwes = [242]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE242_Use_of_Inherently_Dangerous_Function__basic_08"
+path = "testcases/CWE242_Use_of_Inherently_Dangerous_Function/CWE242_Use_of_Inherently_Dangerous_Function__basic_08.c"
+expected_cwes = [242]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE242_Use_of_Inherently_Dangerous_Function__basic_09"
+path = "testcases/CWE242_Use_of_Inherently_Dangerous_Function/CWE242_Use_of_Inherently_Dangerous_Function__basic_09.c"
+expected_cwes = [242]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE242_Use_of_Inherently_Dangerous_Function__basic_10"
+path = "testcases/CWE242_Use_of_Inherently_Dangerous_Function/CWE242_Use_of_Inherently_Dangerous_Function__basic_10.c"
+expected_cwes = [242]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE244_Heap_Inspection__w32_char_free_01"
+path = "testcases/CWE244_Heap_Inspection/CWE244_Heap_Inspection__w32_char_free_01.c"
+expected_cwes = [244]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE244_Heap_Inspection__w32_char_free_02"
+path = "testcases/CWE244_Heap_Inspection/CWE244_Heap_Inspection__w32_char_free_02.c"
+expected_cwes = [244]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE244_Heap_Inspection__w32_char_free_03"
+path = "testcases/CWE244_Heap_Inspection/CWE244_Heap_Inspection__w32_char_free_03.c"
+expected_cwes = [244]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE244_Heap_Inspection__w32_char_free_04"
+path = "testcases/CWE244_Heap_Inspection/CWE244_Heap_Inspection__w32_char_free_04.c"
+expected_cwes = [244]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE244_Heap_Inspection__w32_char_free_05"
+path = "testcases/CWE244_Heap_Inspection/CWE244_Heap_Inspection__w32_char_free_05.c"
+expected_cwes = [244]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE244_Heap_Inspection__w32_char_free_06"
+path = "testcases/CWE244_Heap_Inspection/CWE244_Heap_Inspection__w32_char_free_06.c"
+expected_cwes = [244]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE244_Heap_Inspection__w32_char_free_07"
+path = "testcases/CWE244_Heap_Inspection/CWE244_Heap_Inspection__w32_char_free_07.c"
+expected_cwes = [244]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE244_Heap_Inspection__w32_char_free_08"
+path = "testcases/CWE244_Heap_Inspection/CWE244_Heap_Inspection__w32_char_free_08.c"
+expected_cwes = [244]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE244_Heap_Inspection__w32_char_free_09"
+path = "testcases/CWE244_Heap_Inspection/CWE244_Heap_Inspection__w32_char_free_09.c"
+expected_cwes = [244]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE244_Heap_Inspection__w32_char_free_10"
+path = "testcases/CWE244_Heap_Inspection/CWE244_Heap_Inspection__w32_char_free_10.c"
+expected_cwes = [244]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_01"
+path = "testcases/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_01.c"
+expected_cwes = [247]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_02"
+path = "testcases/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_02.c"
+expected_cwes = [247]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_03"
+path = "testcases/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_03.c"
+expected_cwes = [247]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_04"
+path = "testcases/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_04.c"
+expected_cwes = [247]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_05"
+path = "testcases/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_05.c"
+expected_cwes = [247]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_06"
+path = "testcases/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_06.c"
+expected_cwes = [247]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_07"
+path = "testcases/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_07.c"
+expected_cwes = [247]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_08"
+path = "testcases/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_08.c"
+expected_cwes = [247]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_09"
+path = "testcases/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_09.c"
+expected_cwes = [247]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_10"
+path = "testcases/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision/CWE247_Reliance_on_DNS_Lookups_in_Security_Decision__w32_10.c"
+expected_cwes = [247]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE252_Unchecked_Return_Value__char_fgets_01"
+path = "testcases/CWE252_Unchecked_Return_Value/CWE252_Unchecked_Return_Value__char_fgets_01.c"
+expected_cwes = [252]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE252_Unchecked_Return_Value__char_fgets_02"
+path = "testcases/CWE252_Unchecked_Return_Value/CWE252_Unchecked_Return_Value__char_fgets_02.c"
+expected_cwes = [252]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE252_Unchecked_Return_Value__char_fgets_03"
+path = "testcases/CWE252_Unchecked_Return_Value/CWE252_Unchecked_Return_Value__char_fgets_03.c"
+expected_cwes = [252]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE252_Unchecked_Return_Value__char_fgets_04"
+path = "testcases/CWE252_Unchecked_Return_Value/CWE252_Unchecked_Return_Value__char_fgets_04.c"
+expected_cwes = [252]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE252_Unchecked_Return_Value__char_fgets_05"
+path = "testcases/CWE252_Unchecked_Return_Value/CWE252_Unchecked_Return_Value__char_fgets_05.c"
+expected_cwes = [252]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE252_Unchecked_Return_Value__char_fgets_06"
+path = "testcases/CWE252_Unchecked_Return_Value/CWE252_Unchecked_Return_Value__char_fgets_06.c"
+expected_cwes = [252]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE252_Unchecked_Return_Value__char_fgets_07"
+path = "testcases/CWE252_Unchecked_Return_Value/CWE252_Unchecked_Return_Value__char_fgets_07.c"
+expected_cwes = [252]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE252_Unchecked_Return_Value__char_fgets_08"
+path = "testcases/CWE252_Unchecked_Return_Value/CWE252_Unchecked_Return_Value__char_fgets_08.c"
+expected_cwes = [252]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE252_Unchecked_Return_Value__char_fgets_09"
+path = "testcases/CWE252_Unchecked_Return_Value/CWE252_Unchecked_Return_Value__char_fgets_09.c"
+expected_cwes = [252]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE252_Unchecked_Return_Value__char_fgets_10"
+path = "testcases/CWE252_Unchecked_Return_Value/CWE252_Unchecked_Return_Value__char_fgets_10.c"
+expected_cwes = [252]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_01"
+path = "testcases/CWE253_Incorrect_Check_of_Function_Return_Value/CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_01.c"
+expected_cwes = [253]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_02"
+path = "testcases/CWE253_Incorrect_Check_of_Function_Return_Value/CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_02.c"
+expected_cwes = [253]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_03"
+path = "testcases/CWE253_Incorrect_Check_of_Function_Return_Value/CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_03.c"
+expected_cwes = [253]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_04"
+path = "testcases/CWE253_Incorrect_Check_of_Function_Return_Value/CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_04.c"
+expected_cwes = [253]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_05"
+path = "testcases/CWE253_Incorrect_Check_of_Function_Return_Value/CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_05.c"
+expected_cwes = [253]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_06"
+path = "testcases/CWE253_Incorrect_Check_of_Function_Return_Value/CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_06.c"
+expected_cwes = [253]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_07"
+path = "testcases/CWE253_Incorrect_Check_of_Function_Return_Value/CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_07.c"
+expected_cwes = [253]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_08"
+path = "testcases/CWE253_Incorrect_Check_of_Function_Return_Value/CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_08.c"
+expected_cwes = [253]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_09"
+path = "testcases/CWE253_Incorrect_Check_of_Function_Return_Value/CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_09.c"
+expected_cwes = [253]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_10"
+path = "testcases/CWE253_Incorrect_Check_of_Function_Return_Value/CWE253_Incorrect_Check_of_Function_Return_Value__char_fgets_10.c"
+expected_cwes = [253]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE256_Plaintext_Storage_of_Password__w32_char_01"
+path = "testcases/CWE256_Plaintext_Storage_of_Password/CWE256_Plaintext_Storage_of_Password__w32_char_01.c"
+expected_cwes = [256]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE256_Plaintext_Storage_of_Password__w32_char_02"
+path = "testcases/CWE256_Plaintext_Storage_of_Password/CWE256_Plaintext_Storage_of_Password__w32_char_02.c"
+expected_cwes = [256]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE256_Plaintext_Storage_of_Password__w32_char_03"
+path = "testcases/CWE256_Plaintext_Storage_of_Password/CWE256_Plaintext_Storage_of_Password__w32_char_03.c"
+expected_cwes = [256]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE256_Plaintext_Storage_of_Password__w32_char_04"
+path = "testcases/CWE256_Plaintext_Storage_of_Password/CWE256_Plaintext_Storage_of_Password__w32_char_04.c"
+expected_cwes = [256]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE256_Plaintext_Storage_of_Password__w32_char_05"
+path = "testcases/CWE256_Plaintext_Storage_of_Password/CWE256_Plaintext_Storage_of_Password__w32_char_05.c"
+expected_cwes = [256]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE256_Plaintext_Storage_of_Password__w32_char_06"
+path = "testcases/CWE256_Plaintext_Storage_of_Password/CWE256_Plaintext_Storage_of_Password__w32_char_06.c"
+expected_cwes = [256]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE256_Plaintext_Storage_of_Password__w32_char_07"
+path = "testcases/CWE256_Plaintext_Storage_of_Password/CWE256_Plaintext_Storage_of_Password__w32_char_07.c"
+expected_cwes = [256]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE256_Plaintext_Storage_of_Password__w32_char_08"
+path = "testcases/CWE256_Plaintext_Storage_of_Password/CWE256_Plaintext_Storage_of_Password__w32_char_08.c"
+expected_cwes = [256]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE256_Plaintext_Storage_of_Password__w32_char_09"
+path = "testcases/CWE256_Plaintext_Storage_of_Password/CWE256_Plaintext_Storage_of_Password__w32_char_09.c"
+expected_cwes = [256]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE256_Plaintext_Storage_of_Password__w32_char_10"
+path = "testcases/CWE256_Plaintext_Storage_of_Password/CWE256_Plaintext_Storage_of_Password__w32_char_10.c"
+expected_cwes = [256]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE259_Hard_Coded_Password__w32_char_01"
+path = "testcases/CWE259_Hard_Coded_Password/CWE259_Hard_Coded_Password__w32_char_01.c"
+expected_cwes = [259]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE259_Hard_Coded_Password__w32_char_02"
+path = "testcases/CWE259_Hard_Coded_Password/CWE259_Hard_Coded_Password__w32_char_02.c"
+expected_cwes = [259]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE259_Hard_Coded_Password__w32_char_03"
+path = "testcases/CWE259_Hard_Coded_Password/CWE259_Hard_Coded_Password__w32_char_03.c"
+expected_cwes = [259]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE259_Hard_Coded_Password__w32_char_04"
+path = "testcases/CWE259_Hard_Coded_Password/CWE259_Hard_Coded_Password__w32_char_04.c"
+expected_cwes = [259]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE259_Hard_Coded_Password__w32_char_05"
+path = "testcases/CWE259_Hard_Coded_Password/CWE259_Hard_Coded_Password__w32_char_05.c"
+expected_cwes = [259]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE259_Hard_Coded_Password__w32_char_06"
+path = "testcases/CWE259_Hard_Coded_Password/CWE259_Hard_Coded_Password__w32_char_06.c"
+expected_cwes = [259]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE259_Hard_Coded_Password__w32_char_07"
+path = "testcases/CWE259_Hard_Coded_Password/CWE259_Hard_Coded_Password__w32_char_07.c"
+expected_cwes = [259]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE259_Hard_Coded_Password__w32_char_08"
+path = "testcases/CWE259_Hard_Coded_Password/CWE259_Hard_Coded_Password__w32_char_08.c"
+expected_cwes = [259]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE259_Hard_Coded_Password__w32_char_09"
+path = "testcases/CWE259_Hard_Coded_Password/CWE259_Hard_Coded_Password__w32_char_09.c"
+expected_cwes = [259]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE259_Hard_Coded_Password__w32_char_10"
+path = "testcases/CWE259_Hard_Coded_Password/CWE259_Hard_Coded_Password__w32_char_10.c"
+expected_cwes = [259]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_01"
+path = "testcases/CWE272_Least_Privilege_Violation/CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_01.c"
+expected_cwes = [272]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_02"
+path = "testcases/CWE272_Least_Privilege_Violation/CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_02.c"
+expected_cwes = [272]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_03"
+path = "testcases/CWE272_Least_Privilege_Violation/CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_03.c"
+expected_cwes = [272]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_04"
+path = "testcases/CWE272_Least_Privilege_Violation/CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_04.c"
+expected_cwes = [272]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_05"
+path = "testcases/CWE272_Least_Privilege_Violation/CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_05.c"
+expected_cwes = [272]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_06"
+path = "testcases/CWE272_Least_Privilege_Violation/CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_06.c"
+expected_cwes = [272]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_07"
+path = "testcases/CWE272_Least_Privilege_Violation/CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_07.c"
+expected_cwes = [272]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_08"
+path = "testcases/CWE272_Least_Privilege_Violation/CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_08.c"
+expected_cwes = [272]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_09"
+path = "testcases/CWE272_Least_Privilege_Violation/CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_09.c"
+expected_cwes = [272]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_10"
+path = "testcases/CWE272_Least_Privilege_Violation/CWE272_Least_Privilege_Violation__w32_char_CreateProcessAsUser_10.c"
+expected_cwes = [272]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_01"
+path = "testcases/CWE273_Improper_Check_for_Dropped_Privileges/CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_01.c"
+expected_cwes = [273]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_02"
+path = "testcases/CWE273_Improper_Check_for_Dropped_Privileges/CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_02.c"
+expected_cwes = [273]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_03"
+path = "testcases/CWE273_Improper_Check_for_Dropped_Privileges/CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_03.c"
+expected_cwes = [273]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_04"
+path = "testcases/CWE273_Improper_Check_for_Dropped_Privileges/CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_04.c"
+expected_cwes = [273]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_05"
+path = "testcases/CWE273_Improper_Check_for_Dropped_Privileges/CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_05.c"
+expected_cwes = [273]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_06"
+path = "testcases/CWE273_Improper_Check_for_Dropped_Privileges/CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_06.c"
+expected_cwes = [273]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_07"
+path = "testcases/CWE273_Improper_Check_for_Dropped_Privileges/CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_07.c"
+expected_cwes = [273]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_08"
+path = "testcases/CWE273_Improper_Check_for_Dropped_Privileges/CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_08.c"
+expected_cwes = [273]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_09"
+path = "testcases/CWE273_Improper_Check_for_Dropped_Privileges/CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_09.c"
+expected_cwes = [273]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_10"
+path = "testcases/CWE273_Improper_Check_for_Dropped_Privileges/CWE273_Improper_Check_for_Dropped_Privileges__w32_ImpersonateNamedPipeClient_10.c"
+expected_cwes = [273]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE284_Improper_Access_Control__w32_char_CreateDesktop_01"
+path = "testcases/CWE284_Improper_Access_Control/CWE284_Improper_Access_Control__w32_char_CreateDesktop_01.c"
+expected_cwes = [284]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE284_Improper_Access_Control__w32_char_CreateDesktop_02"
+path = "testcases/CWE284_Improper_Access_Control/CWE284_Improper_Access_Control__w32_char_CreateDesktop_02.c"
+expected_cwes = [284]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE284_Improper_Access_Control__w32_char_CreateDesktop_03"
+path = "testcases/CWE284_Improper_Access_Control/CWE284_Improper_Access_Control__w32_char_CreateDesktop_03.c"
+expected_cwes = [284]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE284_Improper_Access_Control__w32_char_CreateDesktop_04"
+path = "testcases/CWE284_Improper_Access_Control/CWE284_Improper_Access_Control__w32_char_CreateDesktop_04.c"
+expected_cwes = [284]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE284_Improper_Access_Control__w32_char_CreateDesktop_05"
+path = "testcases/CWE284_Improper_Access_Control/CWE284_Improper_Access_Control__w32_char_CreateDesktop_05.c"
+expected_cwes = [284]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE284_Improper_Access_Control__w32_char_CreateDesktop_06"
+path = "testcases/CWE284_Improper_Access_Control/CWE284_Improper_Access_Control__w32_char_CreateDesktop_06.c"
+expected_cwes = [284]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE284_Improper_Access_Control__w32_char_CreateDesktop_07"
+path = "testcases/CWE284_Improper_Access_Control/CWE284_Improper_Access_Control__w32_char_CreateDesktop_07.c"
+expected_cwes = [284]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE284_Improper_Access_Control__w32_char_CreateDesktop_08"
+path = "testcases/CWE284_Improper_Access_Control/CWE284_Improper_Access_Control__w32_char_CreateDesktop_08.c"
+expected_cwes = [284]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE284_Improper_Access_Control__w32_char_CreateDesktop_09"
+path = "testcases/CWE284_Improper_Access_Control/CWE284_Improper_Access_Control__w32_char_CreateDesktop_09.c"
+expected_cwes = [284]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE284_Improper_Access_Control__w32_char_CreateDesktop_10"
+path = "testcases/CWE284_Improper_Access_Control/CWE284_Improper_Access_Control__w32_char_CreateDesktop_10.c"
+expected_cwes = [284]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_01"
+path = "testcases/CWE319_Cleartext_Tx_Sensitive_Info/CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_01.c"
+expected_cwes = [319]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_02"
+path = "testcases/CWE319_Cleartext_Tx_Sensitive_Info/CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_02.c"
+expected_cwes = [319]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_03"
+path = "testcases/CWE319_Cleartext_Tx_Sensitive_Info/CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_03.c"
+expected_cwes = [319]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_04"
+path = "testcases/CWE319_Cleartext_Tx_Sensitive_Info/CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_04.c"
+expected_cwes = [319]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_05"
+path = "testcases/CWE319_Cleartext_Tx_Sensitive_Info/CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_05.c"
+expected_cwes = [319]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_06"
+path = "testcases/CWE319_Cleartext_Tx_Sensitive_Info/CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_06.c"
+expected_cwes = [319]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_07"
+path = "testcases/CWE319_Cleartext_Tx_Sensitive_Info/CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_07.c"
+expected_cwes = [319]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_08"
+path = "testcases/CWE319_Cleartext_Tx_Sensitive_Info/CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_08.c"
+expected_cwes = [319]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_09"
+path = "testcases/CWE319_Cleartext_Tx_Sensitive_Info/CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_09.c"
+expected_cwes = [319]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_10"
+path = "testcases/CWE319_Cleartext_Tx_Sensitive_Info/CWE319_Cleartext_Tx_Sensitive_Info__w32_char_connect_socket_10.c"
+expected_cwes = [319]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE321_Hard_Coded_Cryptographic_Key__w32_char_01"
+path = "testcases/CWE321_Hard_Coded_Cryptographic_Key/CWE321_Hard_Coded_Cryptographic_Key__w32_char_01.c"
+expected_cwes = [321]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE321_Hard_Coded_Cryptographic_Key__w32_char_02"
+path = "testcases/CWE321_Hard_Coded_Cryptographic_Key/CWE321_Hard_Coded_Cryptographic_Key__w32_char_02.c"
+expected_cwes = [321]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE321_Hard_Coded_Cryptographic_Key__w32_char_03"
+path = "testcases/CWE321_Hard_Coded_Cryptographic_Key/CWE321_Hard_Coded_Cryptographic_Key__w32_char_03.c"
+expected_cwes = [321]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE321_Hard_Coded_Cryptographic_Key__w32_char_04"
+path = "testcases/CWE321_Hard_Coded_Cryptographic_Key/CWE321_Hard_Coded_Cryptographic_Key__w32_char_04.c"
+expected_cwes = [321]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE321_Hard_Coded_Cryptographic_Key__w32_char_05"
+path = "testcases/CWE321_Hard_Coded_Cryptographic_Key/CWE321_Hard_Coded_Cryptographic_Key__w32_char_05.c"
+expected_cwes = [321]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE321_Hard_Coded_Cryptographic_Key__w32_char_06"
+path = "testcases/CWE321_Hard_Coded_Cryptographic_Key/CWE321_Hard_Coded_Cryptographic_Key__w32_char_06.c"
+expected_cwes = [321]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE321_Hard_Coded_Cryptographic_Key__w32_char_07"
+path = "testcases/CWE321_Hard_Coded_Cryptographic_Key/CWE321_Hard_Coded_Cryptographic_Key__w32_char_07.c"
+expected_cwes = [321]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE321_Hard_Coded_Cryptographic_Key__w32_char_08"
+path = "testcases/CWE321_Hard_Coded_Cryptographic_Key/CWE321_Hard_Coded_Cryptographic_Key__w32_char_08.c"
+expected_cwes = [321]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE321_Hard_Coded_Cryptographic_Key__w32_char_09"
+path = "testcases/CWE321_Hard_Coded_Cryptographic_Key/CWE321_Hard_Coded_Cryptographic_Key__w32_char_09.c"
+expected_cwes = [321]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE321_Hard_Coded_Cryptographic_Key__w32_char_10"
+path = "testcases/CWE321_Hard_Coded_Cryptographic_Key/CWE321_Hard_Coded_Cryptographic_Key__w32_char_10.c"
+expected_cwes = [321]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_01"
+path = "testcases/CWE325_Missing_Required_Cryptographic_Step/CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_01.c"
+expected_cwes = [325]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_02"
+path = "testcases/CWE325_Missing_Required_Cryptographic_Step/CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_02.c"
+expected_cwes = [325]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_03"
+path = "testcases/CWE325_Missing_Required_Cryptographic_Step/CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_03.c"
+expected_cwes = [325]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_04"
+path = "testcases/CWE325_Missing_Required_Cryptographic_Step/CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_04.c"
+expected_cwes = [325]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_05"
+path = "testcases/CWE325_Missing_Required_Cryptographic_Step/CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_05.c"
+expected_cwes = [325]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_06"
+path = "testcases/CWE325_Missing_Required_Cryptographic_Step/CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_06.c"
+expected_cwes = [325]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_07"
+path = "testcases/CWE325_Missing_Required_Cryptographic_Step/CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_07.c"
+expected_cwes = [325]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_08"
+path = "testcases/CWE325_Missing_Required_Cryptographic_Step/CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_08.c"
+expected_cwes = [325]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_09"
+path = "testcases/CWE325_Missing_Required_Cryptographic_Step/CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_09.c"
+expected_cwes = [325]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_10"
+path = "testcases/CWE325_Missing_Required_Cryptographic_Step/CWE325_Missing_Required_Cryptographic_Step__w32_CryptCreateHash_10.c"
+expected_cwes = [325]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE327_Use_Broken_Crypto__w32_3DES_01"
+path = "testcases/CWE327_Use_Broken_Crypto/CWE327_Use_Broken_Crypto__w32_3DES_01.c"
+expected_cwes = [327]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE327_Use_Broken_Crypto__w32_3DES_02"
+path = "testcases/CWE327_Use_Broken_Crypto/CWE327_Use_Broken_Crypto__w32_3DES_02.c"
+expected_cwes = [327]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE327_Use_Broken_Crypto__w32_3DES_03"
+path = "testcases/CWE327_Use_Broken_Crypto/CWE327_Use_Broken_Crypto__w32_3DES_03.c"
+expected_cwes = [327]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE327_Use_Broken_Crypto__w32_3DES_04"
+path = "testcases/CWE327_Use_Broken_Crypto/CWE327_Use_Broken_Crypto__w32_3DES_04.c"
+expected_cwes = [327]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE327_Use_Broken_Crypto__w32_3DES_05"
+path = "testcases/CWE327_Use_Broken_Crypto/CWE327_Use_Broken_Crypto__w32_3DES_05.c"
+expected_cwes = [327]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE327_Use_Broken_Crypto__w32_3DES_06"
+path = "testcases/CWE327_Use_Broken_Crypto/CWE327_Use_Broken_Crypto__w32_3DES_06.c"
+expected_cwes = [327]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE327_Use_Broken_Crypto__w32_3DES_07"
+path = "testcases/CWE327_Use_Broken_Crypto/CWE327_Use_Broken_Crypto__w32_3DES_07.c"
+expected_cwes = [327]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE327_Use_Broken_Crypto__w32_3DES_08"
+path = "testcases/CWE327_Use_Broken_Crypto/CWE327_Use_Broken_Crypto__w32_3DES_08.c"
+expected_cwes = [327]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE327_Use_Broken_Crypto__w32_3DES_09"
+path = "testcases/CWE327_Use_Broken_Crypto/CWE327_Use_Broken_Crypto__w32_3DES_09.c"
+expected_cwes = [327]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE327_Use_Broken_Crypto__w32_3DES_10"
+path = "testcases/CWE327_Use_Broken_Crypto/CWE327_Use_Broken_Crypto__w32_3DES_10.c"
+expected_cwes = [327]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE328_Reversible_One_Way_Hash__w32_MD2_01"
+path = "testcases/CWE328_Reversible_One_Way_Hash/CWE328_Reversible_One_Way_Hash__w32_MD2_01.c"
+expected_cwes = [328]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE328_Reversible_One_Way_Hash__w32_MD2_02"
+path = "testcases/CWE328_Reversible_One_Way_Hash/CWE328_Reversible_One_Way_Hash__w32_MD2_02.c"
+expected_cwes = [328]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE328_Reversible_One_Way_Hash__w32_MD2_03"
+path = "testcases/CWE328_Reversible_One_Way_Hash/CWE328_Reversible_One_Way_Hash__w32_MD2_03.c"
+expected_cwes = [328]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE328_Reversible_One_Way_Hash__w32_MD2_04"
+path = "testcases/CWE328_Reversible_One_Way_Hash/CWE328_Reversible_One_Way_Hash__w32_MD2_04.c"
+expected_cwes = [328]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE328_Reversible_One_Way_Hash__w32_MD2_05"
+path = "testcases/CWE328_Reversible_One_Way_Hash/CWE328_Reversible_One_Way_Hash__w32_MD2_05.c"
+expected_cwes = [328]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE328_Reversible_One_Way_Hash__w32_MD2_06"
+path = "testcases/CWE328_Reversible_One_Way_Hash/CWE328_Reversible_One_Way_Hash__w32_MD2_06.c"
+expected_cwes = [328]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE328_Reversible_One_Way_Hash__w32_MD2_07"
+path = "testcases/CWE328_Reversible_One_Way_Hash/CWE328_Reversible_One_Way_Hash__w32_MD2_07.c"
+expected_cwes = [328]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE328_Reversible_One_Way_Hash__w32_MD2_08"
+path = "testcases/CWE328_Reversible_One_Way_Hash/CWE328_Reversible_One_Way_Hash__w32_MD2_08.c"
+expected_cwes = [328]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE328_Reversible_One_Way_Hash__w32_MD2_09"
+path = "testcases/CWE328_Reversible_One_Way_Hash/CWE328_Reversible_One_Way_Hash__w32_MD2_09.c"
+expected_cwes = [328]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE328_Reversible_One_Way_Hash__w32_MD2_10"
+path = "testcases/CWE328_Reversible_One_Way_Hash/CWE328_Reversible_One_Way_Hash__w32_MD2_10.c"
+expected_cwes = [328]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE338_Weak_PRNG__w32_01"
+path = "testcases/CWE338_Weak_PRNG/CWE338_Weak_PRNG__w32_01.c"
+expected_cwes = [338]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE338_Weak_PRNG__w32_02"
+path = "testcases/CWE338_Weak_PRNG/CWE338_Weak_PRNG__w32_02.c"
+expected_cwes = [338]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE338_Weak_PRNG__w32_03"
+path = "testcases/CWE338_Weak_PRNG/CWE338_Weak_PRNG__w32_03.c"
+expected_cwes = [338]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE338_Weak_PRNG__w32_04"
+path = "testcases/CWE338_Weak_PRNG/CWE338_Weak_PRNG__w32_04.c"
+expected_cwes = [338]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE338_Weak_PRNG__w32_05"
+path = "testcases/CWE338_Weak_PRNG/CWE338_Weak_PRNG__w32_05.c"
+expected_cwes = [338]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE338_Weak_PRNG__w32_06"
+path = "testcases/CWE338_Weak_PRNG/CWE338_Weak_PRNG__w32_06.c"
+expected_cwes = [338]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE338_Weak_PRNG__w32_07"
+path = "testcases/CWE338_Weak_PRNG/CWE338_Weak_PRNG__w32_07.c"
+expected_cwes = [338]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE338_Weak_PRNG__w32_08"
+path = "testcases/CWE338_Weak_PRNG/CWE338_Weak_PRNG__w32_08.c"
+expected_cwes = [338]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE338_Weak_PRNG__w32_09"
+path = "testcases/CWE338_Weak_PRNG/CWE338_Weak_PRNG__w32_09.c"
+expected_cwes = [338]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE338_Weak_PRNG__w32_10"
+path = "testcases/CWE338_Weak_PRNG/CWE338_Weak_PRNG__w32_10.c"
+expected_cwes = [338]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE364_Signal_Handler_Race_Condition__basic_01"
+path = "testcases/CWE364_Signal_Handler_Race_Condition/CWE364_Signal_Handler_Race_Condition__basic_01.c"
+expected_cwes = [364]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE364_Signal_Handler_Race_Condition__basic_02"
+path = "testcases/CWE364_Signal_Handler_Race_Condition/CWE364_Signal_Handler_Race_Condition__basic_02.c"
+expected_cwes = [364]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE364_Signal_Handler_Race_Condition__basic_03"
+path = "testcases/CWE364_Signal_Handler_Race_Condition/CWE364_Signal_Handler_Race_Condition__basic_03.c"
+expected_cwes = [364]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE364_Signal_Handler_Race_Condition__basic_04"
+path = "testcases/CWE364_Signal_Handler_Race_Condition/CWE364_Signal_Handler_Race_Condition__basic_04.c"
+expected_cwes = [364]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE364_Signal_Handler_Race_Condition__basic_05"
+path = "testcases/CWE364_Signal_Handler_Race_Condition/CWE364_Signal_Handler_Race_Condition__basic_05.c"
+expected_cwes = [364]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE364_Signal_Handler_Race_Condition__basic_06"
+path = "testcases/CWE364_Signal_Handler_Race_Condition/CWE364_Signal_Handler_Race_Condition__basic_06.c"
+expected_cwes = [364]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE364_Signal_Handler_Race_Condition__basic_07"
+path = "testcases/CWE364_Signal_Handler_Race_Condition/CWE364_Signal_Handler_Race_Condition__basic_07.c"
+expected_cwes = [364]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE364_Signal_Handler_Race_Condition__basic_08"
+path = "testcases/CWE364_Signal_Handler_Race_Condition/CWE364_Signal_Handler_Race_Condition__basic_08.c"
+expected_cwes = [364]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE364_Signal_Handler_Race_Condition__basic_09"
+path = "testcases/CWE364_Signal_Handler_Race_Condition/CWE364_Signal_Handler_Race_Condition__basic_09.c"
+expected_cwes = [364]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE364_Signal_Handler_Race_Condition__basic_10"
+path = "testcases/CWE364_Signal_Handler_Race_Condition/CWE364_Signal_Handler_Race_Condition__basic_10.c"
+expected_cwes = [364]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE366_Race_Condition_Within_Thread__global_int_01"
+path = "testcases/CWE366_Race_Condition_Within_Thread/CWE366_Race_Condition_Within_Thread__global_int_01.c"
+expected_cwes = [366]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE366_Race_Condition_Within_Thread__global_int_02"
+path = "testcases/CWE366_Race_Condition_Within_Thread/CWE366_Race_Condition_Within_Thread__global_int_02.c"
+expected_cwes = [366]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE366_Race_Condition_Within_Thread__global_int_03"
+path = "testcases/CWE366_Race_Condition_Within_Thread/CWE366_Race_Condition_Within_Thread__global_int_03.c"
+expected_cwes = [366]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE366_Race_Condition_Within_Thread__global_int_04"
+path = "testcases/CWE366_Race_Condition_Within_Thread/CWE366_Race_Condition_Within_Thread__global_int_04.c"
+expected_cwes = [366]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE366_Race_Condition_Within_Thread__global_int_05"
+path = "testcases/CWE366_Race_Condition_Within_Thread/CWE366_Race_Condition_Within_Thread__global_int_05.c"
+expected_cwes = [366]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE366_Race_Condition_Within_Thread__global_int_06"
+path = "testcases/CWE366_Race_Condition_Within_Thread/CWE366_Race_Condition_Within_Thread__global_int_06.c"
+expected_cwes = [366]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE366_Race_Condition_Within_Thread__global_int_07"
+path = "testcases/CWE366_Race_Condition_Within_Thread/CWE366_Race_Condition_Within_Thread__global_int_07.c"
+expected_cwes = [366]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE366_Race_Condition_Within_Thread__global_int_08"
+path = "testcases/CWE366_Race_Condition_Within_Thread/CWE366_Race_Condition_Within_Thread__global_int_08.c"
+expected_cwes = [366]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE366_Race_Condition_Within_Thread__global_int_09"
+path = "testcases/CWE366_Race_Condition_Within_Thread/CWE366_Race_Condition_Within_Thread__global_int_09.c"
+expected_cwes = [366]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE366_Race_Condition_Within_Thread__global_int_10"
+path = "testcases/CWE366_Race_Condition_Within_Thread/CWE366_Race_Condition_Within_Thread__global_int_10.c"
+expected_cwes = [366]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE367_TOC_TOU__access_01"
+path = "testcases/CWE367_TOC_TOU/CWE367_TOC_TOU__access_01.c"
+expected_cwes = [367]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE367_TOC_TOU__access_02"
+path = "testcases/CWE367_TOC_TOU/CWE367_TOC_TOU__access_02.c"
+expected_cwes = [367]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE367_TOC_TOU__access_03"
+path = "testcases/CWE367_TOC_TOU/CWE367_TOC_TOU__access_03.c"
+expected_cwes = [367]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE367_TOC_TOU__access_04"
+path = "testcases/CWE367_TOC_TOU/CWE367_TOC_TOU__access_04.c"
+expected_cwes = [367]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE367_TOC_TOU__access_05"
+path = "testcases/CWE367_TOC_TOU/CWE367_TOC_TOU__access_05.c"
+expected_cwes = [367]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE367_TOC_TOU__access_06"
+path = "testcases/CWE367_TOC_TOU/CWE367_TOC_TOU__access_06.c"
+expected_cwes = [367]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE367_TOC_TOU__access_07"
+path = "testcases/CWE367_TOC_TOU/CWE367_TOC_TOU__access_07.c"
+expected_cwes = [367]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE367_TOC_TOU__access_08"
+path = "testcases/CWE367_TOC_TOU/CWE367_TOC_TOU__access_08.c"
+expected_cwes = [367]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE367_TOC_TOU__access_09"
+path = "testcases/CWE367_TOC_TOU/CWE367_TOC_TOU__access_09.c"
+expected_cwes = [367]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE367_TOC_TOU__access_10"
+path = "testcases/CWE367_TOC_TOU/CWE367_TOC_TOU__access_10.c"
+expected_cwes = [367]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE369_Divide_by_Zero__float_connect_socket_01"
+path = "testcases/CWE369_Divide_by_Zero/s01/CWE369_Divide_by_Zero__float_connect_socket_01.c"
+expected_cwes = [369]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE369_Divide_by_Zero__float_connect_socket_02"
+path = "testcases/CWE369_Divide_by_Zero/s01/CWE369_Divide_by_Zero__float_connect_socket_02.c"
+expected_cwes = [369]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE369_Divide_by_Zero__float_connect_socket_03"
+path = "testcases/CWE369_Divide_by_Zero/s01/CWE369_Divide_by_Zero__float_connect_socket_03.c"
+expected_cwes = [369]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE369_Divide_by_Zero__float_connect_socket_04"
+path = "testcases/CWE369_Divide_by_Zero/s01/CWE369_Divide_by_Zero__float_connect_socket_04.c"
+expected_cwes = [369]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE369_Divide_by_Zero__float_connect_socket_05"
+path = "testcases/CWE369_Divide_by_Zero/s01/CWE369_Divide_by_Zero__float_connect_socket_05.c"
+expected_cwes = [369]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE369_Divide_by_Zero__float_connect_socket_06"
+path = "testcases/CWE369_Divide_by_Zero/s01/CWE369_Divide_by_Zero__float_connect_socket_06.c"
+expected_cwes = [369]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE369_Divide_by_Zero__float_connect_socket_07"
+path = "testcases/CWE369_Divide_by_Zero/s01/CWE369_Divide_by_Zero__float_connect_socket_07.c"
+expected_cwes = [369]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE369_Divide_by_Zero__float_connect_socket_08"
+path = "testcases/CWE369_Divide_by_Zero/s01/CWE369_Divide_by_Zero__float_connect_socket_08.c"
+expected_cwes = [369]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE369_Divide_by_Zero__float_connect_socket_09"
+path = "testcases/CWE369_Divide_by_Zero/s01/CWE369_Divide_by_Zero__float_connect_socket_09.c"
+expected_cwes = [369]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE369_Divide_by_Zero__float_connect_socket_10"
+path = "testcases/CWE369_Divide_by_Zero/s01/CWE369_Divide_by_Zero__float_connect_socket_10.c"
+expected_cwes = [369]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE377_Insecure_Temporary_File__char_mktemp_01"
+path = "testcases/CWE377_Insecure_Temporary_File/CWE377_Insecure_Temporary_File__char_mktemp_01.c"
+expected_cwes = [377]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE377_Insecure_Temporary_File__char_mktemp_02"
+path = "testcases/CWE377_Insecure_Temporary_File/CWE377_Insecure_Temporary_File__char_mktemp_02.c"
+expected_cwes = [377]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE377_Insecure_Temporary_File__char_mktemp_03"
+path = "testcases/CWE377_Insecure_Temporary_File/CWE377_Insecure_Temporary_File__char_mktemp_03.c"
+expected_cwes = [377]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE377_Insecure_Temporary_File__char_mktemp_04"
+path = "testcases/CWE377_Insecure_Temporary_File/CWE377_Insecure_Temporary_File__char_mktemp_04.c"
+expected_cwes = [377]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE377_Insecure_Temporary_File__char_mktemp_05"
+path = "testcases/CWE377_Insecure_Temporary_File/CWE377_Insecure_Temporary_File__char_mktemp_05.c"
+expected_cwes = [377]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE377_Insecure_Temporary_File__char_mktemp_06"
+path = "testcases/CWE377_Insecure_Temporary_File/CWE377_Insecure_Temporary_File__char_mktemp_06.c"
+expected_cwes = [377]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE377_Insecure_Temporary_File__char_mktemp_07"
+path = "testcases/CWE377_Insecure_Temporary_File/CWE377_Insecure_Temporary_File__char_mktemp_07.c"
+expected_cwes = [377]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE377_Insecure_Temporary_File__char_mktemp_08"
+path = "testcases/CWE377_Insecure_Temporary_File/CWE377_Insecure_Temporary_File__char_mktemp_08.c"
+expected_cwes = [377]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE377_Insecure_Temporary_File__char_mktemp_09"
+path = "testcases/CWE377_Insecure_Temporary_File/CWE377_Insecure_Temporary_File__char_mktemp_09.c"
+expected_cwes = [377]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE377_Insecure_Temporary_File__char_mktemp_10"
+path = "testcases/CWE377_Insecure_Temporary_File/CWE377_Insecure_Temporary_File__char_mktemp_10.c"
+expected_cwes = [377]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE390_Error_Without_Action__fgets_char_01"
+path = "testcases/CWE390_Error_Without_Action/CWE390_Error_Without_Action__fgets_char_01.c"
+expected_cwes = [390]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE390_Error_Without_Action__fgets_char_02"
+path = "testcases/CWE390_Error_Without_Action/CWE390_Error_Without_Action__fgets_char_02.c"
+expected_cwes = [390]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE390_Error_Without_Action__fgets_char_03"
+path = "testcases/CWE390_Error_Without_Action/CWE390_Error_Without_Action__fgets_char_03.c"
+expected_cwes = [390]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE390_Error_Without_Action__fgets_char_04"
+path = "testcases/CWE390_Error_Without_Action/CWE390_Error_Without_Action__fgets_char_04.c"
+expected_cwes = [390]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE390_Error_Without_Action__fgets_char_05"
+path = "testcases/CWE390_Error_Without_Action/CWE390_Error_Without_Action__fgets_char_05.c"
+expected_cwes = [390]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE390_Error_Without_Action__fgets_char_06"
+path = "testcases/CWE390_Error_Without_Action/CWE390_Error_Without_Action__fgets_char_06.c"
+expected_cwes = [390]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE390_Error_Without_Action__fgets_char_07"
+path = "testcases/CWE390_Error_Without_Action/CWE390_Error_Without_Action__fgets_char_07.c"
+expected_cwes = [390]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE390_Error_Without_Action__fgets_char_08"
+path = "testcases/CWE390_Error_Without_Action/CWE390_Error_Without_Action__fgets_char_08.c"
+expected_cwes = [390]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE390_Error_Without_Action__fgets_char_09"
+path = "testcases/CWE390_Error_Without_Action/CWE390_Error_Without_Action__fgets_char_09.c"
+expected_cwes = [390]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE390_Error_Without_Action__fgets_char_10"
+path = "testcases/CWE390_Error_Without_Action/CWE390_Error_Without_Action__fgets_char_10.c"
+expected_cwes = [390]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE391_Unchecked_Error_Condition__sqrt_01"
+path = "testcases/CWE391_Unchecked_Error_Condition/CWE391_Unchecked_Error_Condition__sqrt_01.c"
+expected_cwes = [391]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE391_Unchecked_Error_Condition__sqrt_02"
+path = "testcases/CWE391_Unchecked_Error_Condition/CWE391_Unchecked_Error_Condition__sqrt_02.c"
+expected_cwes = [391]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE391_Unchecked_Error_Condition__sqrt_03"
+path = "testcases/CWE391_Unchecked_Error_Condition/CWE391_Unchecked_Error_Condition__sqrt_03.c"
+expected_cwes = [391]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE391_Unchecked_Error_Condition__sqrt_04"
+path = "testcases/CWE391_Unchecked_Error_Condition/CWE391_Unchecked_Error_Condition__sqrt_04.c"
+expected_cwes = [391]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE391_Unchecked_Error_Condition__sqrt_05"
+path = "testcases/CWE391_Unchecked_Error_Condition/CWE391_Unchecked_Error_Condition__sqrt_05.c"
+expected_cwes = [391]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE391_Unchecked_Error_Condition__sqrt_06"
+path = "testcases/CWE391_Unchecked_Error_Condition/CWE391_Unchecked_Error_Condition__sqrt_06.c"
+expected_cwes = [391]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE391_Unchecked_Error_Condition__sqrt_07"
+path = "testcases/CWE391_Unchecked_Error_Condition/CWE391_Unchecked_Error_Condition__sqrt_07.c"
+expected_cwes = [391]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE391_Unchecked_Error_Condition__sqrt_08"
+path = "testcases/CWE391_Unchecked_Error_Condition/CWE391_Unchecked_Error_Condition__sqrt_08.c"
+expected_cwes = [391]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE391_Unchecked_Error_Condition__sqrt_09"
+path = "testcases/CWE391_Unchecked_Error_Condition/CWE391_Unchecked_Error_Condition__sqrt_09.c"
+expected_cwes = [391]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE391_Unchecked_Error_Condition__sqrt_10"
+path = "testcases/CWE391_Unchecked_Error_Condition/CWE391_Unchecked_Error_Condition__sqrt_10.c"
+expected_cwes = [391]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE398_Poor_Code_Quality__addition_01"
+path = "testcases/CWE398_Poor_Code_Quality/CWE398_Poor_Code_Quality__addition_01.c"
+expected_cwes = [398]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE398_Poor_Code_Quality__addition_02"
+path = "testcases/CWE398_Poor_Code_Quality/CWE398_Poor_Code_Quality__addition_02.c"
+expected_cwes = [398]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE398_Poor_Code_Quality__addition_03"
+path = "testcases/CWE398_Poor_Code_Quality/CWE398_Poor_Code_Quality__addition_03.c"
+expected_cwes = [398]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE398_Poor_Code_Quality__addition_04"
+path = "testcases/CWE398_Poor_Code_Quality/CWE398_Poor_Code_Quality__addition_04.c"
+expected_cwes = [398]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE398_Poor_Code_Quality__addition_05"
+path = "testcases/CWE398_Poor_Code_Quality/CWE398_Poor_Code_Quality__addition_05.c"
+expected_cwes = [398]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE398_Poor_Code_Quality__addition_06"
+path = "testcases/CWE398_Poor_Code_Quality/CWE398_Poor_Code_Quality__addition_06.c"
+expected_cwes = [398]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE398_Poor_Code_Quality__addition_07"
+path = "testcases/CWE398_Poor_Code_Quality/CWE398_Poor_Code_Quality__addition_07.c"
+expected_cwes = [398]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE398_Poor_Code_Quality__addition_08"
+path = "testcases/CWE398_Poor_Code_Quality/CWE398_Poor_Code_Quality__addition_08.c"
+expected_cwes = [398]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE398_Poor_Code_Quality__addition_09"
+path = "testcases/CWE398_Poor_Code_Quality/CWE398_Poor_Code_Quality__addition_09.c"
+expected_cwes = [398]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE398_Poor_Code_Quality__addition_10"
+path = "testcases/CWE398_Poor_Code_Quality/CWE398_Poor_Code_Quality__addition_10.c"
+expected_cwes = [398]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE400_Resource_Exhaustion__connect_socket_for_loop_01"
+path = "testcases/CWE400_Resource_Exhaustion/s01/CWE400_Resource_Exhaustion__connect_socket_for_loop_01.c"
+expected_cwes = [400]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE400_Resource_Exhaustion__connect_socket_for_loop_02"
+path = "testcases/CWE400_Resource_Exhaustion/s01/CWE400_Resource_Exhaustion__connect_socket_for_loop_02.c"
+expected_cwes = [400]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE400_Resource_Exhaustion__connect_socket_for_loop_03"
+path = "testcases/CWE400_Resource_Exhaustion/s01/CWE400_Resource_Exhaustion__connect_socket_for_loop_03.c"
+expected_cwes = [400]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE400_Resource_Exhaustion__connect_socket_for_loop_04"
+path = "testcases/CWE400_Resource_Exhaustion/s01/CWE400_Resource_Exhaustion__connect_socket_for_loop_04.c"
+expected_cwes = [400]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE400_Resource_Exhaustion__connect_socket_for_loop_05"
+path = "testcases/CWE400_Resource_Exhaustion/s01/CWE400_Resource_Exhaustion__connect_socket_for_loop_05.c"
+expected_cwes = [400]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE400_Resource_Exhaustion__connect_socket_for_loop_06"
+path = "testcases/CWE400_Resource_Exhaustion/s01/CWE400_Resource_Exhaustion__connect_socket_for_loop_06.c"
+expected_cwes = [400]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE400_Resource_Exhaustion__connect_socket_for_loop_07"
+path = "testcases/CWE400_Resource_Exhaustion/s01/CWE400_Resource_Exhaustion__connect_socket_for_loop_07.c"
+expected_cwes = [400]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE400_Resource_Exhaustion__connect_socket_for_loop_08"
+path = "testcases/CWE400_Resource_Exhaustion/s01/CWE400_Resource_Exhaustion__connect_socket_for_loop_08.c"
+expected_cwes = [400]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE400_Resource_Exhaustion__connect_socket_for_loop_09"
+path = "testcases/CWE400_Resource_Exhaustion/s01/CWE400_Resource_Exhaustion__connect_socket_for_loop_09.c"
+expected_cwes = [400]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE400_Resource_Exhaustion__connect_socket_for_loop_10"
+path = "testcases/CWE400_Resource_Exhaustion/s01/CWE400_Resource_Exhaustion__connect_socket_for_loop_10.c"
+expected_cwes = [400]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE401_Memory_Leak__char_calloc_01"
+path = "testcases/CWE401_Memory_Leak/s01/CWE401_Memory_Leak__char_calloc_01.c"
+expected_cwes = [401]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE401_Memory_Leak__char_calloc_02"
+path = "testcases/CWE401_Memory_Leak/s01/CWE401_Memory_Leak__char_calloc_02.c"
+expected_cwes = [401]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE401_Memory_Leak__char_calloc_03"
+path = "testcases/CWE401_Memory_Leak/s01/CWE401_Memory_Leak__char_calloc_03.c"
+expected_cwes = [401]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE401_Memory_Leak__char_calloc_04"
+path = "testcases/CWE401_Memory_Leak/s01/CWE401_Memory_Leak__char_calloc_04.c"
+expected_cwes = [401]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE401_Memory_Leak__char_calloc_05"
+path = "testcases/CWE401_Memory_Leak/s01/CWE401_Memory_Leak__char_calloc_05.c"
+expected_cwes = [401]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE401_Memory_Leak__char_calloc_06"
+path = "testcases/CWE401_Memory_Leak/s01/CWE401_Memory_Leak__char_calloc_06.c"
+expected_cwes = [401]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE401_Memory_Leak__char_calloc_07"
+path = "testcases/CWE401_Memory_Leak/s01/CWE401_Memory_Leak__char_calloc_07.c"
+expected_cwes = [401]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE401_Memory_Leak__char_calloc_08"
+path = "testcases/CWE401_Memory_Leak/s01/CWE401_Memory_Leak__char_calloc_08.c"
+expected_cwes = [401]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE401_Memory_Leak__char_calloc_09"
+path = "testcases/CWE401_Memory_Leak/s01/CWE401_Memory_Leak__char_calloc_09.c"
+expected_cwes = [401]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE401_Memory_Leak__char_calloc_10"
+path = "testcases/CWE401_Memory_Leak/s01/CWE401_Memory_Leak__char_calloc_10.c"
+expected_cwes = [401]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_01"
+path = "testcases/CWE404_Improper_Resource_Shutdown/CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_01.c"
+expected_cwes = [404]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_02"
+path = "testcases/CWE404_Improper_Resource_Shutdown/CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_02.c"
+expected_cwes = [404]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_03"
+path = "testcases/CWE404_Improper_Resource_Shutdown/CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_03.c"
+expected_cwes = [404]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_04"
+path = "testcases/CWE404_Improper_Resource_Shutdown/CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_04.c"
+expected_cwes = [404]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_05"
+path = "testcases/CWE404_Improper_Resource_Shutdown/CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_05.c"
+expected_cwes = [404]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_06"
+path = "testcases/CWE404_Improper_Resource_Shutdown/CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_06.c"
+expected_cwes = [404]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_07"
+path = "testcases/CWE404_Improper_Resource_Shutdown/CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_07.c"
+expected_cwes = [404]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_08"
+path = "testcases/CWE404_Improper_Resource_Shutdown/CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_08.c"
+expected_cwes = [404]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_09"
+path = "testcases/CWE404_Improper_Resource_Shutdown/CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_09.c"
+expected_cwes = [404]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_10"
+path = "testcases/CWE404_Improper_Resource_Shutdown/CWE404_Improper_Resource_Shutdown__fopen_w32CloseHandle_10.c"
+expected_cwes = [404]
+is_negative = false
+language = "c"
+
+[[cases]]
 id = "CWE415_Double_Free__malloc_free_char_01"
 path = "testcases/CWE415_Double_Free/s01/CWE415_Double_Free__malloc_free_char_01.c"
 expected_cwes = [415]
@@ -214,73 +3469,38 @@ is_negative = false
 language = "c"
 
 [[cases]]
-id = "CWE416_Use_After_Free__malloc_free_char_01"
-path = "testcases/CWE416_Use_After_Free/CWE416_Use_After_Free__malloc_free_char_01.c"
-expected_cwes = [416]
+id = "CWE415_Double_Free__malloc_free_char_06"
+path = "testcases/CWE415_Double_Free/s01/CWE415_Double_Free__malloc_free_char_06.c"
+expected_cwes = [415]
 is_negative = false
 language = "c"
 
 [[cases]]
-id = "CWE416_Use_After_Free__malloc_free_char_02"
-path = "testcases/CWE416_Use_After_Free/CWE416_Use_After_Free__malloc_free_char_02.c"
-expected_cwes = [416]
+id = "CWE415_Double_Free__malloc_free_char_07"
+path = "testcases/CWE415_Double_Free/s01/CWE415_Double_Free__malloc_free_char_07.c"
+expected_cwes = [415]
 is_negative = false
 language = "c"
 
 [[cases]]
-id = "CWE416_Use_After_Free__malloc_free_char_03"
-path = "testcases/CWE416_Use_After_Free/CWE416_Use_After_Free__malloc_free_char_03.c"
-expected_cwes = [416]
+id = "CWE415_Double_Free__malloc_free_char_08"
+path = "testcases/CWE415_Double_Free/s01/CWE415_Double_Free__malloc_free_char_08.c"
+expected_cwes = [415]
 is_negative = false
 language = "c"
 
 [[cases]]
-id = "CWE416_Use_After_Free__malloc_free_char_04"
-path = "testcases/CWE416_Use_After_Free/CWE416_Use_After_Free__malloc_free_char_04.c"
-expected_cwes = [416]
+id = "CWE415_Double_Free__malloc_free_char_09"
+path = "testcases/CWE415_Double_Free/s01/CWE415_Double_Free__malloc_free_char_09.c"
+expected_cwes = [415]
 is_negative = false
 language = "c"
 
 [[cases]]
-id = "CWE416_Use_After_Free__malloc_free_char_05"
-path = "testcases/CWE416_Use_After_Free/CWE416_Use_After_Free__malloc_free_char_05.c"
-expected_cwes = [416]
+id = "CWE415_Double_Free__malloc_free_char_10"
+path = "testcases/CWE415_Double_Free/s01/CWE415_Double_Free__malloc_free_char_10.c"
+expected_cwes = [415]
 is_negative = false
 language = "c"
 
-[[cases]]
-id = "CWE476_NULL_Pointer_Dereference__binary_if_01"
-path = "testcases/CWE476_NULL_Pointer_Dereference/CWE476_NULL_Pointer_Dereference__binary_if_01.c"
-expected_cwes = [476]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "CWE476_NULL_Pointer_Dereference__binary_if_02"
-path = "testcases/CWE476_NULL_Pointer_Dereference/CWE476_NULL_Pointer_Dereference__binary_if_02.c"
-expected_cwes = [476]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "CWE476_NULL_Pointer_Dereference__binary_if_03"
-path = "testcases/CWE476_NULL_Pointer_Dereference/CWE476_NULL_Pointer_Dereference__binary_if_03.c"
-expected_cwes = [476]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "CWE476_NULL_Pointer_Dereference__binary_if_04"
-path = "testcases/CWE476_NULL_Pointer_Dereference/CWE476_NULL_Pointer_Dereference__binary_if_04.c"
-expected_cwes = [476]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "CWE476_NULL_Pointer_Dereference__binary_if_05"
-path = "testcases/CWE476_NULL_Pointer_Dereference/CWE476_NULL_Pointer_Dereference__binary_if_05.c"
-expected_cwes = [476]
-is_negative = false
-language = "c"
-
-# 40 cases across 8 CWE families we can detect
+# 500 cases across 109 CWE families

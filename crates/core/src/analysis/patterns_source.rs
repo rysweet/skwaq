@@ -407,6 +407,68 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "atol has no error checking and can cause integer overflow; use strtol with validation",
         },
+        // exec family (from self-improvement: failure-analyst on Juliet CWE-78)
+        SourcePattern {
+            regex: r"\bexecl\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "execl executes a program; validate all arguments",
+        },
+        SourcePattern {
+            regex: r"\bexecle\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "execle executes a program with environment; validate all arguments",
+        },
+        SourcePattern {
+            regex: r"\bexecv\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "execv executes a program; validate all arguments",
+        },
+        SourcePattern {
+            regex: r"\bexecvp\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "execvp executes a program via PATH; validate all arguments",
+        },
+        SourcePattern {
+            regex: r"\bexecve\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "execve executes a program with environment; validate all arguments",
+        },
+        // Memory operations (from self-improvement: heuristic on Juliet CWE-119/120)
+        SourcePattern {
+            regex: r"\bmemcpy\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "memcpy with unchecked size can cause buffer overflow; validate size parameter",
+        },
+        SourcePattern {
+            regex: r"\bmemmove\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "memmove with unchecked size can cause buffer overflow; validate size parameter",
+        },
+        SourcePattern {
+            regex: r"\bwcscpy\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Critical,
+            reason: "wcscpy has no bounds checking (wide-char strcpy); use wcsncpy",
+        },
+        SourcePattern {
+            regex: r"\bsscanf\s*\(",
+            category: DangerCategory::FormatString,
+            severity: Severity::High,
+            reason: "sscanf with %s has no bounds; use width specifiers",
+        },
+        SourcePattern {
+            regex: r"\bfscanf\s*\(",
+            category: DangerCategory::FormatString,
+            severity: Severity::High,
+            reason: "fscanf with %s has no bounds; use width specifiers",
+        },
     ]
 }
 
