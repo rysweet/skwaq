@@ -48,7 +48,7 @@ impl<'a> AnnotationManager<'a> {
     pub fn list(&self, investigation_id: &str) -> anyhow::Result<Vec<Annotation>> {
         let mut stmt = self.db.conn().prepare(
             "SELECT id, text, author, timestamp FROM annotations \
-             WHERE investigation_id = ?1 ORDER BY timestamp DESC"
+             WHERE investigation_id = ?1 ORDER BY timestamp DESC",
         )?;
         let rows = stmt.query_map([investigation_id], |row| {
             Ok(Annotation {
@@ -73,7 +73,11 @@ mod tests {
         db.execute(
             "INSERT INTO investigations (id, name, target, status, created_at, updated_at) \
              VALUES (?1, ?2, '', 'active', ?3, ?3)",
-            &[&id.as_str() as &dyn rusqlite::types::ToSql, &"test", &now.as_str()],
+            &[
+                &id.as_str() as &dyn rusqlite::types::ToSql,
+                &"test",
+                &now.as_str(),
+            ],
         )
         .unwrap();
         id
@@ -85,7 +89,9 @@ mod tests {
         let inv_id = setup_investigation(&db);
         let mgr = AnnotationManager::new(&db);
 
-        let a_id = mgr.add(&inv_id, "suspicious pattern in parse_input", "analyst").unwrap();
+        let a_id = mgr
+            .add(&inv_id, "suspicious pattern in parse_input", "analyst")
+            .unwrap();
         assert!(!a_id.is_empty());
 
         let list = mgr.list(&inv_id).unwrap();

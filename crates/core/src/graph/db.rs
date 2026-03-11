@@ -41,7 +41,11 @@ impl GraphDb {
     }
 
     /// Execute a write statement.
-    pub fn execute(&self, sql: &str, params: &[&dyn rusqlite::types::ToSql]) -> anyhow::Result<usize> {
+    pub fn execute(
+        &self,
+        sql: &str,
+        params: &[&dyn rusqlite::types::ToSql],
+    ) -> anyhow::Result<usize> {
         Ok(self.conn.execute(sql, params)?)
     }
 
@@ -227,7 +231,7 @@ impl GraphDb {
             CREATE INDEX IF NOT EXISTS idx_taint_source ON taint_flows(source_id);
             CREATE INDEX IF NOT EXISTS idx_taint_sink ON taint_flows(sink_id);
             CREATE INDEX IF NOT EXISTS idx_vulns_investigation ON vulnerabilities(investigation_id);
-            "
+            ",
         )?;
         Ok(())
     }
@@ -241,7 +245,8 @@ mod tests {
     fn test_open_in_memory() {
         let db = GraphDb::in_memory().unwrap();
         // Schema should exist
-        let count: i64 = db.conn()
+        let count: i64 = db
+            .conn()
             .query_row("SELECT count(*) FROM functions", [], |row| row.get(0))
             .unwrap();
         assert_eq!(count, 0);
@@ -263,11 +268,22 @@ mod tests {
         db.execute(
             "INSERT INTO functions (id, name, address, decompiled, confidence, investigation_id) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            &[&"func1", &"main", &"0x401000", &"int main() { return 0; }", &0.95_f64 as &dyn rusqlite::types::ToSql, &"inv1"],
-        ).unwrap();
+            &[
+                &"func1",
+                &"main",
+                &"0x401000",
+                &"int main() { return 0; }",
+                &0.95_f64 as &dyn rusqlite::types::ToSql,
+                &"inv1",
+            ],
+        )
+        .unwrap();
 
-        let name: String = db.conn()
-            .query_row("SELECT name FROM functions WHERE id = 'func1'", [], |row| row.get(0))
+        let name: String = db
+            .conn()
+            .query_row("SELECT name FROM functions WHERE id = 'func1'", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(name, "main");
     }
@@ -276,11 +292,24 @@ mod tests {
     fn test_call_relationship() {
         let db = GraphDb::in_memory().unwrap();
 
-        db.execute("INSERT INTO functions (id, name) VALUES ('f1', 'caller')", &[]).unwrap();
-        db.execute("INSERT INTO functions (id, name) VALUES ('f2', 'callee')", &[]).unwrap();
-        db.execute("INSERT INTO calls (caller_id, callee_id) VALUES ('f1', 'f2')", &[]).unwrap();
+        db.execute(
+            "INSERT INTO functions (id, name) VALUES ('f1', 'caller')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO functions (id, name) VALUES ('f2', 'callee')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO calls (caller_id, callee_id) VALUES ('f1', 'f2')",
+            &[],
+        )
+        .unwrap();
 
-        let callee: String = db.conn()
+        let callee: String = db
+            .conn()
             .query_row(
                 "SELECT f2.name FROM calls c \
                  JOIN functions f1 ON c.caller_id = f1.id \
@@ -301,10 +330,16 @@ mod tests {
             "INSERT INTO investigations (id, name, target, status, created_at) \
              VALUES ('inv1', 'Test', '/usr/bin/test', 'active', '2026-03-10')",
             &[],
-        ).unwrap();
+        )
+        .unwrap();
 
-        let status: String = db.conn()
-            .query_row("SELECT status FROM investigations WHERE id = 'inv1'", [], |row| row.get(0))
+        let status: String = db
+            .conn()
+            .query_row(
+                "SELECT status FROM investigations WHERE id = 'inv1'",
+                [],
+                |row| row.get(0),
+            )
             .unwrap();
         assert_eq!(status, "active");
     }
@@ -313,14 +348,19 @@ mod tests {
     fn test_taint_flow() {
         let db = GraphDb::in_memory().unwrap();
 
-        db.execute("INSERT INTO data_sources (id, name, source_type) VALUES ('src1', 'recv', 'network')", &[]).unwrap();
+        db.execute(
+            "INSERT INTO data_sources (id, name, source_type) VALUES ('src1', 'recv', 'network')",
+            &[],
+        )
+        .unwrap();
         db.execute("INSERT INTO data_sinks (id, name, sink_type, danger_level) VALUES ('sink1', 'strcpy', 'memory', 'critical')", &[]).unwrap();
         db.execute(
             "INSERT INTO taint_flows (source_id, sink_id, path, sanitized) VALUES ('src1', 'sink1', 'recv->process->strcpy', 0)",
             &[],
         ).unwrap();
 
-        let path: String = db.conn()
+        let path: String = db
+            .conn()
             .query_row(
                 "SELECT tf.path FROM taint_flows tf \
                  JOIN data_sources s ON tf.source_id = s.id \

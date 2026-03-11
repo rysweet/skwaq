@@ -6,7 +6,7 @@
 use async_trait::async_trait;
 use std::time::Duration;
 
-use crate::binary::subprocess::{SubprocessTool, ToolHealth, command_exists, get_version};
+use crate::binary::subprocess::{command_exists, get_version, SubprocessTool, ToolHealth};
 
 /// Runs Semgrep static analysis as a subprocess.
 pub struct SemgrepRunner {

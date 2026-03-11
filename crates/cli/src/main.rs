@@ -167,9 +167,7 @@ async fn main() -> anyhow::Result<()> {
                     skwaq::commands::config_cmd::run_show()?;
                 }
                 ConfigSub::Set { key: _, value: _ } => {
-                    anyhow::bail!(
-                        "Config writing not implemented. Edit skwaq.toml directly."
-                    );
+                    anyhow::bail!("Config writing not implemented. Edit skwaq.toml directly.");
                 }
             }
         }

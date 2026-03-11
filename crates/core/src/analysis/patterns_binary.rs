@@ -30,8 +30,10 @@ impl DangerousApiDetector {
         imports
             .iter()
             .filter_map(|imp| {
-                self.entries.iter().find(|e| e.name == imp.name.as_str()).map(|entry| {
-                    DangerousApiHit {
+                self.entries
+                    .iter()
+                    .find(|e| e.name == imp.name.as_str())
+                    .map(|entry| DangerousApiHit {
                         function_name: imp.name.clone(),
                         library: imp.library.clone(),
                         reason: entry.reason.to_string(),
@@ -39,8 +41,7 @@ impl DangerousApiDetector {
                         severity: entry.severity.clone(),
                         file: String::new(),
                         line: 0,
-                    }
-                })
+                    })
             })
             .collect()
     }
@@ -53,9 +54,7 @@ impl DangerousApiDetector {
         let mut seen = std::collections::HashSet::new();
 
         // Check function names (strip @version suffix for matching)
-        let mut stmt = db.conn().prepare(
-            "SELECT f.name FROM functions f",
-        )?;
+        let mut stmt = db.conn().prepare("SELECT f.name FROM functions f")?;
         let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
         for row in rows {
             let name = row?;
@@ -76,9 +75,9 @@ impl DangerousApiDetector {
         }
 
         // Check imports stored in the symbols table
-        let mut stmt = db.conn().prepare(
-            "SELECT s.name FROM symbols s WHERE s.symbol_type = 'import'",
-        )?;
+        let mut stmt = db
+            .conn()
+            .prepare("SELECT s.name FROM symbols s WHERE s.symbol_type = 'import'")?;
         let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
         for row in rows {
             let name = row?;
@@ -99,9 +98,9 @@ impl DangerousApiDetector {
         }
 
         // Check data_sinks (already classified during ingestion)
-        let mut stmt = db.conn().prepare(
-            "SELECT s.name, s.danger_level FROM data_sinks s",
-        )?;
+        let mut stmt = db
+            .conn()
+            .prepare("SELECT s.name, s.danger_level FROM data_sinks s")?;
         let rows = stmt.query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })?;
@@ -163,9 +162,18 @@ mod tests {
     fn test_check_imports_finds_dangerous() {
         let detector = DangerousApiDetector::new();
         let imports = vec![
-            ImportInfo { name: "strcpy".into(), library: "libc.so.6".into() },
-            ImportInfo { name: "safe_func".into(), library: "libfoo.so".into() },
-            ImportInfo { name: "system".into(), library: "libc.so.6".into() },
+            ImportInfo {
+                name: "strcpy".into(),
+                library: "libc.so.6".into(),
+            },
+            ImportInfo {
+                name: "safe_func".into(),
+                library: "libfoo.so".into(),
+            },
+            ImportInfo {
+                name: "system".into(),
+                library: "libc.so.6".into(),
+            },
         ];
         let hits = detector.check_imports(&imports);
         assert_eq!(hits.len(), 2);
@@ -181,15 +189,18 @@ mod tests {
         db.execute(
             "INSERT INTO functions (id, name) VALUES ('f1', 'strcpy')",
             &[],
-        ).unwrap();
+        )
+        .unwrap();
         db.execute(
             "INSERT INTO functions (id, name) VALUES ('f2', 'main')",
             &[],
-        ).unwrap();
+        )
+        .unwrap();
         db.execute(
             "INSERT INTO calls (caller_id, callee_id) VALUES ('f2', 'f1')",
             &[],
-        ).unwrap();
+        )
+        .unwrap();
 
         let detector = DangerousApiDetector::new();
         let hits = detector.detect(&db).unwrap();
@@ -201,8 +212,14 @@ mod tests {
     fn test_no_false_positives() {
         let detector = DangerousApiDetector::new();
         let imports = vec![
-            ImportInfo { name: "printf".into(), library: "libc.so.6".into() },
-            ImportInfo { name: "malloc".into(), library: "libc.so.6".into() },
+            ImportInfo {
+                name: "printf".into(),
+                library: "libc.so.6".into(),
+            },
+            ImportInfo {
+                name: "malloc".into(),
+                library: "libc.so.6".into(),
+            },
         ];
         let hits = detector.check_imports(&imports);
         assert!(hits.is_empty());

@@ -2,8 +2,8 @@
 //!
 //! Every tool queries or mutates the actual database - no placeholder data.
 
+use super::tool_translate::{execute_read_query, translate_to_sql};
 use crate::graph::GraphDb;
-use super::tool_translate::{translate_to_sql, execute_read_query};
 
 /// Execute a single tool call against the real graph database.
 ///
@@ -21,8 +21,12 @@ pub fn execute_tool(
         "get_callers" => execute_get_callers(db, investigation_id, args),
         "get_callees" => execute_get_callees(db, investigation_id, args),
         "lookup_cwe" => execute_lookup_cwe(db, args),
-        "create_finding" => super::tool_translate::execute_create_finding(db, investigation_id, args),
-        "search_similar" => super::tool_translate::execute_search_similar(db, investigation_id, args),
+        "create_finding" => {
+            super::tool_translate::execute_create_finding(db, investigation_id, args)
+        }
+        "search_similar" => {
+            super::tool_translate::execute_search_similar(db, investigation_id, args)
+        }
         _ => {
             tracing::warn!("Unknown tool: {name}");
             Ok(serde_json::json!({
@@ -38,10 +42,7 @@ fn execute_query_graph(
     investigation_id: &str,
     args: &serde_json::Value,
 ) -> anyhow::Result<serde_json::Value> {
-    let query = args
-        .get("cypher")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let query = args.get("cypher").and_then(|v| v.as_str()).unwrap_or("");
     tracing::info!("Tool query_graph: {query}");
 
     if query.is_empty() {
@@ -254,10 +255,7 @@ fn execute_get_callees(
 }
 
 /// Look up a CWE entry by ID.
-fn execute_lookup_cwe(
-    db: &GraphDb,
-    args: &serde_json::Value,
-) -> anyhow::Result<serde_json::Value> {
+fn execute_lookup_cwe(db: &GraphDb, args: &serde_json::Value) -> anyhow::Result<serde_json::Value> {
     let cwe_id = args
         .get("cwe_id")
         .and_then(|v| v.as_str())
@@ -341,12 +339,22 @@ mod tests {
 
         db.execute(
             "INSERT INTO functions (id, name, address, investigation_id) VALUES (?1, ?2, ?3, ?4)",
-            &[&"f1" as &dyn rusqlite::types::ToSql, &"main", &"0x401000", &inv_id],
+            &[
+                &"f1" as &dyn rusqlite::types::ToSql,
+                &"main",
+                &"0x401000",
+                &inv_id,
+            ],
         )
         .unwrap();
         db.execute(
             "INSERT INTO functions (id, name, address, investigation_id) VALUES (?1, ?2, ?3, ?4)",
-            &[&"f2" as &dyn rusqlite::types::ToSql, &"strcpy", &"0x402000", &inv_id],
+            &[
+                &"f2" as &dyn rusqlite::types::ToSql,
+                &"strcpy",
+                &"0x402000",
+                &inv_id,
+            ],
         )
         .unwrap();
         db.execute(
@@ -370,12 +378,22 @@ mod tests {
 
         db.execute(
             "INSERT INTO functions (id, name, address, investigation_id) VALUES (?1, ?2, ?3, ?4)",
-            &[&"f1" as &dyn rusqlite::types::ToSql, &"main", &"0x401000", &inv_id],
+            &[
+                &"f1" as &dyn rusqlite::types::ToSql,
+                &"main",
+                &"0x401000",
+                &inv_id,
+            ],
         )
         .unwrap();
         db.execute(
             "INSERT INTO functions (id, name, address, investigation_id) VALUES (?1, ?2, ?3, ?4)",
-            &[&"f2" as &dyn rusqlite::types::ToSql, &"system", &"0x402000", &inv_id],
+            &[
+                &"f2" as &dyn rusqlite::types::ToSql,
+                &"system",
+                &"0x402000",
+                &inv_id,
+            ],
         )
         .unwrap();
         db.execute(
@@ -458,7 +476,12 @@ mod tests {
 
         db.execute(
             "INSERT INTO functions (id, name, address, investigation_id) VALUES (?1, ?2, ?3, ?4)",
-            &[&"f1" as &dyn rusqlite::types::ToSql, &"main", &"0x401000", &inv_id],
+            &[
+                &"f1" as &dyn rusqlite::types::ToSql,
+                &"main",
+                &"0x401000",
+                &inv_id,
+            ],
         )
         .unwrap();
 
@@ -518,7 +541,10 @@ mod tests {
         let result = execute_tool(&db, inv_id, "query_graph", &args).unwrap();
 
         assert_eq!(result["status"], "error");
-        assert!(result["error"].as_str().unwrap().contains("Unsupported query pattern"));
+        assert!(result["error"]
+            .as_str()
+            .unwrap()
+            .contains("Unsupported query pattern"));
 
         // Verify no data was actually inserted
         let count: i64 = db

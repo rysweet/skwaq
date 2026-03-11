@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::OnceCell;
 
 use super::copilot_auth::{ensure_auth, AuthState};
-use super::traits::{LlmClient, LlmResponse, Message, ToolCall, ToolDefinition, TokenUsage};
+use super::traits::{LlmClient, LlmResponse, Message, TokenUsage, ToolCall, ToolDefinition};
 
 // ── request types (OpenAI-compatible) ────────────────────────────
 
@@ -128,9 +128,7 @@ impl CopilotClient {
     /// Lazily discover and validate auth.
     async fn ensure_auth(&self) -> anyhow::Result<&AuthState> {
         self.auth
-            .get_or_try_init(|| async {
-                ensure_auth(&self.http).await
-            })
+            .get_or_try_init(|| async { ensure_auth(&self.http).await })
             .await
     }
 }
@@ -167,11 +165,12 @@ impl LlmClient for CopilotClient {
 
                 // For assistant messages with tool_calls, content should be
                 // null (not empty string) per OpenAI API spec
-                let content = if m.role == "assistant" && api_tool_calls.is_some() && m.content.is_empty() {
-                    None
-                } else {
-                    Some(m.content.clone())
-                };
+                let content =
+                    if m.role == "assistant" && api_tool_calls.is_some() && m.content.is_empty() {
+                        None
+                    } else {
+                        Some(m.content.clone())
+                    };
 
                 CompletionsMessage {
                     role: m.role.clone(),
@@ -237,8 +236,7 @@ impl LlmClient for CopilotClient {
             .into_iter()
             .map(|tc| {
                 let arguments: serde_json::Value =
-                    serde_json::from_str(&tc.function.arguments)
-                        .unwrap_or(serde_json::Value::Null);
+                    serde_json::from_str(&tc.function.arguments).unwrap_or(serde_json::Value::Null);
                 ToolCall {
                     id: tc.id,
                     name: tc.function.name,

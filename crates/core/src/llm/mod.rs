@@ -6,8 +6,8 @@ pub mod copilot_client;
 pub mod ollama;
 pub mod traits;
 
-pub use traits::*;
 pub use copilot_client::CopilotClient;
+pub use traits::*;
 
 use crate::config::LlmConfig;
 
@@ -30,8 +30,10 @@ mod tests {
 
     #[test]
     fn test_create_ollama_client() {
-        let mut config = LlmConfig::default();
-        config.reasoning = "ollama".into();
+        let config = LlmConfig {
+            reasoning: "ollama".into(),
+            ..Default::default()
+        };
         let client = create_llm_client(&config);
         assert_eq!(client.provider_name(), "ollama");
     }
@@ -45,8 +47,10 @@ mod tests {
 
     #[test]
     fn test_create_copilot_client_explicit() {
-        let mut config = LlmConfig::default();
-        config.reasoning = "copilot".into();
+        let config = LlmConfig {
+            reasoning: "copilot".into(),
+            ..Default::default()
+        };
         let client = create_llm_client(&config);
         assert_eq!(client.provider_name(), "copilot");
     }

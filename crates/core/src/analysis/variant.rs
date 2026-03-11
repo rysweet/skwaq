@@ -37,13 +37,17 @@ impl<'a> VariantAnalyzer<'a> {
     /// of callee sets.
     pub fn find_variants(&self, pattern_id: &str) -> anyhow::Result<Vec<VariantHit>> {
         // Look up the function associated with the vulnerability pattern.
-        let func_name: Option<String> = self.db.conn().query_row(
-            "SELECT f.name FROM vulnerabilities v \
+        let func_name: Option<String> = self
+            .db
+            .conn()
+            .query_row(
+                "SELECT f.name FROM vulnerabilities v \
              JOIN functions f ON v.function_id = f.id \
              WHERE v.id = ?1",
-            [pattern_id],
-            |row| row.get(0),
-        ).ok();
+                [pattern_id],
+                |row| row.get(0),
+            )
+            .ok();
 
         let func_name = match func_name {
             Some(n) => n,
@@ -62,7 +66,7 @@ impl<'a> VariantAnalyzer<'a> {
              JOIN calls c2 ON c1.callee_id = c2.callee_id \
              JOIN functions f1 ON c1.caller_id = f1.id \
              JOIN functions f2 ON c2.caller_id = f2.id \
-             WHERE f1.name = ?1 AND f2.name != ?1"
+             WHERE f1.name = ?1 AND f2.name != ?1",
         )?;
         let candidate_names: Vec<String> = stmt
             .query_map([&func_name], |row| row.get::<_, String>(0))?
@@ -83,12 +87,19 @@ impl<'a> VariantAnalyzer<'a> {
             hits.push(VariantHit {
                 function_name: candidate_name,
                 similarity,
-                description: format!("Shares callee pattern with {} (Jaccard: {:.2})", func_name, similarity),
+                description: format!(
+                    "Shares callee pattern with {} (Jaccard: {:.2})",
+                    func_name, similarity
+                ),
             });
         }
 
         // Sort by similarity descending.
-        hits.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap_or(std::cmp::Ordering::Equal));
+        hits.sort_by(|a, b| {
+            b.similarity
+                .partial_cmp(&a.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         Ok(hits)
     }

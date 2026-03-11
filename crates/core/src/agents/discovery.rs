@@ -47,10 +47,7 @@ pub fn discover_agents() -> Vec<AgentDefinition> {
                     agents.insert(def.name.clone(), def);
                 }
                 Err(e) => {
-                    tracing::warn!(
-                        "Failed to parse agent file {}: {e}",
-                        entry.path().display()
-                    );
+                    tracing::warn!("Failed to parse agent file {}: {e}", entry.path().display());
                 }
             }
         }

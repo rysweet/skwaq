@@ -12,7 +12,9 @@ use tokio::time::timeout;
 pub trait SubprocessTool: Send + Sync {
     fn name(&self) -> &str;
     async fn health_check(&self) -> ToolHealth;
-    fn min_version(&self) -> Option<&str> { None }
+    fn min_version(&self) -> Option<&str> {
+        None
+    }
     fn default_timeout(&self) -> Duration;
     fn install_hint(&self) -> &str;
 }
@@ -68,11 +70,7 @@ pub async fn run_tool(
 
 /// Check if a command exists on PATH.
 pub async fn command_exists(cmd: &str) -> Option<String> {
-    let result = Command::new("which")
-        .arg(cmd)
-        .output()
-        .await
-        .ok()?;
+    let result = Command::new("which").arg(cmd).output().await.ok()?;
 
     if result.status.success() {
         Some(String::from_utf8_lossy(&result.stdout).trim().to_string())
@@ -83,11 +81,7 @@ pub async fn command_exists(cmd: &str) -> Option<String> {
 
 /// Get version string from a command.
 pub async fn get_version(cmd: &str, args: &[&str]) -> Option<String> {
-    let result = Command::new(cmd)
-        .args(args)
-        .output()
-        .await
-        .ok()?;
+    let result = Command::new(cmd).args(args).output().await.ok()?;
 
     if result.status.success() {
         let output = String::from_utf8_lossy(&result.stdout);

@@ -27,7 +27,8 @@ impl AnalysisCache {
     }
 
     pub fn put(&self, binary_path: &Path, analysis: &GhidraAnalysis) -> anyhow::Result<()> {
-        let hash = self.hash_file(binary_path)
+        let hash = self
+            .hash_file(binary_path)
             .ok_or_else(|| anyhow::anyhow!("Cannot hash binary"))?;
         let dir = self.cache_dir.join(&hash);
         std::fs::create_dir_all(&dir)?;

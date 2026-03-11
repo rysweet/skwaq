@@ -130,9 +130,8 @@ pub fn discover_skills() -> Vec<SkillDefinition> {
 /// 2. `~/.skwaq/skills/{name}/SKILL.md` (user-global)
 /// 3. `skills/{name}/SKILL.md` (bundled defaults)
 pub fn load_skill(name: &str) -> anyhow::Result<SkillDefinition> {
-    let mut candidates: Vec<PathBuf> = vec![
-        PathBuf::from(".skwaq/skills").join(name).join("SKILL.md"),
-    ];
+    let mut candidates: Vec<PathBuf> =
+        vec![PathBuf::from(".skwaq/skills").join(name).join("SKILL.md")];
     if let Some(home) = dirs::home_dir() {
         candidates.push(home.join(".skwaq/skills").join(name).join("SKILL.md"));
     }
@@ -182,8 +181,7 @@ fn parse_skill_markdown(content: &str, path: &Path) -> anyhow::Result<SkillDefin
         .unwrap_or("unknown")
         .to_string();
 
-    if content.starts_with("---") {
-        let rest = &content[3..];
+    if let Some(rest) = content.strip_prefix("---") {
         if let Some(end) = rest.find("\n---") {
             let yaml_str = &rest[..end];
             let body = rest[end + 4..].trim();
@@ -192,11 +190,7 @@ fn parse_skill_markdown(content: &str, path: &Path) -> anyhow::Result<SkillDefin
                 .map_err(|e| anyhow::anyhow!("Failed to parse skill frontmatter: {e}"))?;
 
             // Use frontmatter name if provided, otherwise use directory name.
-            let skill_name = if fm.name.is_empty() {
-                name
-            } else {
-                fm.name
-            };
+            let skill_name = if fm.name.is_empty() { name } else { fm.name };
 
             return Ok(SkillDefinition {
                 name: skill_name,
@@ -315,10 +309,7 @@ description: A skill without a name field
             parse_allowed_tools(Some("Bash(skwaq *), Read, Grep")),
             vec!["Bash(skwaq *)", "Read", "Grep"]
         );
-        assert_eq!(
-            parse_allowed_tools(Some("Bash")),
-            vec!["Bash"]
-        );
+        assert_eq!(parse_allowed_tools(Some("Bash")), vec!["Bash"]);
         assert!(parse_allowed_tools(None).is_empty());
         assert!(parse_allowed_tools(Some("")).is_empty());
     }

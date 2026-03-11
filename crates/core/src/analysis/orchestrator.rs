@@ -6,7 +6,7 @@
 //! (no new findings and no invalidations in the latest cycle).
 
 use crate::analysis::findings::{Finding, FindingStatus, FindingUpdate};
-use crate::analysis::{perspective_pattern, perspective_dataflow, perspective_context};
+use crate::analysis::{perspective_context, perspective_dataflow, perspective_pattern};
 use crate::graph::GraphDb;
 
 /// Result of a single analysis cycle.
@@ -42,10 +42,7 @@ impl<'a> AnalysisOrchestrator<'a> {
     /// Returns the history of all cycles run. The final cycle's findings
     /// list contains the definitive results with statuses reflecting
     /// the full analysis.
-    pub fn run_quick_analysis(
-        &self,
-        investigation_id: &str,
-    ) -> anyhow::Result<Vec<AnalysisCycle>> {
+    pub fn run_quick_analysis(&self, investigation_id: &str) -> anyhow::Result<Vec<AnalysisCycle>> {
         let mut cycles = Vec::new();
         let mut all_findings: Vec<Finding> = Vec::new();
 
@@ -85,8 +82,11 @@ impl<'a> AnalysisOrchestrator<'a> {
                 // Cycle 1: Pattern detection + taint analysis + source/sink ID
                 let pattern_findings =
                     perspective_pattern::pattern_perspective(self.db, investigation_id, cycle_num);
-                let dataflow_findings =
-                    perspective_dataflow::dataflow_perspective(self.db, investigation_id, cycle_num);
+                let dataflow_findings = perspective_dataflow::dataflow_perspective(
+                    self.db,
+                    investigation_id,
+                    cycle_num,
+                );
 
                 let new_count = pattern_findings.len() + dataflow_findings.len();
                 all_findings.extend(pattern_findings);
@@ -149,11 +149,7 @@ impl<'a> AnalysisOrchestrator<'a> {
     }
 
     /// Persist final findings to the database.
-    fn store_findings(
-        &self,
-        investigation_id: &str,
-        findings: &[Finding],
-    ) -> anyhow::Result<()> {
+    fn store_findings(&self, investigation_id: &str, findings: &[Finding]) -> anyhow::Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
 
         for finding in findings {
@@ -229,7 +225,7 @@ mod tests {
         let orch = AnalysisOrchestrator::new(&db, 5);
         let cycles = orch.run_quick_analysis("inv1").unwrap();
         // Should run 2 cycles (cycle 1 finds nothing, cycle 2 finds nothing => convergence)
-        assert!(cycles.len() >= 1);
+        assert!(!cycles.is_empty());
         assert_eq!(cycles[0].new_findings, 0);
     }
 
@@ -339,7 +335,12 @@ mod tests {
 
         // At least some findings should be confirmed or invalidated
         assert!(
-            confirmed > 0 || invalidated > 0 || last.findings.iter().any(|f| f.status == FindingStatus::Challenged),
+            confirmed > 0
+                || invalidated > 0
+                || last
+                    .findings
+                    .iter()
+                    .any(|f| f.status == FindingStatus::Challenged),
             "Cycle 2+ should have processed findings"
         );
     }
@@ -433,10 +434,7 @@ mod tests {
         assert!(!cycles.is_empty());
 
         // Check that invalidated findings are not in the DB
-        let mut stmt = db
-            .conn()
-            .prepare("SELECT status FROM findings")
-            .unwrap();
+        let mut stmt = db.conn().prepare("SELECT status FROM findings").unwrap();
         let statuses: Vec<String> = stmt
             .query_map([], |row| row.get::<_, String>(0))
             .unwrap()
@@ -444,7 +442,10 @@ mod tests {
             .collect();
 
         for status in &statuses {
-            assert_ne!(status, "invalidated", "Invalidated findings should not be stored");
+            assert_ne!(
+                status, "invalidated",
+                "Invalidated findings should not be stored"
+            );
         }
     }
 }

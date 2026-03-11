@@ -20,37 +20,51 @@ pub struct AttackSurface {
 }
 
 const NETWORK_PATTERNS: &[&str] = &[
-    "socket", "bind", "listen", "accept", "recv", "recvfrom", "recvmsg",
-    "send", "sendto", "sendmsg", "connect", "getaddrinfo", "gethostbyname",
+    "socket",
+    "bind",
+    "listen",
+    "accept",
+    "recv",
+    "recvfrom",
+    "recvmsg",
+    "send",
+    "sendto",
+    "sendmsg",
+    "connect",
+    "getaddrinfo",
+    "gethostbyname",
 ];
 
 const FILE_PATTERNS: &[&str] = &[
-    "fopen", "fread", "fgets", "read", "open", "openat", "pread", "readdir",
-    "fclose", "fwrite", "fdopen",
+    "fopen", "fread", "fgets", "read", "open", "openat", "pread", "readdir", "fclose", "fwrite",
+    "fdopen",
 ];
 
 const IPC_PATTERNS: &[&str] = &[
-    "pipe", "shmget", "msgget", "mq_open", "shmat", "semget", "mkfifo",
+    "pipe",
+    "shmget",
+    "msgget",
+    "mq_open",
+    "shmat",
+    "semget",
+    "mkfifo",
     "socketpair",
 ];
 
 const INPUT_PATTERNS: &[&str] = &[
-    "scanf", "sscanf", "fscanf", "gets", "getenv", "getchar", "getline",
-    "readline",
+    "scanf", "sscanf", "fscanf", "gets", "getenv", "getchar", "getline", "readline",
 ];
 
 /// Source patterns: functions that read external data into the program.
 pub const SOURCE_PATTERNS: &[&str] = &[
-    "recv", "recvfrom", "recvmsg", "accept", "read", "fread", "fgets",
-    "gets", "getenv", "scanf", "sscanf", "fscanf", "getchar", "getline",
-    "readline", "fopen", "open",
+    "recv", "recvfrom", "recvmsg", "accept", "read", "fread", "fgets", "gets", "getenv", "scanf",
+    "sscanf", "fscanf", "getchar", "getline", "readline", "fopen", "open",
 ];
 
 /// Sink patterns: dangerous functions that consume tainted data.
 pub const SINK_PATTERNS: &[&str] = &[
-    "strcpy", "strncpy", "sprintf", "snprintf", "strcat", "strncat",
-    "system", "exec", "execve", "execvp", "popen", "memcpy", "memmove",
-    "gets", "free", "realloc", "malloc",
+    "strcpy", "strncpy", "sprintf", "snprintf", "strcat", "strncat", "system", "exec", "execve",
+    "execvp", "popen", "memcpy", "memmove", "gets", "free", "realloc", "malloc",
 ];
 
 /// Analyze the attack surface of a binary by categorizing its imports.
@@ -62,16 +76,16 @@ pub fn identify_attack_surface(info: &BinaryInfo) -> AttackSurface {
         // Strip optional "@" version suffix (e.g. "recv@@GLIBC_2.2.5")
         let base = name.split('@').next().unwrap_or(name);
 
-        if NETWORK_PATTERNS.iter().any(|p| base == *p) {
+        if NETWORK_PATTERNS.contains(&base) {
             surface.network.push(name.to_string());
         }
-        if FILE_PATTERNS.iter().any(|p| base == *p) {
+        if FILE_PATTERNS.contains(&base) {
             surface.file.push(name.to_string());
         }
-        if IPC_PATTERNS.iter().any(|p| base == *p) {
+        if IPC_PATTERNS.contains(&base) {
             surface.ipc.push(name.to_string());
         }
-        if INPUT_PATTERNS.iter().any(|p| base == *p) {
+        if INPUT_PATTERNS.contains(&base) {
             surface.input.push(name.to_string());
         }
     }

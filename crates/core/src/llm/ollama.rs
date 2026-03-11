@@ -7,7 +7,7 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use super::traits::{LlmClient, LlmResponse, Message, ToolCall, ToolDefinition, TokenUsage};
+use super::traits::{LlmClient, LlmResponse, Message, TokenUsage, ToolCall, ToolDefinition};
 
 /// Ollama chat API client.
 pub struct OllamaClient {

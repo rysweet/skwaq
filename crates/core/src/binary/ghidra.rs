@@ -27,11 +27,7 @@ impl GhidraRunner {
         }
 
         // Check common locations
-        let candidates = [
-            "/opt/ghidra",
-            "/usr/local/ghidra",
-            "/usr/share/ghidra",
-        ];
+        let candidates = ["/opt/ghidra", "/usr/local/ghidra", "/usr/share/ghidra"];
         for candidate in candidates {
             let p = PathBuf::from(candidate);
             if p.join("support/analyzeHeadless").exists() {
@@ -97,41 +93,65 @@ impl GhidraRunner {
     fn headless_path(&self) -> Option<PathBuf> {
         let base = self.ghidra_path.as_ref()?;
         let path = base.join("support/analyzeHeadless");
-        if path.exists() { Some(path) } else { None }
+        if path.exists() {
+            Some(path)
+        } else {
+            None
+        }
     }
 
     /// Run Ghidra headless analysis on a binary.
     /// Returns parsed analysis output with decompiled functions.
-    pub async fn analyze(&self, binary_path: &Path, timeout_secs: u64) -> anyhow::Result<GhidraAnalysis> {
-        let headless = self.headless_path()
+    pub async fn analyze(
+        &self,
+        binary_path: &Path,
+        timeout_secs: u64,
+    ) -> anyhow::Result<GhidraAnalysis> {
+        let headless = self
+            .headless_path()
             .ok_or_else(|| anyhow::anyhow!("Ghidra not found. Set GHIDRA_INSTALL_DIR"))?;
 
-        let scripts_dir = Self::find_scripts_dir()
-            .ok_or_else(|| anyhow::anyhow!(
+        let scripts_dir = Self::find_scripts_dir().ok_or_else(|| {
+            anyhow::anyhow!(
                 "ghidra-scripts/extract_analysis.py not found. \
                  Set SKWAQ_SCRIPTS_DIR or run from the skwaq project root."
-            ))?;
+            )
+        })?;
 
         let project_dir = tempfile::tempdir()?;
         let output_file = project_dir.path().join("ghidra_output.json");
 
-        let binary_abs = std::fs::canonicalize(binary_path)
-            .map_err(|e| anyhow::anyhow!("Cannot resolve binary path {}: {}", binary_path.display(), e))?;
+        let binary_abs = std::fs::canonicalize(binary_path).map_err(|e| {
+            anyhow::anyhow!(
+                "Cannot resolve binary path {}: {}",
+                binary_path.display(),
+                e
+            )
+        })?;
 
         let mut cmd = tokio::process::Command::new(&headless);
         cmd.args([
-            project_dir.path().to_str().ok_or_else(|| anyhow::anyhow!("non-UTF-8 path"))?,
+            project_dir
+                .path()
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("non-UTF-8 path"))?,
             "SkwaqProject",
             "-import",
-            binary_abs.to_str().ok_or_else(|| anyhow::anyhow!("non-UTF-8 binary path"))?,
+            binary_abs
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("non-UTF-8 binary path"))?,
             "-postScript",
             "extract_analysis.py",
-            output_file.to_str().ok_or_else(|| anyhow::anyhow!("non-UTF-8 output path"))?,
+            output_file
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("non-UTF-8 output path"))?,
             "-scriptPath",
-            scripts_dir.to_str().ok_or_else(|| anyhow::anyhow!("non-UTF-8 scripts path"))?,
+            scripts_dir
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("non-UTF-8 scripts path"))?,
             "-analysisTimeoutPerFile",
             &timeout_secs.to_string(),
-            "-deleteProject",  // Clean up Ghidra project files automatically
+            "-deleteProject", // Clean up Ghidra project files automatically
         ]);
 
         let _output = run_tool(
@@ -139,7 +159,8 @@ impl GhidraRunner {
             "Ghidra",
             Duration::from_secs(timeout_secs + 60), // Extra buffer beyond analysis timeout
             Some(project_dir.path()),
-        ).await?;
+        )
+        .await?;
 
         // Parse the JSON output from the post-script
         if output_file.exists() {
@@ -161,87 +182,125 @@ impl GhidraRunner {
 /// The Python script may produce string offsets (e.g. "00401234") instead of
 /// numeric offsets. This function handles both formats.
 fn parse_ghidra_json(raw: &serde_json::Value) -> anyhow::Result<GhidraAnalysis> {
-    let functions: Vec<GhidraFunction> = raw.get("functions")
+    let functions: Vec<GhidraFunction> = raw
+        .get("functions")
         .and_then(|v| v.as_array())
         .map(|arr| {
-            arr.iter().filter_map(|f| {
-                Some(GhidraFunction {
-                    name: f.get("name")?.as_str()?.to_string(),
-                    address: f.get("address")?.as_str()?.to_string(),
-                    size: f.get("size").and_then(|v| v.as_u64()).unwrap_or(0),
-                    decompiled: f.get("decompiled").and_then(|v| v.as_str()).map(String::from),
-                    calls: f.get("calls")
-                        .and_then(|v| v.as_array())
-                        .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-                        .unwrap_or_default(),
-                    called_by: f.get("called_by")
-                        .and_then(|v| v.as_array())
-                        .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-                        .unwrap_or_default(),
-                    parameter_count: f.get("parameter_count").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-                })
-            }).collect()
-        })
-        .unwrap_or_default();
-
-    let strings: Vec<ExtractedString> = raw.get("strings")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter().filter_map(|s| {
-                let value = s.get("value")?.as_str()?.to_string();
-                // offset may be a hex string (from Ghidra addresses) or a number
-                let offset = s.get("offset")
-                    .map(|v| {
-                        if let Some(n) = v.as_u64() {
-                            n
-                        } else if let Some(s) = v.as_str() {
-                            // Parse hex address like "00401234"
-                            u64::from_str_radix(s.trim_start_matches("0x"), 16).unwrap_or(0)
-                        } else {
-                            0
-                        }
+            arr.iter()
+                .filter_map(|f| {
+                    Some(GhidraFunction {
+                        name: f.get("name")?.as_str()?.to_string(),
+                        address: f.get("address")?.as_str()?.to_string(),
+                        size: f.get("size").and_then(|v| v.as_u64()).unwrap_or(0),
+                        decompiled: f
+                            .get("decompiled")
+                            .and_then(|v| v.as_str())
+                            .map(String::from),
+                        calls: f
+                            .get("calls")
+                            .and_then(|v| v.as_array())
+                            .map(|a| {
+                                a.iter()
+                                    .filter_map(|v| v.as_str().map(String::from))
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
+                        called_by: f
+                            .get("called_by")
+                            .and_then(|v| v.as_array())
+                            .map(|a| {
+                                a.iter()
+                                    .filter_map(|v| v.as_str().map(String::from))
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
+                        parameter_count: f
+                            .get("parameter_count")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0) as u32,
                     })
-                    .unwrap_or(0);
-                let encoding = s.get("encoding")
-                    .and_then(|v| v.as_str())
-                    .map(|e| match e {
-                        "utf16le" | "utf16" => StringEncoding::Utf16Le,
-                        "ascii" => StringEncoding::Ascii,
-                        _ => StringEncoding::Utf8,
-                    })
-                    .unwrap_or(StringEncoding::Utf8);
-                Some(ExtractedString { value, offset, encoding })
-            }).collect()
+                })
+                .collect()
         })
         .unwrap_or_default();
 
-    let imports: Vec<ImportInfo> = raw.get("imports")
+    let strings: Vec<ExtractedString> = raw
+        .get("strings")
         .and_then(|v| v.as_array())
         .map(|arr| {
-            arr.iter().filter_map(|i| {
-                Some(ImportInfo {
-                    name: i.get("name")?.as_str()?.to_string(),
-                    library: i.get("library").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            arr.iter()
+                .filter_map(|s| {
+                    let value = s.get("value")?.as_str()?.to_string();
+                    // offset may be a hex string (from Ghidra addresses) or a number
+                    let offset = s
+                        .get("offset")
+                        .map(|v| {
+                            if let Some(n) = v.as_u64() {
+                                n
+                            } else if let Some(s) = v.as_str() {
+                                // Parse hex address like "00401234"
+                                u64::from_str_radix(s.trim_start_matches("0x"), 16).unwrap_or(0)
+                            } else {
+                                0
+                            }
+                        })
+                        .unwrap_or(0);
+                    let encoding = s
+                        .get("encoding")
+                        .and_then(|v| v.as_str())
+                        .map(|e| match e {
+                            "utf16le" | "utf16" => StringEncoding::Utf16Le,
+                            "ascii" => StringEncoding::Ascii,
+                            _ => StringEncoding::Utf8,
+                        })
+                        .unwrap_or(StringEncoding::Utf8);
+                    Some(ExtractedString {
+                        value,
+                        offset,
+                        encoding,
+                    })
                 })
-            }).collect()
+                .collect()
         })
         .unwrap_or_default();
 
-    Ok(GhidraAnalysis { functions, strings, imports })
+    let imports: Vec<ImportInfo> = raw
+        .get("imports")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|i| {
+                    Some(ImportInfo {
+                        name: i.get("name")?.as_str()?.to_string(),
+                        library: i
+                            .get("library")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Ok(GhidraAnalysis {
+        functions,
+        strings,
+        imports,
+    })
 }
 
 #[async_trait]
 impl SubprocessTool for GhidraRunner {
-    fn name(&self) -> &str { "Ghidra" }
+    fn name(&self) -> &str {
+        "Ghidra"
+    }
 
     async fn health_check(&self) -> ToolHealth {
         match Self::find_ghidra() {
             Some(path) => {
                 let headless_str = path.join("support/analyzeHeadless");
-                let version = get_version(
-                    headless_str.to_str().unwrap_or(""),
-                    &[],
-                ).await;
+                let version = get_version(headless_str.to_str().unwrap_or(""), &[]).await;
                 ToolHealth {
                     available: true,
                     version,
@@ -319,7 +378,10 @@ mod tests {
         let analysis = parse_ghidra_json(&json).unwrap();
         assert_eq!(analysis.functions.len(), 1);
         assert_eq!(analysis.functions[0].name, "main");
-        assert_eq!(analysis.functions[0].decompiled.as_deref(), Some("int main(int argc, char **argv) { return 0; }"));
+        assert_eq!(
+            analysis.functions[0].decompiled.as_deref(),
+            Some("int main(int argc, char **argv) { return 0; }")
+        );
         assert_eq!(analysis.functions[0].calls.len(), 1);
         assert_eq!(analysis.strings.len(), 1);
         assert_eq!(analysis.strings[0].value, "/bin/sh");

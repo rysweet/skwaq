@@ -1,6 +1,6 @@
 //! Graph enrichment from Ghidra decompilation results.
 
-use super::builder::{GraphBuilder, GhidraInsertCounts};
+use super::builder::{GhidraInsertCounts, GraphBuilder};
 use crate::binary::types::GhidraAnalysis;
 
 impl<'a> GraphBuilder<'a> {
@@ -18,15 +18,12 @@ impl<'a> GraphBuilder<'a> {
 
         self.db().mutate("BEGIN TRANSACTION;")?;
 
-        let result =
-            self.build_from_ghidra_inner(analysis, investigation_id, &mut counts);
+        let result = self.build_from_ghidra_inner(analysis, investigation_id, &mut counts);
 
         if result.is_ok() {
             self.db().mutate("COMMIT;")?;
-        } else {
-            if let Err(e) = self.db().mutate("ROLLBACK;") {
-                tracing::error!("Failed to rollback transaction: {e}");
-            }
+        } else if let Err(e) = self.db().mutate("ROLLBACK;") {
+            tracing::error!("Failed to rollback transaction: {e}");
         }
 
         result?;
@@ -48,9 +45,10 @@ impl<'a> GraphBuilder<'a> {
         let mut name_to_id: std::collections::HashMap<String, String> =
             std::collections::HashMap::new();
         {
-            let mut stmt = self.db().conn().prepare(
-                "SELECT id, name, address FROM functions WHERE investigation_id = ?1",
-            )?;
+            let mut stmt = self
+                .db()
+                .conn()
+                .prepare("SELECT id, name, address FROM functions WHERE investigation_id = ?1")?;
             let rows = stmt.query_map([investigation_id], |row| {
                 Ok((
                     row.get::<_, String>(0)?,
@@ -79,7 +77,8 @@ impl<'a> GraphBuilder<'a> {
             // Try to find an existing function by address first, then by name.
             // Address matching: goblin stores "0x10d0", Ghidra stores "00101000".
             // These often differ due to PIE base address differences.
-            let existing_id = addr_to_id.get(&gfunc.address)
+            let existing_id = addr_to_id
+                .get(&gfunc.address)
                 .or_else(|| {
                     let with_prefix = format!("0x{}", &gfunc.address);
                     addr_to_id.get(&with_prefix)
@@ -88,7 +87,8 @@ impl<'a> GraphBuilder<'a> {
                     // Try stripping leading zeros from Ghidra address
                     let stripped = gfunc.address.trim_start_matches('0');
                     if !stripped.is_empty() {
-                        addr_to_id.get(stripped)
+                        addr_to_id
+                            .get(stripped)
                             .or_else(|| addr_to_id.get(&format!("0x{}", stripped)))
                     } else {
                         None
@@ -221,7 +221,10 @@ mod tests {
                     name: "main".into(),
                     address: "401000".into(), // without 0x prefix (Ghidra style)
                     size: 100,
-                    decompiled: Some("int main(int argc, char **argv) {\n  system(argv[1]);\n  return 0;\n}".into()),
+                    decompiled: Some(
+                        "int main(int argc, char **argv) {\n  system(argv[1]);\n  return 0;\n}"
+                            .into(),
+                    ),
                     calls: vec!["401100".into()],
                     called_by: vec![],
                     parameter_count: 2,
@@ -240,7 +243,9 @@ mod tests {
             imports: vec![],
         };
 
-        let gcounts = builder.build_from_ghidra_analysis(&ghidra, "inv-ghidra").unwrap();
+        let gcounts = builder
+            .build_from_ghidra_analysis(&ghidra, "inv-ghidra")
+            .unwrap();
 
         // main should be updated (address match via 0x prefix stripping)
         assert_eq!(gcounts.functions_updated, 1);
@@ -274,11 +279,7 @@ mod tests {
         // Verify call edge exists
         let call_count: i64 = db
             .conn()
-            .query_row(
-                "SELECT count(*) FROM calls",
-                [],
-                |row| row.get(0),
-            )
+            .query_row("SELECT count(*) FROM calls", [], |row| row.get(0))
             .unwrap();
         assert_eq!(call_count, 1);
     }
@@ -294,7 +295,9 @@ mod tests {
             imports: vec![],
         };
 
-        let gcounts = builder.build_from_ghidra_analysis(&ghidra, "inv-empty").unwrap();
+        let gcounts = builder
+            .build_from_ghidra_analysis(&ghidra, "inv-empty")
+            .unwrap();
         assert_eq!(gcounts.functions_updated, 0);
         assert_eq!(gcounts.functions_added, 0);
         assert_eq!(gcounts.calls_added, 0);

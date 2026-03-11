@@ -32,8 +32,8 @@ pub fn run(source_filter: Option<&str>, sink_filter: Option<&str>) -> anyhow::Re
     let filtered: Vec<_> = flows
         .iter()
         .filter(|(src, snk, _, _)| {
-            let src_match = source_filter.map_or(true, |f| src.contains(f));
-            let snk_match = sink_filter.map_or(true, |f| snk.contains(f));
+            let src_match = source_filter.is_none_or(|f| src.contains(f));
+            let snk_match = sink_filter.is_none_or(|f| snk.contains(f));
             src_match && snk_match
         })
         .collect();
@@ -43,10 +43,7 @@ pub fn run(source_filter: Option<&str>, sink_filter: Option<&str>) -> anyhow::Re
         flows.len(),
         filtered.len()
     );
-    println!(
-        "  {:<20} {:<20} {:<10} {}",
-        "SOURCE", "SINK", "SANITIZED", "PATH"
-    );
+    println!("  {:<20} {:<20} {:<10} PATH", "SOURCE", "SINK", "SANITIZED");
     println!("  {}", "-".repeat(80));
 
     for (src, snk, path, sanitized) in &filtered {

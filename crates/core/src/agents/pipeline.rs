@@ -33,9 +33,7 @@ pub enum ContextMode {
     /// Build context from the graph database (attack surface, functions, taint flows).
     FromGraph,
     /// Use the output of previous stages as context, plus a preamble.
-    FromPreviousResults {
-        preamble: String,
-    },
+    FromPreviousResults { preamble: String },
 }
 
 impl AnalysisPipeline {
@@ -65,9 +63,7 @@ impl AnalysisPipeline {
             let agent = load_agent(&stage.agent_name)?;
 
             let context = match &stage.context_mode {
-                ContextMode::FromGraph => {
-                    build_analysis_context(target, investigation_id, db)
-                }
+                ContextMode::FromGraph => build_analysis_context(target, investigation_id, db),
                 ContextMode::FromPreviousResults { preamble } => {
                     let mut ctx = preamble.clone();
                     for prev in &results {
@@ -85,10 +81,7 @@ impl AnalysisPipeline {
                 }
             };
 
-            eprintln!(
-                "  Running agent: {} ({})",
-                agent.name, agent.description
-            );
+            eprintln!("  Running agent: {} ({})", agent.name, agent.description);
 
             let result = runner
                 .run_agent_with_db(&agent, investigation_id, &context, db, budget)

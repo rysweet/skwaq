@@ -101,7 +101,9 @@ pub fn dataflow_perspective(db: &GraphDb, inv_id: &str, cycle: u32) -> Vec<Findi
             .prepare("SELECT id FROM functions WHERE name = ?1 AND investigation_id = ?2")
         {
             let source_ids: Vec<String> = id_stmt
-                .query_map(rusqlite::params![source.as_str(), inv_id], |row| row.get::<_, String>(0))
+                .query_map(rusqlite::params![source.as_str(), inv_id], |row| {
+                    row.get::<_, String>(0)
+                })
                 .ok()
                 .map(|rows| rows.flatten().collect())
                 .unwrap_or_default();
@@ -128,8 +130,7 @@ pub fn dataflow_perspective(db: &GraphDb, inv_id: &str, cycle: u32) -> Vec<Findi
                         for row in rows.flatten() {
                             let (func_name, path) = row;
                             if sinks.contains(&func_name)
-                                && !existing_pairs
-                                    .contains(&(source.clone(), func_name.clone()))
+                                && !existing_pairs.contains(&(source.clone(), func_name.clone()))
                             {
                                 findings.push(Finding {
                                     id: Uuid::new_v4().to_string(),

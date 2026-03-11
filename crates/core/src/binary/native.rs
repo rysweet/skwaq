@@ -37,43 +37,77 @@ fn parse_elf(elf: &goblin::elf::Elf, data: &[u8]) -> anyhow::Result<BinaryInfo> 
 
     let is_stripped = elf.syms.is_empty();
 
-    let sections = elf.section_headers.iter().filter_map(|sh| {
-        let name = elf.shdr_strtab.get_at(sh.sh_name).unwrap_or("").to_string();
-        if name.is_empty() { return None; }
-        let perms = format!("{}{}{}",
-            if sh.sh_flags as u32 & goblin::elf::section_header::SHF_ALLOC as u32 != 0 { "A" } else { "-" },
-            if sh.sh_flags as u32 & goblin::elf::section_header::SHF_WRITE as u32 != 0 { "W" } else { "-" },
-            if sh.sh_flags as u32 & goblin::elf::section_header::SHF_EXECINSTR as u32 != 0 { "X" } else { "-" },
-        );
-        Some(SectionInfo {
-            name,
-            address: sh.sh_addr,
-            size: sh.sh_size,
-            permissions: perms,
+    let sections = elf
+        .section_headers
+        .iter()
+        .filter_map(|sh| {
+            let name = elf.shdr_strtab.get_at(sh.sh_name).unwrap_or("").to_string();
+            if name.is_empty() {
+                return None;
+            }
+            let perms = format!(
+                "{}{}{}",
+                if sh.sh_flags as u32 & goblin::elf::section_header::SHF_ALLOC != 0 {
+                    "A"
+                } else {
+                    "-"
+                },
+                if sh.sh_flags as u32 & goblin::elf::section_header::SHF_WRITE != 0 {
+                    "W"
+                } else {
+                    "-"
+                },
+                if sh.sh_flags as u32 & goblin::elf::section_header::SHF_EXECINSTR != 0 {
+                    "X"
+                } else {
+                    "-"
+                },
+            );
+            Some(SectionInfo {
+                name,
+                address: sh.sh_addr,
+                size: sh.sh_size,
+                permissions: perms,
+            })
         })
-    }).collect();
+        .collect();
 
-    let symbols: Vec<SymbolInfo> = elf.syms.iter().filter_map(|sym| {
-        let name = elf.strtab.get_at(sym.st_name).unwrap_or("").to_string();
-        if name.is_empty() { return None; }
-        Some(SymbolInfo {
-            name,
-            address: sym.st_value,
-            size: sym.st_size,
-            symbol_type: format!("{:?}", goblin::elf::sym::st_type(sym.st_info)),
-            binding: format!("{:?}", goblin::elf::sym::st_bind(sym.st_info)),
+    let symbols: Vec<SymbolInfo> = elf
+        .syms
+        .iter()
+        .filter_map(|sym| {
+            let name = elf.strtab.get_at(sym.st_name).unwrap_or("").to_string();
+            if name.is_empty() {
+                return None;
+            }
+            Some(SymbolInfo {
+                name,
+                address: sym.st_value,
+                size: sym.st_size,
+                symbol_type: format!("{:?}", goblin::elf::sym::st_type(sym.st_info)),
+                binding: format!("{:?}", goblin::elf::sym::st_bind(sym.st_info)),
+            })
         })
-    }).collect();
+        .collect();
 
-    let imports: Vec<ImportInfo> = elf.dynsyms.iter().filter_map(|sym| {
-        if sym.is_import() {
-            let name = elf.dynstrtab.get_at(sym.st_name).unwrap_or("").to_string();
-            if name.is_empty() { return None; }
-            Some(ImportInfo { name, library: String::new() })
-        } else {
-            None
-        }
-    }).collect();
+    let imports: Vec<ImportInfo> = elf
+        .dynsyms
+        .iter()
+        .filter_map(|sym| {
+            if sym.is_import() {
+                let name = elf.dynstrtab.get_at(sym.st_name).unwrap_or("").to_string();
+                if name.is_empty() {
+                    return None;
+                }
+                Some(ImportInfo {
+                    name,
+                    library: String::new(),
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
 
     let strings = extract_strings(data, 4);
 
@@ -84,7 +118,11 @@ fn parse_elf(elf: &goblin::elf::Elf, data: &[u8]) -> anyhow::Result<BinaryInfo> 
         format: BinaryFormat::Elf,
         architecture: architecture.to_string(),
         bits: if elf.is_64 { 64 } else { 32 },
-        endianness: if elf.little_endian { "little".into() } else { "big".into() },
+        endianness: if elf.little_endian {
+            "little".into()
+        } else {
+            "big".into()
+        },
         is_stripped,
         entry_point: elf.header.e_entry,
         sections,
@@ -98,22 +136,30 @@ fn parse_elf(elf: &goblin::elf::Elf, data: &[u8]) -> anyhow::Result<BinaryInfo> 
 fn parse_pe(pe: &goblin::pe::PE, data: &[u8]) -> anyhow::Result<BinaryInfo> {
     let architecture = if pe.is_64 { "x86_64" } else { "x86" };
 
-    let sections = pe.sections.iter().map(|s| {
-        let name = String::from_utf8_lossy(&s.name).trim_end_matches('\0').to_string();
-        SectionInfo {
-            name,
-            address: s.virtual_address as u64,
-            size: s.virtual_size as u64,
-            permissions: format!("{:#x}", s.characteristics),
-        }
-    }).collect();
+    let sections = pe
+        .sections
+        .iter()
+        .map(|s| {
+            let name = String::from_utf8_lossy(&s.name)
+                .trim_end_matches('\0')
+                .to_string();
+            SectionInfo {
+                name,
+                address: s.virtual_address as u64,
+                size: s.virtual_size as u64,
+                permissions: format!("{:#x}", s.characteristics),
+            }
+        })
+        .collect();
 
-    let imports: Vec<ImportInfo> = pe.imports.iter().map(|imp| {
-        ImportInfo {
+    let imports: Vec<ImportInfo> = pe
+        .imports
+        .iter()
+        .map(|imp| ImportInfo {
             name: imp.name.to_string(),
             library: imp.dll.to_string(),
-        }
-    }).collect();
+        })
+        .collect();
 
     let strings = extract_strings(data, 4);
 
@@ -143,7 +189,7 @@ fn extract_strings(data: &[u8], min_length: usize) -> Vec<ExtractedString> {
     let mut start_offset = 0;
 
     for (i, &byte) in data.iter().enumerate() {
-        if byte >= 0x20 && byte < 0x7f {
+        if (0x20..0x7f).contains(&byte) {
             if current.is_empty() {
                 start_offset = i;
             }
@@ -191,23 +237,27 @@ fn detect_elf_hardening(elf: &goblin::elf::Elf) -> HardeningInfo {
     };
 
     // Check for stack canary via __stack_chk_fail import
-    let canary = if elf.dynsyms.iter().any(|sym| {
-        elf.dynstrtab.get_at(sym.st_name).unwrap_or("") == "__stack_chk_fail"
-    }) {
+    let canary = if elf
+        .dynsyms
+        .iter()
+        .any(|sym| elf.dynstrtab.get_at(sym.st_name).unwrap_or("") == "__stack_chk_fail")
+    {
         HardeningStatus::Enabled
     } else {
         HardeningStatus::Disabled
     };
 
     // Check RELRO
-    let has_relro = elf.program_headers.iter().any(|ph| {
-        ph.p_type == goblin::elf::program_header::PT_GNU_RELRO
-    });
-    let has_bind_now = elf.dynamic.as_ref().map_or(false, |dyn_info| {
+    let has_relro = elf
+        .program_headers
+        .iter()
+        .any(|ph| ph.p_type == goblin::elf::program_header::PT_GNU_RELRO);
+    let has_bind_now = elf.dynamic.as_ref().is_some_and(|dyn_info| {
         dyn_info.dyns.iter().any(|d| {
             d.d_tag == goblin::elf::dynamic::DT_BIND_NOW
             || (d.d_tag == goblin::elf::dynamic::DT_FLAGS && d.d_val & 0x8 != 0)  // DF_BIND_NOW
-            || (d.d_tag == goblin::elf::dynamic::DT_FLAGS_1 && d.d_val & 0x1 != 0)  // DF_1_NOW
+            || (d.d_tag == goblin::elf::dynamic::DT_FLAGS_1 && d.d_val & 0x1 != 0)
+            // DF_1_NOW
         })
     });
     let relro = match (has_relro, has_bind_now) {
@@ -226,7 +276,13 @@ fn detect_elf_hardening(elf: &goblin::elf::Elf) -> HardeningInfo {
         HardeningStatus::Disabled
     };
 
-    HardeningInfo { pie, nx, canary, relro, fortify }
+    HardeningInfo {
+        pie,
+        nx,
+        canary,
+        relro,
+        fortify,
+    }
 }
 
 #[cfg(test)]

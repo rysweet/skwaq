@@ -1,8 +1,8 @@
 //! `skwaq ingest` - ingest binary, source, or SARIF data.
 
 use super::IngestSub;
-use skwaq_core::analysis::DangerousApiDetector;
 use skwaq_core::analysis::surface::identify_attack_surface;
+use skwaq_core::analysis::DangerousApiDetector;
 use skwaq_core::binary::cache::AnalysisCache;
 use skwaq_core::binary::ghidra::GhidraRunner;
 use skwaq_core::binary::native::parse_binary;
@@ -19,7 +19,7 @@ pub async fn run(sub: &IngestSub) -> anyhow::Result<()> {
     }
 }
 
-async fn ingest_binary(path: &PathBuf) -> anyhow::Result<()> {
+async fn ingest_binary(path: &std::path::Path) -> anyhow::Result<()> {
     // 1. Parse the binary.
     let info = parse_binary(path)?;
 
@@ -102,7 +102,7 @@ async fn ingest_binary(path: &PathBuf) -> anyhow::Result<()> {
 /// Run Ghidra analysis if available, enriching the graph with decompiled code.
 /// Failures are non-fatal - Ghidra is optional.
 async fn run_ghidra_enrichment(
-    binary_path: &PathBuf,
+    binary_path: &std::path::Path,
     investigation_id: &str,
     builder: &GraphBuilder<'_>,
 ) {
@@ -143,7 +143,9 @@ async fn run_ghidra_enrichment(
 
     match runner.analyze(binary_path, timeout_secs).await {
         Ok(analysis) => {
-            let decompiled_count = analysis.functions.iter()
+            let decompiled_count = analysis
+                .functions
+                .iter()
                 .filter(|f| f.decompiled.is_some())
                 .count();
             println!(
@@ -161,7 +163,10 @@ async fn run_ghidra_enrichment(
             store_ghidra_results(builder, &analysis, investigation_id);
         }
         Err(e) => {
-            println!("[ghidra]  Analysis failed: {}. Continuing without decompilation.", e);
+            println!(
+                "[ghidra]  Analysis failed: {}. Continuing without decompilation.",
+                e
+            );
         }
     }
 }
@@ -176,9 +181,7 @@ fn store_ghidra_results(
         Ok(gcounts) => {
             println!(
                 "[ghidra]  Graph: {} functions updated, {} new functions, {} call edges",
-                gcounts.functions_updated,
-                gcounts.functions_added,
-                gcounts.calls_added,
+                gcounts.functions_updated, gcounts.functions_added, gcounts.calls_added,
             );
         }
         Err(e) => {
@@ -206,7 +209,8 @@ fn ingest_source(path: &PathBuf) -> anyhow::Result<()> {
     println!("[scan]    Found {} source file(s)", source_files.len());
 
     // Count files per language.
-    let mut lang_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut lang_counts: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
     for f in &source_files {
         if let Some(lang) = detect_language(f.as_path()) {
             *lang_counts.entry(lang.to_string()).or_default() += 1;
@@ -278,10 +282,7 @@ fn ingest_source(path: &PathBuf) -> anyhow::Result<()> {
     let detector = DangerousApiDetector::new();
     let mut total_hits = 0;
     for parsed in &parsed_files {
-        match detector.detect_in_source(
-            std::path::Path::new(&parsed.path),
-            &parsed.language,
-        ) {
+        match detector.detect_in_source(std::path::Path::new(&parsed.path), &parsed.language) {
             Ok(hits) => {
                 for hit in &hits {
                     let finding_id = uuid::Uuid::new_v4().to_string();

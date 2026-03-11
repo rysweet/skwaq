@@ -37,100 +37,376 @@ struct SourceSinkPattern {
 
 fn python_source_sinks() -> &'static [SourceSinkPattern] {
     &[
-        SourceSinkPattern { regex: r#"request\.args"#, kind: SourceSinkKind::Source, category: "http_input" },
-        SourceSinkPattern { regex: r#"request\.form"#, kind: SourceSinkKind::Source, category: "http_input" },
-        SourceSinkPattern { regex: r#"request\.json"#, kind: SourceSinkKind::Source, category: "http_input" },
-        SourceSinkPattern { regex: r#"request\.data"#, kind: SourceSinkKind::Source, category: "http_input" },
-        SourceSinkPattern { regex: r#"\binput\s*\("#, kind: SourceSinkKind::Source, category: "user_input" },
-        SourceSinkPattern { regex: r#"\bos\.environ"#, kind: SourceSinkKind::Source, category: "environment" },
-        SourceSinkPattern { regex: r#"\bopen\s*\([^)]+\)\.read"#, kind: SourceSinkKind::Source, category: "file_read" },
-        SourceSinkPattern { regex: r#"\bsys\.argv"#, kind: SourceSinkKind::Source, category: "command_line" },
-        SourceSinkPattern { regex: r#"\bsys\.stdin"#, kind: SourceSinkKind::Source, category: "stdin" },
-        SourceSinkPattern { regex: r#"\bcursor\.execute\s*\("#, kind: SourceSinkKind::Sink, category: "sql_query" },
-        SourceSinkPattern { regex: r#"\bos\.system\s*\("#, kind: SourceSinkKind::Sink, category: "command_exec" },
-        SourceSinkPattern { regex: r#"\bsubprocess\.\w+\s*\("#, kind: SourceSinkKind::Sink, category: "command_exec" },
-        SourceSinkPattern { regex: r#"\beval\s*\("#, kind: SourceSinkKind::Sink, category: "code_exec" },
-        SourceSinkPattern { regex: r#"\bexec\s*\("#, kind: SourceSinkKind::Sink, category: "code_exec" },
-        SourceSinkPattern { regex: r#"\bpickle\.loads?\s*\("#, kind: SourceSinkKind::Sink, category: "deserialization" },
-        SourceSinkPattern { regex: r#"\bopen\s*\([^)]+,\s*['"]w"#, kind: SourceSinkKind::Sink, category: "file_write" },
+        SourceSinkPattern {
+            regex: r#"request\.args"#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"request\.form"#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"request\.json"#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"request\.data"#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"\binput\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "user_input",
+        },
+        SourceSinkPattern {
+            regex: r#"\bos\.environ"#,
+            kind: SourceSinkKind::Source,
+            category: "environment",
+        },
+        SourceSinkPattern {
+            regex: r#"\bopen\s*\([^)]+\)\.read"#,
+            kind: SourceSinkKind::Source,
+            category: "file_read",
+        },
+        SourceSinkPattern {
+            regex: r#"\bsys\.argv"#,
+            kind: SourceSinkKind::Source,
+            category: "command_line",
+        },
+        SourceSinkPattern {
+            regex: r#"\bsys\.stdin"#,
+            kind: SourceSinkKind::Source,
+            category: "stdin",
+        },
+        SourceSinkPattern {
+            regex: r#"\bcursor\.execute\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        SourceSinkPattern {
+            regex: r#"\bos\.system\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bsubprocess\.\w+\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\beval\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "code_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bexec\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "code_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bpickle\.loads?\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "deserialization",
+        },
+        SourceSinkPattern {
+            regex: r#"\bopen\s*\([^)]+,\s*['"]w"#,
+            kind: SourceSinkKind::Sink,
+            category: "file_write",
+        },
     ]
 }
 
 fn javascript_source_sinks() -> &'static [SourceSinkPattern] {
     &[
-        SourceSinkPattern { regex: r#"req\.params"#, kind: SourceSinkKind::Source, category: "http_input" },
-        SourceSinkPattern { regex: r#"req\.body"#, kind: SourceSinkKind::Source, category: "http_input" },
-        SourceSinkPattern { regex: r#"req\.query"#, kind: SourceSinkKind::Source, category: "http_input" },
-        SourceSinkPattern { regex: r#"process\.env"#, kind: SourceSinkKind::Source, category: "environment" },
-        SourceSinkPattern { regex: r#"process\.argv"#, kind: SourceSinkKind::Source, category: "command_line" },
-        SourceSinkPattern { regex: r#"process\.stdin"#, kind: SourceSinkKind::Source, category: "stdin" },
-        SourceSinkPattern { regex: r#"window\.location"#, kind: SourceSinkKind::Source, category: "url_input" },
-        SourceSinkPattern { regex: r#"document\.cookie"#, kind: SourceSinkKind::Source, category: "cookie" },
-        SourceSinkPattern { regex: r#"\bdb\.query\s*\("#, kind: SourceSinkKind::Sink, category: "sql_query" },
-        SourceSinkPattern { regex: r#"\bchild_process\.exec\s*\("#, kind: SourceSinkKind::Sink, category: "command_exec" },
-        SourceSinkPattern { regex: r#"\beval\s*\("#, kind: SourceSinkKind::Sink, category: "code_exec" },
-        SourceSinkPattern { regex: r#"\.innerHTML\s*="#, kind: SourceSinkKind::Sink, category: "xss" },
-        SourceSinkPattern { regex: r#"\bdocument\.write\s*\("#, kind: SourceSinkKind::Sink, category: "xss" },
-        SourceSinkPattern { regex: r#"\bfs\.writeFile"#, kind: SourceSinkKind::Sink, category: "file_write" },
-        SourceSinkPattern { regex: r#"\bres\.send\s*\("#, kind: SourceSinkKind::Sink, category: "http_response" },
+        SourceSinkPattern {
+            regex: r#"req\.params"#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"req\.body"#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"req\.query"#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"process\.env"#,
+            kind: SourceSinkKind::Source,
+            category: "environment",
+        },
+        SourceSinkPattern {
+            regex: r#"process\.argv"#,
+            kind: SourceSinkKind::Source,
+            category: "command_line",
+        },
+        SourceSinkPattern {
+            regex: r#"process\.stdin"#,
+            kind: SourceSinkKind::Source,
+            category: "stdin",
+        },
+        SourceSinkPattern {
+            regex: r#"window\.location"#,
+            kind: SourceSinkKind::Source,
+            category: "url_input",
+        },
+        SourceSinkPattern {
+            regex: r#"document\.cookie"#,
+            kind: SourceSinkKind::Source,
+            category: "cookie",
+        },
+        SourceSinkPattern {
+            regex: r#"\bdb\.query\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        SourceSinkPattern {
+            regex: r#"\bchild_process\.exec\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\beval\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "code_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\.innerHTML\s*="#,
+            kind: SourceSinkKind::Sink,
+            category: "xss",
+        },
+        SourceSinkPattern {
+            regex: r#"\bdocument\.write\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "xss",
+        },
+        SourceSinkPattern {
+            regex: r#"\bfs\.writeFile"#,
+            kind: SourceSinkKind::Sink,
+            category: "file_write",
+        },
+        SourceSinkPattern {
+            regex: r#"\bres\.send\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "http_response",
+        },
     ]
 }
 
 fn go_source_sinks() -> &'static [SourceSinkPattern] {
     &[
-        SourceSinkPattern { regex: r#"r\.URL\.Query\s*\("#, kind: SourceSinkKind::Source, category: "http_input" },
-        SourceSinkPattern { regex: r#"r\.FormValue\s*\("#, kind: SourceSinkKind::Source, category: "http_input" },
-        SourceSinkPattern { regex: r#"\bos\.Getenv\s*\("#, kind: SourceSinkKind::Source, category: "environment" },
-        SourceSinkPattern { regex: r#"\bbufio\.NewReader\s*\("#, kind: SourceSinkKind::Source, category: "reader" },
-        SourceSinkPattern { regex: r#"\bos\.Args\b"#, kind: SourceSinkKind::Source, category: "command_line" },
-        SourceSinkPattern { regex: r#"\bos\.Stdin\b"#, kind: SourceSinkKind::Source, category: "stdin" },
-        SourceSinkPattern { regex: r#"\bdb\.Exec\s*\("#, kind: SourceSinkKind::Sink, category: "sql_query" },
-        SourceSinkPattern { regex: r#"\bdb\.Query\s*\("#, kind: SourceSinkKind::Sink, category: "sql_query" },
-        SourceSinkPattern { regex: r#"\bexec\.Command\s*\("#, kind: SourceSinkKind::Sink, category: "command_exec" },
-        SourceSinkPattern { regex: r#"\btemplate\.HTML\s*\("#, kind: SourceSinkKind::Sink, category: "xss" },
-        SourceSinkPattern { regex: r#"\bfmt\.Fprintf\s*\(w,"#, kind: SourceSinkKind::Sink, category: "http_response" },
+        SourceSinkPattern {
+            regex: r#"r\.URL\.Query\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"r\.FormValue\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"\bos\.Getenv\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "environment",
+        },
+        SourceSinkPattern {
+            regex: r#"\bbufio\.NewReader\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "reader",
+        },
+        SourceSinkPattern {
+            regex: r#"\bos\.Args\b"#,
+            kind: SourceSinkKind::Source,
+            category: "command_line",
+        },
+        SourceSinkPattern {
+            regex: r#"\bos\.Stdin\b"#,
+            kind: SourceSinkKind::Source,
+            category: "stdin",
+        },
+        SourceSinkPattern {
+            regex: r#"\bdb\.Exec\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        SourceSinkPattern {
+            regex: r#"\bdb\.Query\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        SourceSinkPattern {
+            regex: r#"\bexec\.Command\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\btemplate\.HTML\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "xss",
+        },
+        SourceSinkPattern {
+            regex: r#"\bfmt\.Fprintf\s*\(w,"#,
+            kind: SourceSinkKind::Sink,
+            category: "http_response",
+        },
     ]
 }
 
 fn java_source_sinks() -> &'static [SourceSinkPattern] {
     &[
-        SourceSinkPattern { regex: r#"request\.getParameter\s*\("#, kind: SourceSinkKind::Source, category: "http_input" },
-        SourceSinkPattern { regex: r#"request\.getInputStream"#, kind: SourceSinkKind::Source, category: "http_input" },
-        SourceSinkPattern { regex: r#"\bSystem\.getenv\s*\("#, kind: SourceSinkKind::Source, category: "environment" },
-        SourceSinkPattern { regex: r#"\bSystem\.getProperty\s*\("#, kind: SourceSinkKind::Source, category: "environment" },
-        SourceSinkPattern { regex: r#"\bScanner\s*\(\s*System\.in"#, kind: SourceSinkKind::Source, category: "stdin" },
-        SourceSinkPattern { regex: r#"\bstatement\.execute\s*\("#, kind: SourceSinkKind::Sink, category: "sql_query" },
-        SourceSinkPattern { regex: r#"\bRuntime\.getRuntime\(\)\.exec\s*\("#, kind: SourceSinkKind::Sink, category: "command_exec" },
-        SourceSinkPattern { regex: r#"\bProcessBuilder\s*\("#, kind: SourceSinkKind::Sink, category: "command_exec" },
-        SourceSinkPattern { regex: r#"\bObjectInputStream\b"#, kind: SourceSinkKind::Sink, category: "deserialization" },
-        SourceSinkPattern { regex: r#"\bresponse\.getWriter\(\)\.write\s*\("#, kind: SourceSinkKind::Sink, category: "http_response" },
+        SourceSinkPattern {
+            regex: r#"request\.getParameter\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"request\.getInputStream"#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"\bSystem\.getenv\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "environment",
+        },
+        SourceSinkPattern {
+            regex: r#"\bSystem\.getProperty\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "environment",
+        },
+        SourceSinkPattern {
+            regex: r#"\bScanner\s*\(\s*System\.in"#,
+            kind: SourceSinkKind::Source,
+            category: "stdin",
+        },
+        SourceSinkPattern {
+            regex: r#"\bstatement\.execute\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        SourceSinkPattern {
+            regex: r#"\bRuntime\.getRuntime\(\)\.exec\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bProcessBuilder\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bObjectInputStream\b"#,
+            kind: SourceSinkKind::Sink,
+            category: "deserialization",
+        },
+        SourceSinkPattern {
+            regex: r#"\bresponse\.getWriter\(\)\.write\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "http_response",
+        },
     ]
 }
 
 fn rust_source_sinks() -> &'static [SourceSinkPattern] {
     &[
-        SourceSinkPattern { regex: r#"\bstd::env::args\s*\("#, kind: SourceSinkKind::Source, category: "command_line" },
-        SourceSinkPattern { regex: r#"\bstd::env::var\s*\("#, kind: SourceSinkKind::Source, category: "environment" },
-        SourceSinkPattern { regex: r#"\bstd::io::stdin\s*\("#, kind: SourceSinkKind::Source, category: "stdin" },
-        SourceSinkPattern { regex: r#"\bstd::fs::read"#, kind: SourceSinkKind::Source, category: "file_read" },
-        SourceSinkPattern { regex: r#"\bCommand::new\s*\("#, kind: SourceSinkKind::Sink, category: "command_exec" },
-        SourceSinkPattern { regex: r#"\bconn\.execute\s*\("#, kind: SourceSinkKind::Sink, category: "sql_query" },
-        SourceSinkPattern { regex: r#"\bstd::fs::write\s*\("#, kind: SourceSinkKind::Sink, category: "file_write" },
+        SourceSinkPattern {
+            regex: r#"\bstd::env::args\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "command_line",
+        },
+        SourceSinkPattern {
+            regex: r#"\bstd::env::var\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "environment",
+        },
+        SourceSinkPattern {
+            regex: r#"\bstd::io::stdin\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "stdin",
+        },
+        SourceSinkPattern {
+            regex: r#"\bstd::fs::read"#,
+            kind: SourceSinkKind::Source,
+            category: "file_read",
+        },
+        SourceSinkPattern {
+            regex: r#"\bCommand::new\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bconn\.execute\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        SourceSinkPattern {
+            regex: r#"\bstd::fs::write\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "file_write",
+        },
     ]
 }
 
 fn c_cpp_source_sinks() -> &'static [SourceSinkPattern] {
     &[
-        SourceSinkPattern { regex: r#"\brecv\s*\("#, kind: SourceSinkKind::Source, category: "network" },
-        SourceSinkPattern { regex: r#"\bfread\s*\("#, kind: SourceSinkKind::Source, category: "file_read" },
-        SourceSinkPattern { regex: r#"\bfgets\s*\("#, kind: SourceSinkKind::Source, category: "file_read" },
-        SourceSinkPattern { regex: r#"\bgets\s*\("#, kind: SourceSinkKind::Source, category: "stdin" },
-        SourceSinkPattern { regex: r#"\bgetenv\s*\("#, kind: SourceSinkKind::Source, category: "environment" },
-        SourceSinkPattern { regex: r#"\bscanf\s*\("#, kind: SourceSinkKind::Source, category: "stdin" },
-        SourceSinkPattern { regex: r#"\bstrcpy\s*\("#, kind: SourceSinkKind::Sink, category: "memory" },
-        SourceSinkPattern { regex: r#"\bsprintf\s*\("#, kind: SourceSinkKind::Sink, category: "memory" },
-        SourceSinkPattern { regex: r#"\bsystem\s*\("#, kind: SourceSinkKind::Sink, category: "command_exec" },
-        SourceSinkPattern { regex: r#"\bmemcpy\s*\("#, kind: SourceSinkKind::Sink, category: "memory" },
+        SourceSinkPattern {
+            regex: r#"\brecv\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "network",
+        },
+        SourceSinkPattern {
+            regex: r#"\bfread\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "file_read",
+        },
+        SourceSinkPattern {
+            regex: r#"\bfgets\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "file_read",
+        },
+        SourceSinkPattern {
+            regex: r#"\bgets\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "stdin",
+        },
+        SourceSinkPattern {
+            regex: r#"\bgetenv\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "environment",
+        },
+        SourceSinkPattern {
+            regex: r#"\bscanf\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "stdin",
+        },
+        SourceSinkPattern {
+            regex: r#"\bstrcpy\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "memory",
+        },
+        SourceSinkPattern {
+            regex: r#"\bsprintf\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "memory",
+        },
+        SourceSinkPattern {
+            regex: r#"\bsystem\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bmemcpy\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "memory",
+        },
     ]
 }
 
@@ -204,8 +480,14 @@ os.system("echo " + name)
 eval(name)
 "#;
         let hits = identify_source_sinks_in_content(src, "python", "app.py").unwrap();
-        let sources: Vec<_> = hits.iter().filter(|h| h.kind == SourceSinkKind::Source).collect();
-        let sinks: Vec<_> = hits.iter().filter(|h| h.kind == SourceSinkKind::Sink).collect();
+        let sources: Vec<_> = hits
+            .iter()
+            .filter(|h| h.kind == SourceSinkKind::Source)
+            .collect();
+        let sinks: Vec<_> = hits
+            .iter()
+            .filter(|h| h.kind == SourceSinkKind::Sink)
+            .collect();
         assert!(!sources.is_empty(), "Should find data sources");
         assert!(!sinks.is_empty(), "Should find data sinks");
         assert!(sources.iter().any(|s| s.category == "http_input"));
@@ -222,8 +504,14 @@ res.send(output);
 db.query("SELECT * FROM x WHERE id = " + id);
 "#;
         let hits = identify_source_sinks_in_content(src, "javascript", "app.js").unwrap();
-        let sources: Vec<_> = hits.iter().filter(|h| h.kind == SourceSinkKind::Source).collect();
-        let sinks: Vec<_> = hits.iter().filter(|h| h.kind == SourceSinkKind::Sink).collect();
+        let sources: Vec<_> = hits
+            .iter()
+            .filter(|h| h.kind == SourceSinkKind::Source)
+            .collect();
+        let sinks: Vec<_> = hits
+            .iter()
+            .filter(|h| h.kind == SourceSinkKind::Sink)
+            .collect();
         assert!(!sources.is_empty());
         assert!(!sinks.is_empty());
     }

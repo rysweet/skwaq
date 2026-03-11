@@ -81,12 +81,7 @@ impl<'a> GraphBuilder<'a> {
     }
 
     /// Insert a DataSource node representing an extracted string or input.
-    pub fn insert_string_source(
-        &self,
-        id: &str,
-        name: &str,
-        kind: &str,
-    ) -> anyhow::Result<()> {
+    pub fn insert_string_source(&self, id: &str, name: &str, kind: &str) -> anyhow::Result<()> {
         self.db.execute(
             "INSERT OR IGNORE INTO data_sources (id, name, source_type) VALUES (?1, ?2, ?3)",
             &[&id, &name, &kind],
@@ -95,12 +90,7 @@ impl<'a> GraphBuilder<'a> {
     }
 
     /// Insert a DataSink node.
-    pub fn insert_data_sink(
-        &self,
-        id: &str,
-        name: &str,
-        kind: &str,
-    ) -> anyhow::Result<()> {
+    pub fn insert_data_sink(&self, id: &str, name: &str, kind: &str) -> anyhow::Result<()> {
         self.db.execute(
             "INSERT OR IGNORE INTO data_sinks (id, name, sink_type) VALUES (?1, ?2, ?3)",
             &[&id, &name, &kind],
