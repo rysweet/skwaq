@@ -24,8 +24,10 @@ pub struct BenchmarkConfig {
 }
 
 /// Every benchmark suite implements this trait.
-#[async_trait]
-pub trait BenchmarkAdapter: Send + Sync {
+/// Uses ?Send since skwaq runs on a single-threaded tokio runtime
+/// and GraphDb (SQLite Connection) is !Send.
+#[async_trait(?Send)]
+pub trait BenchmarkAdapter {
     /// Human-readable name of this suite.
     fn name(&self) -> &str;
 
