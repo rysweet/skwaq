@@ -51,8 +51,8 @@
                 <div class="label">Recall (Full Mode)</div>
             </div>
             <div class="stat">
-                <div class="value">80%</div>
-                <div class="label">F1 Score (Quick Mode)</div>
+                <div class="value">67%</div>
+                <div class="label">F1 Score (Dual-Judge)</div>
             </div>
             <div class="stat">
                 <div class="value">9</div>
@@ -80,7 +80,9 @@
                 <tr><td>+orchestrator</td><td>Full (no LLM)</td><td>58.8%</td><td>41.7%</td><td>100.0%</td><td>5/5</td><td>+100% recall</td></tr>
                 <tr><td>+LLM pipeline</td><td>Full (LLM)</td><td>31.1%</td><td>18.4%</td><td>100.0%</td><td>5/5</td><td>LLM finds all</td></tr>
                 <tr><td>+verdict-synth</td><td>Full (LLM)</td><td>21.1%</td><td>11.8%</td><td>100.0%</td><td>5/5</td><td>FP reduction WIP</td></tr>
-                <tr><td>Quick mode</td><td>Patterns</td><td>80.0%</td><td>80.0%</td><td>80.0%</td><td>4/5</td><td>Best F1</td></tr>
+                <tr><td>+improved hunter</td><td>Full (LLM)</td><td>27.3%</td><td>15.8%</td><td>100.0%</td><td>5/5</td><td>Prompt refinement</td></tr>
+                <tr style="background:#1f6feb22"><td>Dual-Judge</td><td>Full (LLM)</td><td><strong>66.7%</strong></td><td><strong>50.0%</strong></td><td><strong>100.0%</strong></td><td>5/5</td><td>-81% FPs</td></tr>
+                <tr><td>Quick mode</td><td>Patterns</td><td>80.0%</td><td>80.0%</td><td>80.0%</td><td>4/5</td><td>Best pattern F1</td></tr>
             </tbody>
         </table>
 
@@ -165,11 +167,11 @@
         new Chart(ctx, {
             type: 'line',
             data: {
-                labels: ['Baseline', '+Patterns', '+Orchestrator', '+LLM', '+Verdict', 'Quick Best'],
+                labels: ['Baseline', '+Patterns', '+Orchestrator', '+LLM', '+Verdict', '+Hunter', 'Dual-Judge', 'Quick Best'],
                 datasets: [
                     {
                         label: 'F1 Score',
-                        data: [50, 76.2, 58.8, 31.1, 21.1, 80],
+                        data: [50, 76.2, 58.8, 31.1, 21.1, 27.3, 66.7, 80],
                         borderColor: '#58a6ff',
                         backgroundColor: '#58a6ff22',
                         tension: 0.3,
@@ -177,13 +179,13 @@
                     },
                     {
                         label: 'Precision',
-                        data: [66.7, 66.7, 41.7, 18.4, 11.8, 80],
+                        data: [66.7, 66.7, 41.7, 18.4, 11.8, 15.8, 50, 80],
                         borderColor: '#3fb950',
                         tension: 0.3,
                     },
                     {
                         label: 'Recall',
-                        data: [40, 88.9, 100, 100, 100, 80],
+                        data: [40, 88.9, 100, 100, 100, 100, 100, 80],
                         borderColor: '#f85149',
                         tension: 0.3,
                     },
