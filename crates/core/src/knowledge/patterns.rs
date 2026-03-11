@@ -27,14 +27,6 @@ impl VulnerabilityPatterns {
         }
     }
 
-    /// Load patterns from a configuration source.
-    ///
-    /// Vulnerability patterns are detected through the analysis pipeline.
-    /// Use `skwaq kb init` to populate the knowledge base.
-    pub fn load(_path: &str) -> anyhow::Result<Self> {
-        Err(anyhow::anyhow!("Use `skwaq kb init` to populate the knowledge base"))
-    }
-
     /// Return all patterns whose indicators overlap with `terms`.
     pub fn match_indicators(&self, terms: &[&str]) -> Vec<&VulnerabilityPattern> {
         self.patterns

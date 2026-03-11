@@ -13,9 +13,6 @@ use super::traits::{LlmClient, LlmResponse, Message, ToolCall, ToolDefinition, T
 
 const COPILOT_MODELS_URL: &str = "https://api.githubcopilot.com/models";
 const COPILOT_CHAT_URL: &str = "https://api.githubcopilot.com/chat/completions";
-// Kept for potential future use in model listing
-#[allow(dead_code)]
-const GITHUB_MODELS_LIST_URL: &str = "https://models.github.ai/inference/models";
 const GITHUB_MODELS_CHAT_URL: &str = "https://models.github.ai/inference/chat/completions";
 const GITHUB_MODELS_PREFIX: &str = "openai/";
 

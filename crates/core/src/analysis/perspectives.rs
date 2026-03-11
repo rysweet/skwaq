@@ -14,13 +14,13 @@ use uuid::Uuid;
 ///
 /// Scans the graph for dangerous API usage by checking function names,
 /// imports, and data sinks against a known-dangerous list.
-pub fn pattern_perspective(db: &GraphDb, _inv_id: &str, cycle: u32) -> Vec<Finding> {
+pub fn pattern_perspective(db: &GraphDb, inv_id: &str, cycle: u32) -> Vec<Finding> {
     let mut findings = Vec::new();
     let mut seen = std::collections::HashSet::new();
 
     // Check functions for dangerous API names
-    if let Ok(mut stmt) = db.conn().prepare("SELECT f.name, f.address FROM functions f") {
-        if let Ok(rows) = stmt.query_map([], |row| {
+    if let Ok(mut stmt) = db.conn().prepare("SELECT f.name, f.address FROM functions f WHERE f.investigation_id = ?1") {
+        if let Ok(rows) = stmt.query_map([inv_id], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1).unwrap_or_default(),
@@ -64,9 +64,9 @@ pub fn pattern_perspective(db: &GraphDb, _inv_id: &str, cycle: u32) -> Vec<Findi
     // Check imports in symbols table
     if let Ok(mut stmt) = db
         .conn()
-        .prepare("SELECT s.name FROM symbols s WHERE s.symbol_type = 'import'")
+        .prepare("SELECT s.name FROM symbols s WHERE s.symbol_type = 'import' AND s.investigation_id = ?1")
     {
-        if let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(0)) {
+        if let Ok(rows) = stmt.query_map([inv_id], |row| row.get::<_, String>(0)) {
             for row in rows.flatten() {
                 let base = row.split('@').next().unwrap_or(&row);
                 if let Some((cat, sev, reason)) = dangerous_api_info(base) {
@@ -100,9 +100,9 @@ pub fn pattern_perspective(db: &GraphDb, _inv_id: &str, cycle: u32) -> Vec<Findi
     // Check data sinks
     if let Ok(mut stmt) = db
         .conn()
-        .prepare("SELECT s.name, s.danger_level FROM data_sinks s")
+        .prepare("SELECT s.name, s.danger_level FROM data_sinks s WHERE s.investigation_id = ?1")
     {
-        if let Ok(rows) = stmt.query_map([], |row| {
+        if let Ok(rows) = stmt.query_map([inv_id], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         }) {
             for row in rows.flatten() {
@@ -143,7 +143,7 @@ pub fn pattern_perspective(db: &GraphDb, _inv_id: &str, cycle: u32) -> Vec<Findi
 ///
 /// Finds unsanitized data flow paths from sources to sinks, both from
 /// pre-computed taint flows and on-the-fly call graph traversal.
-pub fn dataflow_perspective(db: &GraphDb, _inv_id: &str, cycle: u32) -> Vec<Finding> {
+pub fn dataflow_perspective(db: &GraphDb, inv_id: &str, cycle: u32) -> Vec<Finding> {
     let mut findings = Vec::new();
 
     // Check pre-computed taint flows
@@ -151,9 +151,9 @@ pub fn dataflow_perspective(db: &GraphDb, _inv_id: &str, cycle: u32) -> Vec<Find
         "SELECT s.name, k.name, tf.path FROM taint_flows tf \
          JOIN data_sources s ON tf.source_id = s.id \
          JOIN data_sinks k ON tf.sink_id = k.id \
-         WHERE tf.sanitized = 0",
+         WHERE tf.sanitized = 0 AND s.investigation_id = ?1",
     ) {
-        if let Ok(rows) = stmt.query_map([], |row| {
+        if let Ok(rows) = stmt.query_map([inv_id], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
@@ -191,10 +191,10 @@ pub fn dataflow_perspective(db: &GraphDb, _inv_id: &str, cycle: u32) -> Vec<Find
 
     let sources: Vec<String> = db
         .conn()
-        .prepare("SELECT DISTINCT name FROM data_sources")
+        .prepare("SELECT DISTINCT name FROM data_sources WHERE investigation_id = ?1")
         .ok()
         .and_then(|mut stmt| {
-            stmt.query_map([], |row| row.get::<_, String>(0))
+            stmt.query_map([inv_id], |row| row.get::<_, String>(0))
                 .ok()
                 .map(|rows| rows.flatten().collect())
         })
@@ -202,10 +202,10 @@ pub fn dataflow_perspective(db: &GraphDb, _inv_id: &str, cycle: u32) -> Vec<Find
 
     let sinks: Vec<String> = db
         .conn()
-        .prepare("SELECT DISTINCT name FROM data_sinks")
+        .prepare("SELECT DISTINCT name FROM data_sinks WHERE investigation_id = ?1")
         .ok()
         .and_then(|mut stmt| {
-            stmt.query_map([], |row| row.get::<_, String>(0))
+            stmt.query_map([inv_id], |row| row.get::<_, String>(0))
                 .ok()
                 .map(|rows| rows.flatten().collect())
         })
@@ -233,10 +233,10 @@ pub fn dataflow_perspective(db: &GraphDb, _inv_id: &str, cycle: u32) -> Vec<Find
     for source in &sources {
         if let Ok(mut id_stmt) = db
             .conn()
-            .prepare("SELECT id FROM functions WHERE name = ?1")
+            .prepare("SELECT id FROM functions WHERE name = ?1 AND investigation_id = ?2")
         {
             let source_ids: Vec<String> = id_stmt
-                .query_map([source.as_str()], |row| row.get::<_, String>(0))
+                .query_map(rusqlite::params![source.as_str(), inv_id], |row| row.get::<_, String>(0))
                 .ok()
                 .map(|rows| rows.flatten().collect())
                 .unwrap_or_default();
@@ -309,7 +309,7 @@ pub fn dataflow_perspective(db: &GraphDb, _inv_id: &str, cycle: u32) -> Vec<Find
 /// - Does the function have bounds checking the pattern detector missed?
 pub fn context_perspective(
     db: &GraphDb,
-    _inv_id: &str,
+    inv_id: &str,
     existing_findings: &[Finding],
     cycle: u32,
 ) -> (Vec<FindingUpdate>, Vec<Finding>) {
@@ -378,7 +378,7 @@ pub fn context_perspective(
     }
 
     // Deeper analysis: look for wrapper functions that hide dangerous operations
-    new_findings.extend(detect_indirect_dangerous_calls(db, existing_findings, cycle));
+    new_findings.extend(detect_indirect_dangerous_calls(db, inv_id, existing_findings, cycle));
 
     (updates, new_findings)
 }
@@ -539,6 +539,7 @@ fn check_has_bounds_checking(db: &GraphDb, func_name: &str) -> bool {
 /// to dangerous functions, potentially hiding the risk.
 fn detect_indirect_dangerous_calls(
     db: &GraphDb,
+    inv_id: &str,
     existing_findings: &[Finding],
     cycle: u32,
 ) -> Vec<Finding> {
@@ -559,10 +560,11 @@ fn detect_indirect_dangerous_calls(
     let sql = "SELECT DISTINCT f_caller.name, f_callee.name \
                FROM calls c \
                JOIN functions f_caller ON c.caller_id = f_caller.id \
-               JOIN functions f_callee ON c.callee_id = f_callee.id";
+               JOIN functions f_callee ON c.callee_id = f_callee.id \
+               WHERE f_caller.investigation_id = ?1";
 
     if let Ok(mut stmt) = db.conn().prepare(sql) {
-        if let Ok(rows) = stmt.query_map([], |row| {
+        if let Ok(rows) = stmt.query_map([inv_id], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         }) {
             for row in rows.flatten() {
@@ -692,12 +694,12 @@ mod tests {
     fn test_pattern_perspective_finds_dangerous_functions() {
         let db = GraphDb::in_memory().unwrap();
         db.execute(
-            "INSERT INTO functions (id, name) VALUES ('f1', 'strcpy')",
+            "INSERT INTO functions (id, name, investigation_id) VALUES ('f1', 'strcpy', 'inv1')",
             &[],
         )
         .unwrap();
         db.execute(
-            "INSERT INTO functions (id, name) VALUES ('f2', 'main')",
+            "INSERT INTO functions (id, name, investigation_id) VALUES ('f2', 'main', 'inv1')",
             &[],
         )
         .unwrap();
@@ -712,7 +714,7 @@ mod tests {
     fn test_pattern_perspective_handles_versioned_names() {
         let db = GraphDb::in_memory().unwrap();
         db.execute(
-            "INSERT INTO functions (id, name) VALUES ('f1', 'system@GLIBC_2.2.5')",
+            "INSERT INTO functions (id, name, investigation_id) VALUES ('f1', 'system@GLIBC_2.2.5', 'inv1')",
             &[],
         )
         .unwrap();
@@ -726,12 +728,12 @@ mod tests {
     fn test_dataflow_perspective_finds_taint_paths() {
         let db = GraphDb::in_memory().unwrap();
         db.execute(
-            "INSERT INTO data_sources (id, name, source_type) VALUES ('src1', 'recv', 'network')",
+            "INSERT INTO data_sources (id, name, source_type, investigation_id) VALUES ('src1', 'recv', 'network', 'inv1')",
             &[],
         )
         .unwrap();
         db.execute(
-            "INSERT INTO data_sinks (id, name, sink_type, danger_level) VALUES ('sink1', 'strcpy', 'memory', 'critical')",
+            "INSERT INTO data_sinks (id, name, sink_type, danger_level, investigation_id) VALUES ('sink1', 'strcpy', 'memory', 'critical', 'inv1')",
             &[],
         )
         .unwrap();
@@ -807,12 +809,12 @@ mod tests {
     fn test_detect_indirect_dangerous_calls() {
         let db = GraphDb::in_memory().unwrap();
         db.execute(
-            "INSERT INTO functions (id, name) VALUES ('f1', 'my_copy')",
+            "INSERT INTO functions (id, name, investigation_id) VALUES ('f1', 'my_copy', 'inv1')",
             &[],
         )
         .unwrap();
         db.execute(
-            "INSERT INTO functions (id, name) VALUES ('f2', 'strcpy')",
+            "INSERT INTO functions (id, name, investigation_id) VALUES ('f2', 'strcpy', 'inv1')",
             &[],
         )
         .unwrap();
@@ -840,7 +842,7 @@ mod tests {
             cycle_last_updated: 1,
         }];
 
-        let new = detect_indirect_dangerous_calls(&db, &existing, 3);
+        let new = detect_indirect_dangerous_calls(&db, "inv1", &existing, 3);
         assert!(!new.is_empty());
         assert!(new[0].title.contains("my_copy"));
         assert_eq!(new[0].category, "indirect");

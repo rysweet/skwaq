@@ -242,17 +242,17 @@ mod tests {
         )
         .unwrap();
         db.execute(
-            "INSERT INTO functions (id, name) VALUES ('f1', 'strcpy')",
+            "INSERT INTO functions (id, name, investigation_id) VALUES ('f1', 'strcpy', 'inv1')",
             &[],
         )
         .unwrap();
         db.execute(
-            "INSERT INTO functions (id, name) VALUES ('f2', 'system')",
+            "INSERT INTO functions (id, name, investigation_id) VALUES ('f2', 'system', 'inv1')",
             &[],
         )
         .unwrap();
         db.execute(
-            "INSERT INTO functions (id, name) VALUES ('f3', 'main')",
+            "INSERT INTO functions (id, name, investigation_id) VALUES ('f3', 'main', 'inv1')",
             &[],
         )
         .unwrap();
@@ -274,17 +274,17 @@ mod tests {
         )
         .unwrap();
         db.execute(
-            "INSERT INTO functions (id, name) VALUES ('f1', 'recv')",
+            "INSERT INTO functions (id, name, investigation_id) VALUES ('f1', 'recv', 'inv1')",
             &[],
         )
         .unwrap();
         db.execute(
-            "INSERT INTO functions (id, name) VALUES ('f2', 'process')",
+            "INSERT INTO functions (id, name, investigation_id) VALUES ('f2', 'process', 'inv1')",
             &[],
         )
         .unwrap();
         db.execute(
-            "INSERT INTO functions (id, name) VALUES ('f3', 'strcpy')",
+            "INSERT INTO functions (id, name, investigation_id) VALUES ('f3', 'strcpy', 'inv1')",
             &[],
         )
         .unwrap();
@@ -299,12 +299,12 @@ mod tests {
         )
         .unwrap();
         db.execute(
-            "INSERT INTO data_sources (id, name, source_type) VALUES ('src1', 'recv', 'network')",
+            "INSERT INTO data_sources (id, name, source_type, investigation_id) VALUES ('src1', 'recv', 'network', 'inv1')",
             &[],
         )
         .unwrap();
         db.execute(
-            "INSERT INTO data_sinks (id, name, sink_type, danger_level) VALUES ('sink1', 'strcpy', 'memory', 'critical')",
+            "INSERT INTO data_sinks (id, name, sink_type, danger_level, investigation_id) VALUES ('sink1', 'strcpy', 'memory', 'critical', 'inv1')",
             &[],
         )
         .unwrap();
@@ -353,7 +353,7 @@ mod tests {
         )
         .unwrap();
         db.execute(
-            "INSERT INTO functions (id, name) VALUES ('f1', 'strcpy')",
+            "INSERT INTO functions (id, name, investigation_id) VALUES ('f1', 'strcpy', 'inv1')",
             &[],
         )
         .unwrap();
