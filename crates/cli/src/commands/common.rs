@@ -52,7 +52,7 @@ pub fn resolve_investigation(db: &GraphDb, explicit_id: Option<&str>) -> anyhow:
         }
         None => {
             let id = most_recent_investigation(db)?;
-            println!("Using most recent investigation: {id}\n");
+            eprintln!("Using most recent investigation: {id}\n");
             Ok(id)
         }
     }

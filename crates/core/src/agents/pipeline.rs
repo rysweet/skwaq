@@ -11,6 +11,10 @@ use crate::llm::{LlmClient, TokenBudget};
 use super::definition::load_agent;
 use super::runner::{build_analysis_context, AgentResult, AgentRunner};
 
+/// Maximum characters for accumulated previous-results context passed between
+/// pipeline stages.  Keeps subsequent agent prompts within LLM token limits.
+const MAX_PIPELINE_CONTEXT_CHARS: usize = 3000;
+
 /// A composable analysis pipeline of agent stages.
 pub struct AnalysisPipeline {
     pub stages: Vec<PipelineStage>,
@@ -72,11 +76,16 @@ impl AnalysisPipeline {
                             prev.agent_name, prev.output
                         ));
                     }
+                    // Truncate accumulated context to stay within LLM limits.
+                    if ctx.len() > MAX_PIPELINE_CONTEXT_CHARS {
+                        ctx.truncate(MAX_PIPELINE_CONTEXT_CHARS);
+                        ctx.push_str("\n...[truncated]");
+                    }
                     ctx
                 }
             };
 
-            println!(
+            eprintln!(
                 "  Running agent: {} ({})",
                 agent.name, agent.description
             );
@@ -85,7 +94,7 @@ impl AnalysisPipeline {
                 .run_agent_with_db(&agent, investigation_id, &context, db, budget)
                 .await?;
 
-            println!(
+            eprintln!(
                 "  Agent {} completed ({} tokens used)",
                 result.agent_name, result.tokens_used
             );
