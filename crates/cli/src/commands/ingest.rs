@@ -208,6 +208,17 @@ fn ingest_source(path: &PathBuf) -> anyhow::Result<()> {
 
     println!("[scan]    Found {} source file(s)", source_files.len());
 
+    // Enforce max source file count to prevent resource exhaustion.
+    const MAX_SOURCE_FILES: usize = 10_000;
+    if source_files.len() > MAX_SOURCE_FILES {
+        anyhow::bail!(
+            "Source tree contains {} files, exceeding the {} file limit. \
+             Narrow the scope or increase the limit.",
+            source_files.len(),
+            MAX_SOURCE_FILES,
+        );
+    }
+
     // Count files per language.
     let mut lang_counts: std::collections::HashMap<String, usize> =
         std::collections::HashMap::new();
