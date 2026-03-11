@@ -1,12 +1,10 @@
 //! Agent runner: execute any agent definition against the graph database.
 //!
 //! The runner loads the agent's system prompt, filters available tools,
-//! builds context, and drives the LLM tool loop.
-
-use std::sync::Arc;
+//! builds context, and drives the LLM tool loop via RustyClawd's Client.
 
 use crate::graph::GraphDb;
-use crate::llm::{execute_with_tools, LlmClient, TokenBudget};
+use crate::llm::{execute_with_tools, Client, TokenBudget};
 
 use super::definition::AgentDefinition;
 use super::tool_definitions::{agent_tools, filter_tools};
@@ -25,13 +23,13 @@ pub struct AgentResult {
 
 /// Runs any agent definition against the graph database.
 pub struct AgentRunner {
-    llm: Arc<dyn LlmClient>,
+    client: Client,
 }
 
 impl AgentRunner {
-    /// Create a new runner with the given LLM client.
-    pub fn new(llm: Arc<dyn LlmClient>) -> Self {
-        Self { llm }
+    /// Create a new runner with the given RustyClawd client.
+    pub fn new(client: Client) -> Self {
+        Self { client }
     }
 
     /// Run an agent with access to the graph database for tool execution.
@@ -55,7 +53,7 @@ impl AgentRunner {
         let inv_id = investigation_id.to_string();
 
         let output = execute_with_tools(
-            self.llm.as_ref(),
+            &self.client,
             model,
             system_prompt,
             context,

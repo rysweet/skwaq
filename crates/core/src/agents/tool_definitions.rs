@@ -5,11 +5,10 @@ use crate::llm::ToolDefinition;
 /// Return the full set of tool definitions that agents can call during analysis.
 pub fn agent_tools() -> Vec<ToolDefinition> {
     vec![
-        ToolDefinition {
-            name: "query_graph".into(),
-            description: "Run a Cypher query against the code property graph and return results."
-                .into(),
-            parameters: serde_json::json!({
+        ToolDefinition::new(
+            "query_graph",
+            "Run a Cypher query against the code property graph and return results.",
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "cypher": {
@@ -19,12 +18,11 @@ pub fn agent_tools() -> Vec<ToolDefinition> {
                 },
                 "required": ["cypher"]
             }),
-        },
-        ToolDefinition {
-            name: "read_function".into(),
-            description: "Read the decompiled or source code of a function by name or address."
-                .into(),
-            parameters: serde_json::json!({
+        ),
+        ToolDefinition::new(
+            "read_function",
+            "Read the decompiled or source code of a function by name or address.",
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "name": {
@@ -34,11 +32,11 @@ pub fn agent_tools() -> Vec<ToolDefinition> {
                 },
                 "required": ["name"]
             }),
-        },
-        ToolDefinition {
-            name: "get_callers".into(),
-            description: "Return all functions that call the specified function.".into(),
-            parameters: serde_json::json!({
+        ),
+        ToolDefinition::new(
+            "get_callers",
+            "Return all functions that call the specified function.",
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "function": {
@@ -48,11 +46,11 @@ pub fn agent_tools() -> Vec<ToolDefinition> {
                 },
                 "required": ["function"]
             }),
-        },
-        ToolDefinition {
-            name: "get_callees".into(),
-            description: "Return all functions called by the specified function.".into(),
-            parameters: serde_json::json!({
+        ),
+        ToolDefinition::new(
+            "get_callees",
+            "Return all functions called by the specified function.",
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "function": {
@@ -62,13 +60,11 @@ pub fn agent_tools() -> Vec<ToolDefinition> {
                 },
                 "required": ["function"]
             }),
-        },
-        ToolDefinition {
-            name: "lookup_cwe".into(),
-            description:
-                "Look up a CWE entry by ID and return its name, description, and mitigations."
-                    .into(),
-            parameters: serde_json::json!({
+        ),
+        ToolDefinition::new(
+            "lookup_cwe",
+            "Look up a CWE entry by ID and return its name, description, and mitigations.",
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "cwe_id": {
@@ -78,11 +74,11 @@ pub fn agent_tools() -> Vec<ToolDefinition> {
                 },
                 "required": ["cwe_id"]
             }),
-        },
-        ToolDefinition {
-            name: "create_finding".into(),
-            description: "Record a new vulnerability finding in the graph database.".into(),
-            parameters: serde_json::json!({
+        ),
+        ToolDefinition::new(
+            "create_finding",
+            "Record a new vulnerability finding in the graph database.",
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "title": {
@@ -109,12 +105,11 @@ pub fn agent_tools() -> Vec<ToolDefinition> {
                 },
                 "required": ["title", "severity", "description"]
             }),
-        },
-        ToolDefinition {
-            name: "search_similar".into(),
-            description:
-                "Search for code patterns similar to a given snippet using pattern matching.".into(),
-            parameters: serde_json::json!({
+        ),
+        ToolDefinition::new(
+            "search_similar",
+            "Search for code patterns similar to a given snippet using pattern matching.",
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "code": {
@@ -129,7 +124,7 @@ pub fn agent_tools() -> Vec<ToolDefinition> {
                 },
                 "required": ["code"]
             }),
-        },
+        ),
     ]
 }
 

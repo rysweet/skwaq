@@ -1,54 +1,82 @@
-//! LLM client layer: traits, backends, and the agentic tool loop.
+//! LLM layer: delegates to RustyClawd's Client for all LLM operations.
+//!
+//! All Anthropic and Copilot protocol handling (message format, auth,
+//! tool-loop, streaming, retries) lives in `rustyclawd_core::client`.
+//! This module provides:
+//!
+//! - [`create_client`] -- build a `rustyclawd_core::client::Client` from
+//!   skwaq's [`LlmConfig`](crate::config::LlmConfig).
+//! - [`TokenBudget`] -- lightweight token accounting for agent cost control.
+//! - [`execute_with_tools`] -- budget-aware wrapper around RustyClawd's
+//!   built-in tool loop.
+//! - Re-exports of the RustyClawd types used by agents, skills, and the CLI.
 
-pub mod anthropic;
-pub mod copilot;
-pub mod copilot_auth;
-pub mod copilot_client;
-pub mod ollama;
 pub mod traits;
-
-pub use copilot_client::CopilotClient;
 pub use traits::*;
 
-use crate::config::LlmConfig;
-use std::sync::Arc;
+// Re-export the RustyClawd types that the rest of the crate uses directly.
+pub use rustyclawd_core::client::{
+    Client, ClientError, ClientResult, ContentBlock, CreateMessageRequest, Message, MessageContent,
+    MessageResponse, Role, ToolDefinition, Usage,
+};
 
-/// Create an LLM client from configuration.
+use crate::config::LlmConfig;
+
+/// Create a RustyClawd [`Client`] from skwaq's LLM configuration.
 ///
-/// Examines `config.reasoning` to decide which backend to use:
-/// - `"anthropic"` (default) -> Anthropic Claude API
-/// - `"copilot"` -> GitHub Copilot
-/// - `"ollama"` -> local Ollama server
-///
-/// Auto-detection: if no explicit backend is configured and `ANTHROPIC_API_KEY`
-/// is set, the Anthropic backend is preferred.
-pub fn create_llm_client(config: &LlmConfig) -> Arc<dyn LlmClient> {
+/// Backend selection:
+/// - `"copilot"` -- GitHub Copilot (async token discovery + Models API fallback).
+/// - `"anthropic"` (default) -- Anthropic Messages API (`ANTHROPIC_API_KEY`).
+/// - anything else -- auto-detect: try Anthropic if the env var is set,
+///   otherwise fall back to Copilot.
+pub async fn create_client(config: &LlmConfig) -> anyhow::Result<Client> {
     match config.reasoning.as_str() {
-        "anthropic" => match anthropic::AnthropicClient::new() {
-            Ok(client) => Arc::new(client),
-            Err(e) => {
-                tracing::warn!("Anthropic client init failed ({e}), falling back to copilot");
-                Arc::new(CopilotClient::new())
-            }
-        },
-        "ollama" => Arc::new(ollama::OllamaClient::new(&config.ollama.host)),
-        "copilot" => Arc::new(CopilotClient::new()),
+        "copilot" => {
+            let client = Client::new_copilot()
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to create Copilot client: {e}"))?;
+            Ok(client)
+        }
+        "anthropic" => create_anthropic_client(config),
         other => {
             // Auto-detect: try Anthropic if ANTHROPIC_API_KEY is set
             if std::env::var("ANTHROPIC_API_KEY").is_ok() {
                 tracing::info!(
                     "Unknown backend '{other}', but ANTHROPIC_API_KEY set; using Anthropic"
                 );
-                match anthropic::AnthropicClient::new() {
-                    Ok(client) => Arc::new(client),
-                    Err(_) => Arc::new(CopilotClient::new()),
+                match create_anthropic_client(config) {
+                    Ok(client) => Ok(client),
+                    Err(e) => {
+                        tracing::warn!(
+                            "Anthropic client init failed ({e}), falling back to copilot"
+                        );
+                        Client::new_copilot()
+                            .await
+                            .map_err(|e| anyhow::anyhow!("Copilot fallback also failed: {e}"))
+                    }
                 }
             } else {
                 tracing::info!("Unknown backend '{other}', falling back to copilot");
-                Arc::new(CopilotClient::new())
+                Client::new_copilot()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Copilot client creation failed: {e}"))
             }
         }
     }
+}
+
+/// Build an Anthropic-backend client from the environment key.
+fn create_anthropic_client(_config: &LlmConfig) -> anyhow::Result<Client> {
+    use rustyclawd_core::client::{ApiKey, Config as RcConfig};
+
+    let raw_key = std::env::var("ANTHROPIC_API_KEY")
+        .map_err(|_| anyhow::anyhow!("ANTHROPIC_API_KEY not set"))?;
+    let api_key =
+        ApiKey::new(raw_key).map_err(|e| anyhow::anyhow!("Invalid ANTHROPIC_API_KEY: {e}"))?;
+    let rc_config = RcConfig::new(api_key);
+    let client = Client::new(rc_config)
+        .map_err(|e| anyhow::anyhow!("Failed to create Anthropic client: {e}"))?;
+    Ok(client)
 }
 
 #[cfg(test)]
@@ -57,36 +85,16 @@ mod tests {
     use crate::config::LlmConfig;
 
     #[test]
-    fn test_create_ollama_client() {
-        let config = LlmConfig {
-            reasoning: "ollama".into(),
-            ..Default::default()
-        };
-        let client = create_llm_client(&config);
-        assert_eq!(client.provider_name(), "ollama");
-    }
-
-    #[test]
-    fn test_create_copilot_client_explicit() {
-        let config = LlmConfig {
-            reasoning: "copilot".into(),
-            ..Default::default()
-        };
-        let client = create_llm_client(&config);
-        assert_eq!(client.provider_name(), "copilot");
-    }
-
-    #[test]
     fn test_create_anthropic_client_with_key() {
         let original = std::env::var("ANTHROPIC_API_KEY").ok();
-        std::env::set_var("ANTHROPIC_API_KEY", "test-key");
+        std::env::set_var("ANTHROPIC_API_KEY", "sk-ant-test-key-123");
 
         let config = LlmConfig {
             reasoning: "anthropic".into(),
             ..Default::default()
         };
-        let client = create_llm_client(&config);
-        assert_eq!(client.provider_name(), "anthropic");
+        let result = create_anthropic_client(&config);
+        assert!(result.is_ok());
 
         match original {
             Some(key) => std::env::set_var("ANTHROPIC_API_KEY", key),
@@ -95,35 +103,16 @@ mod tests {
     }
 
     #[test]
-    fn test_create_anthropic_client_falls_back_without_key() {
+    fn test_create_anthropic_client_without_key() {
         let original = std::env::var("ANTHROPIC_API_KEY").ok();
         std::env::remove_var("ANTHROPIC_API_KEY");
 
-        let config = LlmConfig {
-            reasoning: "anthropic".into(),
-            ..Default::default()
-        };
-        let client = create_llm_client(&config);
-        // Falls back to copilot when key is missing
-        assert_eq!(client.provider_name(), "copilot");
+        let config = LlmConfig::default();
+        let result = create_anthropic_client(&config);
+        assert!(result.is_err());
 
         if let Some(key) = original {
             std::env::set_var("ANTHROPIC_API_KEY", key);
-        }
-    }
-
-    #[test]
-    fn test_default_config_creates_anthropic_with_key() {
-        let original = std::env::var("ANTHROPIC_API_KEY").ok();
-        std::env::set_var("ANTHROPIC_API_KEY", "test-key");
-
-        let config = LlmConfig::default();
-        let client = create_llm_client(&config);
-        assert_eq!(client.provider_name(), "anthropic");
-
-        match original {
-            Some(key) => std::env::set_var("ANTHROPIC_API_KEY", key),
-            None => std::env::remove_var("ANTHROPIC_API_KEY"),
         }
     }
 }
