@@ -50,6 +50,16 @@ pub enum GymSub {
         #[arg(long, default_value = "10")]
         limit: u32,
     },
+
+    /// Run self-improvement loop: analyze failures and propose fixes
+    Improve {
+        /// Suite to improve (fixtures, juliet, cgc, owasp, cyberseceval)
+        suite: String,
+
+        /// Maximum cases to analyze
+        #[arg(long, default_value = "20")]
+        max_cases: usize,
+    },
 }
 
 pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
@@ -101,6 +111,31 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
         }
         GymSub::History { limit } => {
             gym.history(*limit)?;
+        }
+        GymSub::Improve { suite, max_cases } => {
+            let config = skwaq_gym::adapters::BenchmarkConfig {
+                cache_dir: dirs::data_dir()
+                    .unwrap_or_else(|| std::path::PathBuf::from("."))
+                    .join("skwaq/gym/cache"),
+                cwe_filter: None,
+                max_cases: Some(*max_cases),
+                quick_mode: true,
+                parallelism: 4,
+                timeout_secs: 30,
+            };
+
+            // Find the matching adapter
+            let adapters = gym.get_adapters();
+            let adapter = adapters
+                .iter()
+                .find(|a| a.name() == suite.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Unknown suite: {}", suite))?;
+
+            let data_dir = adapter.setup(&config).await?;
+            let cycle =
+                skwaq_gym::improve::run_improvement_cycle(adapter.as_ref(), &config, &data_dir)
+                    .await?;
+            skwaq_gym::improve::print_proposals(&cycle);
         }
     }
 
