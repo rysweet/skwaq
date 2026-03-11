@@ -60,6 +60,9 @@ pub enum GymSub {
         #[arg(long, default_value = "20")]
         max_cases: usize,
     },
+
+    /// Generate dashboard: mermaid charts + scores table from run history
+    Dashboard,
 }
 
 pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
@@ -136,6 +139,16 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 skwaq_gym::improve::run_improvement_cycle(adapter.as_ref(), &config, &data_dir)
                     .await?;
             skwaq_gym::improve::print_proposals(&cycle);
+        }
+        GymSub::Dashboard => {
+            println!(
+                "{}",
+                skwaq_gym::dashboard::generate_charts(&gym.history_db)?
+            );
+            println!(
+                "{}",
+                skwaq_gym::dashboard::generate_scores_table(&gym.history_db)?
+            );
         }
     }
 
