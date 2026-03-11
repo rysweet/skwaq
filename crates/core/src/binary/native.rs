@@ -204,7 +204,11 @@ fn detect_elf_hardening(elf: &goblin::elf::Elf) -> HardeningInfo {
         ph.p_type == goblin::elf::program_header::PT_GNU_RELRO
     });
     let has_bind_now = elf.dynamic.as_ref().map_or(false, |dyn_info| {
-        dyn_info.dyns.iter().any(|d| d.d_tag == goblin::elf::dynamic::DT_BIND_NOW)
+        dyn_info.dyns.iter().any(|d| {
+            d.d_tag == goblin::elf::dynamic::DT_BIND_NOW
+            || (d.d_tag == goblin::elf::dynamic::DT_FLAGS && d.d_val & 0x8 != 0)  // DF_BIND_NOW
+            || (d.d_tag == goblin::elf::dynamic::DT_FLAGS_1 && d.d_val & 0x1 != 0)  // DF_1_NOW
+        })
     });
     let relro = match (has_relro, has_bind_now) {
         (true, true) => RelroStatus::Full,

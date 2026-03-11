@@ -31,3 +31,29 @@ pub fn most_recent_investigation(db: &GraphDb) -> anyhow::Result<String> {
         })?;
     Ok(id)
 }
+
+/// Resolve an investigation ID from an optional user-provided value.
+///
+/// If `explicit_id` is `Some`, validates it exists in the database.
+/// If `None`, falls back to the most recent investigation.
+/// Returns a clear error message in either failure case.
+pub fn resolve_investigation(db: &GraphDb, explicit_id: Option<&str>) -> anyhow::Result<String> {
+    match explicit_id {
+        Some(id) => {
+            let count: i64 = db.conn().query_row(
+                "SELECT count(*) FROM investigations WHERE id = ?1",
+                [id],
+                |row| row.get(0),
+            )?;
+            if count == 0 {
+                anyhow::bail!("Investigation '{}' not found. Run `skwaq investigate list`.", id);
+            }
+            Ok(id.to_string())
+        }
+        None => {
+            let id = most_recent_investigation(db)?;
+            println!("Using most recent investigation: {id}\n");
+            Ok(id)
+        }
+    }
+}

@@ -4,6 +4,7 @@
 //! Without `--quick`, drives the dynamic agent pipeline through real LLM calls.
 //! Use `--agents` or `--agent` to override which agents run.
 
+use super::common::resolve_investigation;
 use skwaq_core::agents::{default_pipeline, pipeline_from_names};
 use skwaq_core::analysis::{AnalysisOrchestrator, FindingStatus};
 use skwaq_core::config::Config;
@@ -36,7 +37,7 @@ async fn run_ai_analysis(
     let db_path = config.database_path();
     let db = GraphDb::open(&db_path)?;
 
-    let inv_id = resolve_investigation_id(&db, investigation_id)?;
+    let inv_id = resolve_investigation(&db, investigation_id)?;
 
     // Get the target name for the prompt
     let target: String = db
@@ -145,7 +146,7 @@ fn run_quick_analysis(investigation_id: Option<&str>) -> anyhow::Result<()> {
     let db_path = config.database_path();
     let db = GraphDb::open(&db_path)?;
 
-    let inv_id = resolve_investigation_id(&db, investigation_id)?;
+    let inv_id = resolve_investigation(&db, investigation_id)?;
 
     let max_cycles = 5;
     let orchestrator = AnalysisOrchestrator::new(&db, max_cycles);
@@ -258,46 +259,13 @@ fn run_quick_analysis(investigation_id: Option<&str>) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Resolve an investigation ID from an optional user-provided value.
-fn resolve_investigation_id(db: &GraphDb, id: Option<&str>) -> anyhow::Result<String> {
-    match id {
-        Some(id) => {
-            let count: i64 = db.conn().query_row(
-                "SELECT count(*) FROM investigations WHERE id = ?1",
-                [id],
-                |row| row.get(0),
-            )?;
-            if count == 0 {
-                anyhow::bail!("Investigation '{}' not found. Run `skwaq investigate list`.", id);
-            }
-            Ok(id.to_string())
-        }
-        None => {
-            let result: Result<String, _> = db.conn().query_row(
-                "SELECT id FROM investigations ORDER BY created_at DESC LIMIT 1",
-                [],
-                |row| row.get(0),
-            );
-            match result {
-                Ok(id) => {
-                    println!("Using most recent investigation: {id}\n");
-                    Ok(id)
-                }
-                Err(_) => {
-                    anyhow::bail!(
-                        "No investigations found. Run `skwaq ingest binary <path>` first."
-                    );
-                }
-            }
-        }
-    }
-}
-
 /// Truncate a string to fit in a column width.
 fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() <= max {
         s.to_string()
     } else {
-        format!("{}...", &s[..max - 3])
+        let truncated: String = chars[..max.saturating_sub(3)].iter().collect();
+        format!("{truncated}...")
     }
 }

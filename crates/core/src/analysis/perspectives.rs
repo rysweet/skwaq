@@ -383,14 +383,17 @@ pub fn context_perspective(
     (updates, new_findings)
 }
 
-/// Check if any sanitization function exists between a taint source and sink.
-fn check_sanitization_exists(db: &GraphDb, finding: &Finding) -> bool {
-    // Known sanitization functions
-    const SANITIZERS: &[&str] = &[
+/// Check if a function name matches a sanitizer by exact word comparison.
+///
+/// Splits the name on `_` and checks if any word exactly matches a known sanitizer keyword.
+fn is_sanitizer_name(name: &str) -> bool {
+    const SANITIZER_WORDS: &[&str] = &[
         "validate",
         "sanitize",
         "check",
         "verify",
+    ];
+    const SANITIZER_EXACT: &[&str] = &[
         "bounds_check",
         "strlcpy",
         "strlcat",
@@ -399,6 +402,21 @@ fn check_sanitization_exists(db: &GraphDb, finding: &Finding) -> bool {
         "strcpy_s",
     ];
 
+    // Exact full-name match against known safe functions
+    if SANITIZER_EXACT.iter().any(|s| name == *s) {
+        return true;
+    }
+
+    // Word-level match: split on '_' and check each word
+    let words: Vec<&str> = name.split('_').collect();
+    SANITIZER_WORDS.iter().any(|s| words.contains(s))
+}
+
+/// Check if any sanitization function exists between a taint source and sink.
+///
+/// Examines the evidence path from the finding and checks if any function
+/// BETWEEN the source (first hop) and sink (last hop) is a known sanitizer.
+fn check_sanitization_exists(db: &GraphDb, finding: &Finding) -> bool {
     // Extract the path from evidence if available
     for ev in &finding.evidence {
         let path_str = ev
@@ -406,22 +424,24 @@ fn check_sanitization_exists(db: &GraphDb, finding: &Finding) -> bool {
             .trim_start_matches("Call path: ");
         let hops: Vec<&str> = path_str.split(" -> ").map(|s| s.trim()).collect();
 
-        // Check if any intermediate hop is a sanitizer
-        // Skip first (source) and last (sink)
+        // Check if any intermediate hop (not source, not sink) is a sanitizer
         if hops.len() > 2 {
             for hop in &hops[1..hops.len() - 1] {
                 let base = hop.split('@').next().unwrap_or(hop);
-                if SANITIZERS.iter().any(|s| base.contains(s)) {
+                if is_sanitizer_name(base) {
                     return true;
                 }
             }
         }
     }
 
-    // Also check if a sanitizer is between source and sink in the call graph
+    // Check if a sanitizer exists between source and sink in the call graph.
+    // Build the path from evidence, then look for sanitizers along it.
     let func_name = &finding.location.function;
     let base = func_name.split('@').next().unwrap_or(func_name);
 
+    // Look for intermediate functions between a caller and the sink
+    // that have sanitizer-like names.
     if let Ok(mut stmt) = db.conn().prepare(
         "SELECT f.name FROM calls c \
          JOIN functions f ON c.caller_id = f.id \
@@ -431,7 +451,7 @@ fn check_sanitization_exists(db: &GraphDb, finding: &Finding) -> bool {
         if let Ok(rows) = stmt.query_map([format!("%{}%", base)], |row| row.get::<_, String>(0)) {
             for row in rows.flatten() {
                 let caller_base = row.split('@').next().unwrap_or(&row);
-                if SANITIZERS.iter().any(|s| caller_base.contains(s)) {
+                if is_sanitizer_name(caller_base) {
                     return true;
                 }
             }

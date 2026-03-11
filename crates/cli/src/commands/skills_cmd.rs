@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use super::common::resolve_investigation;
 use skwaq_core::config::Config;
 use skwaq_core::graph::GraphDb;
 use skwaq_core::skills::{discover_skills, load_skill, run_skill};
@@ -26,8 +27,9 @@ pub fn run_list() {
     println!("{}", "-".repeat(82));
 
     for skill in &skills {
-        let desc = if skill.description.len() > 50 {
-            format!("{}...", &skill.description[..47])
+        let desc = if skill.description.chars().count() > 50 {
+            let truncated: String = skill.description.chars().take(47).collect();
+            format!("{truncated}...")
         } else {
             skill.description.clone()
         };
@@ -70,16 +72,8 @@ pub async fn run_run(name: &str, args: Vec<String>) -> anyhow::Result<()> {
     // Try to find the most recent investigation to provide context
     let investigation_id = {
         let db = GraphDb::open(&db_path)?;
-        let result: Result<String, _> = db.conn().query_row(
-            "SELECT id FROM investigations ORDER BY created_at DESC LIMIT 1",
-            [],
-            |row| row.get(0),
-        );
-        match result {
-            Ok(id) => {
-                println!("Using investigation: {id}");
-                Some(id)
-            }
+        match resolve_investigation(&db, None) {
+            Ok(id) => Some(id),
             Err(_) => {
                 println!("No investigation found. Running skill without investigation context.");
                 None

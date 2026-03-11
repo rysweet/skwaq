@@ -4,8 +4,8 @@ use super::common::open_db;
 
 pub fn run_init() -> anyhow::Result<()> {
     let db = open_db().or_else(|_| {
-        // Create the DB if it doesn't exist
-        let db_dir = std::env::current_dir()?.join(".skwaq").join("graph");
+        // Create the DB if it doesn't exist using the configured path
+        let db_dir = skwaq_core::config::Config::load()?.database_path();
         skwaq_core::graph::GraphDb::open(&db_dir)
     })?;
 

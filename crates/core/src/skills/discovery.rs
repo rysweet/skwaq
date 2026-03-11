@@ -211,6 +211,12 @@ fn parse_skill_markdown(content: &str, path: &Path) -> anyhow::Result<SkillDefin
                 context: fm.context,
                 agent: fm.agent,
             });
+        } else {
+            // Opening `---` found but no closing `---` — malformed frontmatter
+            anyhow::bail!(
+                "Malformed skill file {}: opening '---' found but no closing '---'",
+                path.display()
+            );
         }
     }
 

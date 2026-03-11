@@ -22,8 +22,9 @@ pub fn run_list() {
     println!("{}", "-".repeat(87));
 
     for agent in &agents {
-        let desc = if agent.description.len() > 38 {
-            format!("{}...", &agent.description[..35])
+        let desc = if agent.description.chars().count() > 38 {
+            let truncated: String = agent.description.chars().take(35).collect();
+            format!("{truncated}...")
         } else {
             agent.description.clone()
         };

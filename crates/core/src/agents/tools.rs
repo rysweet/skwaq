@@ -253,14 +253,17 @@ fn execute_read_function(
     );
 
     match result {
-        Ok((id, name, address, decompiled, confidence)) => Ok(serde_json::json!({
-            "status": "ok",
-            "function_id": id,
-            "function": name,
-            "address": address,
-            "decompiled": decompiled,
-            "confidence": confidence
-        })),
+        Ok((id, name, address, decompiled, confidence)) => {
+            let safe_decompiled = format!("<code_data>\n{}\n</code_data>", decompiled);
+            Ok(serde_json::json!({
+                "status": "ok",
+                "function_id": id,
+                "function": name,
+                "address": address,
+                "decompiled": safe_decompiled,
+                "confidence": confidence
+            }))
+        }
         Err(_) => {
             // Try matching by address if name lookup failed
             let addr_result = db.conn().query_row(
@@ -279,14 +282,17 @@ fn execute_read_function(
             );
 
             match addr_result {
-                Ok((id, name, address, decompiled, confidence)) => Ok(serde_json::json!({
-                    "status": "ok",
-                    "function_id": id,
-                    "function": name,
-                    "address": address,
-                    "decompiled": decompiled,
-                    "confidence": confidence
-                })),
+                Ok((id, name, address, decompiled, confidence)) => {
+                    let safe_decompiled = format!("<code_data>\n{}\n</code_data>", decompiled);
+                    Ok(serde_json::json!({
+                        "status": "ok",
+                        "function_id": id,
+                        "function": name,
+                        "address": address,
+                        "decompiled": safe_decompiled,
+                        "confidence": confidence
+                    }))
+                }
                 Err(_) => Ok(serde_json::json!({
                     "status": "not_found",
                     "function": func_name,
@@ -509,10 +515,8 @@ fn execute_search_similar(
         .and_then(|v| v.as_u64())
         .unwrap_or(10) as usize;
 
-    tracing::info!(
-        "Tool search_similar: {}...",
-        &code[..code.len().min(40)]
-    );
+    let code_preview: String = code.chars().take(40).collect();
+    tracing::info!("Tool search_similar: {code_preview}...");
 
     let search_pattern = format!("%{}%", code.replace('%', ""));
 
@@ -542,15 +546,17 @@ fn execute_search_similar(
             }
         })
         .map(|(name, addr, decompiled)| {
-            let preview = if decompiled.len() > 200 {
-                format!("{}...", &decompiled[..200])
+            let preview_raw = if decompiled.chars().count() > 200 {
+                let truncated: String = decompiled.chars().take(200).collect();
+                format!("{}...", truncated)
             } else {
                 decompiled
             };
+            let safe_preview = format!("<code_data>\n{}\n</code_data>", preview_raw);
             serde_json::json!({
                 "name": name,
                 "address": addr,
-                "preview": preview
+                "preview": safe_preview
             })
         })
         .collect();
@@ -601,9 +607,10 @@ fn translate_to_sql(query: &str, investigation_id: &str) -> Result<(String, Vec<
         ));
     }
 
+    let q_preview: String = q.chars().take(80).collect();
     Err(format!(
         "Unsupported query pattern. Use Cypher-like queries with FUNCTION/RETURN, CALL, or TAINT/FLOW keywords. Got: {}",
-        &q[..q.len().min(80)]
+        q_preview
     ))
 }
 
@@ -698,7 +705,10 @@ mod tests {
 
         assert_eq!(result["status"], "ok");
         assert_eq!(result["function"], "vulnerable_func");
-        assert!(result["decompiled"].as_str().unwrap().contains("strcpy"));
+        let decompiled = result["decompiled"].as_str().unwrap();
+        assert!(decompiled.starts_with("<code_data>"));
+        assert!(decompiled.ends_with("</code_data>"));
+        assert!(decompiled.contains("strcpy"));
     }
 
     #[test]

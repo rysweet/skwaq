@@ -3,6 +3,7 @@
 //! Queries all findings for an investigation and outputs them in the
 //! requested format: JSON (default), SARIF, or Markdown.
 
+use super::common::resolve_investigation;
 use skwaq_core::config::Config;
 use skwaq_core::graph::GraphDb;
 use skwaq_core::reporting::{
@@ -26,24 +27,7 @@ pub fn run(
     let db = GraphDb::open(&db_path)?;
 
     // Resolve investigation ID
-    let inv_id = match investigation_id {
-        Some(id) => id.to_string(),
-        None => {
-            let id: String = db
-                .conn()
-                .query_row(
-                    "SELECT id FROM investigations ORDER BY created_at DESC LIMIT 1",
-                    [],
-                    |row| row.get(0),
-                )
-                .map_err(|_| {
-                    anyhow::anyhow!(
-                        "No investigations found. Run `skwaq analyze --quick` first."
-                    )
-                })?;
-            id
-        }
-    };
+    let inv_id = resolve_investigation(&db, investigation_id)?;
 
     let report = if sarif {
         generate_sarif_for_investigation(&db, &inv_id)?
