@@ -29,6 +29,9 @@ async fn main() -> anyhow::Result<()> {
         Commands::Doctor => {
             skwaq::commands::doctor::run().await?;
         }
+        Commands::SelfTest => {
+            skwaq::commands::selftest_cmd::run()?;
+        }
         Commands::Checksec { binary } => {
             skwaq::commands::checksec_cmd::run(binary)?;
         }

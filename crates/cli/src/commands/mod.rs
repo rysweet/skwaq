@@ -12,6 +12,7 @@ pub mod ingest;
 pub mod investigate;
 pub mod kb_cmd;
 pub mod report;
+pub mod selftest_cmd;
 pub mod skills_cmd;
 pub mod strings_cmd;
 pub mod surface_cmd;
@@ -207,6 +208,9 @@ pub enum Commands {
 
     /// Check system dependencies and connectivity
     Doctor,
+
+    /// Run self-analysis on skwaq's own source code
+    SelfTest,
 
     /// Show version information
     Version,

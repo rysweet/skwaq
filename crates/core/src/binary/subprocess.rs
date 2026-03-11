@@ -69,11 +69,30 @@ pub async fn run_tool(
 }
 
 /// Check if a command exists on PATH.
+///
+/// Returns the canonicalized absolute path to the command if found.
+/// The result is resolved via `canonicalize` to prevent symlink-based
+/// PATH hijacking - the caller can verify the resolved path is in
+/// an expected location (e.g. /usr/bin, /usr/local/bin).
 pub async fn command_exists(cmd: &str) -> Option<String> {
     let result = Command::new("which").arg(cmd).output().await.ok()?;
 
     if result.status.success() {
-        Some(String::from_utf8_lossy(&result.stdout).trim().to_string())
+        let raw_path = String::from_utf8_lossy(&result.stdout).trim().to_string();
+        // Canonicalize to resolve symlinks and detect PATH manipulation.
+        match std::fs::canonicalize(&raw_path) {
+            Ok(canonical) => Some(canonical.to_string_lossy().to_string()),
+            Err(_) => {
+                // If canonicalize fails, return the raw path but log a warning.
+                tracing::warn!(
+                    "Could not canonicalize path for '{}': {}. \
+                     Verify the tool is installed in a trusted location.",
+                    cmd,
+                    raw_path,
+                );
+                Some(raw_path)
+            }
+        }
     } else {
         None
     }

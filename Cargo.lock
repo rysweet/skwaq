@@ -3194,6 +3194,7 @@ dependencies = [
  "serde",
  "serde_json",
  "skwaq-core",
+ "tempfile",
  "tokio",
  "tracing",
  "tracing-subscriber",

@@ -177,11 +177,29 @@ impl GhidraRunner {
     }
 }
 
+/// Maximum number of functions to parse from Ghidra output to prevent
+/// resource exhaustion from maliciously crafted binaries.
+const MAX_GHIDRA_FUNCTIONS: usize = 50_000;
+
 /// Parse raw Ghidra JSON output into typed GhidraAnalysis.
 ///
 /// The Python script may produce string offsets (e.g. "00401234") instead of
 /// numeric offsets. This function handles both formats.
+///
+/// Enforces a limit of [`MAX_GHIDRA_FUNCTIONS`] to prevent resource exhaustion.
 fn parse_ghidra_json(raw: &serde_json::Value) -> anyhow::Result<GhidraAnalysis> {
+    let raw_functions = raw.get("functions").and_then(|v| v.as_array());
+    if let Some(arr) = raw_functions {
+        if arr.len() > MAX_GHIDRA_FUNCTIONS {
+            anyhow::bail!(
+                "Ghidra output contains {} functions, exceeding the {} limit. \
+                 This may indicate a maliciously crafted binary.",
+                arr.len(),
+                MAX_GHIDRA_FUNCTIONS,
+            );
+        }
+    }
+
     let functions: Vec<GhidraFunction> = raw
         .get("functions")
         .and_then(|v| v.as_array())
@@ -411,5 +429,32 @@ mod tests {
         });
         let analysis = parse_ghidra_json(&json).unwrap();
         assert_eq!(analysis.strings[0].offset, 12345);
+    }
+
+    #[test]
+    fn test_parse_ghidra_json_rejects_excessive_functions() {
+        // Build a JSON payload with more than MAX_GHIDRA_FUNCTIONS entries.
+        let count = MAX_GHIDRA_FUNCTIONS + 1;
+        let functions: Vec<serde_json::Value> = (0..count)
+            .map(|i| {
+                serde_json::json!({
+                    "name": format!("func_{}", i),
+                    "address": format!("{:08x}", i),
+                    "size": 10,
+                })
+            })
+            .collect();
+        let json = serde_json::json!({
+            "functions": functions,
+            "strings": [],
+            "imports": []
+        });
+        let result = parse_ghidra_json(&json);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("exceeding"),
+            "Error should mention exceeding limit: {err_msg}"
+        );
     }
 }
