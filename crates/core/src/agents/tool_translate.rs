@@ -14,6 +14,86 @@ pub fn translate_to_sql(
     let q = query.trim();
     let upper = q.to_uppercase();
 
+    // --- Schema discovery: what tables/node types exist ---
+    if upper.contains("LABELS") || upper.contains("DISTINCT") && upper.contains("COUNT") {
+        return Ok((
+            "SELECT 'functions' AS table_name, count(*) AS count FROM functions WHERE investigation_id = ?1 \
+             UNION ALL SELECT 'data_sources', count(*) FROM data_sources WHERE investigation_id = ?1 \
+             UNION ALL SELECT 'data_sinks', count(*) FROM data_sinks WHERE investigation_id = ?1 \
+             UNION ALL SELECT 'findings', count(*) FROM findings WHERE investigation_id = ?1 \
+             UNION ALL SELECT 'taint_flows', count(*) FROM taint_flows tf JOIN data_sources s ON tf.source_id = s.id WHERE s.investigation_id = ?1 \
+             UNION ALL SELECT 'calls', count(*) FROM calls c JOIN functions f ON c.caller_id = f.id WHERE f.investigation_id = ?1"
+                .to_string(),
+            vec![investigation_id.to_string()],
+        ));
+    }
+
+    // --- Look up function by name ---
+    if let Some(name) = extract_name_filter(q) {
+        return Ok((
+            format!(
+                "SELECT name, address, decompiled, language FROM functions \
+                 WHERE investigation_id = ?1 AND name LIKE '%{}%' LIMIT 20",
+                sanitize_like_param(&name)
+            ),
+            vec![investigation_id.to_string()],
+        ));
+    }
+
+    // --- Filter by file ---
+    if let Some(file_pattern) = extract_file_filter(q) {
+        return Ok((
+            format!(
+                "SELECT name, address, decompiled FROM functions \
+                 WHERE investigation_id = ?1 AND address LIKE '%{}%' LIMIT 30",
+                sanitize_like_param(&file_pattern)
+            ),
+            vec![investigation_id.to_string()],
+        ));
+    }
+
+    // --- Query findings/vulnerabilities ---
+    if upper.contains("VULNERAB") || upper.contains("FINDING") {
+        return Ok((
+            "SELECT id, title, severity, category, status, evidence FROM findings \
+             WHERE investigation_id = ?1 ORDER BY \
+             CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 \
+             WHEN 'medium' THEN 2 ELSE 3 END LIMIT 50"
+                .to_string(),
+            vec![investigation_id.to_string()],
+        ));
+    }
+
+    // --- Query sources and sinks ---
+    if upper.contains("SOURCE") && !upper.contains("TAINT") {
+        return Ok((
+            "SELECT id, name, source_type, location FROM data_sources \
+             WHERE investigation_id = ?1 LIMIT 50"
+                .to_string(),
+            vec![investigation_id.to_string()],
+        ));
+    }
+
+    if upper.contains("SINK") && !upper.contains("TAINT") {
+        return Ok((
+            "SELECT id, name, sink_type, danger_level, location FROM data_sinks \
+             WHERE investigation_id = ?1 LIMIT 50"
+                .to_string(),
+            vec![investigation_id.to_string()],
+        ));
+    }
+
+    // --- Functions with source code ---
+    if upper.contains("CODE") || upper.contains("DECOMPILE") {
+        return Ok((
+            "SELECT name, address, decompiled FROM functions \
+             WHERE investigation_id = ?1 AND decompiled IS NOT NULL AND decompiled != '' LIMIT 30"
+                .to_string(),
+            vec![investigation_id.to_string()],
+        ));
+    }
+
+    // --- List all functions (general FUNCTION query) ---
     if upper.contains("FUNCTION") && upper.contains("RETURN") {
         return Ok((
             "SELECT name, address, decompiled FROM functions WHERE investigation_id = ?1 LIMIT 50"
@@ -22,6 +102,7 @@ pub fn translate_to_sql(
         ));
     }
 
+    // --- Call graph ---
     if upper.contains("CALL") {
         return Ok((
             "SELECT f1.name as caller, f2.name as callee FROM calls c \
@@ -33,6 +114,7 @@ pub fn translate_to_sql(
         ));
     }
 
+    // --- Taint flows ---
     if upper.contains("TAINT") || upper.contains("FLOW") {
         return Ok((
             "SELECT s.name, k.name, tf.path, tf.sanitized FROM taint_flows tf \
@@ -44,11 +126,129 @@ pub fn translate_to_sql(
         ));
     }
 
+    // --- Relationships (general graph traversal) ---
+    if upper.contains("MATCH") && (upper.contains("->") || upper.contains("REL")) {
+        return Ok((
+            "SELECT 'calls' AS rel_type, f1.name AS from_name, f2.name AS to_name \
+             FROM calls c JOIN functions f1 ON c.caller_id = f1.id \
+             JOIN functions f2 ON c.callee_id = f2.id \
+             WHERE f1.investigation_id = ?1 LIMIT 50"
+                .to_string(),
+            vec![investigation_id.to_string()],
+        ));
+    }
+
+    // --- Fallback: if it's a MATCH query, return the schema summary ---
+    if upper.starts_with("MATCH") {
+        return Ok((
+            "SELECT 'functions' AS table_name, count(*) AS count FROM functions WHERE investigation_id = ?1 \
+             UNION ALL SELECT 'findings', count(*) FROM findings WHERE investigation_id = ?1 \
+             UNION ALL SELECT 'data_sources', count(*) FROM data_sources WHERE investigation_id = ?1 \
+             UNION ALL SELECT 'data_sinks', count(*) FROM data_sinks WHERE investigation_id = ?1"
+                .to_string(),
+            vec![investigation_id.to_string()],
+        ));
+    }
+
     let q_preview: String = q.chars().take(80).collect();
     Err(format!(
-        "Unsupported query pattern. Use Cypher-like queries with FUNCTION/RETURN, CALL, or TAINT/FLOW keywords. Got: {}",
+        "Unsupported query pattern. Try: MATCH (f:Function) RETURN f, or use keywords: \
+         FUNCTION, CALL, TAINT, FINDING, SOURCE, SINK, CODE. Got: {}",
         q_preview
     ))
+}
+
+/// Extract a function name filter from WHERE clauses like `n.name = 'strcpy'`
+/// or `n.name IN ['strcpy', 'system']` or `n.name CONTAINS 'strcpy'`.
+/// Only matches Cypher-like patterns (requires MATCH or WHERE prefix).
+fn extract_name_filter(query: &str) -> Option<String> {
+    let lower = query.to_lowercase();
+
+    // Only match in Cypher-like queries (must start with MATCH or contain WHERE)
+    if !lower.contains("match") && !lower.contains("where") {
+        return None;
+    }
+
+    // Match: n.name = 'foo' or n.name = "foo"
+    if let Some(pos) = lower.find(".name") {
+        let rest = &query[pos + 1..]; // skip the dot
+                                      // Look for quoted string after = or CONTAINS
+        for delim in ["= '", "= \"", "contains '", "contains \""] {
+            if let Some(start) = rest.to_lowercase().find(delim) {
+                let quote_char = if delim.ends_with('\'') { '\'' } else { '"' };
+                let value_start = start + delim.len();
+                let rest_after = &rest[value_start..];
+                if let Some(end) = rest_after.find(quote_char) {
+                    let name = &rest_after[..end];
+                    if !name.is_empty() && name.len() < 100 {
+                        return Some(name.to_string());
+                    }
+                }
+            }
+        }
+
+        // Match: n.name IN ['foo', 'bar']
+        if let Some(in_pos) = rest.to_lowercase().find(" in [") {
+            let bracket_start = in_pos + 5;
+            let rest_after = &rest[bracket_start..];
+            if let Some(bracket_end) = rest_after.find(']') {
+                let items = &rest_after[..bracket_end];
+                // Take the first item
+                if let Some(first_quote_start) = items.find('\'') {
+                    let after = &items[first_quote_start + 1..];
+                    if let Some(end) = after.find('\'') {
+                        let name = &after[..end];
+                        if !name.is_empty() && name.len() < 100 {
+                            return Some(name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Extract a file filter from WHERE clauses like `n.file CONTAINS 'format_string'`.
+fn extract_file_filter(query: &str) -> Option<String> {
+    let lower = query.to_lowercase();
+    if !lower.contains("file") {
+        return None;
+    }
+    // Look for: file CONTAINS 'x' or file = 'x'
+    if let Some(pos) = lower.find("file") {
+        let rest = &query[pos..];
+        for delim in [
+            "contains '",
+            "contains \"",
+            "= '",
+            "= \"",
+            "like '",
+            "like \"",
+        ] {
+            if let Some(start) = rest.to_lowercase().find(delim) {
+                let quote_char = if delim.ends_with('\'') { '\'' } else { '"' };
+                let value_start = start + delim.len();
+                let rest_after = &rest[value_start..];
+                if let Some(end) = rest_after.find(quote_char) {
+                    let pattern = &rest_after[..end];
+                    if !pattern.is_empty() && pattern.len() < 200 {
+                        return Some(pattern.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Sanitize a string for use in a SQL LIKE pattern.
+/// Escapes SQL wildcards to prevent injection via LIKE patterns.
+fn sanitize_like_param(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+        .replace('\'', "''")
 }
 
 /// Execute a read-only parameterized SQL query and return results as a Vec of JSON objects.
