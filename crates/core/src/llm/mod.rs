@@ -11,6 +11,7 @@ pub use copilot_client::CopilotClient;
 pub use traits::*;
 
 use crate::config::LlmConfig;
+use std::sync::Arc;
 
 /// Create an LLM client from configuration.
 ///
@@ -21,17 +22,17 @@ use crate::config::LlmConfig;
 ///
 /// Auto-detection: if no explicit backend is configured and `ANTHROPIC_API_KEY`
 /// is set, the Anthropic backend is preferred.
-pub fn create_llm_client(config: &LlmConfig) -> Box<dyn LlmClient> {
+pub fn create_llm_client(config: &LlmConfig) -> Arc<dyn LlmClient> {
     match config.reasoning.as_str() {
         "anthropic" => match anthropic::AnthropicClient::new() {
-            Ok(client) => Box::new(client),
+            Ok(client) => Arc::new(client),
             Err(e) => {
                 tracing::warn!("Anthropic client init failed ({e}), falling back to copilot");
-                Box::new(CopilotClient::new())
+                Arc::new(CopilotClient::new())
             }
         },
-        "ollama" => Box::new(ollama::OllamaClient::new(&config.ollama.host)),
-        "copilot" => Box::new(CopilotClient::new()),
+        "ollama" => Arc::new(ollama::OllamaClient::new(&config.ollama.host)),
+        "copilot" => Arc::new(CopilotClient::new()),
         other => {
             // Auto-detect: try Anthropic if ANTHROPIC_API_KEY is set
             if std::env::var("ANTHROPIC_API_KEY").is_ok() {
@@ -39,12 +40,12 @@ pub fn create_llm_client(config: &LlmConfig) -> Box<dyn LlmClient> {
                     "Unknown backend '{other}', but ANTHROPIC_API_KEY set; using Anthropic"
                 );
                 match anthropic::AnthropicClient::new() {
-                    Ok(client) => Box::new(client),
-                    Err(_) => Box::new(CopilotClient::new()),
+                    Ok(client) => Arc::new(client),
+                    Err(_) => Arc::new(CopilotClient::new()),
                 }
             } else {
                 tracing::info!("Unknown backend '{other}', falling back to copilot");
-                Box::new(CopilotClient::new())
+                Arc::new(CopilotClient::new())
             }
         }
     }
