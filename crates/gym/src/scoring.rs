@@ -113,7 +113,7 @@ pub fn cwe_family(cwe: u32) -> u32 {
 pub fn category_to_cwes(category: &str) -> Vec<u32> {
     match category {
         "memory" => vec![119, 120, 121, 122, 125, 126, 787, 416, 415, 190, 191],
-        "injection" => vec![77, 78, 89, 90, 94, 501, 643],
+        "injection" => vec![15, 77, 78, 89, 90, 94, 501, 643],
         "format_string" => vec![134],
         "race" => vec![362, 367],
         "temp_file" => vec![377],

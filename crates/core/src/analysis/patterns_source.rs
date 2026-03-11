@@ -497,6 +497,49 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "fscanf with %s has no bounds; use width specifiers",
         },
+        // Windows-specific patterns (from self-improvement iteration 4)
+        SourcePattern {
+            regex: r"(?i)\bSetComputerName[AW]?\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "SetComputerName with untrusted input allows external control of system settings (CWE-15)",
+        },
+        SourcePattern {
+            regex: r"(?i)\bSetEnvironmentVariable[AW]?\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "SetEnvironmentVariable with untrusted input can modify system behavior",
+        },
+        SourcePattern {
+            regex: r"(?i)\bRegSetValue[AW]?(Ex[AW]?)?\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "Registry write with untrusted input can compromise system configuration",
+        },
+        SourcePattern {
+            regex: r"(?i)\bCreateProcess[AW]?\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "CreateProcess runs external programs; validate command line arguments",
+        },
+        SourcePattern {
+            regex: r"(?i)\bShellExecute[AW]?(Ex[AW]?)?\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "ShellExecute runs programs via shell; validate all parameters",
+        },
+        SourcePattern {
+            regex: r"(?i)\bWinExec\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "WinExec is deprecated and insecure; use CreateProcess with validated args",
+        },
+        SourcePattern {
+            regex: r"(?i)\b_execl\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "_execl (MSVC) executes a program; validate all arguments",
+        },
     ]
 }
 
