@@ -72,3 +72,120 @@ impl BenchmarkAdapter for FixturesAdapter {
         crate::scoring::category_to_cwes(&finding.category)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn workspace_root() -> PathBuf {
+        let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        dir.pop(); // crates/
+        dir.pop(); // workspace root
+        dir
+    }
+
+    fn test_fixtures_dir() -> PathBuf {
+        workspace_root().join("tests/fixtures")
+    }
+
+    fn test_manifest_path() -> PathBuf {
+        workspace_root().join("data/gym/ground_truth/fixtures.toml")
+    }
+
+    fn test_config() -> BenchmarkConfig {
+        BenchmarkConfig {
+            cache_dir: PathBuf::from("/tmp/gym-test"),
+            cwe_filter: None,
+            max_cases: None,
+            quick_mode: true,
+            parallelism: 1,
+            timeout_secs: 30,
+        }
+    }
+
+    #[test]
+    fn test_adapter_name() {
+        let adapter = FixturesAdapter::new(test_manifest_path(), test_fixtures_dir());
+        assert_eq!(adapter.name(), "fixtures");
+    }
+
+    #[test]
+    fn test_adapter_is_ready() {
+        let adapter = FixturesAdapter::new(test_manifest_path(), test_fixtures_dir());
+        assert!(adapter.is_ready(&test_config()));
+    }
+
+    #[test]
+    fn test_adapter_not_ready_with_bad_dir() {
+        let adapter = FixturesAdapter::new(
+            PathBuf::from("/nonexistent/manifest.toml"),
+            PathBuf::from("/nonexistent/fixtures"),
+        );
+        assert!(!adapter.is_ready(&test_config()));
+    }
+
+    #[test]
+    fn test_adapter_ground_truth_loads() {
+        let adapter = FixturesAdapter::new(test_manifest_path(), test_fixtures_dir());
+        let gt = adapter.ground_truth().unwrap();
+        assert_eq!(gt.suite, "fixtures");
+        assert!(!gt.cases.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_run_case_buffer_overflow() {
+        let adapter = FixturesAdapter::new(test_manifest_path(), test_fixtures_dir());
+        let case = TestCase {
+            id: "buffer_overflow".to_string(),
+            path: "buffer_overflow.c".to_string(),
+            expected_cwes: vec![121],
+            is_negative: false,
+            language: "c".to_string(),
+        };
+        let findings = adapter
+            .run_case(&case, &test_fixtures_dir(), &test_config())
+            .await
+            .unwrap();
+        assert!(
+            !findings.is_empty(),
+            "Expected findings for buffer_overflow.c"
+        );
+        let has_memory = findings.iter().any(|f| {
+            let cwes = adapter.map_finding_to_cwes(f);
+            cwes.iter().any(|&c| crate::scoring::cwe_family(c) == 119)
+        });
+        assert!(
+            has_memory,
+            "Expected memory-family CWE in buffer_overflow.c"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_run_case_command_injection() {
+        let adapter = FixturesAdapter::new(test_manifest_path(), test_fixtures_dir());
+        let case = TestCase {
+            id: "command_injection".to_string(),
+            path: "command_injection.c".to_string(),
+            expected_cwes: vec![78],
+            is_negative: false,
+            language: "c".to_string(),
+        };
+        let findings = adapter
+            .run_case(&case, &test_fixtures_dir(), &test_config())
+            .await
+            .unwrap();
+        assert!(
+            !findings.is_empty(),
+            "Expected findings for command_injection.c"
+        );
+        let has_injection = findings.iter().any(|f| {
+            let cwes = adapter.map_finding_to_cwes(f);
+            cwes.iter().any(|&c| crate::scoring::cwe_family(c) == 74)
+        });
+        assert!(
+            has_injection,
+            "Expected injection-family CWE in command_injection.c"
+        );
+    }
+}

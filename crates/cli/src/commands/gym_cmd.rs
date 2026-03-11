@@ -69,14 +69,10 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             json,
             markdown,
         } => {
-            let cwe_filter = cwe.as_ref().map(|c| {
-                let num: u32 = c
-                    .trim_start_matches("CWE-")
-                    .trim_start_matches("cwe-")
-                    .parse()
-                    .expect("Invalid CWE number");
-                vec![num]
-            });
+            let cwe_filter = cwe
+                .as_ref()
+                .map(|c| parse_cwe_number(c).map(|n| vec![n]))
+                .transpose()?;
             gym.run(suite.as_deref(), cwe_filter, *max_cases, *full)
                 .await?;
 
@@ -111,6 +107,14 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Parse a CWE filter string like "CWE-119", "cwe-119", or "119" into a number.
+fn parse_cwe_number(s: &str) -> anyhow::Result<u32> {
+    s.trim_start_matches("CWE-")
+        .trim_start_matches("cwe-")
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Invalid CWE number: '{}'. Use format: CWE-119 or 119", s))
+}
+
 /// Find the workspace root by looking for Cargo.toml with [workspace].
 fn find_skwaq_root() -> anyhow::Result<PathBuf> {
     let mut dir = std::env::current_dir()?;
@@ -125,5 +129,33 @@ fn find_skwaq_root() -> anyhow::Result<PathBuf> {
         if !dir.pop() {
             anyhow::bail!("Could not find skwaq workspace root (Cargo.toml with [workspace])");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_cwe_number_plain() {
+        assert_eq!(parse_cwe_number("119").unwrap(), 119);
+    }
+
+    #[test]
+    fn test_parse_cwe_number_prefixed() {
+        assert_eq!(parse_cwe_number("CWE-121").unwrap(), 121);
+        assert_eq!(parse_cwe_number("cwe-78").unwrap(), 78);
+    }
+
+    #[test]
+    fn test_parse_cwe_number_invalid() {
+        let err = parse_cwe_number("not-a-number").unwrap_err();
+        assert!(err.to_string().contains("Invalid CWE number"));
+        assert!(err.to_string().contains("not-a-number"));
+    }
+
+    #[test]
+    fn test_parse_cwe_number_empty() {
+        assert!(parse_cwe_number("").is_err());
     }
 }
