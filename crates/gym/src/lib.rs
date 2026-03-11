@@ -286,6 +286,11 @@ impl Gym {
         println!();
         Ok(())
     }
+
+    /// Get a reference to the registered adapters.
+    pub fn get_adapters(&self) -> &[Box<dyn BenchmarkAdapter>] {
+        &self.adapters
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
