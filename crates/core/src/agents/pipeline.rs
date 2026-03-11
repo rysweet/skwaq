@@ -11,7 +11,7 @@ use super::runner::{build_analysis_context, AgentResult, AgentRunner};
 
 /// Maximum characters for accumulated previous-results context passed between
 /// pipeline stages.  Keeps subsequent agent prompts within LLM token limits.
-const MAX_PIPELINE_CONTEXT_CHARS: usize = 3000;
+const MAX_PIPELINE_CONTEXT_CHARS: usize = 8000;
 
 /// A composable analysis pipeline of agent stages.
 pub struct AnalysisPipeline {
@@ -72,7 +72,12 @@ impl AnalysisPipeline {
                     }
                     // Truncate accumulated context to stay within LLM limits.
                     if ctx.len() > MAX_PIPELINE_CONTEXT_CHARS {
-                        ctx.truncate(MAX_PIPELINE_CONTEXT_CHARS);
+                        // Find nearest char boundary at or before the limit.
+                        let mut boundary = MAX_PIPELINE_CONTEXT_CHARS;
+                        while boundary > 0 && !ctx.is_char_boundary(boundary) {
+                            boundary -= 1;
+                        }
+                        ctx.truncate(boundary);
                         ctx.push_str("\n...[truncated]");
                     }
                     ctx
@@ -120,6 +125,67 @@ pub fn default_pipeline() -> AnalysisPipeline {
                     preamble: "Review the following vulnerability findings and validate each one. \
                                For each finding, determine if it is a true positive or false \
                                positive, and adjust severity if needed."
+                        .into(),
+                },
+            },
+        ],
+    }
+}
+
+/// Build a deep analysis pipeline with multi-agent validation panel.
+///
+/// Discovery: attack-surface → vuln-hunter (find everything)
+/// Validation: exploit-analyst + defense-analyst + cwe-classifier (validate, reduce FPs)
+///
+/// This pipeline trades speed for precision. Each finding is validated by
+/// three specialist agents, and only findings confirmed by 2/3 survive.
+pub fn deep_pipeline() -> AnalysisPipeline {
+    AnalysisPipeline {
+        stages: vec![
+            // Discovery phase
+            PipelineStage {
+                agent_name: "attack-surface".into(),
+                context_mode: ContextMode::FromGraph,
+            },
+            PipelineStage {
+                agent_name: "vuln-hunter".into(),
+                context_mode: ContextMode::FromPreviousResults {
+                    preamble: "The attack surface analysis is complete. Now perform deep \
+                               vulnerability analysis based on the attack surface findings below. \
+                               Focus on the highest-risk areas identified. \
+                               For each vulnerability found, use create_finding to record it."
+                        .into(),
+                },
+            },
+            // Validation phase - multi-agent panel
+            PipelineStage {
+                agent_name: "exploit-analyst".into(),
+                context_mode: ContextMode::FromPreviousResults {
+                    preamble: "Review each vulnerability finding below. For each one, evaluate \
+                               whether it can actually be triggered by an attacker. Check reachability \
+                               from external inputs, controllability of parameters, and real impact. \
+                               Respond with CONFIRMED, DOWNGRADED, or REJECTED for each finding."
+                        .into(),
+                },
+            },
+            PipelineStage {
+                agent_name: "defense-analyst".into(),
+                context_mode: ContextMode::FromPreviousResults {
+                    preamble: "Review each vulnerability finding below. For each one, check whether \
+                               defensive controls (input validation, sanitization, safe wrappers, \
+                               architectural mitigations) make it non-exploitable. \
+                               Respond with VULNERABLE, MITIGATED, or SAFE for each finding."
+                        .into(),
+                },
+            },
+            PipelineStage {
+                agent_name: "cwe-classifier".into(),
+                context_mode: ContextMode::FromPreviousResults {
+                    preamble: "Review each vulnerability finding and its validation results below. \
+                               Verify the CWE classification, calibrate severity, check evidence quality, \
+                               and flag duplicates. Only CONFIRM findings that have been validated by \
+                               the exploit analyst and defense analyst. REJECT findings that were \
+                               marked as not exploitable or fully mitigated by both validators."
                         .into(),
                 },
             },
