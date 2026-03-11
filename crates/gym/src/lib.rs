@@ -99,7 +99,9 @@ impl Gym {
         }
         if full {
             config.quick_mode = false;
-            config.timeout_secs = 300;
+            // Agentic analysis with 5 LLM agents can take 10+ minutes per case.
+            // 30 minutes is generous but prevents infinite hangs.
+            config.timeout_secs = 1800;
         }
 
         for adapter in adapters {
