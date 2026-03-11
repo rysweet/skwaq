@@ -1,7 +1,7 @@
 ---
 name: taint-tracer
 description: Data flow analysis specialist
-model: openai/gpt-4o-mini
+model: openai/gpt-4o
 tools:
   - query_graph
   - read_function

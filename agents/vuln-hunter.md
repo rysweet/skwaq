@@ -1,7 +1,7 @@
 ---
 name: vuln-hunter
 description: Primary vulnerability discovery agent
-model: openai/gpt-4o-mini
+model: openai/gpt-4o
 tools:
   - query_graph
   - read_function

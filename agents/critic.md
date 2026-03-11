@@ -1,7 +1,7 @@
 ---
 name: critic
 description: Finding validation and false positive reduction
-model: openai/gpt-4o-mini
+model: openai/gpt-4o
 tools:
   - query_graph
   - read_function
