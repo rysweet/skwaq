@@ -19,7 +19,9 @@ pub mod tool_translate;
 
 pub use definition::{load_agent, AgentDefinition};
 pub use discovery::discover_agents;
-pub use pipeline::{default_pipeline, pipeline_from_names, AnalysisPipeline, PipelineStage};
+pub use pipeline::{
+    deep_pipeline, default_pipeline, pipeline_from_names, AnalysisPipeline, PipelineStage,
+};
 pub use runner::{AgentResult, AgentRunner};
 pub use tool_definitions::{agent_tools, filter_tools};
 pub use tool_executor::execute_tool;

@@ -117,8 +117,10 @@ async fn run_llm_pipeline(db: &GraphDb, inv_id: &str, file_str: &str, timeout_se
         }
     };
 
-    let pipeline = skwaq_core::agents::default_pipeline();
-    let budget_amount = config.analysis.default_token_budget.min(50_000);
+    // Use the deep pipeline with multi-agent validation panel
+    // (attack-surface → vuln-hunter → exploit-analyst → defense-analyst → cwe-classifier)
+    let pipeline = skwaq_core::agents::deep_pipeline();
+    let budget_amount = config.analysis.default_token_budget.min(100_000);
     let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
 
     let target = std::path::Path::new(file_str)
