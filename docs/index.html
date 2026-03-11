@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skwaq Gym - Vulnerability Detection Benchmark</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0d1117; color: #c9d1d9; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+        h1 { font-size: 2.5rem; margin-bottom: 0.5rem; color: #58a6ff; }
+        h2 { font-size: 1.5rem; margin: 2rem 0 1rem; color: #8b949e; border-bottom: 1px solid #21262d; padding-bottom: 0.5rem; }
+        h3 { font-size: 1.2rem; margin: 1.5rem 0 0.75rem; color: #c9d1d9; }
+        p { line-height: 1.6; margin-bottom: 1rem; color: #8b949e; }
+        .subtitle { font-size: 1.1rem; color: #8b949e; margin-bottom: 2rem; }
+        .chart-container { background: #161b22; border-radius: 8px; padding: 1.5rem; margin: 1.5rem 0; border: 1px solid #21262d; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+        .stat { background: #161b22; border-radius: 8px; padding: 1.5rem; text-align: center; border: 1px solid #21262d; }
+        .stat .value { font-size: 2rem; font-weight: 700; color: #58a6ff; }
+        .stat .label { font-size: 0.85rem; color: #8b949e; margin-top: 0.25rem; }
+        .agent-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin: 1rem 0; }
+        .agent-card { background: #161b22; border-radius: 8px; padding: 1.25rem; border: 1px solid #21262d; }
+        .agent-card .name { font-weight: 600; color: #58a6ff; margin-bottom: 0.25rem; }
+        .agent-card .role { font-size: 0.85rem; color: #8b949e; }
+        .agent-card .stage { display: inline-block; font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; margin-top: 0.5rem; }
+        .stage-discovery { background: #1f6feb33; color: #58a6ff; }
+        .stage-validation { background: #da3633 22; color: #f85149; }
+        .stage-synthesis { background: #3fb95033; color: #3fb950; }
+        .stage-specialist { background: #d29922 22; color: #d29922; }
+        table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+        th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #21262d; }
+        th { color: #8b949e; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; }
+        td { color: #c9d1d9; }
+        .pipeline { background: #161b22; border-radius: 8px; padding: 1.5rem; margin: 1rem 0; border: 1px solid #21262d; font-family: monospace; font-size: 0.9rem; line-height: 2; }
+        .pipeline .arrow { color: #8b949e; }
+        .pipeline .phase { color: #d29922; font-weight: 600; }
+        a { color: #58a6ff; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #21262d; font-size: 0.85rem; color: #484f58; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Skwaq Gym</h1>
+        <p class="subtitle">Multi-agent vulnerability detection benchmark and self-improvement harness</p>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="value">100%</div>
+                <div class="label">Recall (Full Mode)</div>
+            </div>
+            <div class="stat">
+                <div class="value">80%</div>
+                <div class="label">F1 Score (Quick Mode)</div>
+            </div>
+            <div class="stat">
+                <div class="value">9</div>
+                <div class="label">Specialist Agents</div>
+            </div>
+            <div class="stat">
+                <div class="value">174</div>
+                <div class="label">Tests Passing</div>
+            </div>
+        </div>
+
+        <h2>Improvement Trajectory</h2>
+        <div class="chart-container">
+            <canvas id="trajectoryChart"></canvas>
+        </div>
+
+        <h2>Score History</h2>
+        <table>
+            <thead>
+                <tr><th>Iteration</th><th>Mode</th><th>F1</th><th>Precision</th><th>Recall</th><th>CWEs</th><th>Change</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Baseline</td><td>Patterns</td><td>50.0%</td><td>66.7%</td><td>40.0%</td><td>2/5</td><td>-</td></tr>
+                <tr><td>+3 patterns</td><td>Patterns</td><td>76.2%</td><td>66.7%</td><td>88.9%</td><td>4/5</td><td>+26.2%</td></tr>
+                <tr><td>+orchestrator</td><td>Full (no LLM)</td><td>58.8%</td><td>41.7%</td><td>100.0%</td><td>5/5</td><td>+100% recall</td></tr>
+                <tr><td>+LLM pipeline</td><td>Full (LLM)</td><td>31.1%</td><td>18.4%</td><td>100.0%</td><td>5/5</td><td>LLM finds all</td></tr>
+                <tr><td>+verdict-synth</td><td>Full (LLM)</td><td>21.1%</td><td>11.8%</td><td>100.0%</td><td>5/5</td><td>FP reduction WIP</td></tr>
+                <tr><td>Quick mode</td><td>Patterns</td><td>80.0%</td><td>80.0%</td><td>80.0%</td><td>4/5</td><td>Best F1</td></tr>
+            </tbody>
+        </table>
+
+        <h2>Deep Pipeline Architecture</h2>
+        <div class="pipeline">
+            <span class="phase">Discovery:</span> attack-surface <span class="arrow">&rarr;</span> vuln-hunter<br>
+            <span class="phase">Validation:</span> exploit-analyst <span class="arrow">&rarr;</span> defense-analyst<br>
+            <span class="phase">Synthesis:</span> verdict-synthesizer
+        </div>
+
+        <h2>Agent Team</h2>
+        <div class="agent-grid">
+            <div class="agent-card">
+                <div class="name">attack-surface</div>
+                <div class="role">Maps entry points, external interfaces, and dangerous API usage</div>
+                <span class="stage stage-discovery">Discovery</span>
+            </div>
+            <div class="agent-card">
+                <div class="name">vuln-hunter</div>
+                <div class="role">Systematic vulnerability discovery with THREE-QUESTION TEST</div>
+                <span class="stage stage-discovery">Discovery</span>
+            </div>
+            <div class="agent-card">
+                <div class="name">exploit-analyst</div>
+                <div class="role">Evaluates exploitability: reachability, controllability, impact</div>
+                <span class="stage stage-validation">Validation</span>
+            </div>
+            <div class="agent-card">
+                <div class="name">defense-analyst</div>
+                <div class="role">Identifies mitigations: input validation, sanitization, safe wrappers</div>
+                <span class="stage stage-validation">Validation</span>
+            </div>
+            <div class="agent-card">
+                <div class="name">verdict-synthesizer</div>
+                <div class="role">Final verdicts from multi-perspective validation synthesis</div>
+                <span class="stage stage-synthesis">Synthesis</span>
+            </div>
+            <div class="agent-card">
+                <div class="name">taint-tracer</div>
+                <div class="role">Data flow tracking from untrusted sources to dangerous sinks</div>
+                <span class="stage stage-specialist">Specialist</span>
+            </div>
+            <div class="agent-card">
+                <div class="name">decompile-analyst</div>
+                <div class="role">Binary decompilation analysis and pattern recognition</div>
+                <span class="stage stage-specialist">Specialist</span>
+            </div>
+            <div class="agent-card">
+                <div class="name">critic</div>
+                <div class="role">Single-agent finding validation (legacy default pipeline)</div>
+                <span class="stage stage-validation">Validation</span>
+            </div>
+            <div class="agent-card">
+                <div class="name">cwe-classifier</div>
+                <div class="role">CWE taxonomy classification and severity calibration</div>
+                <span class="stage stage-specialist">Specialist</span>
+            </div>
+        </div>
+
+        <h2>Methodology</h2>
+        <h3>Four-Layer Analysis</h3>
+        <p><strong>Layer 1 - Pattern Detection:</strong> Regex-based dangerous API detection (strcpy, sprintf, system, atoi, etc.). Fast, high precision, limited recall.</p>
+        <p><strong>Layer 2 - Dataflow Analysis:</strong> Taint tracking from sources (network, stdin, env) to sinks (memory ops, system calls). Catches use-after-free and injection chains.</p>
+        <p><strong>Layer 3 - Context Validation:</strong> Multi-cycle orchestrator that confirms or invalidates findings based on surrounding code context. Reduces false positives.</p>
+        <p><strong>Layer 4 - LLM Agent Pipeline:</strong> Multiple specialist agents reason about code semantically, like a security researcher. Discovery agents find, validation agents debate, synthesizer decides.</p>
+
+        <h3>Benchmarks</h3>
+        <p><strong>Fixtures:</strong> 7 hand-crafted test cases (C, Python, JavaScript) covering 5 CWE families: buffer overflow (CWE-121), command injection (CWE-78), format string (CWE-134), integer overflow (CWE-190), use-after-free (CWE-416).</p>
+        <p><strong>NIST Juliet:</strong> 45,324 test cases across 116 CWEs (adapter implemented, data download pending).</p>
+
+        <h3>Scoring</h3>
+        <p>Standard information retrieval metrics: Precision = TP/(TP+FP), Recall = TP/(TP+FN), F1 = harmonic mean. CWE-family matching allows CWE-121 findings to match CWE-119 ground truth (same vulnerability family).</p>
+
+        <div class="footer">
+            <p>Skwaq &mdash; Named after the Lushootseed word for Raven, symbolizing intelligent discovery of hidden vulnerabilities.</p>
+            <p><a href="https://github.com/rysweet/skwaq">GitHub</a> &middot; <a href="https://github.com/rysweet/skwaq/issues/28">Master Issue</a></p>
+        </div>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('trajectoryChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['Baseline', '+Patterns', '+Orchestrator', '+LLM', '+Verdict', 'Quick Best'],
+                datasets: [
+                    {
+                        label: 'F1 Score',
+                        data: [50, 76.2, 58.8, 31.1, 21.1, 80],
+                        borderColor: '#58a6ff',
+                        backgroundColor: '#58a6ff22',
+                        tension: 0.3,
+                        fill: true,
+                    },
+                    {
+                        label: 'Precision',
+                        data: [66.7, 66.7, 41.7, 18.4, 11.8, 80],
+                        borderColor: '#3fb950',
+                        tension: 0.3,
+                    },
+                    {
+                        label: 'Recall',
+                        data: [40, 88.9, 100, 100, 100, 80],
+                        borderColor: '#f85149',
+                        tension: 0.3,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { labels: { color: '#8b949e' } },
+                },
+                scales: {
+                    y: {
+                        min: 0, max: 100,
+                        ticks: { color: '#8b949e', callback: v => v + '%' },
+                        grid: { color: '#21262d' },
+                    },
+                    x: {
+                        ticks: { color: '#8b949e' },
+                        grid: { color: '#21262d' },
+                    },
+                },
+            },
+        });
+    </script>
+</body>
+</html>
