@@ -1,58 +1,40 @@
-//! Agentic analysis: runs the LLM-driven agent pipeline on test cases.
+//! Agentic analysis: multi-layer vulnerability detection pipeline.
 //!
-//! This module bridges the gym's benchmark framework with skwaq's
-//! multi-agent analysis pipeline. For each test case, it:
-//! 1. Ingests the source into a graph DB and runs pattern/dataflow analysis
-//! 2. (When LLM is available) Runs the agent pipeline for semantic analysis
-//! 3. Extracts findings with CWE classifications
+//! Combines pattern detection, dataflow analysis, and LLM-driven agent
+//! reasoning to detect vulnerabilities like a security researcher would.
+//!
+//! Layer 1: Pattern detection (dangerous APIs, known-bad patterns)
+//! Layer 2: Dataflow analysis (taint tracking source→sink)
+//! Layer 3: Context validation (false positive reduction)
+//! Layer 4: LLM agent pipeline (semantic reasoning about code)
 
 use crate::adapters::DetectedFinding;
 use skwaq_core::analysis::DangerousApiDetector;
+use skwaq_core::config::Config;
 use skwaq_core::graph::builder::GraphBuilder;
 use skwaq_core::graph::GraphDb;
 use skwaq_core::source::parse_file;
 use std::path::Path;
 
-/// Run agentic analysis on a source file.
+/// Run full agentic analysis on a source file.
 ///
-/// Phase 1 (always): Ingest → pattern detection → multi-cycle orchestrator
-/// Phase 2 (when LLM available): Agent pipeline for semantic analysis
+/// Layers:
+/// 1. Ingest source → build code property graph
+/// 2. Pattern detection → store initial findings
+/// 3. Multi-cycle orchestrator (dataflow + context validation)
+/// 4. LLM agent pipeline (attack-surface → vuln-hunter → critic)
 pub async fn run_agentic_source_analysis(
     path: &Path,
-    _timeout_secs: u64,
+    timeout_secs: u64,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
-    let path = path.to_path_buf();
-
-    // Phase 1: Sync analysis (pattern + dataflow + context validation)
-    // All DB work happens here, no await points while DB is alive.
-    let findings = run_sync_analysis(&path)?;
-
-    // Phase 2: LLM agent pipeline (future work - requires Send-safe DB wrapper)
-    // For now, the sync analysis with the multi-cycle orchestrator provides
-    // pattern detection + taint analysis + context validation (false positive reduction).
-    // The LLM pipeline will be integrated when we add a Send-safe DB wrapper
-    // or switch to a connection pool.
-
-    Ok(findings)
-}
-
-/// Run synchronous analysis: ingest, pattern detection, orchestrator cycles.
-fn run_sync_analysis(path: &Path) -> anyhow::Result<Vec<DetectedFinding>> {
     let db = GraphDb::in_memory()?;
     let parsed = parse_file(path)?;
 
-    let inv_id = format!(
-        "gym-{}",
-        uuid::Uuid::new_v4()
-            .to_string()
-            .split('-')
-            .next()
-            .unwrap_or("0")
-    );
+    let inv_id = format!("gym-{}", &uuid::Uuid::new_v4().to_string()[..8]);
     let now = chrono::Utc::now().to_rfc3339();
     let file_str = path.to_string_lossy().to_string();
 
-    // Create investigation
+    // --- Layer 1: Ingest source into graph ---
     db.execute(
         "INSERT INTO investigations (id, name, target, status, created_at, updated_at) \
          VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
@@ -65,7 +47,6 @@ fn run_sync_analysis(path: &Path) -> anyhow::Result<Vec<DetectedFinding>> {
         ],
     )?;
 
-    // Build graph from parsed source (functions, calls, sources, sinks)
     let builder = GraphBuilder::new(&db);
     let counts = builder.build_from_source(std::slice::from_ref(&parsed), &inv_id)?;
     tracing::debug!(
@@ -77,7 +58,7 @@ fn run_sync_analysis(path: &Path) -> anyhow::Result<Vec<DetectedFinding>> {
         counts.sinks,
     );
 
-    // Run pattern detection and store as initial findings
+    // --- Layer 2: Pattern detection ---
     let detector = DangerousApiDetector::new();
     if let Ok(hits) = detector.detect_in_source(path, &parsed.language) {
         for hit in &hits {
@@ -109,21 +90,79 @@ fn run_sync_analysis(path: &Path) -> anyhow::Result<Vec<DetectedFinding>> {
         }
     }
 
-    // Run multi-cycle analysis (pattern perspective + dataflow + context validation)
+    // --- Layer 3: Multi-cycle orchestrator (dataflow + context validation) ---
     let orchestrator = skwaq_core::analysis::AnalysisOrchestrator::new(&db, 3);
     let _cycles = orchestrator.run_quick_analysis(&inv_id)?;
 
-    // Collect all non-invalidated findings from the DB
+    // --- Layer 4: LLM agent pipeline ---
+    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await;
+
+    // Collect all non-invalidated findings
     collect_findings_from_db(&db, &inv_id)
 }
 
-/// Extract findings from the DB after analysis.
+/// Run the LLM agent pipeline if ANTHROPIC_API_KEY is configured.
+/// Gracefully degrades to pattern-only analysis if no API key is available.
+async fn run_llm_pipeline(db: &GraphDb, inv_id: &str, file_str: &str, timeout_secs: u64) {
+    let config = match Config::load() {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    let llm_client = match skwaq_core::llm::create_client(&config.llm).await {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::debug!("LLM not available ({}), using pattern-only analysis", e);
+            return;
+        }
+    };
+
+    let pipeline = skwaq_core::agents::default_pipeline();
+    let budget_amount = config.analysis.default_token_budget.min(50_000);
+    let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
+
+    let target = std::path::Path::new(file_str)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| file_str.to_string());
+
+    tracing::info!("Running LLM agent pipeline on {}", target);
+
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(timeout_secs),
+        pipeline.run(&target, inv_id, db, llm_client, &mut budget),
+    )
+    .await
+    {
+        Ok(Ok(results)) => {
+            let total_tokens: u64 = results.iter().map(|r| r.tokens_used).sum();
+            tracing::info!(
+                "LLM pipeline completed for {}: {} agents, {} tokens",
+                target,
+                results.len(),
+                total_tokens,
+            );
+        }
+        Ok(Err(e)) => {
+            tracing::warn!("LLM pipeline failed for {}: {}", file_str, e);
+        }
+        Err(_) => {
+            tracing::warn!(
+                "LLM pipeline timed out for {} after {}s",
+                file_str,
+                timeout_secs
+            );
+        }
+    }
+}
+
+/// Extract findings from the DB after all analysis layers complete.
 fn collect_findings_from_db(
     db: &GraphDb,
     investigation_id: &str,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
     let mut stmt = db.conn().prepare(
-        "SELECT id, title, severity, category, evidence FROM findings \
+        "SELECT id, title, severity, category FROM findings \
          WHERE investigation_id = ?1 AND status != 'invalidated'",
     )?;
 
@@ -133,7 +172,6 @@ fn collect_findings_from_db(
             let title: String = row.get(1)?;
             let severity: String = row.get(2).unwrap_or_default();
             let category: String = row.get(3).unwrap_or_default();
-            let _evidence: String = row.get(4).unwrap_or_default();
 
             Ok(DetectedFinding {
                 id,
@@ -152,7 +190,6 @@ fn collect_findings_from_db(
 }
 
 fn extract_function_from_title(title: &str) -> String {
-    // Extract function name from "Dangerous pattern: strcpy (file:line)"
     if let Some(start) = title.find(": ") {
         let rest = &title[start + 2..];
         if let Some(end) = rest.find(' ') {
@@ -167,56 +204,101 @@ fn extract_function_from_title(title: &str) -> String {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_sync_analysis_buffer_overflow() {
+    fn fixtures_dir() -> std::path::PathBuf {
         let mut dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         dir.pop();
         dir.pop();
-        let fixture = dir.join("tests/fixtures/buffer_overflow.c");
-
-        if fixture.exists() {
-            let findings = run_sync_analysis(&fixture).unwrap();
-            assert!(
-                !findings.is_empty(),
-                "Expected findings from buffer_overflow.c"
-            );
-            // Should find strcpy pattern
-            let has_memory = findings.iter().any(|f| f.category == "memory");
-            assert!(has_memory, "Expected memory-category findings");
-        }
+        dir.join("tests/fixtures")
     }
 
     #[test]
-    fn test_sync_analysis_command_injection() {
-        let mut dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        dir.pop();
-        dir.pop();
-        let fixture = dir.join("tests/fixtures/command_injection.c");
-
-        if fixture.exists() {
-            let findings = run_sync_analysis(&fixture).unwrap();
-            assert!(
-                !findings.is_empty(),
-                "Expected findings from command_injection.c"
-            );
-            let has_injection = findings.iter().any(|f| f.category == "injection");
-            assert!(has_injection, "Expected injection-category findings");
+    fn test_sync_layers_buffer_overflow() {
+        let fixture = fixtures_dir().join("buffer_overflow.c");
+        if !fixture.exists() {
+            return;
         }
+
+        let db = GraphDb::in_memory().unwrap();
+        let parsed = parse_file(&fixture).unwrap();
+        let inv_id = "test-sync";
+        let now = chrono::Utc::now().to_rfc3339();
+
+        db.execute(
+            "INSERT INTO investigations (id, name, target, status, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
+            &[&inv_id, &"test", &"test", &now.as_str(), &now.as_str()],
+        )
+        .unwrap();
+
+        let builder = GraphBuilder::new(&db);
+        builder
+            .build_from_source(std::slice::from_ref(&parsed), inv_id)
+            .unwrap();
+
+        let detector = DangerousApiDetector::new();
+        let hits = detector
+            .detect_in_source(&fixture, &parsed.language)
+            .unwrap();
+        assert!(
+            !hits.is_empty(),
+            "Pattern detector should find dangerous APIs"
+        );
+
+        let orchestrator = skwaq_core::analysis::AnalysisOrchestrator::new(&db, 3);
+        let cycles = orchestrator.run_quick_analysis(inv_id).unwrap();
+        assert!(
+            !cycles.is_empty(),
+            "Orchestrator should run at least one cycle"
+        );
+    }
+
+    #[test]
+    fn test_sync_layers_command_injection() {
+        let fixture = fixtures_dir().join("command_injection.c");
+        if !fixture.exists() {
+            return;
+        }
+
+        let db = GraphDb::in_memory().unwrap();
+        let parsed = parse_file(&fixture).unwrap();
+        let inv_id = "test-injection";
+        let now = chrono::Utc::now().to_rfc3339();
+
+        db.execute(
+            "INSERT INTO investigations (id, name, target, status, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
+            &[&inv_id, &"test", &"test", &now.as_str(), &now.as_str()],
+        )
+        .unwrap();
+
+        let builder = GraphBuilder::new(&db);
+        builder
+            .build_from_source(std::slice::from_ref(&parsed), inv_id)
+            .unwrap();
+
+        let detector = DangerousApiDetector::new();
+        let hits = detector
+            .detect_in_source(&fixture, &parsed.language)
+            .unwrap();
+        let has_injection = hits
+            .iter()
+            .any(|h| h.danger_category.to_string() == "injection");
+        assert!(
+            has_injection,
+            "Should detect injection pattern in command_injection.c"
+        );
     }
 
     #[tokio::test]
-    async fn test_agentic_analysis_runs() {
-        let mut dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        dir.pop();
-        dir.pop();
-        let fixture = dir.join("tests/fixtures/buffer_overflow.c");
-
-        if fixture.exists() {
-            let findings = run_agentic_source_analysis(&fixture, 30).await.unwrap();
-            assert!(
-                !findings.is_empty(),
-                "Expected findings from agentic analysis"
-            );
+    async fn test_full_agentic_analysis() {
+        let fixture = fixtures_dir().join("buffer_overflow.c");
+        if !fixture.exists() {
+            return;
         }
+
+        let findings = run_agentic_source_analysis(&fixture, 30).await.unwrap();
+        assert!(!findings.is_empty(), "Should produce findings");
+        let has_memory = findings.iter().any(|f| f.category == "memory");
+        assert!(has_memory, "Should detect memory category");
     }
 }

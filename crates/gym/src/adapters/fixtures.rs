@@ -19,7 +19,7 @@ impl FixturesAdapter {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl BenchmarkAdapter for FixturesAdapter {
     fn name(&self) -> &str {
         "fixtures"
