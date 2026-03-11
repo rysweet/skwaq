@@ -302,6 +302,24 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::Critical,
             reason: "popen passes to shell; use pipe+fork+exec",
         },
+        SourcePattern {
+            regex: r"\bprintf\s*\(\s*[a-zA-Z_]\w*\s*\)",
+            category: DangerCategory::FormatString,
+            severity: Severity::High,
+            reason: "printf with variable as format string; use printf(\"%s\", var) instead",
+        },
+        SourcePattern {
+            regex: r"\batoi\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "atoi has no error checking and can cause integer overflow; use strtol with validation",
+        },
+        SourcePattern {
+            regex: r"\batol\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "atol has no error checking and can cause integer overflow; use strtol with validation",
+        },
     ]
 }
 
@@ -492,5 +510,60 @@ def safe_function():
             .detect_in_source_content(src, "python", "safe.py")
             .unwrap();
         assert!(hits.is_empty());
+    }
+
+    #[test]
+    fn test_detect_c_format_string_and_integer_patterns() {
+        let detector = DangerousApiDetector::new();
+        let src = r#"
+void vuln(char *msg, char *num_str) {
+    printf(msg);
+    int n = atoi(num_str);
+    long l = atol(num_str);
+}
+"#;
+        let hits = detector
+            .detect_in_source_content(src, "c", "test.c")
+            .unwrap();
+        assert!(
+            hits.iter().any(|h| h.function_name.contains("printf")),
+            "Expected printf(variable) format string detection"
+        );
+        assert!(
+            hits.iter().any(|h| h.function_name.contains("atoi")),
+            "Expected atoi detection"
+        );
+        assert!(
+            hits.iter().any(|h| h.function_name.contains("atol")),
+            "Expected atol detection"
+        );
+    }
+
+    #[test]
+    fn test_safe_printf_not_flagged() {
+        let detector = DangerousApiDetector::new();
+        let src = r#"
+void safe(const char *msg) {
+    printf("%s\n", msg);
+    printf("hello world\n");
+}
+"#;
+        let hits = detector
+            .detect_in_source_content(src, "c", "safe.c")
+            .unwrap();
+        // Safe printf with format literal should not trigger the format string pattern.
+        // (sprintf is still flagged by the existing pattern, but printf with literal is safe)
+        let format_hits: Vec<_> = hits
+            .iter()
+            .filter(|h| h.danger_category == DangerCategory::FormatString)
+            .collect();
+        assert!(
+            format_hits.is_empty(),
+            "Safe printf should not trigger format string detection, got: {:?}",
+            format_hits
+                .iter()
+                .map(|h| &h.function_name)
+                .collect::<Vec<_>>()
+        );
     }
 }
