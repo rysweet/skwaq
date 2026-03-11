@@ -4,6 +4,7 @@
 //! and drives a self-improvement loop.
 
 pub mod adapters;
+pub mod agentic;
 pub mod download;
 pub mod ground_truth;
 pub mod history;
