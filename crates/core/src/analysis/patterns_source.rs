@@ -342,6 +342,34 @@ fn java_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "LDAP query with user input; use parameterized LDAP queries",
         },
+        // From self-improvement: broader Runtime.exec pattern
+        SourcePattern {
+            regex: r"\bRuntime\b[^;]*\.exec\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "Runtime.exec runs OS commands; validate all arguments",
+        },
+        // From self-improvement: cookie-based path traversal
+        SourcePattern {
+            regex: r"\bgetCookies\s*\(\s*\)",
+            category: DangerCategory::PathTraversal,
+            severity: Severity::High,
+            reason: "Cookie values may contain path traversal payloads; validate and canonicalize",
+        },
+        // Trust boundary: HttpSession setAttribute with user input
+        SourcePattern {
+            regex: r"\bsetAttribute\s*\([^)]*getParameter",
+            category: DangerCategory::Injection,
+            severity: Severity::Medium,
+            reason: "Storing user input in session without validation; sanitize before storing",
+        },
+        // Secure cookie missing
+        SourcePattern {
+            regex: r"\bnew\s+Cookie\s*\(",
+            category: DangerCategory::Crypto,
+            severity: Severity::Medium,
+            reason: "Cookie creation should set Secure and HttpOnly flags",
+        },
     ]
 }
 
