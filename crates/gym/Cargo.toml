@@ -1,0 +1,33 @@
+[package]
+name = "skwaq-gym"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+skwaq-core = { path = "../core" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+reqwest = { workspace = true }
+rusqlite = { workspace = true }
+sha2 = { workspace = true }
+tempfile = { workspace = true }
+dirs = { workspace = true }
+async-trait = { workspace = true }
+flate2 = "1"
+tar = "0.4"
+zip = "2"
+walkdir = "2"
+rayon = "1"
+indicatif = "0.17"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+tempfile = { workspace = true }

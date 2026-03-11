@@ -10,6 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 skwaq-core = { path = "../core" }
+skwaq-gym = { path = "../gym" }
 rustyclawd-tools = { workspace = true }
 tokio = { workspace = true }
 clap = { workspace = true }
