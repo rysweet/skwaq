@@ -3,10 +3,8 @@
 //! A pipeline runs a sequence of agents, passing context forward.
 //! Each stage can build its input from the graph database and previous results.
 
-use std::sync::Arc;
-
 use crate::graph::GraphDb;
-use crate::llm::{LlmClient, TokenBudget};
+use crate::llm::{Client, TokenBudget};
 
 use super::definition::load_agent;
 use super::runner::{build_analysis_context, AgentResult, AgentRunner};
@@ -45,7 +43,7 @@ impl AnalysisPipeline {
         target: &str,
         investigation_id: &str,
         db: &GraphDb,
-        llm: Arc<dyn LlmClient>,
+        llm: Client,
         budget: &mut TokenBudget,
     ) -> anyhow::Result<Vec<AgentResult>> {
         let runner = AgentRunner::new(llm);

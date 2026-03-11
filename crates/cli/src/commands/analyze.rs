@@ -83,9 +83,8 @@ async fn run_ai_analysis(
     eprintln!("  Pipeline: {}", stage_names.join(" -> "));
     println!();
 
-    // Create the LLM client
-    let llm_client: std::sync::Arc<dyn skwaq_core::llm::LlmClient> =
-        skwaq_core::llm::create_llm_client(&config.llm);
+    // Create the LLM client (delegates to RustyClawd)
+    let llm_client = skwaq_core::llm::create_client(&config.llm).await?;
 
     let mut token_budget = skwaq_core::llm::TokenBudget::new(budget_amount);
 

@@ -1,91 +1,16 @@
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
+//! Budget-aware tool loop and token tracking.
+//!
+//! The heavy lifting (HTTP, auth, message format, retries) is handled by
+//! RustyClawd's `Client::execute_with_tools`. This module adds:
+//!
+//! - [`TokenBudget`] -- simple counter for per-agent cost control.
+//! - [`execute_with_tools`] -- wraps RustyClawd's tool loop with budget
+//!   tracking and our `anyhow::Result` based tool executor signature.
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Message {
-    pub role: String,
-    pub content: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_call_id: Option<String>,
-    /// Tool calls made by the assistant. Required by the OpenAI API when
-    /// the next messages are tool-result messages.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_calls: Option<Vec<ToolCall>>,
-}
-
-impl Message {
-    pub fn system(content: &str) -> Self {
-        Self {
-            role: "system".into(),
-            content: content.into(),
-            tool_call_id: None,
-            tool_calls: None,
-        }
-    }
-    pub fn user(content: &str) -> Self {
-        Self {
-            role: "user".into(),
-            content: content.into(),
-            tool_call_id: None,
-            tool_calls: None,
-        }
-    }
-    pub fn tool(content: &str, tool_call_id: &str) -> Self {
-        Self {
-            role: "tool".into(),
-            content: content.into(),
-            tool_call_id: Some(tool_call_id.into()),
-            tool_calls: None,
-        }
-    }
-    pub fn assistant_with_tool_calls(content: Option<String>, calls: Vec<ToolCall>) -> Self {
-        Self {
-            role: "assistant".into(),
-            content: content.unwrap_or_default(),
-            tool_call_id: None,
-            tool_calls: if calls.is_empty() { None } else { Some(calls) },
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolDefinition {
-    pub name: String,
-    pub description: String,
-    pub parameters: serde_json::Value,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolCall {
-    pub id: String,
-    pub name: String,
-    pub arguments: serde_json::Value,
-}
-
-#[derive(Debug, Clone)]
-pub struct LlmResponse {
-    pub content: Option<String>,
-    pub tool_calls: Vec<ToolCall>,
-    pub usage: TokenUsage,
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct TokenUsage {
-    pub input_tokens: u64,
-    pub output_tokens: u64,
-}
-
-#[async_trait]
-pub trait LlmClient: Send + Sync {
-    async fn chat(
-        &self,
-        messages: &[Message],
-        tools: &[ToolDefinition],
-        model: &str,
-    ) -> anyhow::Result<LlmResponse>;
-
-    fn provider_name(&self) -> &str;
-}
+use rustyclawd_core::client::{
+    Client, ClientError, ContentBlock, CreateMessageRequest, Message, MessageResponse,
+    ToolDefinition, Usage,
+};
 
 /// Token budget tracking for agent cost control.
 #[derive(Debug)]
@@ -114,17 +39,38 @@ impl TokenBudget {
         self.limit.saturating_sub(self.used)
     }
 
-    pub fn track(&mut self, usage: &TokenUsage) {
-        self.used += usage.input_tokens + usage.output_tokens;
+    pub fn track(&mut self, usage: &Usage) {
+        self.used += usage.input_tokens as u64 + usage.output_tokens as u64;
     }
 }
 
-/// The core agentic tool loop.
+/// Extract all text content from a `MessageResponse`.
+pub fn text_content(response: &MessageResponse) -> String {
+    response
+        .content
+        .iter()
+        .filter_map(|block| {
+            if let ContentBlock::Text { text } = block {
+                Some(text.as_str())
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("")
+}
+
+/// Budget-aware agentic tool loop.
 ///
-/// LLM requests tool calls -> we execute them -> feed results back -> repeat
-/// until LLM returns a text response or budget is exhausted.
+/// Delegates to RustyClawd's `Client::execute_with_tools` for the actual
+/// API interaction and tool protocol. This wrapper adds:
+/// 1. Token budget checking before each turn.
+/// 2. Conversion between the caller's `anyhow::Result` tool executor and
+///    RustyClawd's `ClientResult`.
+///
+/// Returns the final text output from the LLM.
 pub async fn execute_with_tools<F, Fut>(
-    client: &dyn LlmClient,
+    client: &Client,
     model: &str,
     system_prompt: &str,
     user_prompt: &str,
@@ -136,36 +82,133 @@ where
     F: Fn(String, serde_json::Value) -> Fut,
     Fut: std::future::Future<Output = anyhow::Result<serde_json::Value>>,
 {
-    let mut messages = vec![Message::system(system_prompt), Message::user(user_prompt)];
-
-    let max_turns = 50; // Safety limit
-    for _ in 0..max_turns {
-        if budget.exhausted() {
-            tracing::warn!("Token budget exhausted ({}/{})", budget.used, budget.limit);
-            return Ok("Analysis stopped: token budget exhausted.".into());
-        }
-
-        let response = client.chat(&messages, tools, model).await?;
-        budget.track(&response.usage);
-
-        if response.tool_calls.is_empty() {
-            return Ok(response.content.unwrap_or_default());
-        }
-
-        // Record assistant message with its tool_calls so the API knows
-        // the subsequent tool-role messages are responses to these calls.
-        messages.push(Message::assistant_with_tool_calls(
-            response.content.clone(),
-            response.tool_calls.clone(),
-        ));
-
-        // Execute each tool call and add the results
-        for call in &response.tool_calls {
-            tracing::debug!("Tool call: {} args={}", call.name, call.arguments);
-            let result = tool_executor(call.name.clone(), call.arguments.clone()).await?;
-            messages.push(Message::tool(&serde_json::to_string(&result)?, &call.id));
-        }
+    if budget.exhausted() {
+        tracing::warn!("Token budget exhausted ({}/{})", budget.used, budget.limit);
+        return Ok("Analysis stopped: token budget exhausted.".into());
     }
 
-    Ok("Analysis stopped: maximum turns reached.".into())
+    let request = CreateMessageRequest::new(model, vec![Message::user(user_prompt)], 4096)
+        .with_system(system_prompt.to_string())
+        .with_tools(tools.to_vec());
+
+    let response = client
+        .execute_with_tools(request, |tool_name, tool_args| {
+            let fut = tool_executor(tool_name, tool_args);
+            async move {
+                fut.await
+                    .map_err(|e| ClientError::ToolExecution(e.to_string()))
+            }
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("LLM tool loop failed: {e}"))?;
+
+    budget.track(&response.usage);
+
+    Ok(text_content(&response))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rustyclawd_core::client::Role;
+
+    #[test]
+    fn test_token_budget_new() {
+        let budget = TokenBudget::new(1000);
+        assert_eq!(budget.limit, 1000);
+        assert_eq!(budget.used, 0);
+        assert!(!budget.exhausted());
+        assert_eq!(budget.remaining(), 1000);
+    }
+
+    #[test]
+    fn test_token_budget_unlimited() {
+        let budget = TokenBudget::unlimited();
+        assert!(!budget.exhausted());
+        assert_eq!(budget.remaining(), u64::MAX);
+    }
+
+    #[test]
+    fn test_token_budget_track() {
+        let mut budget = TokenBudget::new(100);
+        let usage = Usage {
+            input_tokens: 30,
+            output_tokens: 20,
+            speed: None,
+        };
+        budget.track(&usage);
+        assert_eq!(budget.used, 50);
+        assert_eq!(budget.remaining(), 50);
+        assert!(!budget.exhausted());
+    }
+
+    #[test]
+    fn test_token_budget_exhausted() {
+        let mut budget = TokenBudget::new(50);
+        let usage = Usage {
+            input_tokens: 30,
+            output_tokens: 25,
+            speed: None,
+        };
+        budget.track(&usage);
+        assert!(budget.exhausted());
+        assert_eq!(budget.remaining(), 0);
+    }
+
+    #[test]
+    fn test_text_content_extraction() {
+        let response = MessageResponse {
+            id: "msg_test".to_string(),
+            type_field: "message".to_string(),
+            role: Role::Assistant,
+            content: vec![
+                ContentBlock::Text {
+                    text: "Hello ".to_string(),
+                },
+                ContentBlock::Text {
+                    text: "world".to_string(),
+                },
+            ],
+            model: "test".to_string(),
+            stop_reason: Some("end_turn".to_string()),
+            stop_sequence: None,
+            usage: Usage {
+                input_tokens: 10,
+                output_tokens: 5,
+                speed: None,
+            },
+        };
+        assert_eq!(text_content(&response), "Hello world");
+    }
+
+    #[test]
+    fn test_text_content_skips_non_text() {
+        let response = MessageResponse {
+            id: "msg_test".to_string(),
+            type_field: "message".to_string(),
+            role: Role::Assistant,
+            content: vec![
+                ContentBlock::Text {
+                    text: "Before ".to_string(),
+                },
+                ContentBlock::ToolUse {
+                    id: "tu_1".to_string(),
+                    name: "bash".to_string(),
+                    input: serde_json::json!({}),
+                },
+                ContentBlock::Text {
+                    text: "after".to_string(),
+                },
+            ],
+            model: "test".to_string(),
+            stop_reason: None,
+            stop_sequence: None,
+            usage: Usage {
+                input_tokens: 0,
+                output_tokens: 0,
+                speed: None,
+            },
+        };
+        assert_eq!(text_content(&response), "Before after");
+    }
 }

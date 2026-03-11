@@ -20,12 +20,11 @@
 pub mod discovery;
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use crate::agents::{agent_tools, execute_tool, filter_tools};
 use crate::config::Config;
 use crate::graph::GraphDb;
-use crate::llm::{execute_with_tools, LlmClient, TokenBudget};
+use crate::llm::{execute_with_tools, Client, TokenBudget};
 
 pub use discovery::{discover_skills, load_skill};
 
@@ -96,7 +95,7 @@ pub async fn run_skill(
     skill: &SkillDefinition,
     args: &[String],
     investigation_id: Option<&str>,
-    llm: Arc<dyn LlmClient>,
+    llm: Client,
     config: &Config,
 ) -> anyhow::Result<SkillResult> {
     let model = if let Some(ref m) = skill.model {
@@ -137,7 +136,7 @@ pub async fn run_skill(
     let inv_id = investigation_id.unwrap_or("").to_string();
 
     let output = execute_with_tools(
-        llm.as_ref(),
+        &llm,
         &model,
         &content,
         &user_prompt,

@@ -1,7 +1,5 @@
 //! `skwaq skills` - manage and execute security skills.
 
-use std::sync::Arc;
-
 use super::common::resolve_investigation;
 use skwaq_core::config::Config;
 use skwaq_core::graph::GraphDb;
@@ -77,8 +75,7 @@ pub async fn run_run(name: &str, args: Vec<String>) -> anyhow::Result<()> {
 
     println!();
 
-    let llm_client: Arc<dyn skwaq_core::llm::LlmClient> =
-        skwaq_core::llm::create_llm_client(&config.llm);
+    let llm_client = skwaq_core::llm::create_client(&config.llm).await?;
 
     let result = run_skill(
         &skill,
