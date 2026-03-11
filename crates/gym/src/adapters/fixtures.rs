@@ -59,10 +59,15 @@ impl BenchmarkAdapter for FixturesAdapter {
         &self,
         case: &TestCase,
         data_dir: &Path,
-        _config: &BenchmarkConfig,
+        config: &BenchmarkConfig,
     ) -> anyhow::Result<Vec<DetectedFinding>> {
         let path = data_dir.join(&case.path);
-        run_source_pattern_detection(&path)
+        if config.quick_mode {
+            run_source_pattern_detection(&path)
+        } else {
+            // Full agentic analysis: ingest → multi-agent pipeline → findings
+            crate::agentic::run_agentic_source_analysis(&path, config.timeout_secs).await
+        }
     }
 
     fn map_finding_to_cwes(&self, finding: &DetectedFinding) -> Vec<u32> {
