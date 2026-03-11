@@ -82,7 +82,7 @@ fn run_sync_analysis(path: &Path) -> anyhow::Result<Vec<DetectedFinding>> {
     if let Ok(hits) = detector.detect_in_source(path, &parsed.language) {
         for hit in &hits {
             let finding_id = uuid::Uuid::new_v4().to_string();
-            let _ = db.execute(
+            if let Err(e) = db.execute(
                 "INSERT INTO findings (id, title, evidence, agent, timestamp, investigation_id, \
                  status, severity, category) \
                  VALUES (?1, ?2, ?3, 'source-pattern-detector', ?4, ?5, 'new', ?6, ?7)",
@@ -103,7 +103,9 @@ fn run_sync_analysis(path: &Path) -> anyhow::Result<Vec<DetectedFinding>> {
                     &hit.severity.to_string().to_lowercase().as_str(),
                     &hit.danger_category.to_string().as_str(),
                 ],
-            );
+            ) {
+                tracing::warn!("Failed to store finding for {}: {}", hit.function_name, e);
+            }
         }
     }
 
