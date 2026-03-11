@@ -50,7 +50,7 @@ async fn run_ai_analysis(
         .unwrap_or_else(|_| inv_id.clone());
 
     let budget_amount = budget.unwrap_or(config.analysis.default_token_budget);
-    let model = config.llm.copilot.model.clone();
+    // Model is determined per-agent from their markdown definitions
 
     // Build the pipeline based on flags
     let pipeline = if let Some(single) = agent_flag {
@@ -68,11 +68,19 @@ async fn run_ai_analysis(
         .map(|s| s.agent_name.as_str())
         .collect();
 
-    println!("Running AI vulnerability analysis...");
-    println!("  Investigation: {inv_id}");
-    println!("  Model: {model}");
-    println!("  Token budget: {budget_amount}");
-    println!("  Pipeline: {}", stage_names.join(" -> "));
+    // Show model from first agent (each agent specifies its own model in frontmatter)
+    let display_model = pipeline
+        .stages
+        .first()
+        .and_then(|s| skwaq_core::agents::definition::load_agent(&s.agent_name).ok())
+        .map(|a| a.model)
+        .unwrap_or_else(|| config.llm.copilot.model.clone());
+
+    eprintln!("Running AI vulnerability analysis...");
+    eprintln!("  Investigation: {inv_id}");
+    eprintln!("  Model: {display_model}");
+    eprintln!("  Token budget: {budget_amount}");
+    eprintln!("  Pipeline: {}", stage_names.join(" -> "));
     println!();
 
     // Create the LLM client
