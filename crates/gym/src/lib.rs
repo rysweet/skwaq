@@ -36,11 +36,21 @@ impl Gym {
         let gt_dir = skwaq_root.join("data/gym/ground_truth");
         let cache_dir = gym_dir.join("cache");
 
-        let adapters: Vec<Box<dyn BenchmarkAdapter>> =
+        let mut adapter_list: Vec<Box<dyn BenchmarkAdapter>> =
             vec![Box::new(adapters::fixtures::FixturesAdapter::new(
                 gt_dir.join("fixtures.toml"),
                 skwaq_root.join("tests/fixtures"),
             ))];
+
+        // Add Juliet adapter if manifest exists
+        let juliet_manifest = gt_dir.join("juliet.toml");
+        if juliet_manifest.exists() {
+            adapter_list.push(Box::new(adapters::juliet::JulietAdapter::new(
+                juliet_manifest,
+            )));
+        }
+
+        let adapters = adapter_list;
 
         let config = BenchmarkConfig {
             cache_dir,

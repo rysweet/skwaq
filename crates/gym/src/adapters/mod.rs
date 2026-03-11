@@ -1,6 +1,7 @@
 //! Benchmark adapter trait and implementations.
 
 pub mod fixtures;
+pub mod juliet;
 
 use crate::ground_truth::{GroundTruth, TestCase};
 use async_trait::async_trait;
