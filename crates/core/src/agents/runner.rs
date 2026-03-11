@@ -9,7 +9,8 @@ use crate::graph::GraphDb;
 use crate::llm::{execute_with_tools, LlmClient, TokenBudget};
 
 use super::definition::AgentDefinition;
-use super::tools::{agent_tools, execute_tool, filter_tools};
+use super::tool_definitions::{agent_tools, filter_tools};
+use super::tool_executor::execute_tool;
 
 /// Result from running an agent.
 #[derive(Debug, Clone)]

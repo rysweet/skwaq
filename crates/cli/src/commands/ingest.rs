@@ -1,7 +1,7 @@
 //! `skwaq ingest` - ingest binary, source, or SARIF data.
 
 use super::IngestSub;
-use skwaq_core::analysis::patterns::DangerousApiDetector;
+use skwaq_core::analysis::DangerousApiDetector;
 use skwaq_core::analysis::surface::identify_attack_surface;
 use skwaq_core::binary::cache::AnalysisCache;
 use skwaq_core::binary::ghidra::GhidraRunner;

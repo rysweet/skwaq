@@ -6,7 +6,7 @@
 //! (no new findings and no invalidations in the latest cycle).
 
 use crate::analysis::findings::{Finding, FindingStatus, FindingUpdate};
-use crate::analysis::perspectives;
+use crate::analysis::{perspective_pattern, perspective_dataflow, perspective_context};
 use crate::graph::GraphDb;
 
 /// Result of a single analysis cycle.
@@ -84,9 +84,9 @@ impl<'a> AnalysisOrchestrator<'a> {
             1 => {
                 // Cycle 1: Pattern detection + taint analysis + source/sink ID
                 let pattern_findings =
-                    perspectives::pattern_perspective(self.db, investigation_id, cycle_num);
+                    perspective_pattern::pattern_perspective(self.db, investigation_id, cycle_num);
                 let dataflow_findings =
-                    perspectives::dataflow_perspective(self.db, investigation_id, cycle_num);
+                    perspective_dataflow::dataflow_perspective(self.db, investigation_id, cycle_num);
 
                 let new_count = pattern_findings.len() + dataflow_findings.len();
                 all_findings.extend(pattern_findings);
@@ -96,7 +96,7 @@ impl<'a> AnalysisOrchestrator<'a> {
             }
             2 => {
                 // Cycle 2: Context validation - check for false positives
-                let (updates, new_findings) = perspectives::context_perspective(
+                let (updates, new_findings) = perspective_context::context_perspective(
                     self.db,
                     investigation_id,
                     all_findings,
@@ -124,7 +124,7 @@ impl<'a> AnalysisOrchestrator<'a> {
                     return (0, 0);
                 }
 
-                let (updates, new_findings) = perspectives::context_perspective(
+                let (updates, new_findings) = perspective_context::context_perspective(
                     self.db,
                     investigation_id,
                     &active_findings,

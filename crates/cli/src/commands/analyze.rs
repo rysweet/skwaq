@@ -73,7 +73,7 @@ async fn run_ai_analysis(
 
     // Create the LLM client
     let llm_client: std::sync::Arc<dyn skwaq_core::llm::LlmClient> =
-        std::sync::Arc::new(skwaq_core::llm::copilot::CopilotClient::new());
+        std::sync::Arc::new(skwaq_core::llm::CopilotClient::new());
 
     let mut token_budget = skwaq_core::llm::TokenBudget::new(budget_amount);
 
