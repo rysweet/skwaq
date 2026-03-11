@@ -1,10 +1,13 @@
 //! LLM client layer: traits, backends, and the agentic tool loop.
 
 pub mod copilot;
+pub mod copilot_auth;
+pub mod copilot_client;
 pub mod ollama;
 pub mod traits;
 
 pub use traits::*;
+pub use copilot_client::CopilotClient;
 
 use crate::config::LlmConfig;
 
@@ -16,7 +19,7 @@ use crate::config::LlmConfig;
 pub fn create_llm_client(config: &LlmConfig) -> Box<dyn LlmClient> {
     match config.reasoning.as_str() {
         "ollama" => Box::new(ollama::OllamaClient::new(&config.ollama.host)),
-        _ => Box::new(copilot::CopilotClient::new()),
+        _ => Box::new(CopilotClient::new()),
     }
 }
 

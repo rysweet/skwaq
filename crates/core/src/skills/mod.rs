@@ -22,7 +22,7 @@ pub mod discovery;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::agents::tools::{agent_tools, execute_tool, filter_tools};
+use crate::agents::{agent_tools, execute_tool, filter_tools};
 use crate::config::Config;
 use crate::graph::GraphDb;
 use crate::llm::{execute_with_tools, LlmClient, TokenBudget};
