@@ -112,7 +112,7 @@ pub fn cwe_family(cwe: u32) -> u32 {
 /// Default mapping from skwaq DangerCategory to CWE IDs.
 pub fn category_to_cwes(category: &str) -> Vec<u32> {
     match category {
-        "memory" => vec![119, 120, 121, 122, 125, 126, 787, 416, 415],
+        "memory" => vec![119, 120, 121, 122, 125, 126, 787, 416, 415, 190, 191],
         "injection" => vec![78, 89, 90, 94, 77],
         "format_string" => vec![134],
         "race" => vec![362, 367],

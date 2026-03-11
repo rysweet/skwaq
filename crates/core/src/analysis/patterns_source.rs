@@ -302,6 +302,30 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::Critical,
             reason: "popen passes to shell; use pipe+fork+exec",
         },
+        SourcePattern {
+            regex: r"\bprintf\s*\(\s*[a-zA-Z_]\w*\s*\)",
+            category: DangerCategory::FormatString,
+            severity: Severity::High,
+            reason: "printf with variable as format string; use printf(\"%s\", var) instead",
+        },
+        SourcePattern {
+            regex: r"\bfree\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "free() requires careful lifecycle management; risk of use-after-free or double-free",
+        },
+        SourcePattern {
+            regex: r"\batoi\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "atoi has no error checking and can cause integer overflow; use strtol with validation",
+        },
+        SourcePattern {
+            regex: r"\batol\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "atol has no error checking and can cause integer overflow; use strtol with validation",
+        },
     ]
 }
 
