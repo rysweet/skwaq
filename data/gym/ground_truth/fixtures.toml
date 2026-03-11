@@ -1,0 +1,53 @@
+suite = "fixtures"
+version = "1.0"
+download_url = ""
+download_sha256 = ""
+
+[[cases]]
+id = "buffer_overflow"
+path = "buffer_overflow.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "command_injection"
+path = "command_injection.c"
+expected_cwes = [78]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "format_string"
+path = "format_string.c"
+expected_cwes = [134]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "integer_overflow"
+path = "integer_overflow.c"
+expected_cwes = [190]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "use_after_free"
+path = "use_after_free.c"
+expected_cwes = [416]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "vuln_app_py"
+path = "vuln_app.py"
+expected_cwes = [78, 89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "vuln_app_js"
+path = "vuln_app.js"
+expected_cwes = [78, 79]
+is_negative = false
+language = "javascript"

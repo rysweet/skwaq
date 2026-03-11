@@ -23,6 +23,9 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     match &cli.command {
+        Commands::Gym { sub } => {
+            skwaq::commands::gym_cmd::run(sub).await?;
+        }
         Commands::Version => {
             skwaq::commands::version_cmd::run();
         }

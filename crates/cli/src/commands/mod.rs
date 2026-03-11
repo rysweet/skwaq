@@ -7,6 +7,7 @@ pub mod checksec_cmd;
 pub mod common;
 pub mod config_cmd;
 pub mod doctor;
+pub mod gym_cmd;
 pub mod hypothesize_cmd;
 pub mod ingest;
 pub mod investigate;
@@ -204,6 +205,12 @@ pub enum Commands {
     Skills {
         #[command(subcommand)]
         sub: SkillsSub,
+    },
+
+    /// Benchmark and self-improvement harness
+    Gym {
+        #[command(subcommand)]
+        sub: gym_cmd::GymSub,
     },
 
     /// Check system dependencies and connectivity
