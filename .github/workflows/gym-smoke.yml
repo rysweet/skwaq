@@ -1,0 +1,28 @@
+name: Gym Smoke
+on: [pull_request]
+
+jobs:
+  gym-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build
+
+      - name: Gym smoke test (fixtures, pattern mode)
+        run: |
+          ./target/debug/skwaq gym run fixtures --max-cases 5
+          echo "Gym smoke test passed"
+
+      - name: Gym report (JSON)
+        run: |
+          ./target/debug/skwaq gym report --format json > gym-smoke-results.json
+          cat gym-smoke-results.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gym-smoke-results
+          path: gym-smoke-results.json
