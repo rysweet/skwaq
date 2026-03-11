@@ -409,31 +409,31 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
         },
         // exec family (from self-improvement: failure-analyst on Juliet CWE-78)
         SourcePattern {
-            regex: r"\bexecl\s*\(",
+            regex: r"(?i)\bexecl\s*\(",
             category: DangerCategory::Injection,
             severity: Severity::Critical,
             reason: "execl executes a program; validate all arguments",
         },
         SourcePattern {
-            regex: r"\bexecle\s*\(",
+            regex: r"(?i)\bexecle\s*\(",
             category: DangerCategory::Injection,
             severity: Severity::Critical,
             reason: "execle executes a program with environment; validate all arguments",
         },
         SourcePattern {
-            regex: r"\bexecv\s*\(",
+            regex: r"(?i)\bexecv\s*\(",
             category: DangerCategory::Injection,
             severity: Severity::Critical,
             reason: "execv executes a program; validate all arguments",
         },
         SourcePattern {
-            regex: r"\bexecvp\s*\(",
+            regex: r"(?i)\bexecvp\s*\(",
             category: DangerCategory::Injection,
             severity: Severity::Critical,
             reason: "execvp executes a program via PATH; validate all arguments",
         },
         SourcePattern {
-            regex: r"\bexecve\s*\(",
+            regex: r"(?i)\bexecve\s*\(",
             category: DangerCategory::Injection,
             severity: Severity::Critical,
             reason: "execve executes a program with environment; validate all arguments",
