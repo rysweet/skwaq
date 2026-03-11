@@ -72,6 +72,29 @@ fn python_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "marshal deserialization can execute code; use json",
         },
+        // Path traversal (CWE-22) — from self-improvement iteration 5
+        SourcePattern {
+            regex: r"\bopen\s*\([^)]*\+",
+            category: DangerCategory::PathTraversal,
+            severity: Severity::High,
+            reason:
+                "File open with concatenated path; validate and canonicalize to prevent traversal",
+        },
+        SourcePattern {
+            regex: r"\bos\.path\.join\s*\(",
+            category: DangerCategory::PathTraversal,
+            severity: Severity::Medium,
+            reason:
+                "os.path.join with untrusted input can traverse directories; canonicalize result",
+        },
+        // Weak random in Python — from self-improvement iteration 5
+        SourcePattern {
+            regex: r"\brandom\.\w+\s*\(",
+            category: DangerCategory::Crypto,
+            severity: Severity::Medium,
+            reason:
+                "random module is not cryptographically secure; use secrets module for security",
+        },
         SourcePattern {
             regex: r"\bcursor\.execute\s*\([^)]*%",
             category: DangerCategory::Injection,
@@ -130,6 +153,19 @@ fn javascript_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::Injection,
             severity: Severity::High,
             reason: "setInterval with string arg is eval-equivalent; pass a function reference",
+        },
+        // Path traversal (CWE-22) — from self-improvement iteration 5
+        SourcePattern {
+            regex: r"\bfs\.\w*(?:write|read|unlink|rmdir|mkdir|access|stat|open)\w*\s*\(",
+            category: DangerCategory::PathTraversal,
+            severity: Severity::High,
+            reason: "File system operation with potentially user-controlled path; validate and sanitize path",
+        },
+        SourcePattern {
+            regex: r"\bpath\.(?:join|resolve|normalize)\s*\(",
+            category: DangerCategory::PathTraversal,
+            severity: Severity::Medium,
+            reason: "Path manipulation may allow directory traversal; canonicalize and validate against base directory",
         },
         SourcePattern {
             regex: r"__proto__",
@@ -342,6 +378,38 @@ fn java_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "LDAP query with user input; use parameterized LDAP queries",
         },
+        // LDAP injection (CWE-90) — from self-improvement iteration 5: DirContext.search
+        SourcePattern {
+            regex: r"\b(?:DirContext|InitialDirContext|LdapContext|EventDirContext)\.search\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "LDAP DirContext.search may be vulnerable to injection; use parameterized search filters",
+        },
+        SourcePattern {
+            regex: r"\bNamingEnumeration\b",
+            category: DangerCategory::Injection,
+            severity: Severity::Medium,
+            reason: "NamingEnumeration from LDAP search may contain injected data; validate results",
+        },
+        // Path traversal (CWE-22) — from self-improvement iteration 5
+        SourcePattern {
+            regex: r"\bnew\s+(?:java\.io\.)?File\s*\([^)]*(?:getParameter|getHeader|getCookies|request\.|param|input|fileName|filePath|path)",
+            category: DangerCategory::PathTraversal,
+            severity: Severity::High,
+            reason: "File path from user input; validate and canonicalize path to prevent traversal",
+        },
+        SourcePattern {
+            regex: r"\bnew\s+FileInputStream\s*\(",
+            category: DangerCategory::PathTraversal,
+            severity: Severity::Medium,
+            reason: "FileInputStream may read user-controlled path; validate path to prevent traversal",
+        },
+        SourcePattern {
+            regex: r"\bnew\s+FileOutputStream\s*\(",
+            category: DangerCategory::PathTraversal,
+            severity: Severity::Medium,
+            reason: "FileOutputStream may write to user-controlled path; validate path to prevent traversal",
+        },
         // From self-improvement: broader Runtime.exec pattern
         SourcePattern {
             regex: r"\bRuntime\b[^;]*\.exec\s*\(",
@@ -356,12 +424,19 @@ fn java_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "Cookie values may contain path traversal payloads; validate and canonicalize",
         },
-        // Trust boundary: HttpSession setAttribute with user input
+        // Trust boundary (CWE-501): HttpSession setAttribute with user input
         SourcePattern {
             regex: r"\bsetAttribute\s*\([^)]*getParameter",
             category: DangerCategory::Injection,
             severity: Severity::Medium,
             reason: "Storing user input in session without validation; sanitize before storing",
+        },
+        // Broader trust boundary: HttpSession with any put/set + parameter
+        SourcePattern {
+            regex: r"\b(?:HttpSession|session)\b[^;]*\bsetAttribute\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Medium,
+            reason: "Session setAttribute may store untrusted data across trust boundary (CWE-501)",
         },
         // Secure cookie missing
         SourcePattern {
@@ -496,6 +571,91 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::FormatString,
             severity: Severity::High,
             reason: "fscanf with %s has no bounds; use width specifiers",
+        },
+        // Weak PRNG (CWE-338) — from self-improvement iteration 5
+        SourcePattern {
+            regex: r"\brand\s*\(\s*\)",
+            category: DangerCategory::Crypto,
+            severity: Severity::Medium,
+            reason: "rand() is not cryptographically secure; use a CSPRNG or platform-specific secure random",
+        },
+        SourcePattern {
+            regex: r"\bsrand\s*\(",
+            category: DangerCategory::Crypto,
+            severity: Severity::Medium,
+            reason: "srand/rand are not cryptographically secure; use a CSPRNG",
+        },
+        // Integer overflow in allocation (CWE-680) — from self-improvement iteration 5
+        SourcePattern {
+            regex: r"\brealloc\s*\([^,]+,\s*[^)]*\*[^)]*\)",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "realloc with multiplication may overflow; check for integer overflow before reallocation",
+        },
+        // Use-after-free / double-free (CWE-416) — from self-improvement iteration 5
+        SourcePattern {
+            regex: r"\bfree\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Low,
+            reason: "free() requires careful lifecycle management; verify no use-after-free or double-free",
+        },
+        // Stack-based buffer overflow (CWE-121) — from self-improvement iteration 5
+        SourcePattern {
+            regex: r"\balloca\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "alloca allocates on the stack; large or unchecked sizes cause stack overflow",
+        },
+        // LDAP injection (CWE-90) — from self-improvement iteration 5
+        SourcePattern {
+            regex: r"(?i)\bldap_search(_ext)?(_s)?[AW]?\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "LDAP search with untrusted input may allow LDAP injection; sanitize filter parameters",
+        },
+        SourcePattern {
+            regex: r"(?i)\bldap_add(_ext)?(_s)?[AW]?\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "LDAP add with untrusted input may allow LDAP injection; sanitize all parameters",
+        },
+        SourcePattern {
+            regex: r"(?i)\bldap_modify(_ext)?(_s)?[AW]?\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "LDAP modify with untrusted input may allow LDAP injection; sanitize all parameters",
+        },
+        // Use of inherently dangerous function (CWE-242) — from self-improvement iteration 5
+        SourcePattern {
+            regex: r"\b_splitpath\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "_splitpath is inherently dangerous (no bounds checking); use _splitpath_s",
+        },
+        SourcePattern {
+            regex: r"\blstrcat[AW]?\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Critical,
+            reason: "lstrcat has no bounds checking; use StringCchCat or strncat",
+        },
+        SourcePattern {
+            regex: r"\blstrcpy[AW]?\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Critical,
+            reason: "lstrcpy has no bounds checking; use StringCchCopy or strncpy",
+        },
+        // Process control (CWE-114) — from self-improvement iteration 5
+        SourcePattern {
+            regex: r"(?i)\bLoadLibrary[AW]?(Ex[AW]?)?\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "LoadLibrary with untrusted input allows DLL injection (CWE-114); validate library path",
+        },
+        SourcePattern {
+            regex: r"\bdlopen\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "dlopen loads shared libraries dynamically; validate library path to prevent code injection",
         },
         // Windows-specific patterns (from self-improvement iteration 4)
         SourcePattern {
