@@ -1,0 +1,356 @@
+suite = "owasp"
+version = "1.2"
+download_url = ""
+download_sha256 = ""
+
+[[cases]]
+id = "BenchmarkTest00001"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00001.java"
+expected_cwes = [22]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00002"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00002.java"
+expected_cwes = [22]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00003"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00003.java"
+expected_cwes = [328]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00004"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00004.java"
+expected_cwes = [501]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00005"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00005.java"
+expected_cwes = [327]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00006"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00006.java"
+expected_cwes = [78]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00007"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00007.java"
+expected_cwes = [78]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00008"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00008.java"
+expected_cwes = [89]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00009"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00009.java"
+expected_cwes = []
+is_negative = true
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00010"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00010.java"
+expected_cwes = []
+is_negative = true
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00011"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00011.java"
+expected_cwes = [22]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00012"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00012.java"
+expected_cwes = [90]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00013"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00013.java"
+expected_cwes = [79]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00014"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00014.java"
+expected_cwes = [79]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00015"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00015.java"
+expected_cwes = [78]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00016"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00016.java"
+expected_cwes = []
+is_negative = true
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00017"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00017.java"
+expected_cwes = [78]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00018"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00018.java"
+expected_cwes = [89]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00019"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00019.java"
+expected_cwes = [327]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00020"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00020.java"
+expected_cwes = [327]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00021"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00021.java"
+expected_cwes = [90]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00022"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00022.java"
+expected_cwes = []
+is_negative = true
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00023"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00023.java"
+expected_cwes = [330]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00024"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00024.java"
+expected_cwes = [89]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00025"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00025.java"
+expected_cwes = [89]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00026"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00026.java"
+expected_cwes = [89]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00027"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00027.java"
+expected_cwes = [89]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00028"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00028.java"
+expected_cwes = [22]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00029"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00029.java"
+expected_cwes = [328]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00030"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00030.java"
+expected_cwes = [79]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00031"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00031.java"
+expected_cwes = [501]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00032"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00032.java"
+expected_cwes = [89]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00033"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00033.java"
+expected_cwes = [89]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00034"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00034.java"
+expected_cwes = [89]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00035"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00035.java"
+expected_cwes = [327]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00036"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00036.java"
+expected_cwes = [79]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00037"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00037.java"
+expected_cwes = [89]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00038"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00038.java"
+expected_cwes = [89]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00039"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00039.java"
+expected_cwes = [89]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00040"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00040.java"
+expected_cwes = [22]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00041"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00041.java"
+expected_cwes = [79]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00042"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00042.java"
+expected_cwes = []
+is_negative = true
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00043"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00043.java"
+expected_cwes = [89]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00044"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00044.java"
+expected_cwes = [90]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00045"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00045.java"
+expected_cwes = [22]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00046"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00046.java"
+expected_cwes = [328]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00047"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00047.java"
+expected_cwes = [79]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00048"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00048.java"
+expected_cwes = [79]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00049"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00049.java"
+expected_cwes = [79]
+is_negative = false
+language = "java"
+
+[[cases]]
+id = "BenchmarkTest00050"
+path = "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00050.java"
+expected_cwes = [327]
+is_negative = false
+language = "java"
+
+# Total test cases: 2740 (1415 true positives, 1325 false positives)

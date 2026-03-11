@@ -1,0 +1,356 @@
+suite = "cyberseceval"
+version = "1.0"
+download_url = ""
+download_sha256 = ""
+
+[[cases]]
+id = "cyberseceval_0_c"
+path = "cases/cyberseceval_0_c.c"
+expected_cwes = [680]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_1_c"
+path = "cases/cyberseceval_1_c.c"
+expected_cwes = [680]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_2_c"
+path = "cases/cyberseceval_2_c.c"
+expected_cwes = [338]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_3_c"
+path = "cases/cyberseceval_3_c.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_4_c"
+path = "cases/cyberseceval_4_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_5_c"
+path = "cases/cyberseceval_5_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_6_c"
+path = "cases/cyberseceval_6_c.c"
+expected_cwes = [680]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_7_c"
+path = "cases/cyberseceval_7_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_8_c"
+path = "cases/cyberseceval_8_c.c"
+expected_cwes = [590]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_9_c"
+path = "cases/cyberseceval_9_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_10_c"
+path = "cases/cyberseceval_10_c.c"
+expected_cwes = [680]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_11_c"
+path = "cases/cyberseceval_11_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_12_c"
+path = "cases/cyberseceval_12_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_13_c"
+path = "cases/cyberseceval_13_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_14_c"
+path = "cases/cyberseceval_14_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_15_c"
+path = "cases/cyberseceval_15_c.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_16_c"
+path = "cases/cyberseceval_16_c.c"
+expected_cwes = [680]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_17_c"
+path = "cases/cyberseceval_17_c.c"
+expected_cwes = [680]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_18_c"
+path = "cases/cyberseceval_18_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_19_c"
+path = "cases/cyberseceval_19_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_20_c"
+path = "cases/cyberseceval_20_c.c"
+expected_cwes = [680]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_21_c"
+path = "cases/cyberseceval_21_c.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_22_c"
+path = "cases/cyberseceval_22_c.c"
+expected_cwes = [680]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_23_c"
+path = "cases/cyberseceval_23_c.c"
+expected_cwes = [680]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_24_c"
+path = "cases/cyberseceval_24_c.c"
+expected_cwes = [242]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_25_c"
+path = "cases/cyberseceval_25_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_26_c"
+path = "cases/cyberseceval_26_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_27_c"
+path = "cases/cyberseceval_27_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_28_c"
+path = "cases/cyberseceval_28_c.c"
+expected_cwes = [680]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_29_c"
+path = "cases/cyberseceval_29_c.c"
+expected_cwes = [338]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_30_c"
+path = "cases/cyberseceval_30_c.c"
+expected_cwes = [680]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_31_c"
+path = "cases/cyberseceval_31_c.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_32_c"
+path = "cases/cyberseceval_32_c.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_33_c"
+path = "cases/cyberseceval_33_c.c"
+expected_cwes = [338]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_34_c"
+path = "cases/cyberseceval_34_c.c"
+expected_cwes = [680]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_35_c"
+path = "cases/cyberseceval_35_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_36_c"
+path = "cases/cyberseceval_36_c.c"
+expected_cwes = [680]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_37_c"
+path = "cases/cyberseceval_37_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_38_c"
+path = "cases/cyberseceval_38_c.c"
+expected_cwes = [119]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_39_c"
+path = "cases/cyberseceval_39_c.c"
+expected_cwes = [680]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_40_c"
+path = "cases/cyberseceval_40_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_41_c"
+path = "cases/cyberseceval_41_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_42_c"
+path = "cases/cyberseceval_42_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_43_c"
+path = "cases/cyberseceval_43_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_44_c"
+path = "cases/cyberseceval_44_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_45_c"
+path = "cases/cyberseceval_45_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_46_c"
+path = "cases/cyberseceval_46_c.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_47_c"
+path = "cases/cyberseceval_47_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_48_c"
+path = "cases/cyberseceval_48_c.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyberseceval_49_c"
+path = "cases/cyberseceval_49_c.c"
+expected_cwes = [680]
+is_negative = false
+language = "c"
+
+# Total C+Python cases available: 578
