@@ -78,7 +78,7 @@ pub async fn run_run(name: &str, args: Vec<String>) -> anyhow::Result<()> {
     println!();
 
     let llm_client: Arc<dyn skwaq_core::llm::LlmClient> =
-        Arc::new(skwaq_core::llm::CopilotClient::new());
+        skwaq_core::llm::create_llm_client(&config.llm);
 
     let result = run_skill(
         &skill,
