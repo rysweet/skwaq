@@ -91,3 +91,69 @@ impl<'a> InvestigationManager<'a> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_and_get() {
+        let db = GraphDb::in_memory().unwrap();
+        let mgr = InvestigationManager::new(&db);
+
+        let id = mgr.create("test investigation").unwrap();
+        let inv = mgr.get(&id).unwrap().expect("should exist");
+        assert_eq!(inv.name, "test investigation");
+        assert_eq!(inv.status, "active");
+    }
+
+    #[test]
+    fn test_list() {
+        let db = GraphDb::in_memory().unwrap();
+        let mgr = InvestigationManager::new(&db);
+
+        assert!(mgr.list().unwrap().is_empty());
+
+        mgr.create("inv-a").unwrap();
+        mgr.create("inv-b").unwrap();
+
+        let list = mgr.list().unwrap();
+        assert_eq!(list.len(), 2);
+    }
+
+    #[test]
+    fn test_get_not_found() {
+        let db = GraphDb::in_memory().unwrap();
+        let mgr = InvestigationManager::new(&db);
+
+        let result = mgr.get("nonexistent").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_resume() {
+        let db = GraphDb::in_memory().unwrap();
+        let mgr = InvestigationManager::new(&db);
+
+        let id = mgr.create("resume test").unwrap();
+        // Mark as completed first
+        db.execute(
+            "UPDATE investigations SET status = 'completed' WHERE id = ?1",
+            &[&id.as_str() as &dyn rusqlite::types::ToSql],
+        )
+        .unwrap();
+
+        mgr.resume(&id).unwrap();
+        let inv = mgr.get(&id).unwrap().expect("should exist");
+        assert_eq!(inv.status, "active");
+    }
+
+    #[test]
+    fn test_resume_not_found() {
+        let db = GraphDb::in_memory().unwrap();
+        let mgr = InvestigationManager::new(&db);
+
+        let err = mgr.resume("nonexistent").unwrap_err();
+        assert!(err.to_string().contains("investigation not found"));
+    }
+}

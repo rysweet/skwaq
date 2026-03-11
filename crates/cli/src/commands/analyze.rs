@@ -108,8 +108,7 @@ async fn run_ai_analysis(
                 row.get::<_, String>(3)?,
             ))
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     if findings.is_empty() {
         println!("No findings recorded.");

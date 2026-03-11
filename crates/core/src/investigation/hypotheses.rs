@@ -91,3 +91,60 @@ impl<'a> HypothesisManager<'a> {
         Ok(results)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn setup_investigation(db: &GraphDb) -> String {
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+        db.execute(
+            "INSERT INTO investigations (id, name, target, status, created_at, updated_at) \
+             VALUES (?1, ?2, '', 'active', ?3, ?3)",
+            &[&id.as_str() as &dyn rusqlite::types::ToSql, &"test", &now.as_str()],
+        )
+        .unwrap();
+        id
+    }
+
+    #[test]
+    fn test_create_and_list() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = setup_investigation(&db);
+        let mgr = HypothesisManager::new(&db);
+
+        let h_id = mgr.create(&inv_id, "buffer overflow possible", 0.8).unwrap();
+        assert!(!h_id.is_empty());
+
+        let list = mgr.list(&inv_id).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].statement, "buffer overflow possible");
+        assert_eq!(list[0].status, "pending");
+        assert!((list[0].confidence - 0.8).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_update() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = setup_investigation(&db);
+        let mgr = HypothesisManager::new(&db);
+
+        let h_id = mgr.create(&inv_id, "test hypothesis", 0.5).unwrap();
+        mgr.update(&h_id, "confirmed", 0.95).unwrap();
+
+        let list = mgr.list(&inv_id).unwrap();
+        assert_eq!(list[0].status, "confirmed");
+        assert!((list[0].confidence - 0.95).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_list_empty() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = setup_investigation(&db);
+        let mgr = HypothesisManager::new(&db);
+
+        let list = mgr.list(&inv_id).unwrap();
+        assert!(list.is_empty());
+    }
+}

@@ -195,9 +195,19 @@ fn execute_query_graph(
         }));
     }
 
-    let sql = translate_to_sql(query, investigation_id);
+    let (sql, params) = match translate_to_sql(query, investigation_id) {
+        Ok(pair) => pair,
+        Err(msg) => {
+            tracing::warn!("query_graph unsupported pattern: {msg}");
+            return Ok(serde_json::json!({
+                "status": "error",
+                "query": query,
+                "error": msg
+            }));
+        }
+    };
 
-    match execute_read_query(db, &sql) {
+    match execute_read_query(db, &sql, &params) {
         Ok(rows) => Ok(serde_json::json!({
             "status": "ok",
             "query": query,
@@ -552,51 +562,56 @@ fn execute_search_similar(
     }))
 }
 
-/// Translate common Cypher-like query patterns to SQL.
-fn translate_to_sql(query: &str, investigation_id: &str) -> String {
+/// Translate common Cypher-like query patterns to parameterized SQL.
+///
+/// Returns `(sql, params)` where params contains the investigation_id
+/// for the `?1` placeholder. Only predefined patterns are supported;
+/// arbitrary SQL (including raw SELECT from the LLM) is rejected.
+fn translate_to_sql(query: &str, investigation_id: &str) -> Result<(String, Vec<String>), String> {
     let q = query.trim();
-
     let upper = q.to_uppercase();
-    // Only allow SELECT statements to pass through directly.
-    // INSERT/UPDATE/DELETE are blocked to prevent SQL injection from LLM queries.
-    if upper.starts_with("SELECT") {
-        return q.to_string();
-    }
 
     if upper.contains("FUNCTION") && upper.contains("RETURN") {
-        return format!(
-            "SELECT name, address, decompiled FROM functions WHERE investigation_id = '{}' LIMIT 50",
-            investigation_id.replace('\'', "''")
-        );
+        return Ok((
+            "SELECT name, address, decompiled FROM functions WHERE investigation_id = ?1 LIMIT 50"
+                .to_string(),
+            vec![investigation_id.to_string()],
+        ));
     }
 
     if upper.contains("CALL") {
-        return format!(
+        return Ok((
             "SELECT f1.name as caller, f2.name as callee FROM calls c \
              JOIN functions f1 ON c.caller_id = f1.id \
              JOIN functions f2 ON c.callee_id = f2.id \
-             WHERE f1.investigation_id = '{}' LIMIT 50",
-            investigation_id.replace('\'', "''")
-        );
+             WHERE f1.investigation_id = ?1 LIMIT 50"
+                .to_string(),
+            vec![investigation_id.to_string()],
+        ));
     }
 
     if upper.contains("TAINT") || upper.contains("FLOW") {
-        return format!(
+        return Ok((
             "SELECT s.name, k.name, tf.path, tf.sanitized FROM taint_flows tf \
              JOIN data_sources s ON tf.source_id = s.id \
              JOIN data_sinks k ON tf.sink_id = k.id \
-             WHERE s.investigation_id = '{}' LIMIT 50",
-            investigation_id.replace('\'', "''")
-        );
+             WHERE s.investigation_id = ?1 LIMIT 50"
+                .to_string(),
+            vec![investigation_id.to_string()],
+        ));
     }
 
-    q.to_string()
+    Err(format!(
+        "Unsupported query pattern. Use Cypher-like queries with FUNCTION/RETURN, CALL, or TAINT/FLOW keywords. Got: {}",
+        &q[..q.len().min(80)]
+    ))
 }
 
-/// Execute a read-only SQL query and return results as a Vec of JSON objects.
+/// Execute a read-only parameterized SQL query and return results as a Vec of JSON objects.
 fn execute_read_query(
     db: &GraphDb,
     sql: &str,
+    params: &[String],
 ) -> anyhow::Result<Vec<serde_json::Value>> {
     let stmt = db.conn().prepare(sql)?;
     if !stmt.readonly() {
@@ -608,7 +623,10 @@ fn execute_read_query(
         .map(|i| stmt.column_name(i).unwrap_or("?").to_string())
         .collect();
 
-    let rows = stmt.query_map([], |row| {
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+        params.iter().map(|s| s as &dyn rusqlite::types::ToSql).collect();
+
+    let rows = stmt.query_map(param_refs.as_slice(), |row| {
         let mut obj = serde_json::Map::new();
         for (i, col_name) in column_names.iter().enumerate() {
             let val: rusqlite::Result<String> = row.get(i);
@@ -819,8 +837,9 @@ mod tests {
         )
         .unwrap();
 
+        // Use a Cypher-like pattern that translate_to_sql recognizes
         let args = serde_json::json!({
-            "cypher": format!("SELECT name, address FROM functions WHERE investigation_id = '{inv_id}'")
+            "cypher": "MATCH (f:Function) RETURN f"
         });
         let result = execute_tool(&db, inv_id, "query_graph", &args).unwrap();
 
@@ -883,28 +902,14 @@ mod tests {
         let db = GraphDb::in_memory().unwrap();
         let inv_id = "test-inv";
 
-        // Attempt an INSERT via query_graph - should be rejected by readonly check
+        // Attempt an INSERT via query_graph - translate_to_sql rejects unrecognised patterns
         let args = serde_json::json!({
             "cypher": "INSERT INTO functions (id, name) VALUES ('evil', 'injected')"
         });
         let result = execute_tool(&db, inv_id, "query_graph", &args).unwrap();
 
-        // The translate_to_sql function no longer passes through INSERT,
-        // so it falls through to the Cypher fallback. Either way, the
-        // readonly check in execute_read_query should catch any write attempt.
-        // If it got through to execute_read_query, it returns an error.
-        // If it was treated as Cypher and fell through, SQLite may parse it.
-        // In both cases, the result should indicate an error.
-        let status = result.get("status").and_then(|v| v.as_str()).unwrap_or("");
-        let has_error = result.get("error").is_some()
-            || result.get("rows")
-                .and_then(|v| v.as_array())
-                .map(|rows| rows.iter().any(|r| r.get("error").is_some()))
-                .unwrap_or(false);
-        assert!(
-            status == "error" || has_error,
-            "Destructive query should be rejected, got: {result}"
-        );
+        assert_eq!(result["status"], "error");
+        assert!(result["error"].as_str().unwrap().contains("Unsupported query pattern"));
 
         // Verify no data was actually inserted
         let count: i64 = db
@@ -923,7 +928,7 @@ mod tests {
         let db = GraphDb::in_memory().unwrap();
 
         // Directly test execute_read_query with a write statement
-        let result = execute_read_query(&db, "INSERT INTO functions (id, name) VALUES ('evil', 'injected')").unwrap();
+        let result = execute_read_query(&db, "INSERT INTO functions (id, name) VALUES ('evil', 'injected')", &[]).unwrap();
 
         // Should return an error entry instead of executing
         assert_eq!(result.len(), 1);
@@ -945,21 +950,30 @@ mod tests {
     }
 
     #[test]
-    fn test_translate_to_sql_blocks_insert_update() {
-        // INSERT should NOT be passed through
+    fn test_translate_to_sql_blocks_unrecognised_patterns() {
+        // INSERT should be rejected
         let result = translate_to_sql("INSERT INTO functions VALUES ('x', 'y')", "inv1");
-        // Should be treated as Cypher (falls through to the as-is fallback)
-        // but NOT passed through as-is SQL
-        assert_eq!(result, "INSERT INTO functions VALUES ('x', 'y')");
-        // The readonly check in execute_read_query will catch this
+        assert!(result.is_err());
 
-        // UPDATE should NOT be passed through
+        // UPDATE should be rejected
         let result = translate_to_sql("UPDATE functions SET name = 'hacked'", "inv1");
-        assert_eq!(result, "UPDATE functions SET name = 'hacked'");
-        // The readonly check in execute_read_query will catch this
+        assert!(result.is_err());
 
-        // SELECT should still work
+        // Raw SELECT should also be rejected (no pass-through)
         let result = translate_to_sql("SELECT * FROM functions", "inv1");
-        assert_eq!(result, "SELECT * FROM functions");
+        assert!(result.is_err());
+
+        // Recognised Cypher-like patterns should work and use parameterized queries
+        let result = translate_to_sql("MATCH (f:Function) RETURN f", "inv1");
+        assert!(result.is_ok());
+        let (sql, params) = result.unwrap();
+        assert!(sql.contains("?1"));
+        assert_eq!(params, vec!["inv1"]);
+
+        let result = translate_to_sql("MATCH (c:Call) RETURN c", "inv1");
+        assert!(result.is_ok());
+        let (sql, params) = result.unwrap();
+        assert!(sql.contains("?1"));
+        assert_eq!(params, vec!["inv1"]);
     }
 }
