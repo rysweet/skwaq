@@ -11,6 +11,7 @@ path = "src/main.rs"
 [dependencies]
 skwaq-core = { path = "../core" }
 skwaq-agents = { path = "../agents" }
+rustyclawd-tools = { workspace = true }
 tokio = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }

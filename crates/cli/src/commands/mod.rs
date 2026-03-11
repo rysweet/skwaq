@@ -12,6 +12,7 @@ pub mod ingest;
 pub mod investigate;
 pub mod kb_cmd;
 pub mod report;
+pub mod skills_cmd;
 pub mod strings_cmd;
 pub mod surface_cmd;
 pub mod symbols_cmd;
@@ -198,6 +199,12 @@ pub enum Commands {
         sub: ConfigSub,
     },
 
+    /// Manage and run security skills
+    Skills {
+        #[command(subcommand)]
+        sub: SkillsSub,
+    },
+
     /// Check system dependencies and connectivity
     Doctor,
 
@@ -294,4 +301,18 @@ pub enum ConfigSub {
 pub enum AgentsSub {
     /// List all discovered agent definitions
     List,
+}
+
+#[derive(Subcommand)]
+pub enum SkillsSub {
+    /// List all discovered skills
+    List,
+    /// Run a skill by name through the LLM agent system
+    Run {
+        /// Skill name (e.g. vuln-scan, binary-audit, source-audit)
+        name: String,
+        /// Arguments passed to the skill ($ARGUMENTS, $0, $1, etc.)
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
 }

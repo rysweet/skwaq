@@ -65,6 +65,17 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        Commands::Skills { sub } => {
+            use skwaq::commands::SkillsSub;
+            match sub {
+                SkillsSub::List => {
+                    skwaq::commands::skills_cmd::run_list();
+                }
+                SkillsSub::Run { name, args } => {
+                    skwaq::commands::skills_cmd::run_run(name, args.clone()).await?;
+                }
+            }
+        }
         Commands::Investigate { sub } => {
             skwaq::commands::investigate::run(sub)?;
         }

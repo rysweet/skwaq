@@ -12,4 +12,5 @@ pub mod investigation;
 pub mod knowledge;
 pub mod llm;
 pub mod reporting;
+pub mod skills;
 pub mod source;

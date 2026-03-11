@@ -12,6 +12,8 @@ repository = "https://github.com/rysweet/skwaq"
 [workspace.dependencies]
 # RustyClawd agent framework (using main until next version tag)
 rustyclawd-core = { git = "https://github.com/rysweet/RustyClawd", branch = "main" }
+rustyclawd-tools = { git = "https://github.com/rysweet/RustyClawd", branch = "main" }
+rustyclawd-cli = { git = "https://github.com/rysweet/RustyClawd", branch = "main" }
 
 # Async
 tokio = { version = "1", features = ["full"] }
