@@ -124,9 +124,10 @@ impl<'a> TaintAnalyzer<'a> {
                      SELECT func_name, path FROM call_chain WHERE depth > 0";
 
                 let mut cte_stmt = self.db.conn().prepare(sql)?;
-                let rows = cte_stmt.query_map(rusqlite::params![source_id.as_str(), max_depth], |row| {
-                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-                })?;
+                let rows = cte_stmt
+                    .query_map(rusqlite::params![source_id.as_str(), max_depth], |row| {
+                        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                    })?;
 
                 for row in rows {
                     let (func_name, path) = row?;
@@ -134,10 +135,7 @@ impl<'a> TaintAnalyzer<'a> {
                         results.push(TaintPath {
                             source: source.clone(),
                             sink: func_name,
-                            hops: path
-                                .split(" -> ")
-                                .map(|s| s.trim().to_string())
-                                .collect(),
+                            hops: path.split(" -> ").map(|s| s.trim().to_string()).collect(),
                             sanitized: false,
                         });
                     }
@@ -195,11 +193,31 @@ mod tests {
         let db = GraphDb::in_memory().unwrap();
 
         // Set up a call chain: recv -> process -> strcpy
-        db.execute("INSERT INTO functions (id, name) VALUES ('f1', 'recv')", &[]).unwrap();
-        db.execute("INSERT INTO functions (id, name) VALUES ('f2', 'process')", &[]).unwrap();
-        db.execute("INSERT INTO functions (id, name) VALUES ('f3', 'strcpy')", &[]).unwrap();
-        db.execute("INSERT INTO calls (caller_id, callee_id) VALUES ('f1', 'f2')", &[]).unwrap();
-        db.execute("INSERT INTO calls (caller_id, callee_id) VALUES ('f2', 'f3')", &[]).unwrap();
+        db.execute(
+            "INSERT INTO functions (id, name) VALUES ('f1', 'recv')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO functions (id, name) VALUES ('f2', 'process')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO functions (id, name) VALUES ('f3', 'strcpy')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO calls (caller_id, callee_id) VALUES ('f1', 'f2')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO calls (caller_id, callee_id) VALUES ('f2', 'f3')",
+            &[],
+        )
+        .unwrap();
 
         // Register source and sink
         db.execute(

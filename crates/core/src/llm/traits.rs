@@ -100,7 +100,10 @@ impl TokenBudget {
     }
 
     pub fn unlimited() -> Self {
-        Self { limit: u64::MAX, used: 0 }
+        Self {
+            limit: u64::MAX,
+            used: 0,
+        }
     }
 
     pub fn exhausted(&self) -> bool {
@@ -133,10 +136,7 @@ where
     F: Fn(String, serde_json::Value) -> Fut,
     Fut: std::future::Future<Output = anyhow::Result<serde_json::Value>>,
 {
-    let mut messages = vec![
-        Message::system(system_prompt),
-        Message::user(user_prompt),
-    ];
+    let mut messages = vec![Message::system(system_prompt), Message::user(user_prompt)];
 
     let max_turns = 50; // Safety limit
     for _ in 0..max_turns {
@@ -163,10 +163,7 @@ where
         for call in &response.tool_calls {
             tracing::debug!("Tool call: {} args={}", call.name, call.arguments);
             let result = tool_executor(call.name.clone(), call.arguments.clone()).await?;
-            messages.push(Message::tool(
-                &serde_json::to_string(&result)?,
-                &call.id,
-            ));
+            messages.push(Message::tool(&serde_json::to_string(&result)?, &call.id));
         }
     }
 

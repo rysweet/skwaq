@@ -46,7 +46,10 @@ pub fn resolve_investigation(db: &GraphDb, explicit_id: Option<&str>) -> anyhow:
                 |row| row.get(0),
             )?;
             if count == 0 {
-                anyhow::bail!("Investigation '{}' not found. Run `skwaq investigate list`.", id);
+                anyhow::bail!(
+                    "Investigation '{}' not found. Run `skwaq investigate list`.",
+                    id
+                );
             }
             Ok(id.to_string())
         }

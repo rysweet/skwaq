@@ -84,7 +84,12 @@ pub fn context_perspective(
     }
 
     // Deeper analysis: look for wrapper functions that hide dangerous operations
-    new_findings.extend(detect_indirect_dangerous_calls(db, inv_id, existing_findings, cycle));
+    new_findings.extend(detect_indirect_dangerous_calls(
+        db,
+        inv_id,
+        existing_findings,
+        cycle,
+    ));
 
     (updates, new_findings)
 }
@@ -93,9 +98,14 @@ pub fn context_perspective(
 fn is_sanitizer_name(name: &str) -> bool {
     const SANITIZER_WORDS: &[&str] = &["validate", "sanitize", "check", "verify"];
     const SANITIZER_EXACT: &[&str] = &[
-        "bounds_check", "strlcpy", "strlcat", "snprintf", "strncpy_s", "strcpy_s",
+        "bounds_check",
+        "strlcpy",
+        "strlcat",
+        "snprintf",
+        "strncpy_s",
+        "strcpy_s",
     ];
-    if SANITIZER_EXACT.iter().any(|s| name == *s) {
+    if SANITIZER_EXACT.contains(&name) {
         return true;
     }
     let words: Vec<&str> = name.split('_').collect();
@@ -208,9 +218,10 @@ fn check_has_bounds_checking(db: &GraphDb, func_name: &str) -> bool {
         // might be mitigated
         for safe_fn in *safe_list {
             let sql = "SELECT count(*) FROM functions WHERE name LIKE ?1";
-            if let Ok(count) = db.conn().query_row(sql, [format!("%{}%", safe_fn)], |row| {
-                row.get::<_, i64>(0)
-            }) {
+            if let Ok(count) = db
+                .conn()
+                .query_row(sql, [format!("%{}%", safe_fn)], |row| row.get::<_, i64>(0))
+            {
                 if count > 0 {
                     return true;
                 }

@@ -79,8 +79,8 @@ pub fn detect_language(path: &Path) -> Option<&'static str> {
 
 /// List of recognized source file extensions.
 pub const SOURCE_EXTENSIONS: &[&str] = &[
-    "py", "pyw", "js", "mjs", "cjs", "ts", "tsx", "go", "rs", "java", "c", "h", "cpp", "cc",
-    "cxx", "hpp", "hh",
+    "py", "pyw", "js", "mjs", "cjs", "ts", "tsx", "go", "rs", "java", "c", "h", "cpp", "cc", "cxx",
+    "hpp", "hh",
 ];
 
 /// Return `true` when the path has a recognized source extension.
@@ -135,22 +135,24 @@ fn extract_functions(content: &str, language: &str) -> Vec<ExtractedFunction> {
         ],
         "javascript" | "typescript" => vec![
             Regex::new(r"(?m)\bfunction\s+(\w+)\s*\(").expect("compile-time regex"),
-            Regex::new(r"(?m)(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\(").expect("compile-time regex"),
-            Regex::new(r"(?m)(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?function").expect("compile-time regex"),
+            Regex::new(r"(?m)(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\(")
+                .expect("compile-time regex"),
+            Regex::new(r"(?m)(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?function")
+                .expect("compile-time regex"),
             Regex::new(r"(?m)^\s*(?:async\s+)?(\w+)\s*\([^)]*\)\s*\{").expect("compile-time regex"),
         ],
-        "go" => vec![
-            Regex::new(r"(?m)^func\s+(?:\([^)]+\)\s+)?(\w+)\s*\(").expect("compile-time regex"),
-        ],
-        "rust" => vec![
-            Regex::new(r"(?m)(?:pub\s+)?(?:async\s+)?fn\s+(\w+)").expect("compile-time regex"),
-        ],
-        "java" => vec![
-            Regex::new(
-                r"(?m)(?:public|private|protected|static|\s)+[\w<>\[\]]+\s+(\w+)\s*\(",
-            )
-            .expect("compile-time regex"),
-        ],
+        "go" => {
+            vec![Regex::new(r"(?m)^func\s+(?:\([^)]+\)\s+)?(\w+)\s*\(").expect("compile-time regex")]
+        }
+        "rust" => {
+            vec![Regex::new(r"(?m)(?:pub\s+)?(?:async\s+)?fn\s+(\w+)").expect("compile-time regex")]
+        }
+        "java" => {
+            vec![
+                Regex::new(r"(?m)(?:public|private|protected|static|\s)+[\w<>\[\]]+\s+(\w+)\s*\(")
+                    .expect("compile-time regex"),
+            ]
+        }
         "c" | "cpp" => vec![
             // Return type + name + paren – rough but effective for common patterns.
             Regex::new(r"(?m)^[\w*\s]+\s+(\w+)\s*\([^;]*\)\s*\{").expect("compile-time regex"),
@@ -166,7 +168,12 @@ fn extract_functions(content: &str, language: &str) -> Vec<ExtractedFunction> {
             let name = m.get(1).expect("compile-time regex").as_str().to_string();
             let byte_offset = m.get(0).expect("compile-time regex").start();
             let line = content[..byte_offset].matches('\n').count() + 1;
-            let sig = m.get(0).expect("compile-time regex").as_str().trim().to_string();
+            let sig = m
+                .get(0)
+                .expect("compile-time regex")
+                .as_str()
+                .trim()
+                .to_string();
 
             if seen.insert((name.clone(), line)) {
                 result.push(ExtractedFunction {
@@ -192,18 +199,104 @@ fn extract_calls(content: &str, language: &str) -> Vec<ExtractedCall> {
     let call_re = Regex::new(r"(?m)([\w.]+)\s*\(").expect("compile-time regex");
 
     let keywords: HashSet<&str> = match language {
-        "python" => ["def", "class", "if", "elif", "while", "for", "with", "async", "await", "return", "import", "from", "except", "assert"]
-            .iter().copied().collect(),
-        "javascript" | "typescript" => ["function", "if", "else", "while", "for", "switch", "case", "catch", "return", "typeof", "instanceof", "new", "class", "import", "from", "const", "let", "var"]
-            .iter().copied().collect(),
-        "go" => ["func", "if", "else", "for", "switch", "case", "select", "return", "go", "defer", "range", "type", "struct", "interface"]
-            .iter().copied().collect(),
-        "rust" => ["fn", "if", "else", "while", "for", "loop", "match", "return", "let", "mut", "pub", "mod", "use", "struct", "enum", "impl", "trait", "type", "where", "async", "await", "unsafe"]
-            .iter().copied().collect(),
-        "java" => ["if", "else", "while", "for", "switch", "case", "catch", "return", "class", "interface", "new", "import", "package", "throw", "throws", "instanceof"]
-            .iter().copied().collect(),
-        "c" | "cpp" => ["if", "else", "while", "for", "switch", "case", "return", "sizeof", "typeof", "struct", "union", "enum", "class", "template", "namespace"]
-            .iter().copied().collect(),
+        "python" => [
+            "def", "class", "if", "elif", "while", "for", "with", "async", "await", "return",
+            "import", "from", "except", "assert",
+        ]
+        .iter()
+        .copied()
+        .collect(),
+        "javascript" | "typescript" => [
+            "function",
+            "if",
+            "else",
+            "while",
+            "for",
+            "switch",
+            "case",
+            "catch",
+            "return",
+            "typeof",
+            "instanceof",
+            "new",
+            "class",
+            "import",
+            "from",
+            "const",
+            "let",
+            "var",
+        ]
+        .iter()
+        .copied()
+        .collect(),
+        "go" => [
+            "func",
+            "if",
+            "else",
+            "for",
+            "switch",
+            "case",
+            "select",
+            "return",
+            "go",
+            "defer",
+            "range",
+            "type",
+            "struct",
+            "interface",
+        ]
+        .iter()
+        .copied()
+        .collect(),
+        "rust" => [
+            "fn", "if", "else", "while", "for", "loop", "match", "return", "let", "mut", "pub",
+            "mod", "use", "struct", "enum", "impl", "trait", "type", "where", "async", "await",
+            "unsafe",
+        ]
+        .iter()
+        .copied()
+        .collect(),
+        "java" => [
+            "if",
+            "else",
+            "while",
+            "for",
+            "switch",
+            "case",
+            "catch",
+            "return",
+            "class",
+            "interface",
+            "new",
+            "import",
+            "package",
+            "throw",
+            "throws",
+            "instanceof",
+        ]
+        .iter()
+        .copied()
+        .collect(),
+        "c" | "cpp" => [
+            "if",
+            "else",
+            "while",
+            "for",
+            "switch",
+            "case",
+            "return",
+            "sizeof",
+            "typeof",
+            "struct",
+            "union",
+            "enum",
+            "class",
+            "template",
+            "namespace",
+        ]
+        .iter()
+        .copied()
+        .collect(),
         _ => HashSet::new(),
     };
 
@@ -218,7 +311,12 @@ fn extract_calls(content: &str, language: &str) -> Vec<ExtractedCall> {
         }
         let byte_offset = m.get(0).expect("compile-time regex").start();
         let line = content[..byte_offset].matches('\n').count() + 1;
-        let expression = m.get(0).expect("compile-time regex").as_str().trim().to_string();
+        let expression = m
+            .get(0)
+            .expect("compile-time regex")
+            .as_str()
+            .trim()
+            .to_string();
 
         result.push(ExtractedCall {
             name: full.to_string(),
@@ -241,7 +339,8 @@ fn extract_imports(content: &str, language: &str) -> Vec<String> {
             Regex::new(r"(?m)^\s*from\s+([\w.]+)\s+import").expect("compile-time regex"),
         ],
         "javascript" | "typescript" => vec![
-            Regex::new(r#"(?m)(?:import|require)\s*\(?['"]([^'"]+)['"]\)?"#).expect("compile-time regex"),
+            Regex::new(r#"(?m)(?:import|require)\s*\(?['"]([^'"]+)['"]\)?"#)
+                .expect("compile-time regex"),
             Regex::new(r#"(?m)import\s+.*\s+from\s+['"]([^'"]+)['"]"#).expect("compile-time regex"),
         ],
         "go" => vec![
@@ -252,12 +351,11 @@ fn extract_imports(content: &str, language: &str) -> Vec<String> {
             Regex::new(r"(?m)^\s*use\s+([\w:]+)").expect("compile-time regex"),
             Regex::new(r"(?m)^\s*extern\s+crate\s+(\w+)").expect("compile-time regex"),
         ],
-        "java" => vec![
-            Regex::new(r"(?m)^\s*import\s+([\w.]+);").expect("compile-time regex"),
-        ],
-        "c" | "cpp" => vec![
-            Regex::new(r#"(?m)^\s*#\s*include\s+[<"]([^>"]+)[>"]"#).expect("compile-time regex"),
-        ],
+        "java" => vec![Regex::new(r"(?m)^\s*import\s+([\w.]+);").expect("compile-time regex")],
+        "c" | "cpp" => {
+            vec![Regex::new(r#"(?m)^\s*#\s*include\s+[<"]([^>"]+)[>"]"#)
+                .expect("compile-time regex")]
+        }
         _ => vec![],
     };
 
@@ -284,7 +382,8 @@ fn extract_strings(content: &str) -> Vec<ExtractedString> {
     // Matches double-quoted and single-quoted strings (non-greedy).
     // Does not handle multi-line strings or escaped quotes perfectly,
     // but catches the common cases.
-    let re = Regex::new(r#"(?m)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')"#).expect("compile-time regex");
+    let re =
+        Regex::new(r#"(?m)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')"#).expect("compile-time regex");
 
     let mut result = Vec::new();
     for m in re.captures_iter(content) {

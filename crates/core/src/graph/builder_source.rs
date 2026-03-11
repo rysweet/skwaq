@@ -18,15 +18,12 @@ impl<'a> GraphBuilder<'a> {
 
         self.db().mutate("BEGIN TRANSACTION;")?;
 
-        let result =
-            self.build_from_source_inner(parsed_files, investigation_id, &mut counts);
+        let result = self.build_from_source_inner(parsed_files, investigation_id, &mut counts);
 
         if result.is_ok() {
             self.db().mutate("COMMIT;")?;
-        } else {
-            if let Err(e) = self.db().mutate("ROLLBACK;") {
-                tracing::error!("Failed to rollback transaction: {e}");
-            }
+        } else if let Err(e) = self.db().mutate("ROLLBACK;") {
+            tracing::error!("Failed to rollback transaction: {e}");
         }
 
         result?;
@@ -82,11 +79,7 @@ impl<'a> GraphBuilder<'a> {
                 )?;
 
                 // Find enclosing function (closest function with line <= call.line).
-                let enclosing = parsed
-                    .functions
-                    .iter()
-                    .filter(|f| f.line <= call.line)
-                    .last();
+                let enclosing = parsed.functions.iter().rfind(|f| f.line <= call.line);
 
                 if let Some(enc) = enclosing {
                     let caller_id = format!("{}-fn-{}-L{}", file_prefix, enc.name, enc.line);
@@ -139,21 +132,14 @@ impl<'a> GraphBuilder<'a> {
             let raw_content = std::fs::read_to_string(&parsed.path).ok();
             if let Some(ref content) = raw_content {
                 let _ = source_content; // suppress warning
-                let ss_hits = identify_source_sinks_in_content(
-                    content,
-                    &parsed.language,
-                    &parsed.path,
-                )?;
+                let ss_hits =
+                    identify_source_sinks_in_content(content, &parsed.language, &parsed.path)?;
 
                 for hit in &ss_hits {
                     match hit.kind {
                         SourceSinkKind::Source => {
-                            let src_id = format!(
-                                "{}-source-{}-L{}",
-                                file_prefix,
-                                hit.category,
-                                hit.line
-                            );
+                            let src_id =
+                                format!("{}-source-{}-L{}", file_prefix, hit.category, hit.line);
                             self.db().execute(
                                 "INSERT OR IGNORE INTO data_sources \
                                  (id, name, source_type, location, investigation_id) \
@@ -169,12 +155,8 @@ impl<'a> GraphBuilder<'a> {
                             counts.sources += 1;
                         }
                         SourceSinkKind::Sink => {
-                            let sink_id = format!(
-                                "{}-sink-{}-L{}",
-                                file_prefix,
-                                hit.category,
-                                hit.line
-                            );
+                            let sink_id =
+                                format!("{}-sink-{}-L{}", file_prefix, hit.category, hit.line);
                             self.db().execute(
                                 "INSERT OR IGNORE INTO data_sinks \
                                  (id, name, sink_type, danger_level, location, investigation_id) \

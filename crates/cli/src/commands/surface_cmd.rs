@@ -27,7 +27,7 @@ pub fn run() -> anyhow::Result<()> {
         println!("  No data sources (entry points) found.");
     } else {
         println!("ENTRY POINTS (data sources):");
-        println!("  {:<30} {:<15} {}", "NAME", "TYPE", "LOCATION");
+        println!("  {:<30} {:<15} LOCATION", "NAME", "TYPE");
         println!("  {}", "-".repeat(65));
         for (name, stype, loc) in &sources {
             let loc_display = if loc.is_empty() { "-" } else { loc.as_str() };
@@ -56,14 +56,14 @@ pub fn run() -> anyhow::Result<()> {
         println!("  No data sinks (dangerous functions) found.");
     } else {
         println!("DANGEROUS SINKS:");
-        println!(
-            "  {:<30} {:<15} {:<10} {}",
-            "NAME", "TYPE", "DANGER", "LOCATION"
-        );
+        println!("  {:<30} {:<15} {:<10} LOCATION", "NAME", "TYPE", "DANGER");
         println!("  {}", "-".repeat(75));
         for (name, stype, danger, loc) in &sinks {
             let loc_display = if loc.is_empty() { "-" } else { loc.as_str() };
-            println!("  {:<30} {:<15} {:<10} {}", name, stype, danger, loc_display);
+            println!(
+                "  {:<30} {:<15} {:<10} {}",
+                name, stype, danger, loc_display
+            );
         }
         println!("\n  {} dangerous sink(s)", sinks.len());
     }

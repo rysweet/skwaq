@@ -20,10 +20,7 @@ pub fn run_list() {
         return;
     }
 
-    println!(
-        "{:<22} {:<52} {:>6}",
-        "NAME", "DESCRIPTION", "FLAGS"
-    );
+    println!("{:<22} {:<52} {:>6}", "NAME", "DESCRIPTION", "FLAGS");
     println!("{}", "-".repeat(82));
 
     for skill in &skills {
@@ -41,10 +38,7 @@ pub fn run_list() {
             flags.push("noai");
         }
         let flags_str = flags.join(",");
-        println!(
-            "{:<22} {:<52} {:>6}",
-            skill.name, desc, flags_str,
-        );
+        println!("{:<22} {:<52} {:>6}", skill.name, desc, flags_str,);
     }
 
     println!("\n{} skill(s) found.", skills.len());

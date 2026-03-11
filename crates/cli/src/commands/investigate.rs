@@ -36,10 +36,7 @@ fn list_investigations() -> anyhow::Result<()> {
     }
 
     // Print table header.
-    println!(
-        "{:<20} {:<30} {:<10} {}",
-        "ID", "NAME", "STATUS", "CREATED"
-    );
+    println!("{:<20} {:<30} {:<10} CREATED", "ID", "NAME", "STATUS");
     println!("{}", "-".repeat(80));
 
     for (id, name, status, created) in &investigations {

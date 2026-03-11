@@ -1,6 +1,8 @@
 //! Authentication and endpoint negotiation for GitHub Copilot / Models API.
 
-use super::copilot::{COPILOT_CHAT_URL, COPILOT_MODELS_URL, GITHUB_MODELS_CHAT_URL, GITHUB_MODELS_PREFIX};
+use super::copilot::{
+    COPILOT_CHAT_URL, COPILOT_MODELS_URL, GITHUB_MODELS_CHAT_URL, GITHUB_MODELS_PREFIX,
+};
 
 /// Which API endpoint is active.
 #[derive(Debug, Clone, Copy)]
@@ -84,9 +86,7 @@ pub(crate) async fn ensure_auth(http: &reqwest::Client) -> anyhow::Result<AuthSt
     // Log the failure details
     if let Ok(resp) = models_resp {
         let status = resp.status();
-        tracing::debug!(
-            "GitHub Models API probe returned {status}, trying Copilot API"
-        );
+        tracing::debug!("GitHub Models API probe returned {status}, trying Copilot API");
     }
 
     // Fall back: check Copilot API models list

@@ -28,7 +28,7 @@ pub fn generate_markdown(findings: &[Value]) -> anyhow::Result<String> {
     let medium = count_severity(findings, "medium");
     let low = count_severity(findings, "low");
 
-    md.push_str(&format!("| Metric | Value |\n"));
+    md.push_str("| Metric | Value |\n");
     md.push_str("| --- | --- |\n");
     md.push_str(&format!("| Total findings | {total} |\n"));
     md.push_str(&format!("| Critical | {critical} |\n"));
@@ -47,9 +47,7 @@ pub fn generate_markdown(findings: &[Value]) -> anyhow::Result<String> {
     md.push_str("| --- | --- | --- | --- | --- | --- |\n");
 
     let mut sorted: Vec<&Value> = findings.iter().collect();
-    sorted.sort_by(|a, b| {
-        severity_rank(a).cmp(&severity_rank(b))
-    });
+    sorted.sort_by_key(|a| severity_rank(a));
 
     for (i, finding) in sorted.iter().enumerate() {
         let title = finding.get("title").and_then(|v| v.as_str()).unwrap_or("—");
@@ -106,12 +104,14 @@ pub fn generate_markdown(findings: &[Value]) -> anyhow::Result<String> {
             .get("evidence")
             .and_then(|v| v.as_str())
             .unwrap_or("");
-        let cvss = finding
-            .get("cvss")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0);
+        let cvss = finding.get("cvss").and_then(|v| v.as_f64()).unwrap_or(0.0);
 
-        md.push_str(&format!("### {}. {} {}\n\n", i + 1, severity_badge(severity), title));
+        md.push_str(&format!(
+            "### {}. {} {}\n\n",
+            i + 1,
+            severity_badge(severity),
+            title
+        ));
         md.push_str(&format!("- **Severity**: {severity}\n"));
         if cvss > 0.0 {
             md.push_str(&format!("- **CVSS**: {cvss:.1}\n"));
@@ -183,7 +183,7 @@ pub fn generate_markdown_for_investigation(
     let mut md = String::new();
     md.push_str("# Vulnerability Assessment Report\n\n");
     md.push_str("## Investigation\n\n");
-    md.push_str(&format!("| Field | Value |\n"));
+    md.push_str("| Field | Value |\n");
     md.push_str("| --- | --- |\n");
     md.push_str(&format!("| Name | {inv_name} |\n"));
     md.push_str(&format!("| Target | `{inv_target}` |\n"));
@@ -309,9 +309,7 @@ fn cwe_link(cwe_id: &str) -> String {
         return "—".into();
     }
     let numeric = cwe_id.strip_prefix("CWE-").unwrap_or(cwe_id);
-    format!(
-        "[{cwe_id}](https://cwe.mitre.org/data/definitions/{numeric}.html)"
-    )
+    format!("[{cwe_id}](https://cwe.mitre.org/data/definitions/{numeric}.html)")
 }
 
 #[cfg(test)]
@@ -425,7 +423,13 @@ mod tests {
         db.execute(
             "INSERT INTO investigations (id, name, target, status, created_at) \
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            &[&"inv2", &"Quick Test", &"/usr/bin/quick", &"active", &"2026-03-10"],
+            &[
+                &"inv2",
+                &"Quick Test",
+                &"/usr/bin/quick",
+                &"active",
+                &"2026-03-10",
+            ],
         )
         .unwrap();
 
@@ -456,7 +460,13 @@ mod tests {
         db.execute(
             "INSERT INTO investigations (id, name, target, status, created_at) \
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            &[&"inv3", &"Combined", &"/usr/bin/combo", &"active", &"2026-03-10"],
+            &[
+                &"inv3",
+                &"Combined",
+                &"/usr/bin/combo",
+                &"active",
+                &"2026-03-10",
+            ],
         )
         .unwrap();
 

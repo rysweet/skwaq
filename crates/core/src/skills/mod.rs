@@ -129,11 +129,7 @@ pub async fn run_skill(
         let tool_names: Vec<String> = all_tools.iter().map(|t| t.name.clone()).collect();
         filter_tools(&all_tools, &tool_names)
     } else {
-        let tool_names: Vec<String> = skill
-            .allowed_tools
-            .iter()
-            .map(|t| t.to_string())
-            .collect();
+        let tool_names: Vec<String> = skill.allowed_tools.iter().map(|t| t.to_string()).collect();
         filter_tools(&all_tools, &tool_names)
     };
 
@@ -192,7 +188,10 @@ mod tests {
         let content = "Scan $ARGUMENTS\nFirst: $0\nSecond: $1";
         let args = vec!["foo.bin".to_string(), "bar.bin".to_string()];
         let result = substitute_skill_args(content, &args, Path::new("skills/test"));
-        assert_eq!(result, "Scan foo.bin bar.bin\nFirst: foo.bin\nSecond: bar.bin");
+        assert_eq!(
+            result,
+            "Scan foo.bin bar.bin\nFirst: foo.bin\nSecond: bar.bin"
+        );
     }
 
     #[test]

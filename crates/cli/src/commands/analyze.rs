@@ -62,7 +62,11 @@ async fn run_ai_analysis(
         default_pipeline()
     };
 
-    let stage_names: Vec<&str> = pipeline.stages.iter().map(|s| s.agent_name.as_str()).collect();
+    let stage_names: Vec<&str> = pipeline
+        .stages
+        .iter()
+        .map(|s| s.agent_name.as_str())
+        .collect();
 
     println!("Running AI vulnerability analysis...");
     println!("  Investigation: {inv_id}");
@@ -115,10 +119,7 @@ async fn run_ai_analysis(
         println!("No findings recorded.");
     } else {
         println!("{} finding(s) recorded:\n", findings.len());
-        println!(
-            "  {:<40} {:<10} {}",
-            "TITLE", "SEVERITY", "CATEGORY"
-        );
+        println!("  {:<40} {:<10} CATEGORY", "TITLE", "SEVERITY");
         println!("  {}", "-".repeat(70));
         for (title, severity, category, _evidence) in &findings {
             println!(
@@ -236,8 +237,8 @@ fn run_quick_analysis(investigation_id: Option<&str>) -> anyhow::Result<()> {
         if !active_findings.is_empty() {
             println!();
             println!(
-                "  {:<35} {:<15} {:<10} {}",
-                "FINDING", "CATEGORY", "SEVERITY", "STATUS"
+                "  {:<35} {:<15} {:<10} STATUS",
+                "FINDING", "CATEGORY", "SEVERITY"
             );
             println!("  {}", "-".repeat(85));
             for finding in &active_findings {

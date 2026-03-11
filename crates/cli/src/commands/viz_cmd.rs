@@ -31,10 +31,7 @@ pub fn run_findings() -> anyhow::Result<()> {
     }
 
     println!("Findings for investigation: {inv_id}\n");
-    println!(
-        "  {:<8} {:<40} {:<20} {}",
-        "ID", "TITLE", "AGENT", "EVIDENCE"
-    );
+    println!("  {:<8} {:<40} {:<20} EVIDENCE", "ID", "TITLE", "AGENT");
     println!("  {}", "-".repeat(100));
 
     for (id, title, agent, evidence) in &findings {
@@ -123,80 +120,77 @@ pub fn run_callgraph(root_filter: Option<&str>) -> anyhow::Result<()> {
     println!("Call graph for investigation: {inv_id}\n");
 
     for root in &roots {
-        let mut visited = HashSet::new();
-        print_tree(&children, root, "", true, &dangerous, &mut visited, 0, 5);
+        let mut ctx = TreePrintCtx {
+            children: &children,
+            dangerous: &dangerous,
+            visited: HashSet::new(),
+            max_depth: 5,
+        };
+        ctx.print_node(root, "", true, 0);
     }
 
     Ok(())
 }
 
-/// Recursively print a tree node with box-drawing characters.
-pub fn print_tree(
-    children: &HashMap<String, Vec<String>>,
-    node: &str,
-    prefix: &str,
-    is_last: bool,
-    dangerous: &HashSet<&str>,
-    visited: &mut HashSet<String>,
-    depth: usize,
+/// Shared context for recursive tree printing.
+struct TreePrintCtx<'a> {
+    children: &'a HashMap<String, Vec<String>>,
+    dangerous: &'a HashSet<&'a str>,
+    visited: HashSet<String>,
     max_depth: usize,
-) {
-    let base_name = node.split('@').next().unwrap_or(node);
-    let marker = if dangerous.contains(base_name) {
-        " [!]"
-    } else {
-        ""
-    };
+}
 
-    if depth == 0 {
-        println!("{}{}", node, marker);
-    } else {
-        let connector = if is_last {
-            "\u{2514}\u{2500}\u{2500} "
+impl TreePrintCtx<'_> {
+    /// Recursively print a tree node with box-drawing characters.
+    fn print_node(&mut self, node: &str, prefix: &str, is_last: bool, depth: usize) {
+        let base_name = node.split('@').next().unwrap_or(node);
+        let marker = if self.dangerous.contains(base_name) {
+            " [!]"
         } else {
-            "\u{251c}\u{2500}\u{2500} "
+            ""
         };
-        println!("{}{}{}{}", prefix, connector, node, marker);
-    }
 
-    if depth >= max_depth {
-        return;
-    }
-
-    if !visited.insert(node.to_string()) {
-        // Already visited -- avoid cycles
-        return;
-    }
-
-    if let Some(kids) = children.get(node) {
-        let mut sorted_kids = kids.clone();
-        sorted_kids.sort();
-        sorted_kids.dedup();
-        let count = sorted_kids.len();
-        for (i, kid) in sorted_kids.iter().enumerate() {
-            let is_last_child = i == count - 1;
-            let new_prefix = if depth == 0 {
-                if is_last_child {
-                    "    ".to_string()
-                } else {
-                    "\u{2502}   ".to_string()
-                }
+        if depth == 0 {
+            println!("{}{}", node, marker);
+        } else {
+            let connector = if is_last {
+                "\u{2514}\u{2500}\u{2500} "
             } else {
-                let ext = if is_last { "    " } else { "\u{2502}   " };
-                format!("{}{}", prefix, ext)
+                "\u{251c}\u{2500}\u{2500} "
             };
-            print_tree(
-                children,
-                kid,
-                &new_prefix,
-                is_last_child,
-                dangerous,
-                visited,
-                depth + 1,
-                max_depth,
-            );
+            println!("{}{}{}{}", prefix, connector, node, marker);
         }
-    }
 
-    visited.remove(node);
+        if depth >= self.max_depth {
+            return;
+        }
+
+        if !self.visited.insert(node.to_string()) {
+            // Already visited -- avoid cycles
+            return;
+        }
+
+        if let Some(kids) = self.children.get(node) {
+            let mut sorted_kids = kids.clone();
+            sorted_kids.sort();
+            sorted_kids.dedup();
+            let count = sorted_kids.len();
+            for (i, kid) in sorted_kids.iter().enumerate() {
+                let is_last_child = i == count - 1;
+                let new_prefix = if depth == 0 {
+                    if is_last_child {
+                        "    ".to_string()
+                    } else {
+                        "\u{2502}   ".to_string()
+                    }
+                } else {
+                    let ext = if is_last { "    " } else { "\u{2502}   " };
+                    format!("{}{}", prefix, ext)
+                };
+                self.print_node(kid, &new_prefix, is_last_child, depth + 1);
+            }
+        }
+
+        self.visited.remove(node);
+    }
 }

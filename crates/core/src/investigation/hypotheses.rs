@@ -52,12 +52,7 @@ impl<'a> HypothesisManager<'a> {
     }
 
     /// Update the status and confidence of a hypothesis.
-    pub fn update(
-        &self,
-        hypothesis_id: &str,
-        status: &str,
-        confidence: f64,
-    ) -> anyhow::Result<()> {
+    pub fn update(&self, hypothesis_id: &str, status: &str, confidence: f64) -> anyhow::Result<()> {
         let rows = self.db.execute(
             "UPDATE hypotheses SET status = ?1, confidence = ?2 WHERE id = ?3",
             &[
@@ -76,7 +71,7 @@ impl<'a> HypothesisManager<'a> {
     pub fn list(&self, investigation_id: &str) -> anyhow::Result<Vec<Hypothesis>> {
         let mut stmt = self.db.conn().prepare(
             "SELECT id, description, status, confidence, timestamp FROM hypotheses \
-             WHERE investigation_id = ?1 ORDER BY timestamp DESC"
+             WHERE investigation_id = ?1 ORDER BY timestamp DESC",
         )?;
         let rows = stmt.query_map([investigation_id], |row| {
             Ok(Hypothesis {
@@ -102,7 +97,11 @@ mod tests {
         db.execute(
             "INSERT INTO investigations (id, name, target, status, created_at, updated_at) \
              VALUES (?1, ?2, '', 'active', ?3, ?3)",
-            &[&id.as_str() as &dyn rusqlite::types::ToSql, &"test", &now.as_str()],
+            &[
+                &id.as_str() as &dyn rusqlite::types::ToSql,
+                &"test",
+                &now.as_str(),
+            ],
         )
         .unwrap();
         id
@@ -114,7 +113,9 @@ mod tests {
         let inv_id = setup_investigation(&db);
         let mgr = HypothesisManager::new(&db);
 
-        let h_id = mgr.create(&inv_id, "buffer overflow possible", 0.8).unwrap();
+        let h_id = mgr
+            .create(&inv_id, "buffer overflow possible", 0.8)
+            .unwrap();
         assert!(!h_id.is_empty());
 
         let list = mgr.list(&inv_id).unwrap();

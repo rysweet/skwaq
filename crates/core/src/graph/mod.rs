@@ -11,6 +11,6 @@ pub mod db;
 pub mod queries;
 pub mod types;
 
-pub use builder::{GraphBuilder, GhidraInsertCounts, InsertCounts, SourceInsertCounts};
+pub use builder::{GhidraInsertCounts, GraphBuilder, InsertCounts, SourceInsertCounts};
 pub use db::GraphDb;
 pub use types::{NodeLabel, RelationshipType};

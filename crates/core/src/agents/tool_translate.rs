@@ -7,7 +7,10 @@ use crate::graph::GraphDb;
 /// Returns `(sql, params)` where params contains the investigation_id
 /// for the `?1` placeholder. Only predefined patterns are supported;
 /// arbitrary SQL (including raw SELECT from the LLM) is rejected.
-pub fn translate_to_sql(query: &str, investigation_id: &str) -> Result<(String, Vec<String>), String> {
+pub fn translate_to_sql(
+    query: &str,
+    investigation_id: &str,
+) -> Result<(String, Vec<String>), String> {
     let q = query.trim();
     let upper = q.to_uppercase();
 
@@ -56,7 +59,9 @@ pub fn execute_read_query(
 ) -> anyhow::Result<Vec<serde_json::Value>> {
     let stmt = db.conn().prepare(sql)?;
     if !stmt.readonly() {
-        return Ok(vec![serde_json::json!({"error": "Only read-only queries are allowed. Write operations are not permitted."})]);
+        return Ok(vec![
+            serde_json::json!({"error": "Only read-only queries are allowed. Write operations are not permitted."}),
+        ]);
     }
     let mut stmt = stmt;
     let column_count = stmt.column_count();
@@ -64,8 +69,10 @@ pub fn execute_read_query(
         .map(|i| stmt.column_name(i).unwrap_or("?").to_string())
         .collect();
 
-    let param_refs: Vec<&dyn rusqlite::types::ToSql> =
-        params.iter().map(|s| s as &dyn rusqlite::types::ToSql).collect();
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params
+        .iter()
+        .map(|s| s as &dyn rusqlite::types::ToSql)
+        .collect();
 
     let rows = stmt.query_map(param_refs.as_slice(), |row| {
         let mut obj = serde_json::Map::new();
@@ -117,9 +124,18 @@ pub(super) fn execute_create_finding(
     investigation_id: &str,
     args: &serde_json::Value,
 ) -> anyhow::Result<serde_json::Value> {
-    let title = args.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
-    let severity = args.get("severity").and_then(|v| v.as_str()).unwrap_or("medium");
-    let description = args.get("description").and_then(|v| v.as_str()).unwrap_or("");
+    let title = args
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Untitled");
+    let severity = args
+        .get("severity")
+        .and_then(|v| v.as_str())
+        .unwrap_or("medium");
+    let description = args
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     let function = args.get("function").and_then(|v| v.as_str()).unwrap_or("");
     let cwe_id = args.get("cwe_id").and_then(|v| v.as_str()).unwrap_or("");
 
@@ -135,9 +151,15 @@ pub(super) fn execute_create_finding(
         "INSERT INTO findings (id, title, evidence, agent, timestamp, investigation_id, \
          status, severity, category) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         &[
-            &finding_id as &dyn rusqlite::types::ToSql, &title,
-            &evidence.to_string(), &"vuln_hunter", &timestamp,
-            &investigation_id, &"new", &severity, &cwe_id,
+            &finding_id as &dyn rusqlite::types::ToSql,
+            &title,
+            &evidence.to_string(),
+            &"vuln_hunter",
+            &timestamp,
+            &investigation_id,
+            &"new",
+            &severity,
+            &cwe_id,
         ],
     )?;
 
@@ -167,7 +189,13 @@ pub(super) fn execute_search_similar(
 
     let rows = stmt.query_map(
         rusqlite::params![investigation_id, search_pattern, limit as i64],
-        |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?)),
+        |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        },
     )?;
 
     let results: Vec<serde_json::Value> = rows
@@ -197,7 +225,12 @@ mod tests {
         let db = GraphDb::in_memory().unwrap();
 
         // Directly test execute_read_query with a write statement
-        let result = execute_read_query(&db, "INSERT INTO functions (id, name) VALUES ('evil', 'injected')", &[]).unwrap();
+        let result = execute_read_query(
+            &db,
+            "INSERT INTO functions (id, name) VALUES ('evil', 'injected')",
+            &[],
+        )
+        .unwrap();
 
         // Should return an error entry instead of executing
         assert_eq!(result.len(), 1);

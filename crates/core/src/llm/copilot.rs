@@ -6,5 +6,6 @@
 
 pub(crate) const COPILOT_MODELS_URL: &str = "https://api.githubcopilot.com/models";
 pub(crate) const COPILOT_CHAT_URL: &str = "https://api.githubcopilot.com/chat/completions";
-pub(crate) const GITHUB_MODELS_CHAT_URL: &str = "https://models.github.ai/inference/chat/completions";
+pub(crate) const GITHUB_MODELS_CHAT_URL: &str =
+    "https://models.github.ai/inference/chat/completions";
 pub(crate) const GITHUB_MODELS_PREFIX: &str = "openai/";

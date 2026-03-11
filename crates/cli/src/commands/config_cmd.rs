@@ -55,9 +55,7 @@ pub fn run_show() -> anyhow::Result<()> {
 
     // Show config file location
     let candidates = ["skwaq.toml", ".skwaq/config.toml"];
-    let found = candidates
-        .iter()
-        .find(|p| std::path::Path::new(p).exists());
+    let found = candidates.iter().find(|p| std::path::Path::new(p).exists());
     match found {
         Some(path) => println!("\nLoaded from: {path}"),
         None => println!("\nUsing defaults (no skwaq.toml found)"),

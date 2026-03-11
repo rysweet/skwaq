@@ -23,10 +23,8 @@ impl<'a> GraphBuilder<'a> {
 
         if result.is_ok() {
             self.db().mutate("COMMIT;")?;
-        } else {
-            if let Err(e) = self.db().mutate("ROLLBACK;") {
-                tracing::error!("Failed to rollback transaction: {e}");
-            }
+        } else if let Err(e) = self.db().mutate("ROLLBACK;") {
+            tracing::error!("Failed to rollback transaction: {e}");
         }
 
         result?;
@@ -47,7 +45,12 @@ impl<'a> GraphBuilder<'a> {
                 self.db().execute(
                     "INSERT OR IGNORE INTO functions (id, name, address, investigation_id) \
                      VALUES (?1, ?2, ?3, ?4)",
-                    &[&id.as_str(), &sym.name.as_str(), &format!("0x{:x}", sym.address).as_str(), &investigation_id],
+                    &[
+                        &id.as_str(),
+                        &sym.name.as_str(),
+                        &format!("0x{:x}", sym.address).as_str(),
+                        &investigation_id,
+                    ],
                 )?;
                 counts.functions += 1;
             }
@@ -65,19 +68,24 @@ impl<'a> GraphBuilder<'a> {
 
             // Classify as data source.
             let base = imp.name.split('@').next().unwrap_or(&imp.name);
-            if SOURCE_PATTERNS.iter().any(|p| base == *p) {
+            if SOURCE_PATTERNS.contains(&base) {
                 let src_id = format!("src-{}", &imp.name);
                 let source_type = classify_source(base);
                 self.db().execute(
                     "INSERT OR IGNORE INTO data_sources (id, name, source_type, investigation_id) \
                      VALUES (?1, ?2, ?3, ?4)",
-                    &[&src_id.as_str(), &imp.name.as_str(), &source_type, &investigation_id],
+                    &[
+                        &src_id.as_str(),
+                        &imp.name.as_str(),
+                        &source_type,
+                        &investigation_id,
+                    ],
                 )?;
                 counts.sources += 1;
             }
 
             // Classify as data sink.
-            if SINK_PATTERNS.iter().any(|p| base == *p) {
+            if SINK_PATTERNS.contains(&base) {
                 let sink_id = format!("sink-{}", &imp.name);
                 let danger = classify_sink_danger(base);
                 self.db().execute(
@@ -96,7 +104,12 @@ impl<'a> GraphBuilder<'a> {
             self.db().execute(
                 "INSERT OR IGNORE INTO string_literals (id, value, offset, investigation_id) \
                  VALUES (?1, ?2, ?3, ?4)",
-                &[&id.as_str(), &s.value.as_str(), &format!("{}", s.offset).as_str(), &investigation_id],
+                &[
+                    &id.as_str(),
+                    &s.value.as_str(),
+                    &format!("{}", s.offset).as_str(),
+                    &investigation_id,
+                ],
             )?;
             counts.strings += 1;
         }
@@ -186,17 +199,24 @@ mod tests {
                 },
             ],
             imports: vec![
-                ImportInfo { name: "recv".into(), library: String::new() },
-                ImportInfo { name: "strcpy".into(), library: String::new() },
-                ImportInfo { name: "printf".into(), library: String::new() },
-            ],
-            strings: vec![
-                ExtractedString {
-                    value: "hello".into(),
-                    offset: 100,
-                    encoding: StringEncoding::Ascii,
+                ImportInfo {
+                    name: "recv".into(),
+                    library: String::new(),
+                },
+                ImportInfo {
+                    name: "strcpy".into(),
+                    library: String::new(),
+                },
+                ImportInfo {
+                    name: "printf".into(),
+                    library: String::new(),
                 },
             ],
+            strings: vec![ExtractedString {
+                value: "hello".into(),
+                offset: 100,
+                encoding: StringEncoding::Ascii,
+            }],
             hardening: HardeningInfo::default(),
         };
 

@@ -32,7 +32,7 @@ impl std::fmt::Display for FindingStatus {
 
 impl FindingStatus {
     /// Parse a status string back into the enum.
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s {
             "confirmed" => Self::Confirmed,
             "challenged" => Self::Challenged,
@@ -105,11 +105,17 @@ mod tests {
 
     #[test]
     fn test_finding_status_from_str() {
-        assert_eq!(FindingStatus::from_str("confirmed"), FindingStatus::Confirmed);
-        assert_eq!(FindingStatus::from_str("challenged"), FindingStatus::Challenged);
-        assert_eq!(FindingStatus::from_str("invalidated"), FindingStatus::Invalidated);
-        assert_eq!(FindingStatus::from_str("new"), FindingStatus::New);
-        assert_eq!(FindingStatus::from_str("unknown"), FindingStatus::New);
+        assert_eq!(FindingStatus::parse("confirmed"), FindingStatus::Confirmed);
+        assert_eq!(
+            FindingStatus::parse("challenged"),
+            FindingStatus::Challenged
+        );
+        assert_eq!(
+            FindingStatus::parse("invalidated"),
+            FindingStatus::Invalidated
+        );
+        assert_eq!(FindingStatus::parse("new"), FindingStatus::New);
+        assert_eq!(FindingStatus::parse("unknown"), FindingStatus::New);
     }
 
     #[test]

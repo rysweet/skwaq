@@ -9,13 +9,19 @@ pub fn run(binary: &Path) -> anyhow::Result<()> {
     let info = parse_binary(binary)?;
 
     if info.symbols.is_empty() && info.imports.is_empty() {
-        println!("No symbols found in {} (binary may be stripped)", binary.display());
+        println!(
+            "No symbols found in {} (binary may be stripped)",
+            binary.display()
+        );
         return Ok(());
     }
 
     if !info.symbols.is_empty() {
         println!("Symbols ({}):", info.symbols.len());
-        println!("  {:<18} {:<8} {:<10} {:<10} {}", "Address", "Size", "Type", "Bind", "Name");
+        println!(
+            "  {:<18} {:<8} {:<10} {:<10} Name",
+            "Address", "Size", "Type", "Bind"
+        );
         println!("  {}", "-".repeat(70));
         for sym in &info.symbols {
             println!(

@@ -72,34 +72,154 @@ pub(crate) struct DangerousEntry {
 /// All known dangerous C/C++ APIs with their categories.
 pub(crate) const DANGEROUS_APIS: &[DangerousEntry] = &[
     // Memory safety
-    DangerousEntry { name: "strcpy",   category: DangerCategory::Memory,       severity: Severity::Critical, reason: "unbounded copy; use strncpy or strlcpy" },
-    DangerousEntry { name: "strcat",   category: DangerCategory::Memory,       severity: Severity::Critical, reason: "unbounded concatenation; use strncat or strlcat" },
-    DangerousEntry { name: "gets",     category: DangerCategory::Memory,       severity: Severity::Critical, reason: "no bounds checking; use fgets" },
-    DangerousEntry { name: "memcpy",   category: DangerCategory::Memory,       severity: Severity::Medium,   reason: "no bounds checking; verify size parameter" },
-    DangerousEntry { name: "memmove",  category: DangerCategory::Memory,       severity: Severity::Medium,   reason: "no bounds checking; verify size parameter" },
-    DangerousEntry { name: "strncpy",  category: DangerCategory::Memory,       severity: Severity::Low,      reason: "may not null-terminate; prefer strlcpy" },
-    DangerousEntry { name: "strncat",  category: DangerCategory::Memory,       severity: Severity::Low,      reason: "size semantics are error-prone; prefer strlcat" },
+    DangerousEntry {
+        name: "strcpy",
+        category: DangerCategory::Memory,
+        severity: Severity::Critical,
+        reason: "unbounded copy; use strncpy or strlcpy",
+    },
+    DangerousEntry {
+        name: "strcat",
+        category: DangerCategory::Memory,
+        severity: Severity::Critical,
+        reason: "unbounded concatenation; use strncat or strlcat",
+    },
+    DangerousEntry {
+        name: "gets",
+        category: DangerCategory::Memory,
+        severity: Severity::Critical,
+        reason: "no bounds checking; use fgets",
+    },
+    DangerousEntry {
+        name: "memcpy",
+        category: DangerCategory::Memory,
+        severity: Severity::Medium,
+        reason: "no bounds checking; verify size parameter",
+    },
+    DangerousEntry {
+        name: "memmove",
+        category: DangerCategory::Memory,
+        severity: Severity::Medium,
+        reason: "no bounds checking; verify size parameter",
+    },
+    DangerousEntry {
+        name: "strncpy",
+        category: DangerCategory::Memory,
+        severity: Severity::Low,
+        reason: "may not null-terminate; prefer strlcpy",
+    },
+    DangerousEntry {
+        name: "strncat",
+        category: DangerCategory::Memory,
+        severity: Severity::Low,
+        reason: "size semantics are error-prone; prefer strlcat",
+    },
     // Format string
-    DangerousEntry { name: "sprintf",  category: DangerCategory::FormatString, severity: Severity::High,     reason: "unbounded format output; use snprintf" },
-    DangerousEntry { name: "vsprintf", category: DangerCategory::FormatString, severity: Severity::High,     reason: "unbounded format output; use vsnprintf" },
-    DangerousEntry { name: "scanf",    category: DangerCategory::FormatString, severity: Severity::High,     reason: "unbounded input; use width specifiers or fgets" },
-    DangerousEntry { name: "fscanf",   category: DangerCategory::FormatString, severity: Severity::High,     reason: "unbounded input; use width specifiers" },
-    DangerousEntry { name: "sscanf",   category: DangerCategory::FormatString, severity: Severity::Medium,   reason: "potential buffer overflow with %s" },
+    DangerousEntry {
+        name: "sprintf",
+        category: DangerCategory::FormatString,
+        severity: Severity::High,
+        reason: "unbounded format output; use snprintf",
+    },
+    DangerousEntry {
+        name: "vsprintf",
+        category: DangerCategory::FormatString,
+        severity: Severity::High,
+        reason: "unbounded format output; use vsnprintf",
+    },
+    DangerousEntry {
+        name: "scanf",
+        category: DangerCategory::FormatString,
+        severity: Severity::High,
+        reason: "unbounded input; use width specifiers or fgets",
+    },
+    DangerousEntry {
+        name: "fscanf",
+        category: DangerCategory::FormatString,
+        severity: Severity::High,
+        reason: "unbounded input; use width specifiers",
+    },
+    DangerousEntry {
+        name: "sscanf",
+        category: DangerCategory::FormatString,
+        severity: Severity::Medium,
+        reason: "potential buffer overflow with %s",
+    },
     // Injection / command execution
-    DangerousEntry { name: "system",   category: DangerCategory::Injection,    severity: Severity::Critical, reason: "shell injection risk; use exec* family directly" },
-    DangerousEntry { name: "popen",    category: DangerCategory::Injection,    severity: Severity::Critical, reason: "shell injection risk; use pipe+fork+exec" },
-    DangerousEntry { name: "exec",     category: DangerCategory::Injection,    severity: Severity::High,     reason: "command execution; validate all arguments" },
-    DangerousEntry { name: "execl",    category: DangerCategory::Injection,    severity: Severity::High,     reason: "command execution; validate all arguments" },
-    DangerousEntry { name: "execle",   category: DangerCategory::Injection,    severity: Severity::High,     reason: "command execution; validate all arguments" },
-    DangerousEntry { name: "execlp",   category: DangerCategory::Injection,    severity: Severity::High,     reason: "command execution with PATH search; validate arguments" },
-    DangerousEntry { name: "execv",    category: DangerCategory::Injection,    severity: Severity::High,     reason: "command execution; validate all arguments" },
-    DangerousEntry { name: "execvp",   category: DangerCategory::Injection,    severity: Severity::High,     reason: "command execution with PATH search; validate arguments" },
-    DangerousEntry { name: "execvpe",  category: DangerCategory::Injection,    severity: Severity::High,     reason: "command execution with PATH/env; validate arguments" },
+    DangerousEntry {
+        name: "system",
+        category: DangerCategory::Injection,
+        severity: Severity::Critical,
+        reason: "shell injection risk; use exec* family directly",
+    },
+    DangerousEntry {
+        name: "popen",
+        category: DangerCategory::Injection,
+        severity: Severity::Critical,
+        reason: "shell injection risk; use pipe+fork+exec",
+    },
+    DangerousEntry {
+        name: "exec",
+        category: DangerCategory::Injection,
+        severity: Severity::High,
+        reason: "command execution; validate all arguments",
+    },
+    DangerousEntry {
+        name: "execl",
+        category: DangerCategory::Injection,
+        severity: Severity::High,
+        reason: "command execution; validate all arguments",
+    },
+    DangerousEntry {
+        name: "execle",
+        category: DangerCategory::Injection,
+        severity: Severity::High,
+        reason: "command execution; validate all arguments",
+    },
+    DangerousEntry {
+        name: "execlp",
+        category: DangerCategory::Injection,
+        severity: Severity::High,
+        reason: "command execution with PATH search; validate arguments",
+    },
+    DangerousEntry {
+        name: "execv",
+        category: DangerCategory::Injection,
+        severity: Severity::High,
+        reason: "command execution; validate all arguments",
+    },
+    DangerousEntry {
+        name: "execvp",
+        category: DangerCategory::Injection,
+        severity: Severity::High,
+        reason: "command execution with PATH search; validate arguments",
+    },
+    DangerousEntry {
+        name: "execvpe",
+        category: DangerCategory::Injection,
+        severity: Severity::High,
+        reason: "command execution with PATH/env; validate arguments",
+    },
     // Temp file / race condition
-    DangerousEntry { name: "mktemp",   category: DangerCategory::Race,        severity: Severity::Medium,   reason: "TOCTOU race; use mkstemp" },
-    DangerousEntry { name: "tmpnam",   category: DangerCategory::TempFile,    severity: Severity::Medium,   reason: "TOCTOU race; use tmpfile or mkstemp" },
+    DangerousEntry {
+        name: "mktemp",
+        category: DangerCategory::Race,
+        severity: Severity::Medium,
+        reason: "TOCTOU race; use mkstemp",
+    },
+    DangerousEntry {
+        name: "tmpnam",
+        category: DangerCategory::TempFile,
+        severity: Severity::Medium,
+        reason: "TOCTOU race; use tmpfile or mkstemp",
+    },
     // Path traversal
-    DangerousEntry { name: "realpath", category: DangerCategory::PathTraversal, severity: Severity::Low,    reason: "buffer overflow in some implementations; check buffer size" },
+    DangerousEntry {
+        name: "realpath",
+        category: DangerCategory::PathTraversal,
+        severity: Severity::Low,
+        reason: "buffer overflow in some implementations; check buffer size",
+    },
 ];
 
 /// A detected use of a dangerous API.

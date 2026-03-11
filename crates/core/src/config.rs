@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub general: GeneralConfig,
@@ -89,21 +89,51 @@ pub struct OutputConfig {
     pub default_format: String,
 }
 
-fn default_database_path() -> String { ".skwaq/graph".into() }
-fn default_cache_path() -> String { ".skwaq/cache".into() }
-fn default_log_level() -> String { "info".into() }
-fn default_llm_backend() -> String { "copilot".into() }
-fn default_ollama() -> String { "ollama".into() }
-fn default_model() -> String { "openai/gpt-4o-mini".into() }
-fn default_ollama_host() -> String { "http://localhost:11434".into() }
-fn default_ollama_model() -> String { "llama3.1".into() }
-fn default_embedding_model() -> String { "nomic-embed-text".into() }
-fn default_timeout() -> u64 { 600 }
-fn default_true() -> bool { true }
-fn default_taint_depth() -> u32 { 15 }
-fn default_fp_target() -> f64 { 0.15 }
-fn default_token_budget() -> u64 { 100_000 }
-fn default_format() -> String { "text".into() }
+fn default_database_path() -> String {
+    ".skwaq/graph".into()
+}
+fn default_cache_path() -> String {
+    ".skwaq/cache".into()
+}
+fn default_log_level() -> String {
+    "info".into()
+}
+fn default_llm_backend() -> String {
+    "copilot".into()
+}
+fn default_ollama() -> String {
+    "ollama".into()
+}
+fn default_model() -> String {
+    "openai/gpt-4o-mini".into()
+}
+fn default_ollama_host() -> String {
+    "http://localhost:11434".into()
+}
+fn default_ollama_model() -> String {
+    "llama3.1".into()
+}
+fn default_embedding_model() -> String {
+    "nomic-embed-text".into()
+}
+fn default_timeout() -> u64 {
+    600
+}
+fn default_true() -> bool {
+    true
+}
+fn default_taint_depth() -> u32 {
+    15
+}
+fn default_fp_target() -> f64 {
+    0.15
+}
+fn default_token_budget() -> u64 {
+    100_000
+}
+fn default_format() -> String {
+    "text".into()
+}
 
 impl Default for GeneralConfig {
     fn default() -> Self {
@@ -165,17 +195,7 @@ impl Default for OutputConfig {
     }
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            general: GeneralConfig::default(),
-            llm: LlmConfig::default(),
-            binary: BinaryConfig::default(),
-            analysis: AnalysisConfig::default(),
-            output: OutputConfig::default(),
-        }
-    }
-}
+// Config derives Default since all fields implement Default.
 
 impl Config {
     pub fn load() -> anyhow::Result<Self> {

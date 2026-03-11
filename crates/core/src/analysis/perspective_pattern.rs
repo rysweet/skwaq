@@ -13,7 +13,10 @@ pub fn pattern_perspective(db: &GraphDb, inv_id: &str, cycle: u32) -> Vec<Findin
     let mut seen = std::collections::HashSet::new();
 
     // Check functions for dangerous API names
-    if let Ok(mut stmt) = db.conn().prepare("SELECT f.name, f.address FROM functions f WHERE f.investigation_id = ?1") {
+    if let Ok(mut stmt) = db
+        .conn()
+        .prepare("SELECT f.name, f.address FROM functions f WHERE f.investigation_id = ?1")
+    {
         if let Ok(rows) = stmt.query_map([inv_id], |row| {
             Ok((
                 row.get::<_, String>(0)?,
@@ -56,10 +59,9 @@ pub fn pattern_perspective(db: &GraphDb, inv_id: &str, cycle: u32) -> Vec<Findin
     }
 
     // Check imports in symbols table
-    if let Ok(mut stmt) = db
-        .conn()
-        .prepare("SELECT s.name FROM symbols s WHERE s.symbol_type = 'import' AND s.investigation_id = ?1")
-    {
+    if let Ok(mut stmt) = db.conn().prepare(
+        "SELECT s.name FROM symbols s WHERE s.symbol_type = 'import' AND s.investigation_id = ?1",
+    ) {
         if let Ok(rows) = stmt.query_map([inv_id], |row| row.get::<_, String>(0)) {
             for row in rows.flatten() {
                 let base = row.split('@').next().unwrap_or(&row);
@@ -136,7 +138,11 @@ pub fn pattern_perspective(db: &GraphDb, inv_id: &str, cycle: u32) -> Vec<Findin
 /// Look up danger info for a function name. Returns (category, severity, reason).
 pub(crate) fn dangerous_api_info(name: &str) -> Option<(&'static str, &'static str, &'static str)> {
     match name {
-        "strcpy" => Some(("memory", "critical", "unbounded copy; use strncpy or strlcpy")),
+        "strcpy" => Some((
+            "memory",
+            "critical",
+            "unbounded copy; use strncpy or strlcpy",
+        )),
         "strcat" => Some((
             "memory",
             "critical",
@@ -153,11 +159,7 @@ pub(crate) fn dangerous_api_info(name: &str) -> Option<(&'static str, &'static s
             "medium",
             "no bounds checking; verify size parameter",
         )),
-        "strncpy" => Some((
-            "memory",
-            "low",
-            "may not null-terminate; prefer strlcpy",
-        )),
+        "strncpy" => Some(("memory", "low", "may not null-terminate; prefer strlcpy")),
         "strncat" => Some((
             "memory",
             "low",

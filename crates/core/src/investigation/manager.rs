@@ -43,7 +43,7 @@ impl<'a> InvestigationManager<'a> {
     pub fn list(&self) -> anyhow::Result<Vec<InvestigationSummary>> {
         let mut stmt = self.db.conn().prepare(
             "SELECT id, name, status, created_at FROM investigations \
-             ORDER BY created_at DESC"
+             ORDER BY created_at DESC",
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(InvestigationSummary {

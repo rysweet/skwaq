@@ -113,9 +113,7 @@ fn severity_to_level(severity: &str) -> &'static str {
 
 /// Build a CWE help URI.
 fn cwe_help_uri(cwe_id: &str) -> String {
-    let numeric = cwe_id
-        .strip_prefix("CWE-")
-        .unwrap_or(cwe_id);
+    let numeric = cwe_id.strip_prefix("CWE-").unwrap_or(cwe_id);
     format!("https://cwe.mitre.org/data/definitions/{numeric}.html")
 }
 
@@ -354,7 +352,9 @@ mod tests {
         assert_eq!(results[0]["level"], "error");
         assert_eq!(results[0]["properties"]["severity"], "critical");
 
-        let rules = doc["runs"][0]["tool"]["driver"]["rules"].as_array().unwrap();
+        let rules = doc["runs"][0]["tool"]["driver"]["rules"]
+            .as_array()
+            .unwrap();
         assert_eq!(rules.len(), 1);
         assert_eq!(rules[0]["id"], "CWE-122");
     }
@@ -531,14 +531,20 @@ mod tests {
 
     #[test]
     fn test_title_to_rule_id() {
-        assert_eq!(title_to_rule_id("Dangerous API - system"), "dangerous-api-system");
+        assert_eq!(
+            title_to_rule_id("Dangerous API - system"),
+            "dangerous-api-system"
+        );
         assert_eq!(title_to_rule_id("Buffer Overflow"), "buffer-overflow");
         assert_eq!(title_to_rule_id("simple"), "simple");
     }
 
     #[test]
     fn test_parse_severity_from_evidence() {
-        assert_eq!(parse_severity_from_evidence("severity=critical something"), "critical");
+        assert_eq!(
+            parse_severity_from_evidence("severity=critical something"),
+            "critical"
+        );
         assert_eq!(parse_severity_from_evidence("severity=high"), "high");
         assert_eq!(parse_severity_from_evidence("severity=low minor"), "low");
         assert_eq!(parse_severity_from_evidence("no severity marker"), "medium");
