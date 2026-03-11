@@ -1,5 +1,6 @@
 //! LLM client layer: traits, backends, and the agentic tool loop.
 
+pub mod anthropic;
 pub mod copilot;
 pub mod copilot_auth;
 pub mod copilot_client;
@@ -14,12 +15,38 @@ use crate::config::LlmConfig;
 /// Create an LLM client from configuration.
 ///
 /// Examines `config.reasoning` to decide which backend to use:
-/// - `"copilot"` (default) -> GitHub Copilot
+/// - `"anthropic"` (default) -> Anthropic Claude API
+/// - `"copilot"` -> GitHub Copilot
 /// - `"ollama"` -> local Ollama server
+///
+/// Auto-detection: if no explicit backend is configured and `ANTHROPIC_API_KEY`
+/// is set, the Anthropic backend is preferred.
 pub fn create_llm_client(config: &LlmConfig) -> Box<dyn LlmClient> {
     match config.reasoning.as_str() {
+        "anthropic" => match anthropic::AnthropicClient::new() {
+            Ok(client) => Box::new(client),
+            Err(e) => {
+                tracing::warn!("Anthropic client init failed ({e}), falling back to copilot");
+                Box::new(CopilotClient::new())
+            }
+        },
         "ollama" => Box::new(ollama::OllamaClient::new(&config.ollama.host)),
-        _ => Box::new(CopilotClient::new()),
+        "copilot" => Box::new(CopilotClient::new()),
+        other => {
+            // Auto-detect: try Anthropic if ANTHROPIC_API_KEY is set
+            if std::env::var("ANTHROPIC_API_KEY").is_ok() {
+                tracing::info!(
+                    "Unknown backend '{other}', but ANTHROPIC_API_KEY set; using Anthropic"
+                );
+                match anthropic::AnthropicClient::new() {
+                    Ok(client) => Box::new(client),
+                    Err(_) => Box::new(CopilotClient::new()),
+                }
+            } else {
+                tracing::info!("Unknown backend '{other}', falling back to copilot");
+                Box::new(CopilotClient::new())
+            }
+        }
     }
 }
 
@@ -39,13 +66,6 @@ mod tests {
     }
 
     #[test]
-    fn test_create_copilot_client_default() {
-        let config = LlmConfig::default();
-        let client = create_llm_client(&config);
-        assert_eq!(client.provider_name(), "copilot");
-    }
-
-    #[test]
     fn test_create_copilot_client_explicit() {
         let config = LlmConfig {
             reasoning: "copilot".into(),
@@ -53,5 +73,56 @@ mod tests {
         };
         let client = create_llm_client(&config);
         assert_eq!(client.provider_name(), "copilot");
+    }
+
+    #[test]
+    fn test_create_anthropic_client_with_key() {
+        let original = std::env::var("ANTHROPIC_API_KEY").ok();
+        std::env::set_var("ANTHROPIC_API_KEY", "test-key");
+
+        let config = LlmConfig {
+            reasoning: "anthropic".into(),
+            ..Default::default()
+        };
+        let client = create_llm_client(&config);
+        assert_eq!(client.provider_name(), "anthropic");
+
+        match original {
+            Some(key) => std::env::set_var("ANTHROPIC_API_KEY", key),
+            None => std::env::remove_var("ANTHROPIC_API_KEY"),
+        }
+    }
+
+    #[test]
+    fn test_create_anthropic_client_falls_back_without_key() {
+        let original = std::env::var("ANTHROPIC_API_KEY").ok();
+        std::env::remove_var("ANTHROPIC_API_KEY");
+
+        let config = LlmConfig {
+            reasoning: "anthropic".into(),
+            ..Default::default()
+        };
+        let client = create_llm_client(&config);
+        // Falls back to copilot when key is missing
+        assert_eq!(client.provider_name(), "copilot");
+
+        if let Some(key) = original {
+            std::env::set_var("ANTHROPIC_API_KEY", key);
+        }
+    }
+
+    #[test]
+    fn test_default_config_creates_anthropic_with_key() {
+        let original = std::env::var("ANTHROPIC_API_KEY").ok();
+        std::env::set_var("ANTHROPIC_API_KEY", "test-key");
+
+        let config = LlmConfig::default();
+        let client = create_llm_client(&config);
+        assert_eq!(client.provider_name(), "anthropic");
+
+        match original {
+            Some(key) => std::env::set_var("ANTHROPIC_API_KEY", key),
+            None => std::env::remove_var("ANTHROPIC_API_KEY"),
+        }
     }
 }

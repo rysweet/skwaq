@@ -99,13 +99,13 @@ fn default_log_level() -> String {
     "info".into()
 }
 fn default_llm_backend() -> String {
-    "copilot".into()
+    "anthropic".into()
 }
 fn default_ollama() -> String {
     "ollama".into()
 }
 fn default_model() -> String {
-    "openai/gpt-4o".into()
+    "claude-opus-4-6".into()
 }
 fn default_ollama_host() -> String {
     "http://localhost:11434".into()
