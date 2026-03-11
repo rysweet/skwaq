@@ -6,7 +6,8 @@ download_sha256 = ""
 [[cases]]
 id = "buffer_overflow"
 path = "buffer_overflow.c"
-expected_cwes = [121]
+# strcpy without bounds (CWE-121) + sprintf overflow (CWE-134)
+expected_cwes = [121, 134]
 is_negative = false
 language = "c"
 
@@ -41,13 +42,15 @@ language = "c"
 [[cases]]
 id = "vuln_app_py"
 path = "vuln_app.py"
-expected_cwes = [78, 89]
+# os.system (CWE-78), SQL injection (CWE-89), eval/exec (CWE-94), pickle/yaml (CWE-502)
+expected_cwes = [78, 89, 94, 502]
 is_negative = false
 language = "python"
 
 [[cases]]
 id = "vuln_app_js"
 path = "vuln_app.js"
-expected_cwes = [78, 79]
+# eval/exec (CWE-78,94), XSS (CWE-79), prototype pollution (CWE-1321), path traversal (CWE-22)
+expected_cwes = [78, 79, 94, 1321, 22]
 is_negative = false
 language = "javascript"
