@@ -23,6 +23,7 @@ sha2 = { workspace = true }
 tempfile = { workspace = true }
 dirs = { workspace = true }
 regex = "1"
+serde_yaml_ng = "0.10"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

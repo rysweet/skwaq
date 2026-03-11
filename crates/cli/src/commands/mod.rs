@@ -1,5 +1,6 @@
 //! CLI command definitions using clap derive.
 
+pub mod agents_cmd;
 pub mod analyze;
 pub mod annotate_cmd;
 pub mod checksec_cmd;
@@ -102,6 +103,20 @@ pub enum Commands {
         /// Token budget for LLM calls
         #[arg(long)]
         budget: Option<u64>,
+
+        /// Comma-separated list of agent names to use (overrides default pipeline)
+        #[arg(long)]
+        agents: Option<String>,
+
+        /// Run a single agent
+        #[arg(long)]
+        agent: Option<String>,
+    },
+
+    /// Manage agent definitions
+    Agents {
+        #[command(subcommand)]
+        sub: AgentsSub,
     },
 
     /// Trace taint flows between sources and sinks
@@ -273,4 +288,10 @@ pub enum ConfigSub {
         /// Configuration value
         value: String,
     },
+}
+
+#[derive(Subcommand)]
+pub enum AgentsSub {
+    /// List all discovered agent definitions
+    List,
 }

@@ -1,8 +1,10 @@
 //! `skwaq analyze` - vulnerability analysis command.
 //!
 //! When `--quick` is given, runs fast pattern-based analysis (no LLM).
-//! Without `--quick`, drives the VulnHunter agent through real LLM calls.
+//! Without `--quick`, drives the dynamic agent pipeline through real LLM calls.
+//! Use `--agents` or `--agent` to override which agents run.
 
+use skwaq_core::agents::{default_pipeline, pipeline_from_names};
 use skwaq_core::analysis::{AnalysisOrchestrator, FindingStatus};
 use skwaq_core::config::Config;
 use skwaq_core::graph::GraphDb;
@@ -13,18 +15,22 @@ pub async fn run(
     investigation_id: Option<&str>,
     quick: bool,
     budget: Option<u64>,
+    agents: Option<&str>,
+    agent: Option<&str>,
 ) -> anyhow::Result<()> {
     if quick {
         run_quick_analysis(investigation_id)
     } else {
-        run_ai_analysis(investigation_id, budget).await
+        run_ai_analysis(investigation_id, budget, agents, agent).await
     }
 }
 
-/// Run the LLM-driven VulnHunter agent for deep analysis.
+/// Run the LLM-driven agent pipeline for deep analysis.
 async fn run_ai_analysis(
     investigation_id: Option<&str>,
     budget: Option<u64>,
+    agents_flag: Option<&str>,
+    agent_flag: Option<&str>,
 ) -> anyhow::Result<()> {
     let config = Config::load()?;
     let db_path = config.database_path();
@@ -45,33 +51,46 @@ async fn run_ai_analysis(
     let budget_amount = budget.unwrap_or(config.analysis.default_token_budget);
     let model = config.llm.copilot.model.clone();
 
+    // Build the pipeline based on flags
+    let pipeline = if let Some(single) = agent_flag {
+        pipeline_from_names(&[single.to_string()])
+    } else if let Some(names) = agents_flag {
+        let names: Vec<String> = names.split(',').map(|s| s.trim().to_string()).collect();
+        pipeline_from_names(&names)
+    } else {
+        default_pipeline()
+    };
+
+    let stage_names: Vec<&str> = pipeline.stages.iter().map(|s| s.agent_name.as_str()).collect();
+
     println!("Running AI vulnerability analysis...");
     println!("  Investigation: {inv_id}");
     println!("  Model: {model}");
     println!("  Token budget: {budget_amount}");
+    println!("  Pipeline: {}", stage_names.join(" -> "));
     println!();
 
-    // Create the LLM client (CopilotClient authenticates lazily on first call)
+    // Create the LLM client
     let llm_client: std::sync::Arc<dyn skwaq_core::llm::LlmClient> =
         std::sync::Arc::new(skwaq_core::llm::copilot::CopilotClient::new());
 
-    // Create and run VulnHunter
-    let mut hunter = skwaq_agents::vuln_hunter::VulnHunterAgent::new(
-        llm_client.clone(),
-        skwaq_core::llm::TokenBudget::new(budget_amount),
-    )
-    .with_model(&model);
+    let mut token_budget = skwaq_core::llm::TokenBudget::new(budget_amount);
 
-    let hunter_result = hunter.analyze(&target, &inv_id, &db).await?;
+    let results = pipeline
+        .run(&target, &inv_id, &db, llm_client, &mut token_budget)
+        .await?;
 
-    println!("--- VulnHunter Analysis ---");
-    println!("{hunter_result}");
-    println!();
+    // Print results from each agent
+    for result in &results {
+        println!("--- {} ---", result.agent_name);
+        println!("{}", result.output);
+        println!();
+    }
 
-    // Query findings created by the agent
+    // Query findings created by the agents
     let mut stmt = db.conn().prepare(
         "SELECT title, severity, category, evidence FROM findings \
-         WHERE investigation_id = ?1 AND agent = 'vuln_hunter' \
+         WHERE investigation_id = ?1 \
          ORDER BY CASE severity \
            WHEN 'critical' THEN 0 \
            WHEN 'high' THEN 1 \
@@ -93,7 +112,7 @@ async fn run_ai_analysis(
         .collect();
 
     if findings.is_empty() {
-        println!("No findings recorded by VulnHunter.");
+        println!("No findings recorded.");
     } else {
         println!("{} finding(s) recorded:\n", findings.len());
         println!(
@@ -112,6 +131,7 @@ async fn run_ai_analysis(
         println!();
     }
 
+    println!("Total tokens used: {}", token_budget.used);
     println!("Investigation: {inv_id}");
     println!("Run `skwaq report {inv_id} --json` to export results.");
 
@@ -240,8 +260,6 @@ fn run_quick_analysis(investigation_id: Option<&str>) -> anyhow::Result<()> {
 }
 
 /// Resolve an investigation ID from an optional user-provided value.
-///
-/// If no ID is provided, uses the most recent investigation.
 fn resolve_investigation_id(db: &GraphDb, id: Option<&str>) -> anyhow::Result<String> {
     match id {
         Some(id) => {

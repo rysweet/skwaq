@@ -45,8 +45,25 @@ async fn main() -> anyhow::Result<()> {
             investigation,
             quick,
             budget,
+            agents,
+            agent,
         } => {
-            skwaq::commands::analyze::run(investigation.as_deref(), *quick, *budget).await?;
+            skwaq::commands::analyze::run(
+                investigation.as_deref(),
+                *quick,
+                *budget,
+                agents.as_deref(),
+                agent.as_deref(),
+            )
+            .await?;
+        }
+        Commands::Agents { sub } => {
+            use skwaq::commands::AgentsSub;
+            match sub {
+                AgentsSub::List => {
+                    skwaq::commands::agents_cmd::run_list();
+                }
+            }
         }
         Commands::Investigate { sub } => {
             skwaq::commands::investigate::run(sub)?;

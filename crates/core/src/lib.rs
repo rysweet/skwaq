@@ -2,6 +2,7 @@
 //! knowledge bases, investigation management, and report generation
 //! for the Skwaq vulnerability assessment copilot.
 
+pub mod agents;
 pub mod analysis;
 pub mod binary;
 pub mod config;
