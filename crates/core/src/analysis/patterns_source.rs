@@ -255,6 +255,93 @@ fn java_patterns() -> &'static [SourcePattern] {
             severity: Severity::Critical,
             reason: "ScriptEngine.eval executes arbitrary code; avoid with untrusted input",
         },
+        // SQL injection patterns
+        SourcePattern {
+            regex: r#"\.execute\w*\s*\([^)]*\+\s*"#,
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason:
+                "SQL query built with string concatenation; use PreparedStatement with parameters",
+        },
+        SourcePattern {
+            regex: r"\.createQuery\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason:
+                "Dynamic query creation may be vulnerable to injection; use parameterized queries",
+        },
+        // XSS patterns
+        SourcePattern {
+            regex: r"\bsetHeader\s*\(\s*.*\+",
+            category: DangerCategory::Xss,
+            severity: Severity::High,
+            reason: "HTTP header set with user input; validate and encode output",
+        },
+        SourcePattern {
+            regex: r"\.getWriter\(\)\.write\s*\(",
+            category: DangerCategory::Xss,
+            severity: Severity::High,
+            reason: "Writing directly to response; encode output to prevent XSS",
+        },
+        SourcePattern {
+            regex: r"\.getWriter\(\)\.println\s*\(",
+            category: DangerCategory::Xss,
+            severity: Severity::High,
+            reason: "Writing directly to response; encode output to prevent XSS",
+        },
+        // Weak cryptography patterns
+        SourcePattern {
+            regex: r#"\bCipher\.getInstance\s*\(\s*"DES"#,
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "DES is a weak cipher; use AES-256-GCM or ChaCha20",
+        },
+        SourcePattern {
+            regex: r#"\bCipher\.getInstance\s*\(\s*".*ECB"#,
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "ECB mode is insecure (no IV, reveals patterns); use GCM or CBC with HMAC",
+        },
+        // Weak hash patterns
+        SourcePattern {
+            regex: r#"\bMessageDigest\.getInstance\s*\(\s*"(MD5|SHA-1|SHA1)""#,
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "MD5/SHA-1 are cryptographically broken; use SHA-256 or SHA-3",
+        },
+        // Weak random
+        SourcePattern {
+            regex: r"\bjava\.util\.Random\b",
+            category: DangerCategory::Crypto,
+            severity: Severity::Medium,
+            reason: "java.util.Random is not cryptographically secure; use SecureRandom",
+        },
+        SourcePattern {
+            regex: r"\bMath\.random\s*\(",
+            category: DangerCategory::Crypto,
+            severity: Severity::Medium,
+            reason: "Math.random is not cryptographically secure; use SecureRandom",
+        },
+        // Path traversal
+        SourcePattern {
+            regex: r"\bnew\s+File\s*\([^)]*getParameter\s*\(",
+            category: DangerCategory::PathTraversal,
+            severity: Severity::High,
+            reason: "File path from user input; validate and canonicalize path",
+        },
+        SourcePattern {
+            regex: r"\bgetRequestDispatcher\s*\([^)]*getParameter",
+            category: DangerCategory::PathTraversal,
+            severity: Severity::High,
+            reason: "Request dispatch with user input; validate path to prevent traversal",
+        },
+        // LDAP injection
+        SourcePattern {
+            regex: r"\bsearch\s*\([^)]*\+.*getParameter",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "LDAP query with user input; use parameterized LDAP queries",
+        },
     ]
 }
 
