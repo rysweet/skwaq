@@ -16,12 +16,6 @@ pub async fn run(sub: &IngestSub) -> anyhow::Result<()> {
     match sub {
         IngestSub::Binary { path } => ingest_binary(path).await,
         IngestSub::Source { path } => ingest_source(path),
-        IngestSub::Sarif { path } => {
-            anyhow::bail!(
-                "SARIF report ingestion not yet implemented. Path: {}",
-                path.display()
-            );
-        }
     }
 }
 

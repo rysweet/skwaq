@@ -49,7 +49,9 @@ impl<'a> GraphBuilder<'a> {
         if result.is_ok() {
             self.db.mutate("COMMIT;")?;
         } else {
-            let _ = self.db.mutate("ROLLBACK;");
+            if let Err(e) = self.db.mutate("ROLLBACK;") {
+                tracing::error!("Failed to rollback transaction: {e}");
+            }
         }
 
         result?;
@@ -225,7 +227,9 @@ impl<'a> GraphBuilder<'a> {
         if result.is_ok() {
             self.db.mutate("COMMIT;")?;
         } else {
-            let _ = self.db.mutate("ROLLBACK;");
+            if let Err(e) = self.db.mutate("ROLLBACK;") {
+                tracing::error!("Failed to rollback transaction: {e}");
+            }
         }
 
         result?;
@@ -412,7 +416,9 @@ impl<'a> GraphBuilder<'a> {
         if result.is_ok() {
             self.db.mutate("COMMIT;")?;
         } else {
-            let _ = self.db.mutate("ROLLBACK;");
+            if let Err(e) = self.db.mutate("ROLLBACK;") {
+                tracing::error!("Failed to rollback transaction: {e}");
+            }
         }
 
         result?;

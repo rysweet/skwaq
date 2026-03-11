@@ -33,56 +33,6 @@ impl AgentRunner {
         Self { llm }
     }
 
-    /// Run an agent against the database.
-    ///
-    /// - Filters tools to only those listed in the agent definition.
-    /// - Builds a user prompt from the context string.
-    /// - Drives the LLM tool loop until completion or budget exhaustion.
-    pub async fn run_agent(
-        &self,
-        agent: &AgentDefinition,
-        investigation_id: &str,
-        context: &str,
-        budget: &mut TokenBudget,
-    ) -> anyhow::Result<AgentResult> {
-        let all_tools = agent_tools();
-        let tools = filter_tools(&all_tools, &agent.tools);
-        let model = &agent.model;
-        let system_prompt = &agent.system_prompt;
-
-        let tokens_before = budget.used;
-        let inv_id = investigation_id.to_string();
-
-        let output = execute_with_tools(
-            self.llm.as_ref(),
-            model,
-            system_prompt,
-            context,
-            &tools,
-            |_tool_name, _args| {
-                let _ = inv_id.clone();
-                async move {
-                    Err(anyhow::anyhow!(
-                        "Use run_agent_with_db to execute tools against a database"
-                    ))
-                }
-            },
-            budget,
-        )
-        .await;
-
-        // This path only triggers if someone calls run_agent directly without
-        // a database. In practice, run_agent_with_db is the correct entry point.
-        let output = output?;
-        let tokens_used = budget.used - tokens_before;
-
-        Ok(AgentResult {
-            agent_name: agent.name.clone(),
-            output,
-            tokens_used,
-        })
-    }
-
     /// Run an agent with access to the graph database for tool execution.
     ///
     /// This is the primary entry point for running agents. The database

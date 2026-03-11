@@ -130,30 +130,30 @@ pub fn parse_source(content: &str, language: &str, path: &str) -> anyhow::Result
 fn extract_functions(content: &str, language: &str) -> Vec<ExtractedFunction> {
     let patterns: Vec<Regex> = match language {
         "python" => vec![
-            Regex::new(r"(?m)^\s*def\s+(\w+)\s*\(").unwrap(),
-            Regex::new(r"(?m)^\s*async\s+def\s+(\w+)\s*\(").unwrap(),
+            Regex::new(r"(?m)^\s*def\s+(\w+)\s*\(").expect("compile-time regex"),
+            Regex::new(r"(?m)^\s*async\s+def\s+(\w+)\s*\(").expect("compile-time regex"),
         ],
         "javascript" | "typescript" => vec![
-            Regex::new(r"(?m)\bfunction\s+(\w+)\s*\(").unwrap(),
-            Regex::new(r"(?m)(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\(").unwrap(),
-            Regex::new(r"(?m)(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?function").unwrap(),
-            Regex::new(r"(?m)^\s*(?:async\s+)?(\w+)\s*\([^)]*\)\s*\{").unwrap(),
+            Regex::new(r"(?m)\bfunction\s+(\w+)\s*\(").expect("compile-time regex"),
+            Regex::new(r"(?m)(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\(").expect("compile-time regex"),
+            Regex::new(r"(?m)(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?function").expect("compile-time regex"),
+            Regex::new(r"(?m)^\s*(?:async\s+)?(\w+)\s*\([^)]*\)\s*\{").expect("compile-time regex"),
         ],
         "go" => vec![
-            Regex::new(r"(?m)^func\s+(?:\([^)]+\)\s+)?(\w+)\s*\(").unwrap(),
+            Regex::new(r"(?m)^func\s+(?:\([^)]+\)\s+)?(\w+)\s*\(").expect("compile-time regex"),
         ],
         "rust" => vec![
-            Regex::new(r"(?m)(?:pub\s+)?(?:async\s+)?fn\s+(\w+)").unwrap(),
+            Regex::new(r"(?m)(?:pub\s+)?(?:async\s+)?fn\s+(\w+)").expect("compile-time regex"),
         ],
         "java" => vec![
             Regex::new(
                 r"(?m)(?:public|private|protected|static|\s)+[\w<>\[\]]+\s+(\w+)\s*\(",
             )
-            .unwrap(),
+            .expect("compile-time regex"),
         ],
         "c" | "cpp" => vec![
             // Return type + name + paren – rough but effective for common patterns.
-            Regex::new(r"(?m)^[\w*\s]+\s+(\w+)\s*\([^;]*\)\s*\{").unwrap(),
+            Regex::new(r"(?m)^[\w*\s]+\s+(\w+)\s*\([^;]*\)\s*\{").expect("compile-time regex"),
         ],
         _ => vec![],
     };
@@ -163,10 +163,10 @@ fn extract_functions(content: &str, language: &str) -> Vec<ExtractedFunction> {
 
     for pat in &patterns {
         for m in pat.captures_iter(content) {
-            let name = m.get(1).unwrap().as_str().to_string();
-            let byte_offset = m.get(0).unwrap().start();
+            let name = m.get(1).expect("compile-time regex").as_str().to_string();
+            let byte_offset = m.get(0).expect("compile-time regex").start();
             let line = content[..byte_offset].matches('\n').count() + 1;
-            let sig = m.get(0).unwrap().as_str().trim().to_string();
+            let sig = m.get(0).expect("compile-time regex").as_str().trim().to_string();
 
             if seen.insert((name.clone(), line)) {
                 result.push(ExtractedFunction {
@@ -189,7 +189,7 @@ fn extract_functions(content: &str, language: &str) -> Vec<ExtractedFunction> {
 fn extract_calls(content: &str, language: &str) -> Vec<ExtractedCall> {
     // Generic call pattern: word followed by `(`.
     // Excludes language keywords via a post-filter.
-    let call_re = Regex::new(r"(?m)([\w.]+)\s*\(").unwrap();
+    let call_re = Regex::new(r"(?m)([\w.]+)\s*\(").expect("compile-time regex");
 
     let keywords: HashSet<&str> = match language {
         "python" => ["def", "class", "if", "elif", "while", "for", "with", "async", "await", "return", "import", "from", "except", "assert"]
@@ -210,15 +210,15 @@ fn extract_calls(content: &str, language: &str) -> Vec<ExtractedCall> {
     let mut result = Vec::new();
 
     for m in call_re.captures_iter(content) {
-        let full = m.get(1).unwrap().as_str();
+        let full = m.get(1).expect("compile-time regex").as_str();
         // Last segment after any `.` chains.
         let leaf = full.rsplit('.').next().unwrap_or(full);
         if keywords.contains(leaf) {
             continue;
         }
-        let byte_offset = m.get(0).unwrap().start();
+        let byte_offset = m.get(0).expect("compile-time regex").start();
         let line = content[..byte_offset].matches('\n').count() + 1;
-        let expression = m.get(0).unwrap().as_str().trim().to_string();
+        let expression = m.get(0).expect("compile-time regex").as_str().trim().to_string();
 
         result.push(ExtractedCall {
             name: full.to_string(),
@@ -237,26 +237,26 @@ fn extract_calls(content: &str, language: &str) -> Vec<ExtractedCall> {
 fn extract_imports(content: &str, language: &str) -> Vec<String> {
     let patterns: Vec<Regex> = match language {
         "python" => vec![
-            Regex::new(r"(?m)^\s*import\s+([\w.]+)").unwrap(),
-            Regex::new(r"(?m)^\s*from\s+([\w.]+)\s+import").unwrap(),
+            Regex::new(r"(?m)^\s*import\s+([\w.]+)").expect("compile-time regex"),
+            Regex::new(r"(?m)^\s*from\s+([\w.]+)\s+import").expect("compile-time regex"),
         ],
         "javascript" | "typescript" => vec![
-            Regex::new(r#"(?m)(?:import|require)\s*\(?['"]([^'"]+)['"]\)?"#).unwrap(),
-            Regex::new(r#"(?m)import\s+.*\s+from\s+['"]([^'"]+)['"]"#).unwrap(),
+            Regex::new(r#"(?m)(?:import|require)\s*\(?['"]([^'"]+)['"]\)?"#).expect("compile-time regex"),
+            Regex::new(r#"(?m)import\s+.*\s+from\s+['"]([^'"]+)['"]"#).expect("compile-time regex"),
         ],
         "go" => vec![
-            Regex::new(r#"(?m)import\s+"([^"]+)""#).unwrap(),
-            Regex::new(r#"(?m)\s+"([^"]+)""#).unwrap(), // inside import block
+            Regex::new(r#"(?m)import\s+"([^"]+)""#).expect("compile-time regex"),
+            Regex::new(r#"(?m)\s+"([^"]+)""#).expect("compile-time regex"), // inside import block
         ],
         "rust" => vec![
-            Regex::new(r"(?m)^\s*use\s+([\w:]+)").unwrap(),
-            Regex::new(r"(?m)^\s*extern\s+crate\s+(\w+)").unwrap(),
+            Regex::new(r"(?m)^\s*use\s+([\w:]+)").expect("compile-time regex"),
+            Regex::new(r"(?m)^\s*extern\s+crate\s+(\w+)").expect("compile-time regex"),
         ],
         "java" => vec![
-            Regex::new(r"(?m)^\s*import\s+([\w.]+);").unwrap(),
+            Regex::new(r"(?m)^\s*import\s+([\w.]+);").expect("compile-time regex"),
         ],
         "c" | "cpp" => vec![
-            Regex::new(r#"(?m)^\s*#\s*include\s+[<"]([^>"]+)[>"]"#).unwrap(),
+            Regex::new(r#"(?m)^\s*#\s*include\s+[<"]([^>"]+)[>"]"#).expect("compile-time regex"),
         ],
         _ => vec![],
     };
@@ -266,7 +266,7 @@ fn extract_imports(content: &str, language: &str) -> Vec<String> {
 
     for pat in &patterns {
         for m in pat.captures_iter(content) {
-            let imp = m.get(1).unwrap().as_str().to_string();
+            let imp = m.get(1).expect("compile-time regex").as_str().to_string();
             if seen.insert(imp.clone()) {
                 result.push(imp);
             }
@@ -284,11 +284,11 @@ fn extract_strings(content: &str) -> Vec<ExtractedString> {
     // Matches double-quoted and single-quoted strings (non-greedy).
     // Does not handle multi-line strings or escaped quotes perfectly,
     // but catches the common cases.
-    let re = Regex::new(r#"(?m)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')"#).unwrap();
+    let re = Regex::new(r#"(?m)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')"#).expect("compile-time regex");
 
     let mut result = Vec::new();
     for m in re.captures_iter(content) {
-        let raw = m.get(1).unwrap().as_str();
+        let raw = m.get(1).expect("compile-time regex").as_str();
         // Strip quotes.
         if raw.len() >= 2 {
             let value = &raw[1..raw.len() - 1];
@@ -296,7 +296,7 @@ fn extract_strings(content: &str) -> Vec<ExtractedString> {
             if value.len() < 3 {
                 continue;
             }
-            let byte_offset = m.get(0).unwrap().start();
+            let byte_offset = m.get(0).expect("compile-time regex").start();
             let line = content[..byte_offset].matches('\n').count() + 1;
             result.push(ExtractedString {
                 value: value.to_string(),
@@ -372,7 +372,7 @@ def handler(request):
 async def helper():
     pass
 "#;
-        let parsed = parse_source(src, "python", "app.py").unwrap();
+        let parsed = parse_source(src, "python", "app.py").expect("compile-time regex");
         assert_eq!(parsed.language, "python");
         assert!(parsed.functions.len() >= 2);
         assert!(parsed.functions.iter().any(|f| f.name == "handler"));
@@ -400,7 +400,7 @@ const helper = (x) => {
     return x + 1;
 };
 "#;
-        let parsed = parse_source(src, "javascript", "app.js").unwrap();
+        let parsed = parse_source(src, "javascript", "app.js").expect("compile-time regex");
         assert!(parsed.functions.iter().any(|f| f.name == "handleRequest"));
         assert!(parsed.calls.iter().any(|c| c.name == "eval"));
     }
@@ -413,14 +413,14 @@ use std::process::Command;
 pub fn run_cmd(input: &str) {
     let output = Command::new(input)
         .output()
-        .unwrap();
+        .expect("compile-time regex");
 }
 
 fn helper() -> bool {
     true
 }
 "#;
-        let parsed = parse_source(src, "rust", "main.rs").unwrap();
+        let parsed = parse_source(src, "rust", "main.rs").expect("compile-time regex");
         assert!(parsed.functions.iter().any(|f| f.name == "run_cmd"));
         assert!(parsed.functions.iter().any(|f| f.name == "helper"));
         assert!(parsed.imports.iter().any(|i| i.contains("std")));
@@ -437,7 +437,7 @@ func RunCommand(input string) {
     exec.Command(input).Run()
 }
 "#;
-        let parsed = parse_source(src, "go", "main.go").unwrap();
+        let parsed = parse_source(src, "go", "main.go").expect("compile-time regex");
         assert!(parsed.functions.iter().any(|f| f.name == "RunCommand"));
         assert!(parsed.imports.iter().any(|i| i == "os/exec"));
     }
@@ -453,7 +453,7 @@ public class Vuln {
     }
 }
 "#;
-        let parsed = parse_source(src, "java", "Vuln.java").unwrap();
+        let parsed = parse_source(src, "java", "Vuln.java").expect("compile-time regex");
         assert!(parsed.functions.iter().any(|f| f.name == "execute"));
         assert!(parsed.imports.iter().any(|i| i.contains("Runtime")));
     }

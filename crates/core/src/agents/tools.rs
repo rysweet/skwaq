@@ -117,7 +117,7 @@ pub fn agent_tools() -> Vec<ToolDefinition> {
         ToolDefinition {
             name: "search_similar".into(),
             description:
-                "Search for code patterns similar to a given snippet using embeddings.".into(),
+                "Search for code patterns similar to a given snippet using pattern matching.".into(),
             parameters: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -311,7 +311,13 @@ fn execute_get_callers(
     })?;
 
     let callers: Vec<serde_json::Value> = rows
-        .filter_map(|r| r.ok())
+        .filter_map(|r| match r {
+            Ok(v) => Some(v),
+            Err(e) => {
+                tracing::warn!("Error reading caller row: {e}");
+                None
+            }
+        })
         .map(|(name, addr)| {
             serde_json::json!({
                 "name": name,
@@ -352,7 +358,13 @@ fn execute_get_callees(
     })?;
 
     let callees: Vec<serde_json::Value> = rows
-        .filter_map(|r| r.ok())
+        .filter_map(|r| match r {
+            Ok(v) => Some(v),
+            Err(e) => {
+                tracing::warn!("Error reading callee row: {e}");
+                None
+            }
+        })
         .map(|(name, addr)| {
             serde_json::json!({
                 "name": name,
@@ -512,7 +524,13 @@ fn execute_search_similar(
     )?;
 
     let results: Vec<serde_json::Value> = rows
-        .filter_map(|r| r.ok())
+        .filter_map(|r| match r {
+            Ok(v) => Some(v),
+            Err(e) => {
+                tracing::warn!("Error reading search result row: {e}");
+                None
+            }
+        })
         .map(|(name, addr, decompiled)| {
             let preview = if decompiled.len() > 200 {
                 format!("{}...", &decompiled[..200])
@@ -539,10 +557,9 @@ fn translate_to_sql(query: &str, investigation_id: &str) -> String {
     let q = query.trim();
 
     let upper = q.to_uppercase();
-    if upper.starts_with("SELECT")
-        || upper.starts_with("INSERT")
-        || upper.starts_with("UPDATE")
-    {
+    // Only allow SELECT statements to pass through directly.
+    // INSERT/UPDATE/DELETE are blocked to prevent SQL injection from LLM queries.
+    if upper.starts_with("SELECT") {
         return q.to_string();
     }
 
@@ -581,7 +598,11 @@ fn execute_read_query(
     db: &GraphDb,
     sql: &str,
 ) -> anyhow::Result<Vec<serde_json::Value>> {
-    let mut stmt = db.conn().prepare(sql)?;
+    let stmt = db.conn().prepare(sql)?;
+    if !stmt.readonly() {
+        return Ok(vec![serde_json::json!({"error": "Only read-only queries are allowed. Write operations are not permitted."})]);
+    }
+    let mut stmt = stmt;
     let column_count = stmt.column_count();
     let column_names: Vec<String> = (0..column_count)
         .map(|i| stmt.column_name(i).unwrap_or("?").to_string())
@@ -619,7 +640,15 @@ fn execute_read_query(
         Ok(serde_json::Value::Object(obj))
     })?;
 
-    let results: Vec<serde_json::Value> = rows.filter_map(|r| r.ok()).collect();
+    let results: Vec<serde_json::Value> = rows
+        .filter_map(|r| match r {
+            Ok(v) => Some(v),
+            Err(e) => {
+                tracing::warn!("Error reading query result row: {e}");
+                None
+            }
+        })
+        .collect();
     Ok(results)
 }
 
@@ -847,5 +876,90 @@ mod tests {
         let all = agent_tools();
         let filtered = filter_tools(&all, &[]);
         assert_eq!(filtered.len(), all.len());
+    }
+
+    #[test]
+    fn test_query_graph_rejects_destructive_query() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv";
+
+        // Attempt an INSERT via query_graph - should be rejected by readonly check
+        let args = serde_json::json!({
+            "cypher": "INSERT INTO functions (id, name) VALUES ('evil', 'injected')"
+        });
+        let result = execute_tool(&db, inv_id, "query_graph", &args).unwrap();
+
+        // The translate_to_sql function no longer passes through INSERT,
+        // so it falls through to the Cypher fallback. Either way, the
+        // readonly check in execute_read_query should catch any write attempt.
+        // If it got through to execute_read_query, it returns an error.
+        // If it was treated as Cypher and fell through, SQLite may parse it.
+        // In both cases, the result should indicate an error.
+        let status = result.get("status").and_then(|v| v.as_str()).unwrap_or("");
+        let has_error = result.get("error").is_some()
+            || result.get("rows")
+                .and_then(|v| v.as_array())
+                .map(|rows| rows.iter().any(|r| r.get("error").is_some()))
+                .unwrap_or(false);
+        assert!(
+            status == "error" || has_error,
+            "Destructive query should be rejected, got: {result}"
+        );
+
+        // Verify no data was actually inserted
+        let count: i64 = db
+            .conn()
+            .query_row(
+                "SELECT count(*) FROM functions WHERE name = 'injected'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 0, "Destructive query must not modify the database");
+    }
+
+    #[test]
+    fn test_readonly_enforcement_in_execute_read_query() {
+        let db = GraphDb::in_memory().unwrap();
+
+        // Directly test execute_read_query with a write statement
+        let result = execute_read_query(&db, "INSERT INTO functions (id, name) VALUES ('evil', 'injected')").unwrap();
+
+        // Should return an error entry instead of executing
+        assert_eq!(result.len(), 1);
+        assert!(
+            result[0].get("error").is_some(),
+            "Write query should be rejected by readonly check"
+        );
+
+        // Verify nothing was inserted
+        let count: i64 = db
+            .conn()
+            .query_row(
+                "SELECT count(*) FROM functions WHERE name = 'injected'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_translate_to_sql_blocks_insert_update() {
+        // INSERT should NOT be passed through
+        let result = translate_to_sql("INSERT INTO functions VALUES ('x', 'y')", "inv1");
+        // Should be treated as Cypher (falls through to the as-is fallback)
+        // but NOT passed through as-is SQL
+        assert_eq!(result, "INSERT INTO functions VALUES ('x', 'y')");
+        // The readonly check in execute_read_query will catch this
+
+        // UPDATE should NOT be passed through
+        let result = translate_to_sql("UPDATE functions SET name = 'hacked'", "inv1");
+        assert_eq!(result, "UPDATE functions SET name = 'hacked'");
+        // The readonly check in execute_read_query will catch this
+
+        // SELECT should still work
+        let result = translate_to_sql("SELECT * FROM functions", "inv1");
+        assert_eq!(result, "SELECT * FROM functions");
     }
 }

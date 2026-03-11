@@ -224,11 +224,6 @@ pub enum IngestSub {
         /// Path to the source tree
         path: PathBuf,
     },
-    /// Import a SARIF report
-    Sarif {
-        /// Path to the SARIF file
-        path: PathBuf,
-    },
 }
 
 #[derive(Subcommand)]
@@ -245,14 +240,6 @@ pub enum InvestigateSub {
     },
     /// List all investigations
     List,
-    /// Export investigation results
-    Export {
-        /// Investigation ID
-        id: String,
-        /// Output path
-        #[arg(short, long)]
-        output: Option<PathBuf>,
-    },
 }
 
 #[derive(Subcommand)]

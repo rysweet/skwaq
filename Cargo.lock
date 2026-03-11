@@ -3193,28 +3193,10 @@ dependencies = [
  "rustyclawd-tools",
  "serde",
  "serde_json",
- "skwaq-agents",
  "skwaq-core",
  "tokio",
  "tracing",
  "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "skwaq-agents"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "chrono",
- "dirs",
- "rusqlite",
- "serde",
- "serde_json",
- "skwaq-core",
- "tokio",
- "tracing",
  "uuid",
 ]
 

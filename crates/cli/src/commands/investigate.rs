@@ -22,13 +22,6 @@ pub fn run(sub: &InvestigateSub) -> anyhow::Result<()> {
         InvestigateSub::List => {
             list_investigations()?;
         }
-        InvestigateSub::Export { id, output } => {
-            let out = output
-                .as_ref()
-                .map(|p| p.display().to_string())
-                .unwrap_or_else(|| "stdout".into());
-            anyhow::bail!("Investigation export not yet implemented. ID: {id} -> {out}");
-        }
     }
     Ok(())
 }

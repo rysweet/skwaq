@@ -20,8 +20,11 @@ pub struct CweDatabase {
 
 impl CweDatabase {
     /// Load CWE definitions from a JSON file or embedded data.
+    ///
+    /// CWE data is managed through the graph database. Use `skwaq kb init`
+    /// to populate the CWE database.
     pub fn load(_path: &str) -> anyhow::Result<Self> {
-        Err(anyhow::anyhow!("CWE database loading not yet implemented"))
+        Err(anyhow::anyhow!("Use `skwaq kb init` to populate the CWE database"))
     }
 
     /// Create an empty database (useful for tests).
