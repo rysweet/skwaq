@@ -1,0 +1,80 @@
+suite = "juliet"
+version = "1.3"
+# NIST Juliet Test Suite C/C++ v1.3
+# Full download: https://samate.nist.gov/SARD/downloads/test-suites/juliet/Juliet_Test_Suite_v1.3_for_C_Cpp.zip
+# SHA-256 must be populated after first download
+download_url = "https://samate.nist.gov/SARD/downloads/test-suites/juliet/Juliet_Test_Suite_v1.3_for_C_Cpp.zip"
+download_sha256 = "POPULATE_AFTER_DOWNLOAD"
+
+# Representative subset: 10 test cases across 5 high-priority CWE families
+# Full manifest should be generated from the downloaded data using scripts/generate-juliet-manifest.sh
+
+[[cases]]
+id = "CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_01"
+path = "testcases/CWE121_Stack_Based_Buffer_Overflow/s01/CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_01.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_01_good"
+path = "testcases/CWE121_Stack_Based_Buffer_Overflow/s01/CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_01.c"
+expected_cwes = []
+is_negative = true
+language = "c"
+
+[[cases]]
+id = "CWE78_OS_Command_Injection__char_connect_socket_system_01"
+path = "testcases/CWE78_OS_Command_Injection/s01/CWE78_OS_Command_Injection__char_connect_socket_system_01.c"
+expected_cwes = [78]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE134_Uncontrolled_Format_String__char_connect_socket_printf_01"
+path = "testcases/CWE134_Uncontrolled_Format_String/s01/CWE134_Uncontrolled_Format_String__char_connect_socket_printf_01.c"
+expected_cwes = [134]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE190_Integer_Overflow__int_connect_socket_add_01"
+path = "testcases/CWE190_Integer_Overflow/int/CWE190_Integer_Overflow__int_connect_socket_add_01.c"
+expected_cwes = [190]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE416_Use_After_Free__malloc_free_char_01"
+path = "testcases/CWE416_Use_After_Free/CWE416_Use_After_Free__malloc_free_char_01.c"
+expected_cwes = [416]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE122_Heap_Based_Buffer_Overflow__char_type_overrun_memcpy_01"
+path = "testcases/CWE122_Heap_Based_Buffer_Overflow/s01/CWE122_Heap_Based_Buffer_Overflow__char_type_overrun_memcpy_01.c"
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE89_SQL_Injection__char_connect_socket_execute_01"
+path = "testcases/CWE89_SQL_Injection/s01/CWE89_SQL_Injection__char_connect_socket_execute_01.c"
+expected_cwes = [89]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE252_Unchecked_Return_Value__char_fgets_01"
+path = "testcases/CWE252_Unchecked_Return_Value/CWE252_Unchecked_Return_Value__char_fgets_01.c"
+expected_cwes = [252]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "CWE362_Race_Condition__access_01"
+path = "testcases/CWE362_Race_Condition/CWE362_Race_Condition__access_01.c"
+expected_cwes = [362]
+is_negative = false
+language = "c"
