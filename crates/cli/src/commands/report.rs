@@ -48,7 +48,7 @@ pub fn run(
             } else {
                 "Markdown"
             };
-            println!("{format_name} report written to {}", path.display());
+            eprintln!("{format_name} report written to {}", path.display());
         }
         None => {
             println!("{report}");

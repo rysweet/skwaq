@@ -79,18 +79,36 @@ impl AgentRunner {
     }
 }
 
+/// Maximum characters for the analysis context sent to the LLM.
+///
+/// GitHub Models gpt-4o-mini has an ~8000 token request limit.  We keep the
+/// context small (~750 tokens) to leave room for system prompt + tool
+/// definitions.
+const DEFAULT_MAX_CONTEXT_CHARS: usize = 3000;
+
 /// Build context for the analysis from the graph database.
 ///
 /// This summarizes the investigation data to give the agent a starting
-/// point for its analysis.
+/// point for its analysis.  The total output is truncated to
+/// `max_context_chars` to stay within LLM token limits.
 pub fn build_analysis_context(target: &str, investigation_id: &str, db: &GraphDb) -> String {
+    build_analysis_context_with_limit(target, investigation_id, db, DEFAULT_MAX_CONTEXT_CHARS)
+}
+
+/// Build context with an explicit character limit.
+pub fn build_analysis_context_with_limit(
+    target: &str,
+    investigation_id: &str,
+    db: &GraphDb,
+    max_context_chars: usize,
+) -> String {
     let mut parts = vec![format!(
-        "Analyze the binary target: {target}\n\nHere is what we know from the graph database:\n"
+        "Analyze target: {target}\n\nGraph DB summary:\n"
     )];
 
-    // Summarize functions
+    // Summarize functions (reduced from 50 to 20)
     if let Ok(mut stmt) = db.conn().prepare(
-        "SELECT name, address FROM functions WHERE investigation_id = ?1 ORDER BY name LIMIT 50",
+        "SELECT name, address FROM functions WHERE investigation_id = ?1 ORDER BY name LIMIT 20",
     ) {
         if let Ok(rows) = stmt.query_map([investigation_id], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
@@ -112,7 +130,7 @@ pub fn build_analysis_context(target: &str, investigation_id: &str, db: &GraphDb
         "SELECT s.name, k.name, tf.path FROM taint_flows tf \
          JOIN data_sources s ON tf.source_id = s.id \
          JOIN data_sinks k ON tf.sink_id = k.id \
-         WHERE tf.sanitized = 0 AND s.investigation_id = ?1 LIMIT 20",
+         WHERE tf.sanitized = 0 AND s.investigation_id = ?1 LIMIT 10",
     ) {
         if let Ok(rows) = stmt.query_map([investigation_id], |row| {
             Ok((
@@ -150,7 +168,7 @@ pub fn build_analysis_context(target: &str, investigation_id: &str, db: &GraphDb
         "SELECT f1.name, f2.name FROM calls c \
          JOIN functions f1 ON c.caller_id = f1.id \
          JOIN functions f2 ON c.callee_id = f2.id \
-         WHERE f2.name IN ({param_placeholders}) AND f1.investigation_id = {inv_param} LIMIT 30"
+         WHERE f2.name IN ({param_placeholders}) AND f1.investigation_id = {inv_param} LIMIT 15"
     );
     if let Ok(mut stmt) = db.conn().prepare(&sql) {
         let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = dangerous
@@ -184,5 +202,14 @@ pub fn build_analysis_context(target: &str, investigation_id: &str, db: &GraphDb
             .into(),
     );
 
-    parts.join("\n")
+    let full = parts.join("\n");
+
+    // Truncate to stay within LLM token limits.
+    if full.len() > max_context_chars {
+        let mut truncated = full[..max_context_chars].to_string();
+        truncated.push_str("\n...[truncated]");
+        truncated
+    } else {
+        full
+    }
 }
