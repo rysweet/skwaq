@@ -41,7 +41,8 @@ pub struct ImprovementResult {
     pub reason: String,
 }
 
-/// Check if any CWE's detection rate dropped.
+/// Check if any CWE's detection rate dropped beyond the noise margin (2%).
+/// CWEs absent from the new score are ignored (they weren't tested in the new run).
 pub fn has_cwe_regression(baseline: &AggregateScore, new: &AggregateScore) -> bool {
     for baseline_cwe in baseline.per_cwe.values() {
         if let Some(new_cwe) = new.per_cwe.get(&baseline_cwe.cwe_id) {
