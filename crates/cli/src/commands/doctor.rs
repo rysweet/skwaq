@@ -1,62 +1,76 @@
 //! `skwaq doctor` - check system dependencies and connectivity.
+//!
+//! All dependencies are required. Missing tools cause errors, not warnings.
 
 use skwaq_core::binary::subprocess::{command_exists, get_version};
 use skwaq_core::config::Config;
 
 /// Run all health checks and print a summary.
+/// Returns error if any dependency is missing.
 pub async fn run() -> anyhow::Result<()> {
     println!("skwaq doctor — checking system dependencies\n");
 
     let config = Config::load().unwrap_or_default();
     let mut all_ok = true;
 
-    // Ghidra
-    let ghidra_ok = check_ghidra(&config).await;
-    all_ok &= ghidra_ok;
-
-    // Python
-    let python_ok = check_python().await;
-    all_ok &= python_ok;
-
-    // Semgrep
-    let semgrep_ok = check_semgrep().await;
-    all_ok &= semgrep_ok;
-
-    // GCC/compilation tools
-    let gcc_ok = check_gcc().await;
-    all_ok &= gcc_ok;
-
-    // AFL++ (fuzzing)
-    let afl_ok = check_afl().await;
-    // AFL is optional, don't fail overall
-    let _ = afl_ok;
-
-    // GhidraMCP server
-    let mcp_ok = check_ghidra_mcp().await;
-    let _ = mcp_ok; // Optional
-
-    // Database directory
-    let db_ok = check_database(&config);
-    all_ok &= db_ok;
-
-    // LLM configuration
-    let llm_ok = check_llm(&config).await;
-    let _ = llm_ok; // Optional but recommended
+    all_ok &= check_ghidra(&config).await;
+    all_ok &= check_python().await;
+    all_ok &= check_semgrep().await;
+    all_ok &= check_gcc().await;
+    all_ok &= check_afl().await;
+    all_ok &= check_ghidra_mcp().await;
+    all_ok &= check_database(&config);
+    all_ok &= check_llm(&config).await;
 
     println!();
     if all_ok {
-        println!("All required checks passed.");
+        println!("All checks passed.");
     } else {
-        println!("Some required checks failed. See above for details.");
+        anyhow::bail!("Missing required dependencies. Install them and run `skwaq doctor` again.");
     }
 
     Ok(())
 }
 
+/// Check required dependencies at startup.
+/// Returns Ok(()) if all required tools are present, Err with details otherwise.
+pub async fn check_required_deps() -> anyhow::Result<()> {
+    let mut missing = Vec::new();
+
+    if !gcc_available().await {
+        missing.push("gcc (sudo apt install gcc)");
+    }
+
+    if !llm_available().await {
+        missing.push("LLM (set ANTHROPIC_API_KEY or GITHUB_TOKEN)");
+    }
+
+    if !missing.is_empty() {
+        anyhow::bail!(
+            "Missing required dependencies:\n{}",
+            missing
+                .iter()
+                .map(|m| format!("  - {}", m))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+    }
+
+    Ok(())
+}
+
+async fn gcc_available() -> bool {
+    get_version("gcc", &["--version"]).await.is_some()
+}
+
+async fn llm_available() -> bool {
+    std::env::var("ANTHROPIC_API_KEY").is_ok()
+        || std::env::var("GITHUB_TOKEN").is_ok()
+        || std::env::var("GH_TOKEN").is_ok()
+}
+
 async fn check_ghidra(config: &Config) -> bool {
     print!("  Ghidra .............. ");
-
-    // Check configured path first, then PATH
     if !config.binary.ghidra_path.is_empty() {
         let analyze = std::path::Path::new(&config.binary.ghidra_path).join("analyzeHeadless");
         if analyze.exists() {
@@ -64,12 +78,11 @@ async fn check_ghidra(config: &Config) -> bool {
             return true;
         }
     }
-
     if let Some(path) = command_exists("analyzeHeadless").await {
         println!("OK ({path})");
         true
     } else {
-        println!("NOT FOUND");
+        println!("MISSING");
         println!("    Install: https://ghidra-sre.org/");
         println!("    Or set binary.ghidra_path in skwaq.toml");
         false
@@ -90,7 +103,7 @@ async fn check_python() -> bool {
             false
         }
     } else {
-        println!("NOT FOUND");
+        println!("MISSING");
         println!("    Install: https://www.python.org/downloads/");
         false
     }
@@ -102,7 +115,7 @@ async fn check_semgrep() -> bool {
         println!("OK ({version})");
         true
     } else {
-        println!("NOT FOUND");
+        println!("MISSING");
         println!("    Install: pip install semgrep");
         false
     }
@@ -115,7 +128,7 @@ async fn check_gcc() -> bool {
         println!("OK ({})", first_line);
         true
     } else {
-        println!("NOT FOUND");
+        println!("MISSING");
         println!("    Install: sudo apt install gcc (Ubuntu) or brew install gcc (macOS)");
         false
     }
@@ -128,7 +141,7 @@ async fn check_afl() -> bool {
         println!("OK ({})", first_line);
         true
     } else {
-        println!("NOT FOUND (optional — needed for `skwaq fuzz`)");
+        println!("MISSING");
         println!("    Install: sudo apt install afl++ (Ubuntu)");
         println!("    Or: cargo install afl");
         false
@@ -141,13 +154,13 @@ async fn check_ghidra_mcp() -> bool {
         println!("OK");
         true
     } else {
-        println!("NOT FOUND (optional — needed for MCP-based investigation)");
+        println!("MISSING");
         println!("    Install: https://github.com/cyberkaida/reverse-engineering-assistant");
         false
     }
 }
 
-async fn check_llm(config: &Config) -> bool {
+async fn check_llm(_config: &Config) -> bool {
     print!("  LLM configuration ... ");
     if std::env::var("ANTHROPIC_API_KEY").is_ok() {
         println!("OK (Anthropic API key found)");
@@ -157,11 +170,7 @@ async fn check_llm(config: &Config) -> bool {
         println!("OK (GitHub token found for Copilot Models)");
         return true;
     }
-    if !config.llm.reasoning.is_empty() && config.llm.reasoning != "auto" {
-        println!("OK (configured: {})", config.llm.reasoning);
-        return true;
-    }
-    println!("NOT CONFIGURED (optional — needed for AI agent analysis)");
+    println!("MISSING");
     println!("    Set ANTHROPIC_API_KEY or GITHUB_TOKEN environment variable");
     false
 }
@@ -171,10 +180,8 @@ fn check_database(config: &Config) -> bool {
     let db_path = config.database_path();
     if db_path.exists() {
         println!("OK ({db_path:?})");
-        true
     } else {
         println!("OK (will create at {db_path:?})");
-        // Not an error - will be created on first use
-        true
     }
+    true
 }

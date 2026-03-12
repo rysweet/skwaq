@@ -74,12 +74,15 @@ impl BenchmarkAdapter for CgcAdapter {
                 if out.exists() {
                     continue;
                 }
-                let _ = std::process::Command::new("make")
+                let status = std::process::Command::new("make")
                     .arg("-C")
                     .arg(challenge_dir)
-                    .stderr(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::piped())
                     .stdout(std::process::Stdio::null())
-                    .status();
+                    .status()?;
+                if !status.success() {
+                    tracing::warn!("CGC compilation failed for {}", case.id);
+                }
             }
         }
 
@@ -96,19 +99,18 @@ impl BenchmarkAdapter for CgcAdapter {
         if config.binary_mode {
             if let Some(bp) = &case.binary_path {
                 let binary = data_dir.join(bp);
-                if binary.exists() {
-                    return if config.quick_mode {
-                        run_binary_pattern_detection(&binary)
-                    } else {
-                        crate::agentic::run_agentic_binary_analysis(&binary, config.timeout_secs)
-                            .await
-                    };
+                if !binary.exists() {
+                    anyhow::bail!(
+                        "Binary '{}' not found for case '{}'. Run compilation first.",
+                        binary.display(),
+                        case.id
+                    );
                 }
-                tracing::warn!(
-                    "Binary {} not found for case {}, falling back to source",
-                    binary.display(),
-                    case.id
-                );
+                return if config.quick_mode {
+                    run_binary_pattern_detection(&binary)
+                } else {
+                    crate::agentic::run_agentic_binary_analysis(&binary, config.timeout_secs).await
+                };
             }
         }
 
