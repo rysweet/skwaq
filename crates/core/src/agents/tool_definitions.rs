@@ -148,6 +148,23 @@ pub fn agent_tools() -> Vec<ToolDefinition> {
                 "required": ["code"]
             }),
         ),
+        ToolDefinition::new(
+            "lookup_knowledge",
+            "Search the vulnerability analysis knowledge pack for expert guidance on \
+             CWE families, detection methodology, taint analysis patterns, or research approaches. \
+             Topics: methodology, cwe-families, codeql, research, memory, injection, crypto, \
+             or any CWE number.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Topic or keyword to search for in the knowledge pack"
+                    }
+                },
+                "required": ["query"]
+            }),
+        ),
     ]
 }
 

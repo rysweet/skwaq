@@ -8,6 +8,7 @@ tools:
   - get_callers
   - get_callees
   - lookup_cwe
+  - lookup_knowledge
   - create_finding
   - search_similar
 max_turns: 30
