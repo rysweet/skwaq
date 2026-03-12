@@ -267,6 +267,7 @@ mod tests {
         let case = TestCase {
             id: "test".to_string(),
             path: "test.c".to_string(),
+            binary_path: None,
             expected_cwes: vec![121],
             is_negative: false,
             language: "c".to_string(),
@@ -284,6 +285,7 @@ mod tests {
         let case = TestCase {
             id: "test".to_string(),
             path: "test.c".to_string(),
+            binary_path: None,
             expected_cwes: vec![121],
             is_negative: false,
             language: "c".to_string(),
@@ -353,6 +355,7 @@ mod tests {
         let case = TestCase {
             id: "cwe78_test".to_string(),
             path: "test.c".to_string(),
+            binary_path: None,
             expected_cwes: vec![78],
             is_negative: false,
             language: "c".to_string(),
@@ -380,6 +383,7 @@ mod tests {
         let case = TestCase {
             id: "negative".to_string(),
             path: "clean.c".to_string(),
+            binary_path: None,
             expected_cwes: vec![],
             is_negative: true,
             language: "c".to_string(),

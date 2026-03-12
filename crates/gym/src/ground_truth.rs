@@ -10,6 +10,9 @@ pub struct TestCase {
     pub id: String,
     /// Relative path to the test file/binary within the benchmark data directory.
     pub path: String,
+    /// Relative path to the compiled binary for binary analysis mode.
+    #[serde(default)]
+    pub binary_path: Option<String>,
     /// CWE IDs that SHOULD be detected in this test case.
     pub expected_cwes: Vec<u32>,
     /// Whether this is a "good" (patched) variant that should have NO findings.
@@ -49,6 +52,15 @@ impl GroundTruth {
                     case.id,
                     case.path
                 );
+            }
+            if let Some(bp) = &case.binary_path {
+                if bp.contains("..") || Path::new(bp).is_absolute() {
+                    anyhow::bail!(
+                        "Invalid binary_path in manifest case '{}': {}. Paths must be relative without '..'",
+                        case.id,
+                        bp
+                    );
+                }
             }
             // Restrict case IDs to safe characters.
             if !case
@@ -97,7 +109,52 @@ language = "c"
         assert_eq!(gt.suite, "test");
         assert_eq!(gt.cases.len(), 2);
         assert_eq!(gt.cases[0].expected_cwes, vec![121]);
+        assert!(gt.cases[0].binary_path.is_none());
         assert!(gt.cases[1].is_negative);
+    }
+
+    #[test]
+    fn test_load_manifest_with_binary_path() {
+        let toml = r#"
+suite = "test"
+version = "1.0"
+
+[[cases]]
+id = "test_bin"
+path = "src/test.c"
+binary_path = "binaries/test_O0"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+"#;
+        let gt: GroundTruth = toml::from_str(toml).unwrap();
+        assert_eq!(gt.cases[0].binary_path.as_deref(), Some("binaries/test_O0"));
+    }
+
+    #[test]
+    fn test_reject_binary_path_traversal() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = dir.path().join("bad.toml");
+        std::fs::write(
+            &manifest,
+            r#"
+suite = "bad"
+version = "1.0"
+
+[[cases]]
+id = "evil"
+path = "test.c"
+binary_path = "../../etc/shadow"
+expected_cwes = [22]
+is_negative = false
+language = "c"
+"#,
+        )
+        .unwrap();
+
+        let result = GroundTruth::load(&manifest);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("binary_path"));
     }
 
     #[test]

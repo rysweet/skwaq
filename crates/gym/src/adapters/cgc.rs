@@ -50,9 +50,39 @@ impl BenchmarkAdapter for CgcAdapter {
         config.cache_dir.join("cgc").join(".ready").exists()
     }
 
-    async fn compile(&self, _data_dir: &Path, _config: &BenchmarkConfig) -> anyhow::Result<()> {
-        // CGC challenges include source code that can be compiled.
-        // For now, we analyze the source directly.
+    async fn compile(&self, data_dir: &Path, config: &BenchmarkConfig) -> anyhow::Result<()> {
+        // CGC challenges have Makefiles in each challenge directory.
+        // Compile if binary_mode is requested.
+        if !config.binary_mode {
+            return Ok(());
+        }
+
+        let gt = self.ground_truth()?;
+        let bin_dir = data_dir.join("compiled");
+        std::fs::create_dir_all(&bin_dir)?;
+
+        for case in &gt.cases {
+            let source_path = data_dir.join(&case.path);
+            let challenge_dir = source_path
+                .parent()
+                .and_then(|p| p.parent())
+                .unwrap_or(data_dir);
+
+            let makefile = challenge_dir.join("Makefile");
+            if makefile.exists() {
+                let out = bin_dir.join(format!("{}.bin", case.id));
+                if out.exists() {
+                    continue;
+                }
+                let _ = std::process::Command::new("make")
+                    .arg("-C")
+                    .arg(challenge_dir)
+                    .stderr(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .status();
+            }
+        }
+
         Ok(())
     }
 
@@ -62,6 +92,29 @@ impl BenchmarkAdapter for CgcAdapter {
         data_dir: &Path,
         config: &BenchmarkConfig,
     ) -> anyhow::Result<Vec<DetectedFinding>> {
+        // Binary mode: analyze compiled binary
+        if config.binary_mode {
+            if let Some(bp) = &case.binary_path {
+                let binary = data_dir.join(bp);
+                if binary.exists() {
+                    return if config.quick_mode {
+                        run_binary_pattern_detection(&binary)
+                    } else {
+                        crate::agentic::run_agentic_binary_analysis(
+                            &binary,
+                            config.timeout_secs,
+                        )
+                        .await
+                    };
+                }
+                tracing::warn!(
+                    "Binary {} not found for case {}, falling back to source",
+                    binary.display(),
+                    case.id
+                );
+            }
+        }
+
         // CGC challenges span multiple source files. Analyze ALL .c files
         // in the challenge's src/ directory, not just the one listed in path.
         let source_path = data_dir.join(&case.path);

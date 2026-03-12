@@ -178,6 +178,139 @@ pub async fn run_agentic_source_analysis(
     Ok(deduped)
 }
 
+/// Run full agentic analysis on a compiled binary.
+///
+/// Parses the binary with goblin, populates the graph, runs pattern
+/// detection on imports, then (optionally) runs the LLM agent pipeline.
+pub async fn run_agentic_binary_analysis(
+    path: &Path,
+    timeout_secs: u64,
+) -> anyhow::Result<Vec<DetectedFinding>> {
+    use skwaq_core::binary::native::parse_binary;
+
+    let db = GraphDb::in_memory()?;
+    let binary_info = parse_binary(path)?;
+
+    let inv_id = format!("gym-bin-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+    let now = chrono::Utc::now().to_rfc3339();
+    let file_str = path.to_string_lossy().to_string();
+
+    // Create investigation
+    db.execute(
+        "INSERT INTO investigations (id, name, target, status, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
+        &[
+            &inv_id.as_str(),
+            &file_str.as_str(),
+            &file_str.as_str(),
+            &now.as_str(),
+            &now.as_str(),
+        ],
+    )?;
+
+    // Ingest binary into graph
+    let builder = GraphBuilder::new(&db);
+    builder.build_from_binary_info(&binary_info, &inv_id)?;
+
+    // Pattern detection on imports
+    let mut pattern_categories: HashSet<String> = HashSet::new();
+    let detector = DangerousApiDetector::new();
+    let import_hits = detector.check_imports(&binary_info.imports);
+
+    let mut pattern_findings = Vec::new();
+    for hit in &import_hits {
+        let category = hit.danger_category.to_string();
+        pattern_categories.insert(category.clone());
+
+        let finding_id = uuid::Uuid::new_v4().to_string();
+        let _ = db.execute(
+            "INSERT INTO findings (id, title, evidence, agent, timestamp, investigation_id, \
+             status, severity, category) \
+             VALUES (?1, ?2, ?3, 'binary-pattern-detector', ?4, ?5, 'new', ?6, ?7)",
+            &[
+                &finding_id.as_str(),
+                &format!("Binary import: {} ({})", hit.function_name, hit.library).as_str(),
+                &format!(
+                    "category={}, severity={}, reason={}",
+                    hit.danger_category, hit.severity, hit.reason
+                )
+                .as_str(),
+                &now.as_str(),
+                &inv_id.as_str(),
+                &hit.severity.to_string().to_lowercase().as_str(),
+                &category.as_str(),
+            ],
+        );
+
+        pattern_findings.push(DetectedFinding {
+            id: finding_id,
+            category,
+            severity: hit.severity.to_string(),
+            cwes: vec![],
+            file: file_str.clone(),
+            function: hit.function_name.clone(),
+            line: None,
+            title: format!("Binary import: {}", hit.function_name),
+        });
+    }
+
+    // Collect CWE families from patterns
+    let pattern_cwe_families: HashSet<u32> = pattern_categories
+        .iter()
+        .flat_map(|cat| scoring::category_to_cwes(cat))
+        .map(scoring::cwe_family)
+        .collect();
+
+    // Multi-cycle orchestrator (taint analysis on graph)
+    let orchestrator = skwaq_core::analysis::AnalysisOrchestrator::new(&db, 3);
+    let _cycles = orchestrator.run_quick_analysis(&inv_id)?;
+
+    let orchestrator_findings =
+        collect_findings_from_db(&db, &inv_id, "binary-pattern-detector")?;
+    for f in &orchestrator_findings {
+        pattern_categories.insert(f.category.clone());
+    }
+
+    // LLM agent pipeline
+    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await;
+
+    // Dual-judge intersection
+    let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
+
+    if all_findings
+        .iter()
+        .all(|f| f.title.starts_with("Binary import:"))
+    {
+        return Ok(pattern_findings);
+    }
+
+    let no_patterns = pattern_categories.is_empty();
+    let confirmed: Vec<DetectedFinding> = all_findings
+        .into_iter()
+        .filter(|f| {
+            if no_patterns {
+                return true;
+            }
+            if pattern_categories.contains(&f.category) {
+                return true;
+            }
+            let finding_families: HashSet<u32> = scoring::category_to_cwes(&f.category)
+                .into_iter()
+                .map(scoring::cwe_family)
+                .collect();
+            !finding_families.is_disjoint(&pattern_cwe_families)
+        })
+        .collect();
+
+    let mut seen_categories: HashSet<String> = HashSet::new();
+    let deduped: Vec<DetectedFinding> = confirmed
+        .into_iter()
+        .filter(|f| seen_categories.insert(f.category.clone()))
+        .collect();
+
+    Ok(deduped)
+}
+
 /// Run the LLM agent pipeline if ANTHROPIC_API_KEY is configured.
 async fn run_llm_pipeline(db: &GraphDb, inv_id: &str, file_str: &str, timeout_secs: u64) {
     let config = match Config::load() {

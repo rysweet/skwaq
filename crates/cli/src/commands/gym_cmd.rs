@@ -25,6 +25,10 @@ pub enum GymSub {
         #[arg(long)]
         quick: bool,
 
+        /// Analyze compiled binaries instead of source code
+        #[arg(long)]
+        binary: bool,
+
         /// Output JSON report to file
         #[arg(long)]
         json: Option<PathBuf>,
@@ -79,6 +83,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             cwe,
             max_cases,
             quick,
+            binary,
             json,
             markdown,
         } => {
@@ -86,7 +91,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 .as_ref()
                 .map(|c| parse_cwe_number(c).map(|n| vec![n]))
                 .transpose()?;
-            gym.run(suite.as_deref(), cwe_filter, *max_cases, *quick)
+            gym.run(suite.as_deref(), cwe_filter, *max_cases, *quick, *binary)
                 .await?;
 
             if let Some(path) = json {
@@ -123,6 +128,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 cwe_filter: None,
                 max_cases: Some(*max_cases),
                 quick_mode: true,
+                binary_mode: false,
                 parallelism: 4,
                 timeout_secs: 30,
             };

@@ -93,6 +93,29 @@ impl BenchmarkAdapter for JulietAdapter {
         data_dir: &Path,
         config: &BenchmarkConfig,
     ) -> anyhow::Result<Vec<DetectedFinding>> {
+        // Binary mode: analyze compiled binary
+        if config.binary_mode {
+            if let Some(bp) = &case.binary_path {
+                let binary = data_dir.join(bp);
+                if binary.exists() {
+                    return if config.quick_mode {
+                        run_binary_pattern_detection(&binary)
+                    } else {
+                        crate::agentic::run_agentic_binary_analysis(
+                            &binary,
+                            config.timeout_secs,
+                        )
+                        .await
+                    };
+                }
+                tracing::warn!(
+                    "Binary {} not found for case {}, falling back to source",
+                    binary.display(),
+                    case.id
+                );
+            }
+        }
+
         let source_path = data_dir.join(&case.path);
         if config.quick_mode {
             run_source_pattern_detection(&source_path)
