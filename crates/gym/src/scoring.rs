@@ -137,16 +137,14 @@ pub fn cwe_family(cwe: u32) -> u32 {
         23 | 36 => 22,
         // Crypto weakness family -> CWE-327
         326 | 328 | 330 | 338 | 310 | 295 => 327,
-        // Hard-coded credentials -> CWE-798
-        312 => 798,
         // Use of potentially dangerous function -> CWE-676
         242 | 676 => 676,
         // Hardware crypto with short key -> crypto family
         1240 => 327,
-        // Type confusion -> itself
-        843 => 843,
-        // Untrusted/expired pointer dereference -> null pointer family
-        822 | 823 | 825 => 476,
+        // Type confusion -> memory safety family (often leads to buffer overflow)
+        843 => 119,
+        // Untrusted/expired/freed pointer dereference -> memory safety family
+        822 | 823 | 825 => 119,
         // Everything else maps to itself.
         other => other,
     }
@@ -408,14 +406,19 @@ mod tests {
 
     #[test]
     fn test_new_cwe_family_mappings() {
-        assert_eq!(cwe_family(312), 798);
-        assert_eq!(cwe_family(822), 476);
-        assert_eq!(cwe_family(823), 476);
-        assert_eq!(cwe_family(825), 476);
+        // CWE-312 (Cleartext Storage) maps to itself, NOT to CWE-798
+        assert_eq!(cwe_family(312), 312);
+        // Pointer dereference issues map to memory safety (CWE-119)
+        assert_eq!(cwe_family(822), 119);
+        assert_eq!(cwe_family(823), 119);
+        assert_eq!(cwe_family(825), 119);
+        // Hardware crypto → crypto family
         assert_eq!(cwe_family(1240), 327);
+        // Dangerous function
         assert_eq!(cwe_family(676), 676);
         assert_eq!(cwe_family(242), 676);
-        assert_eq!(cwe_family(843), 843);
+        // Type confusion → memory safety
+        assert_eq!(cwe_family(843), 119);
     }
 
     #[test]
