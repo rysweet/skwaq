@@ -27,6 +27,10 @@ pub struct BenchmarkConfig {
     pub binary_mode: bool,
     /// Number of parallel compilation/analysis jobs.
     pub parallelism: usize,
+    /// Number of cases to skip (for multi-process parallelism).
+    pub skip: usize,
+    /// Number of cases to run concurrently (in-process async parallelism).
+    pub concurrency: usize,
     /// Per-case timeout in seconds.
     pub timeout_secs: u64,
 }

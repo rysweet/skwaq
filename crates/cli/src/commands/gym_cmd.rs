@@ -25,6 +25,15 @@ pub enum GymSub {
         #[arg(long)]
         quick: bool,
 
+        /// Skip the first N cases (for multi-process parallelism)
+        #[arg(long, default_value = "0")]
+        skip: usize,
+
+        /// Number of cases to analyze concurrently (in-process async parallelism).
+        /// Default 4 for hybrid mode, 1 for quick mode.
+        #[arg(long, short = 'j')]
+        concurrency: Option<usize>,
+
         /// Analyze source code only, skip binary analysis (binary is the default for C cases)
         #[arg(long)]
         source_only: bool,
@@ -83,6 +92,8 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             cwe,
             max_cases,
             quick,
+            skip,
+            concurrency,
             source_only,
             json,
             markdown,
@@ -92,12 +103,16 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 .map(|c| parse_cwe_number(c).map(|n| vec![n]))
                 .transpose()?;
             let binary_mode = !*source_only;
+            // Default concurrency: 4 for hybrid mode, 1 for quick mode
+            let conc = concurrency.unwrap_or(if *quick { 1 } else { 4 });
             gym.run(
                 suite.as_deref(),
                 cwe_filter,
                 *max_cases,
                 *quick,
                 binary_mode,
+                *skip,
+                conc,
             )
             .await?;
 
@@ -137,6 +152,8 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 quick_mode: true,
                 binary_mode: false,
                 parallelism: 4,
+                skip: 0,
+                concurrency: 1,
                 timeout_secs: 30,
             };
 

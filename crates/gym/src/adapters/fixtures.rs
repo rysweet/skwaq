@@ -126,6 +126,8 @@ mod tests {
             quick_mode: true,
             binary_mode: false,
             parallelism: 1,
+            skip: 0,
+            concurrency: 1,
             timeout_secs: 30,
         }
     }
@@ -225,6 +227,8 @@ mod tests {
             quick_mode: true,
             binary_mode: true,
             parallelism: 1,
+            skip: 0,
+            concurrency: 1,
             timeout_secs: 30,
         }
     }
