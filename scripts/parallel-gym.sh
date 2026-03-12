@@ -23,12 +23,11 @@ SUITE="${1:?Usage: parallel-gym.sh <suite> <total_cases> <num_procs> [extra_args
 TOTAL="${2:?Specify total cases}"
 NPROCS="${3:?Specify number of processes}"
 shift 3
-EXTRA_ARGS="$*"
+EXTRA_ARGS=("$@")
 
 CASES_PER_PROC=$(( (TOTAL + NPROCS - 1) / NPROCS ))  # ceiling division
 SKWAQ="${SKWAQ:-./target/release/skwaq}"
-OUTDIR="/tmp/gym-parallel-${SUITE}-$(date +%s)"
-mkdir -p "$OUTDIR"
+OUTDIR=$(mktemp -d /tmp/gym-parallel-${SUITE}-XXXXXX)
 
 echo "=== Parallel Gym Run ==="
 echo "Suite:      $SUITE"
@@ -37,7 +36,7 @@ echo "Processes:  $NPROCS"
 echo "Per proc:   $CASES_PER_PROC cases"
 echo "Binary:     $SKWAQ"
 echo "Output:     $OUTDIR"
-echo "Extra args: $EXTRA_ARGS"
+echo "Extra args: ${EXTRA_ARGS[*]}"
 echo ""
 
 # Verify binary exists
@@ -59,7 +58,7 @@ for i in $(seq 0 $((NPROCS - 1))); do
         --skip "$SKIP" \
         --max-cases "$CASES_PER_PROC" \
         --json "$JSON" \
-        $EXTRA_ARGS \
+        "${EXTRA_ARGS[@]}" \
         > "$LOG" 2>&1 &
 
     PIDS+=($!)

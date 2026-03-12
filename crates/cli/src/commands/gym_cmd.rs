@@ -198,7 +198,23 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             println!("  Output:      {}", eval_dir.display());
             println!();
 
+            let valid_suites: std::collections::HashSet<&str> = [
+                "fixtures",
+                "juliet",
+                "owasp",
+                "cyberseceval",
+                "cgc",
+                "binpool",
+                "binmetric",
+            ]
+            .into_iter()
+            .collect();
             let suite_list: Vec<&str> = suites.split(',').map(|s| s.trim()).collect();
+            for s in &suite_list {
+                if !valid_suites.contains(s) {
+                    anyhow::bail!("Unknown suite '{}'. Valid: {:?}", s, valid_suites);
+                }
+            }
             let mut all_children: Vec<(String, Vec<std::process::Child>)> = Vec::new();
 
             for suite in &suite_list {

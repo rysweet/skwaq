@@ -58,14 +58,12 @@ SUITE_CASES[cyberseceval]=578
 SUITE_CASES[cgc]=204
 SUITE_CASES[fixtures]=7
 
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-EVAL_DIR="/tmp/gym-eval-${TIMESTAMP}"
-mkdir -p "$EVAL_DIR"
+EVAL_DIR=$(mktemp -d /tmp/gym-eval-XXXXXX)
 
 echo "╔══════════════════════════════════════════════════╗"
 echo "║           SKWAQ GYM EVALUATION                  ║"
 echo "╠══════════════════════════════════════════════════╣"
-echo "║  Mode:        $([ -n "$QUICK" ] && echo "Pattern-only (quick)" || echo "Hybrid (LLM + Pattern)")            ║"
+echo "║  Mode:        $([ -n "${QUICK:+$QUICK}" ] && echo "Pattern-only (quick)" || echo "Hybrid (LLM + Pattern)")            ║"
 echo "║  Processes:   $PROCS per suite                          ║"
 echo "║  Concurrency: $CONCURRENCY per process                        ║"
 echo "║  Output:      $EVAL_DIR  ║"
@@ -80,7 +78,7 @@ fi
 
 # Always run fixtures sequentially (only 7 cases)
 echo "[fixtures] Running fixtures..."
-"$SKWAQ" gym run fixtures $QUICK -j 1 \
+"$SKWAQ" gym run fixtures ${QUICK:+$QUICK} -j 1 \
     --json "$EVAL_DIR/fixtures.json" \
     > "$EVAL_DIR/fixtures.log" 2>&1
 echo "[fixtures] Done"
@@ -109,7 +107,7 @@ for suite in "${SUITE_LIST[@]}"; do
             --skip "$skip" \
             --max-cases "$cases_per" \
             -j "$CONCURRENCY" \
-            $QUICK \
+            ${QUICK:+$QUICK} \
             --json "$suite_dir/shard-${i}.json" \
             > "$suite_dir/shard-${i}.log" 2>&1 &
         pids+=($!)
