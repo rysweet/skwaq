@@ -377,6 +377,9 @@ impl Gym {
             reporting::terminal::print_summary(&score, &suite_name);
         }
 
+        // Report synthesis usage across the entire run
+        agentic::synthesis_stats().report();
+
         Ok(())
     }
 

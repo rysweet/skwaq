@@ -19,6 +19,78 @@ use skwaq_core::graph::GraphDb;
 use skwaq_core::source::parse_file;
 use std::collections::HashSet;
 use std::path::Path;
+use std::sync::atomic::{AtomicU32, Ordering};
+
+/// Tracks how many cases used LLM synthesis vs. deterministic fallback.
+///
+/// Thread-safe counters for use across concurrent gym case execution.
+/// Call [`SynthesisStats::report`] at end of a gym run to log the summary.
+pub struct SynthesisStats {
+    llm_synthesis_count: AtomicU32,
+    fallback_count: AtomicU32,
+}
+
+impl Default for SynthesisStats {
+    fn default() -> Self {
+        Self {
+            llm_synthesis_count: AtomicU32::new(0),
+            fallback_count: AtomicU32::new(0),
+        }
+    }
+}
+
+impl SynthesisStats {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn record_llm_synthesis(&self) {
+        self.llm_synthesis_count.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn record_fallback(&self) {
+        self.fallback_count.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Log end-of-run synthesis summary. Call after all cases complete.
+    pub fn report(&self) {
+        let llm = self.llm_synthesis_count.load(Ordering::Relaxed);
+        let fallback = self.fallback_count.load(Ordering::Relaxed);
+        let total = llm + fallback;
+        if total == 0 {
+            tracing::info!("Synthesis: no dual-source cases (nothing to synthesize)");
+            return;
+        }
+        if fallback > 0 {
+            tracing::warn!(
+                "Synthesis summary: {}/{} cases used LLM synthesis, {} used deterministic fallback",
+                llm,
+                total,
+                fallback,
+            );
+            eprintln!(
+                "\n  WARNING: {}/{} synthesis cases fell back to deterministic merge.\n  \
+                 LLM synthesis may not be working. Check warnings above.\n",
+                fallback, total,
+            );
+        } else {
+            tracing::info!(
+                "Synthesis summary: {}/{} cases used LLM synthesis (all successful)",
+                llm,
+                total,
+            );
+        }
+    }
+}
+
+/// Global synthesis stats for the current gym run.
+static SYNTHESIS_STATS: std::sync::LazyLock<SynthesisStats> =
+    std::sync::LazyLock::new(SynthesisStats::new);
+
+/// Get the global synthesis stats. Call [`SynthesisStats::report`] at end of run.
+pub fn synthesis_stats() -> &'static SynthesisStats {
+    &SYNTHESIS_STATS
+}
 
 /// Run full agentic analysis on a source file.
 ///
@@ -406,8 +478,12 @@ async fn synthesize_findings(
 
     // Both sources have findings — attempt LLM synthesis
     match llm_synthesize(&pattern_findings, &llm_findings, timeout_secs).await {
-        Some(synthesized) => synthesized,
+        Some(synthesized) => {
+            SYNTHESIS_STATS.record_llm_synthesis();
+            synthesized
+        }
         None => {
+            SYNTHESIS_STATS.record_fallback();
             // Fallback: deterministic merge with LLM priority
             merge_findings_deterministic(all_findings)
         }
@@ -417,13 +493,34 @@ async fn synthesize_findings(
 /// Call the LLM to evaluate findings like a lead security reviewer.
 ///
 /// Returns None if LLM is unavailable (caller should fall back).
+/// Logs WARN on every failure path so problems are visible.
 async fn llm_synthesize(
     pattern_findings: &[DetectedFinding],
     llm_findings: &[DetectedFinding],
     timeout_secs: u64,
 ) -> Option<Vec<DetectedFinding>> {
-    let config = Config::load().ok()?;
-    let client = skwaq_core::llm::create_client(&config.llm).await.ok()?;
+    let config = match Config::load() {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!("LLM synthesis unavailable: config load failed: {}", e);
+            eprintln!(
+                "  WARNING: LLM synthesis unavailable (config load failed: {}), using merge fallback",
+                e
+            );
+            return None;
+        }
+    };
+    let client = match skwaq_core::llm::create_client(&config.llm).await {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!("LLM synthesis unavailable: client creation failed: {}", e);
+            eprintln!(
+                "  WARNING: LLM synthesis unavailable (client creation failed: {}), using merge fallback",
+                e
+            );
+            return None;
+        }
+    };
 
     // Build the synthesis prompt
     let mut prompt = String::from(
@@ -489,11 +586,19 @@ async fn llm_synthesize(
     let response_text = match result {
         Ok(Ok(text)) => text,
         Ok(Err(e)) => {
-            tracing::debug!("LLM synthesis call failed: {}", e);
+            tracing::warn!("LLM synthesis call failed: {}", e);
+            eprintln!(
+                "  WARNING: LLM synthesis call failed ({}), using merge fallback",
+                e
+            );
             return None;
         }
         Err(_) => {
-            tracing::debug!("LLM synthesis timed out");
+            tracing::warn!("LLM synthesis timed out after {}s", timeout_secs);
+            eprintln!(
+                "  WARNING: LLM synthesis timed out after {}s, using merge fallback",
+                timeout_secs
+            );
             return None;
         }
     };
@@ -610,7 +715,7 @@ async fn run_llm_pipeline(db: &GraphDb, inv_id: &str, file_str: &str, timeout_se
     let llm_client = match skwaq_core::llm::create_client(&config.llm).await {
         Ok(c) => c,
         Err(e) => {
-            tracing::debug!("LLM not available ({}), using pattern-only analysis", e);
+            tracing::warn!("LLM not available ({}), using pattern-only analysis", e);
             return;
         }
     };
@@ -1064,5 +1169,66 @@ mod tests {
         assert!(!findings.is_empty(), "Should produce findings");
         let has_memory = findings.iter().any(|f| f.category == "memory");
         assert!(has_memory, "Should detect memory category");
+    }
+
+    #[tokio::test]
+    async fn test_synthesis_is_tracked() {
+        // When both sources have findings, synthesize_findings should
+        // attempt LLM synthesis and track the outcome (either success or fallback).
+        // It must NOT silently skip tracking.
+        let db = GraphDb::in_memory().unwrap();
+        let cats = HashSet::new();
+
+        let findings = vec![
+            DetectedFinding {
+                id: "p1".into(),
+                category: "memory".into(),
+                severity: "high".into(),
+                cwes: vec![],
+                file: "t.c".into(),
+                function: "f".into(),
+                line: Some(1),
+                title: "Dangerous pattern: strcpy".into(),
+            },
+            DetectedFinding {
+                id: "l1".into(),
+                category: "injection".into(),
+                severity: "critical".into(),
+                cwes: vec![],
+                file: "t.c".into(),
+                function: "g".into(),
+                line: Some(2),
+                title: "LLM: command injection".into(),
+            },
+        ];
+
+        let stats = synthesis_stats();
+        let before_llm = stats.llm_synthesis_count.load(Ordering::Relaxed);
+        let before_fallback = stats.fallback_count.load(Ordering::Relaxed);
+
+        let result = synthesize_findings(findings, &cats, &db, 30).await;
+        assert!(!result.is_empty(), "Should produce findings");
+
+        let after_llm = stats.llm_synthesis_count.load(Ordering::Relaxed);
+        let after_fallback = stats.fallback_count.load(Ordering::Relaxed);
+
+        // Either LLM synthesis succeeded or fallback was used — one counter must increase
+        let total_increase = (after_llm - before_llm) + (after_fallback - before_fallback);
+        assert!(
+            total_increase > 0,
+            "Synthesis must track its outcome: llm_delta={}, fallback_delta={} (neither changed!)",
+            after_llm - before_llm,
+            after_fallback - before_fallback,
+        );
+    }
+
+    #[test]
+    fn test_synthesis_stats_report() {
+        let stats = SynthesisStats::new();
+        stats.record_llm_synthesis();
+        stats.record_llm_synthesis();
+        stats.record_fallback();
+        // Just verify it doesn't panic — the output goes to tracing/eprintln
+        stats.report();
     }
 }
