@@ -125,9 +125,9 @@ pub async fn run(v1: &PathBuf, v2: &PathBuf, advisory: Option<&str>) -> anyhow::
     println!("\n({} tokens used)", result.tokens_used);
 
     // Collect and display findings
-    let mut stmt = db.conn().prepare(
-        "SELECT title, severity, category FROM findings WHERE investigation_id = ?1",
-    )?;
+    let mut stmt = db
+        .conn()
+        .prepare("SELECT title, severity, category FROM findings WHERE investigation_id = ?1")?;
     let findings: Vec<(String, String, String)> = stmt
         .query_map([&inv_id], |row| {
             Ok((
