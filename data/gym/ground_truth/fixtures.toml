@@ -1,7 +1,9 @@
 suite = "fixtures"
-version = "1.0"
+version = "2.0"
 download_url = ""
 download_sha256 = ""
+
+# === Positive test cases (contain vulnerabilities) ===
 
 [[cases]]
 id = "buffer_overflow"
@@ -43,6 +45,71 @@ binary_path = "binaries/use_after_free_O0"
 expected_cwes = [416]
 is_negative = false
 language = "c"
+
+[[cases]]
+id = "null_pointer"
+path = "null_pointer.c"
+binary_path = "binaries/null_pointer_O0"
+# NULL dereference without check (CWE-476)
+expected_cwes = [476]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "double_free"
+path = "double_free.c"
+binary_path = "binaries/double_free_O0"
+# Double-free of heap memory (CWE-415), part of memory/UAF family
+expected_cwes = [415]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "heap_overflow"
+path = "heap_overflow.c"
+binary_path = "binaries/heap_overflow_O0"
+# Heap-based buffer overflow via strcpy/memcpy on malloc'd buffer (CWE-122)
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "race_condition"
+path = "race_condition.c"
+binary_path = "binaries/race_condition_O0"
+# TOCTOU race condition: access() then fopen() (CWE-367)
+expected_cwes = [367]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "signed_unsigned"
+path = "signed_unsigned.c"
+binary_path = "binaries/signed_unsigned_O0"
+# Signed-to-unsigned conversion (CWE-195) and integer truncation (CWE-197)
+expected_cwes = [195, 197]
+is_negative = false
+language = "c"
+
+# === Negative test cases (patched, should have NO findings) ===
+
+[[cases]]
+id = "buffer_overflow_safe"
+path = "buffer_overflow_safe.c"
+binary_path = "binaries/buffer_overflow_safe_O0"
+expected_cwes = []
+is_negative = true
+language = "c"
+
+[[cases]]
+id = "command_injection_safe"
+path = "command_injection_safe.c"
+binary_path = "binaries/command_injection_safe_O0"
+expected_cwes = []
+is_negative = true
+language = "c"
+
+# === Multi-language test cases ===
 
 [[cases]]
 id = "vuln_app_py"
