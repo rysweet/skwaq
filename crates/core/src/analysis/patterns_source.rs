@@ -381,6 +381,45 @@ fn java_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "LDAP query with user input; use parameterized LDAP queries",
         },
+        // XPath injection (CWE-643) — from self-improvement iteration 8
+        SourcePattern {
+            regex: r"\bXPath\b[^;]*\b(?:compile|evaluate|selectNodes|selectSingleNode)\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "XPath query may be vulnerable to injection; use parameterized XPath or validate input",
+        },
+        SourcePattern {
+            regex: r"\bXPathFactory\b",
+            category: DangerCategory::Injection,
+            severity: Severity::Medium,
+            reason: "XPath evaluation may be vulnerable to injection if query includes user input",
+        },
+        SourcePattern {
+            regex: r"\bDocumentBuilder\b[^;]*\bparse\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Medium,
+            reason: "XML parsing may be vulnerable to XXE; disable external entities",
+        },
+        // Trust boundary (CWE-501) — additional session patterns
+        SourcePattern {
+            regex: r"\bputValue\s*\([^)]*getParameter",
+            category: DangerCategory::Injection,
+            severity: Severity::Medium,
+            reason: "Session putValue with user input crosses trust boundary (CWE-501); validate before storing",
+        },
+        // Path traversal (CWE-22) — File.separator and normalize patterns
+        SourcePattern {
+            regex: r"\bnew\s+File\s*\([^)]*File\.separator",
+            category: DangerCategory::PathTraversal,
+            severity: Severity::High,
+            reason: "File construction with separator may allow traversal; canonicalize and validate",
+        },
+        SourcePattern {
+            regex: r"\bPaths\.get\s*\([^)]*getParameter",
+            category: DangerCategory::PathTraversal,
+            severity: Severity::High,
+            reason: "Path from user input; validate and resolve against a safe base directory",
+        },
         // LDAP injection (CWE-90) — from self-improvement iteration 5: DirContext.search
         SourcePattern {
             regex: r"\b(?:DirContext|InitialDirContext|LdapContext|EventDirContext)\.search\s*\(",
@@ -697,6 +736,31 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::Injection,
             severity: Severity::Critical,
             reason: "_execl (MSVC) executes a program; validate all arguments",
+        },
+        // Integer truncation/cast patterns (CWE-190/195/197) — from self-improvement iteration 8
+        SourcePattern {
+            regex: r"\(\s*(?:unsigned\s+)?(?:short|char)\s*\)\s*\w",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "Narrowing cast may truncate value; check for overflow before cast",
+        },
+        SourcePattern {
+            regex: r"\(\s*(?:size_t|unsigned)\s*\)\s*\w+\s*[\-\+\*]",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Signed-to-unsigned cast before arithmetic may wrap; validate sign first",
+        },
+        SourcePattern {
+            regex: r"\bmalloc\s*\([^)]*\*[^)]*\)",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "malloc with multiplication may cause integer overflow in size calculation; use safe multiply",
+        },
+        SourcePattern {
+            regex: r"\bcalloc\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Low,
+            reason: "calloc is safer than malloc for arrays but verify count*size doesn't overflow",
         },
         // CGC (DARPA Cyber Grand Challenge) custom syscalls — from self-improvement iteration 6
         SourcePattern {
