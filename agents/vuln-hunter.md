@@ -1,7 +1,7 @@
 ---
 name: vuln-hunter
 description: Primary vulnerability discovery agent
-model: claude-opus-4-6
+model: claude-opus-4.6
 tools:
   - query_graph
   - read_function

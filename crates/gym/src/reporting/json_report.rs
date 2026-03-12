@@ -1,9 +1,9 @@
 //! Machine-readable JSON report generation.
 
 use crate::scoring::AggregateScore;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct JsonReport {
     pub suite: String,
     pub timestamp: String,
@@ -18,7 +18,7 @@ pub struct JsonReport {
     pub per_cwe: Vec<JsonCweResult>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct JsonCweResult {
     pub cwe_id: u32,
     pub total_cases: u32,

@@ -119,7 +119,10 @@ Create `skwaq.toml` in your project directory:
 
 ```toml
 [llm]
-reasoning = "ollama"        # or "copilot"
+reasoning = "copilot"       # default; or "anthropic" (requires ANTHROPIC_API_KEY)
+
+[llm.copilot]
+model = "claude-opus-4.6"   # default model for Copilot backend
 
 [llm.ollama]
 host = "http://localhost:11434"
@@ -128,6 +131,14 @@ model = "llama3.1"
 [binary]
 ghidra_path = "/opt/ghidra"
 ```
+
+### LLM Backend
+
+The default backend is **GitHub Copilot** (`reasoning = "copilot"`), which uses Claude models via the GitHub Copilot LM Models API. Authentication uses your GitHub token (`gh auth login`).
+
+To use Anthropic directly, set `reasoning = "anthropic"` and provide `ANTHROPIC_API_KEY`.
+
+See [docs/investigation-copilot-lm-api.md](docs/investigation-copilot-lm-api.md) for details on model availability and the Copilot integration architecture.
 
 ## License
 

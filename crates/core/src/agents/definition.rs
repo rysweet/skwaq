@@ -11,7 +11,7 @@ pub struct AgentDefinition {
     pub name: String,
     /// Human-readable description of what this agent does.
     pub description: String,
-    /// LLM model identifier (e.g. `openai/gpt-4o-mini`).
+    /// LLM model identifier (e.g. `claude-opus-4.6`).
     pub model: String,
     /// List of tool names this agent is allowed to call.
     pub tools: Vec<String>,
@@ -38,7 +38,7 @@ struct AgentFrontmatter {
 }
 
 fn default_model() -> String {
-    "openai/gpt-4o-mini".into()
+    "claude-opus-4.6".into()
 }
 
 fn default_max_turns() -> u32 {
@@ -93,7 +93,7 @@ pub fn load_agent(name: &str) -> anyhow::Result<AgentDefinition> {
 /// ---
 /// name: agent-name
 /// description: What this agent does
-/// model: openai/gpt-4o-mini
+/// model: claude-opus-4.6
 /// tools:
 ///   - tool_a
 ///   - tool_b
@@ -141,7 +141,7 @@ mod tests {
         let md = r#"---
 name: test-agent
 description: A test agent
-model: openai/gpt-4o-mini
+model: claude-opus-4.6
 tools:
   - query_graph
   - read_function
@@ -153,7 +153,7 @@ You are a test agent. Do testing things."#;
         let def = parse_agent_markdown(md).unwrap();
         assert_eq!(def.name, "test-agent");
         assert_eq!(def.description, "A test agent");
-        assert_eq!(def.model, "openai/gpt-4o-mini");
+        assert_eq!(def.model, "claude-opus-4.6");
         assert_eq!(def.tools, vec!["query_graph", "read_function"]);
         assert_eq!(def.max_turns, 10);
         assert!(def.system_prompt.contains("test agent"));
@@ -181,7 +181,7 @@ Minimal agent."#;
 
         let def = parse_agent_markdown(md).unwrap();
         assert_eq!(def.name, "minimal");
-        assert_eq!(def.model, "openai/gpt-4o-mini");
+        assert_eq!(def.model, "claude-opus-4.6");
         assert_eq!(def.max_turns, 30);
         assert!(def.tools.is_empty());
     }

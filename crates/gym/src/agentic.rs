@@ -12,6 +12,7 @@
 
 use crate::adapters::DetectedFinding;
 use crate::scoring;
+use anyhow::Context;
 use skwaq_core::analysis::DangerousApiDetector;
 use skwaq_core::config::Config;
 use skwaq_core::graph::builder::GraphBuilder;
@@ -27,14 +28,14 @@ use std::sync::atomic::{AtomicU32, Ordering};
 /// Call [`SynthesisStats::report`] at end of a gym run to log the summary.
 pub struct SynthesisStats {
     llm_synthesis_count: AtomicU32,
-    fallback_count: AtomicU32,
+    failed_count: AtomicU32,
 }
 
 impl Default for SynthesisStats {
     fn default() -> Self {
         Self {
             llm_synthesis_count: AtomicU32::new(0),
-            fallback_count: AtomicU32::new(0),
+            failed_count: AtomicU32::new(0),
         }
     }
 }
@@ -48,30 +49,30 @@ impl SynthesisStats {
         self.llm_synthesis_count.fetch_add(1, Ordering::Relaxed);
     }
 
-    fn record_fallback(&self) {
-        self.fallback_count.fetch_add(1, Ordering::Relaxed);
+    fn record_failure(&self) {
+        self.failed_count.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Log end-of-run synthesis summary. Call after all cases complete.
     pub fn report(&self) {
         let llm = self.llm_synthesis_count.load(Ordering::Relaxed);
-        let fallback = self.fallback_count.load(Ordering::Relaxed);
-        let total = llm + fallback;
+        let failed = self.failed_count.load(Ordering::Relaxed);
+        let total = llm + failed;
         if total == 0 {
             tracing::info!("Synthesis: no dual-source cases (nothing to synthesize)");
             return;
         }
-        if fallback > 0 {
+        if failed > 0 {
             tracing::warn!(
-                "Synthesis summary: {}/{} cases used LLM synthesis, {} used deterministic fallback",
+                "Synthesis summary: {}/{} cases used LLM synthesis, {} failed loudly",
                 llm,
                 total,
-                fallback,
+                failed,
             );
             eprintln!(
-                "\n  WARNING: {}/{} synthesis cases fell back to deterministic merge.\n  \
-                 LLM synthesis may not be working. Check warnings above.\n",
-                fallback, total,
+                "\n  WARNING: {}/{} synthesis cases failed loudly.\n  \
+                 Check the logged LLM synthesis errors above.\n",
+                failed, total,
             );
         } else {
             tracing::info!(
@@ -126,8 +127,7 @@ pub async fn run_agentic_source_analysis(
     // --- Layer 2: Pattern detection → collect pattern-detected categories ---
     let mut pattern_categories: HashSet<String> = HashSet::new();
     let detector = DangerousApiDetector::new();
-    let pattern_findings = if let Ok(hits) = detector.detect_in_source(path, &parsed.language) {
-        let mut findings = Vec::new();
+    if let Ok(hits) = detector.detect_in_source(path, &parsed.language) {
         for hit in &hits {
             let category = hit.danger_category.to_string();
             pattern_categories.insert(category.clone());
@@ -157,26 +157,8 @@ pub async fn run_agentic_source_analysis(
             ) {
                 tracing::warn!("Failed to store finding for {}: {}", hit.function_name, e);
             }
-
-            findings.push(DetectedFinding {
-                id: finding_id,
-                category,
-                severity: hit.severity.to_string(),
-                cwes: vec![],
-                file: file_str.clone(),
-                function: hit.function_name.clone(),
-                line: if hit.line > 0 {
-                    Some(hit.line as u32)
-                } else {
-                    None
-                },
-                title: format!("Dangerous API: {}", hit.function_name),
-            });
         }
-        findings
-    } else {
-        Vec::new()
-    };
+    }
 
     // Also collect CWE families from patterns for dual-judge matching
     let _pattern_cwe_families: HashSet<u32> = pattern_categories
@@ -196,25 +178,18 @@ pub async fn run_agentic_source_analysis(
     }
 
     // --- Layer 4: LLM agent pipeline ---
-    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await;
+    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
 
     // --- Layer 5: Synthesis — weigh all evidence ---
     // Collect ALL findings from DB (pattern + orchestrator + LLM)
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
 
-    // If no LLM was available, return pattern findings directly
-    if all_findings
-        .iter()
-        .all(|f| f.title.starts_with("Dangerous pattern:"))
-    {
-        return Ok(pattern_findings);
-    }
-
-    // Synthesize: use LLM to weigh all evidence and decide which findings are credible.
+    // Synthesize: use the LLM to weigh all evidence and decide which findings are credible.
     // Unlike the old intersection filter, this preserves LLM-only findings that
-    // demonstrate real understanding of the code.
+    // demonstrate real understanding of the code, but it fails loudly if synthesis
+    // cannot run instead of silently downgrading analysis quality.
     let synthesized =
-        synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await;
+        synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await?;
 
     // Deduplicate by category (keep one finding per category)
     let mut seen_categories: HashSet<String> = HashSet::new();
@@ -265,7 +240,6 @@ pub async fn run_agentic_binary_analysis(
     let detector = DangerousApiDetector::new();
     let import_hits = detector.check_imports(&binary_info.imports);
 
-    let mut pattern_findings = Vec::new();
     for hit in &import_hits {
         let category = hit.danger_category.to_string();
         pattern_categories.insert(category.clone());
@@ -289,17 +263,6 @@ pub async fn run_agentic_binary_analysis(
                 &category.as_str(),
             ],
         );
-
-        pattern_findings.push(DetectedFinding {
-            id: finding_id,
-            category,
-            severity: hit.severity.to_string(),
-            cwes: vec![],
-            file: file_str.clone(),
-            function: hit.function_name.clone(),
-            line: None,
-            title: format!("Binary import: {}", hit.function_name),
-        });
     }
 
     // Collect CWE families from patterns
@@ -319,20 +282,13 @@ pub async fn run_agentic_binary_analysis(
     }
 
     // LLM agent pipeline
-    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await;
+    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
 
     // Synthesis — weigh all evidence
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
 
-    if all_findings
-        .iter()
-        .all(|f| f.title.starts_with("Binary import:"))
-    {
-        return Ok(pattern_findings);
-    }
-
     let synthesized =
-        synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await;
+        synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await?;
 
     let mut seen_categories: HashSet<String> = HashSet::new();
     let deduped: Vec<DetectedFinding> = synthesized
@@ -375,7 +331,7 @@ pub async fn run_llm_only_source_analysis(
     builder.build_from_source(std::slice::from_ref(&parsed), &inv_id)?;
 
     // Skip pattern detection — go straight to LLM pipeline
-    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await;
+    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
 
     // Return all LLM findings directly (no intersection filter)
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
@@ -420,7 +376,7 @@ pub async fn run_llm_only_binary_analysis(
     builder.build_from_binary_info(&binary_info, &inv_id)?;
 
     // Skip pattern detection — go straight to LLM pipeline
-    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await;
+    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
 
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
 
@@ -447,16 +403,16 @@ pub async fn run_llm_only_binary_analysis(
 ///   senior researchers (LLM agents)
 /// - Uses judgment to CONFIRM or REJECT each finding
 ///
-/// When an LLM is available, calls it to evaluate all findings together.
-/// Falls back to deterministic merge (LLM-priority union) when unavailable.
+/// When both pattern and LLM findings exist, the analysis must be synthesized
+/// by an LLM reviewer. Fail loudly if that synthesis cannot run.
 async fn synthesize_findings(
     all_findings: Vec<DetectedFinding>,
     _pattern_categories: &HashSet<String>,
     _db: &GraphDb,
     timeout_secs: u64,
-) -> Vec<DetectedFinding> {
+) -> anyhow::Result<Vec<DetectedFinding>> {
     if all_findings.is_empty() {
-        return all_findings;
+        return Ok(all_findings);
     }
 
     // Classify findings by source
@@ -473,54 +429,32 @@ async fn synthesize_findings(
 
     // If only one source produced findings, trust it directly
     if pattern_findings.is_empty() || llm_findings.is_empty() {
-        return all_findings;
+        return Ok(all_findings);
     }
 
-    // Both sources have findings — attempt LLM synthesis
+    // Both sources have findings — synthesis is mandatory.
     match llm_synthesize(&pattern_findings, &llm_findings, timeout_secs).await {
-        Some(synthesized) => {
+        Ok(synthesized) => {
             SYNTHESIS_STATS.record_llm_synthesis();
-            synthesized
+            Ok(synthesized)
         }
-        None => {
-            SYNTHESIS_STATS.record_fallback();
-            // Fallback: deterministic merge with LLM priority
-            merge_findings_deterministic(all_findings)
+        Err(e) => {
+            SYNTHESIS_STATS.record_failure();
+            Err(e)
         }
     }
 }
 
 /// Call the LLM to evaluate findings like a lead security reviewer.
-///
-/// Returns None if LLM is unavailable (caller should fall back).
-/// Logs WARN on every failure path so problems are visible.
 async fn llm_synthesize(
     pattern_findings: &[DetectedFinding],
     llm_findings: &[DetectedFinding],
     timeout_secs: u64,
-) -> Option<Vec<DetectedFinding>> {
-    let config = match Config::load() {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::warn!("LLM synthesis unavailable: config load failed: {}", e);
-            eprintln!(
-                "  WARNING: LLM synthesis unavailable (config load failed: {}), using merge fallback",
-                e
-            );
-            return None;
-        }
-    };
-    let client = match skwaq_core::llm::create_client(&config.llm).await {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::warn!("LLM synthesis unavailable: client creation failed: {}", e);
-            eprintln!(
-                "  WARNING: LLM synthesis unavailable (client creation failed: {}), using merge fallback",
-                e
-            );
-            return None;
-        }
-    };
+) -> anyhow::Result<Vec<DetectedFinding>> {
+    let config = Config::load().context("LLM synthesis requires a valid skwaq configuration")?;
+    let client = skwaq_core::llm::create_client(&config.llm)
+        .await
+        .context("LLM synthesis requires a working LLM client")?;
 
     // Build the synthesis prompt
     let mut prompt = String::from(
@@ -585,28 +519,14 @@ async fn llm_synthesize(
 
     let response_text = match result {
         Ok(Ok(text)) => text,
-        Ok(Err(e)) => {
-            tracing::warn!("LLM synthesis call failed: {}", e);
-            eprintln!(
-                "  WARNING: LLM synthesis call failed ({}), using merge fallback",
-                e
-            );
-            return None;
-        }
-        Err(_) => {
-            tracing::warn!("LLM synthesis timed out after {}s", timeout_secs);
-            eprintln!(
-                "  WARNING: LLM synthesis timed out after {}s, using merge fallback",
-                timeout_secs
-            );
-            return None;
-        }
+        Ok(Err(e)) => anyhow::bail!("LLM synthesis call failed: {}", e),
+        Err(_) => anyhow::bail!("LLM synthesis timed out after {}s", timeout_secs),
     };
 
     // Parse and apply synthesis decisions
     let synthesized = apply_synthesis_decisions(pattern_findings, llm_findings, &response_text);
 
-    Some(synthesized)
+    Ok(synthesized)
 }
 
 /// Sanitize a string for safe inclusion in an LLM prompt.
@@ -675,8 +595,8 @@ fn apply_synthesis_decisions(
     synthesized
 }
 
-/// Deterministic merge fallback: LLM-priority union with deduplication.
-/// Used when the LLM synthesis call is unavailable.
+#[cfg(test)]
+/// Deterministic merge helper retained for unit-test coverage.
 fn merge_findings_deterministic(all_findings: Vec<DetectedFinding>) -> Vec<DetectedFinding> {
     let mut synthesized = Vec::new();
     let mut seen_ids: HashSet<String> = HashSet::new();
@@ -705,20 +625,24 @@ fn merge_findings_deterministic(all_findings: Vec<DetectedFinding>) -> Vec<Detec
     synthesized
 }
 
-/// Run the LLM agent pipeline if ANTHROPIC_API_KEY is configured.
-async fn run_llm_pipeline(db: &GraphDb, inv_id: &str, file_str: &str, timeout_secs: u64) {
-    let config = match Config::load() {
-        Ok(c) => c,
-        Err(_) => return,
-    };
+/// Run the LLM agent pipeline and fail explicitly if the client is unavailable.
+async fn run_llm_pipeline(
+    db: &GraphDb,
+    inv_id: &str,
+    file_str: &str,
+    timeout_secs: u64,
+) -> anyhow::Result<()> {
+    let config = Config::load()
+        .context("Failed to load skwaq configuration for hybrid benchmark analysis")?;
 
-    let llm_client = match skwaq_core::llm::create_client(&config.llm).await {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::warn!("LLM not available ({}), using pattern-only analysis", e);
-            return;
-        }
-    };
+    let llm_client = skwaq_core::llm::create_client(&config.llm)
+        .await
+        .with_context(|| {
+            format!(
+                "Hybrid benchmark analysis requires a working LLM client for {}",
+                file_str
+            )
+        })?;
 
     let pipeline = skwaq_core::agents::deep_pipeline();
     let budget_amount = config.analysis.default_token_budget.min(100_000);
@@ -745,12 +669,13 @@ async fn run_llm_pipeline(db: &GraphDb, inv_id: &str, file_str: &str, timeout_se
                 results.len(),
                 total_tokens,
             );
+            Ok(())
         }
         Ok(Err(e)) => {
-            tracing::warn!("LLM pipeline failed for {}: {}", file_str, e);
+            anyhow::bail!("LLM pipeline failed for {}: {}", file_str, e);
         }
         Err(_) => {
-            tracing::warn!(
+            anyhow::bail!(
                 "LLM pipeline timed out for {} after {}s",
                 file_str,
                 timeout_secs
@@ -840,6 +765,7 @@ fn extract_function_from_title(title: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use skwaq_core::config::Config;
 
     fn fixtures_dir() -> std::path::PathBuf {
         let mut dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -1015,7 +941,7 @@ mod tests {
     async fn test_synthesize_findings_empty() {
         let db = GraphDb::in_memory().unwrap();
         let cats = HashSet::new();
-        let result = synthesize_findings(vec![], &cats, &db, 30).await;
+        let result = synthesize_findings(vec![], &cats, &db, 30).await.unwrap();
         assert!(result.is_empty());
     }
 
@@ -1154,7 +1080,9 @@ mod tests {
             line: Some(1),
             title: "LLM: something dangerous".into(),
         }];
-        let result = synthesize_findings(findings.clone(), &cats, &db, 30).await;
+        let result = synthesize_findings(findings.clone(), &cats, &db, 30)
+            .await
+            .unwrap();
         assert_eq!(result.len(), 1, "Single-source should pass through");
     }
 
@@ -1162,6 +1090,21 @@ mod tests {
     async fn test_full_agentic_analysis() {
         let fixture = fixtures_dir().join("buffer_overflow.c");
         if !fixture.exists() {
+            return;
+        }
+
+        let config = Config::load().unwrap_or_default();
+        if skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm)
+            .await
+            .is_err()
+        {
+            return;
+        }
+        if !std::env::current_dir()
+            .unwrap_or_default()
+            .join("agents/decompile-renamer.md")
+            .exists()
+        {
             return;
         }
 
@@ -1173,9 +1116,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_synthesis_is_tracked() {
-        // When both sources have findings, synthesize_findings should
-        // attempt LLM synthesis and track the outcome (either success or fallback).
-        // It must NOT silently skip tracking.
+        // When both sources have findings, synthesis must either succeed
+        // or fail loudly and track that failure. It must NOT silently degrade.
         let db = GraphDb::in_memory().unwrap();
         let cats = HashSet::new();
 
@@ -1204,21 +1146,26 @@ mod tests {
 
         let stats = synthesis_stats();
         let before_llm = stats.llm_synthesis_count.load(Ordering::Relaxed);
-        let before_fallback = stats.fallback_count.load(Ordering::Relaxed);
+        let before_failed = stats.failed_count.load(Ordering::Relaxed);
 
         let result = synthesize_findings(findings, &cats, &db, 30).await;
-        assert!(!result.is_empty(), "Should produce findings");
+        if let Ok(findings) = &result {
+            assert!(
+                !findings.is_empty(),
+                "Successful synthesis should produce findings"
+            );
+        }
 
         let after_llm = stats.llm_synthesis_count.load(Ordering::Relaxed);
-        let after_fallback = stats.fallback_count.load(Ordering::Relaxed);
+        let after_failed = stats.failed_count.load(Ordering::Relaxed);
 
-        // Either LLM synthesis succeeded or fallback was used — one counter must increase
-        let total_increase = (after_llm - before_llm) + (after_fallback - before_fallback);
+        // Either LLM synthesis succeeded or it failed loudly — one counter must increase.
+        let total_increase = (after_llm - before_llm) + (after_failed - before_failed);
         assert!(
             total_increase > 0,
-            "Synthesis must track its outcome: llm_delta={}, fallback_delta={} (neither changed!)",
+            "Synthesis must track its outcome: llm_delta={}, failed_delta={} (neither changed!)",
             after_llm - before_llm,
-            after_fallback - before_fallback,
+            after_failed - before_failed,
         );
     }
 
@@ -1227,7 +1174,7 @@ mod tests {
         let stats = SynthesisStats::new();
         stats.record_llm_synthesis();
         stats.record_llm_synthesis();
-        stats.record_fallback();
+        stats.record_failure();
         // Just verify it doesn't panic — the output goes to tracing/eprintln
         stats.report();
     }
