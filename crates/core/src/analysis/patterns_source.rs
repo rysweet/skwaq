@@ -182,6 +182,65 @@ fn python_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "Empty password assignment; authentication bypass risk",
         },
+        // Enhanced injection patterns (CWE-74) — from PR #109
+        SourcePattern {
+            regex: r"\bsubprocess\.\w+\s*\([^)]*shell\s*=\s*True",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason:
+                "subprocess with shell=True enables shell injection; use shell=False with list args",
+        },
+        SourcePattern {
+            regex: r"\bos\.popen\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "os.popen() passes command to shell; use subprocess with shell=False",
+        },
+        SourcePattern {
+            regex: r#"\bexecute\s*\(\s*f["']"#,
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "SQL injection via f-string in execute(); use parameterized queries",
+        },
+        SourcePattern {
+            regex: r#"\bexecute\s*\(\s*["'][^)]*\.format\s*\("#,
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "SQL injection via .format() in execute(); use parameterized queries",
+        },
+        SourcePattern {
+            regex: r"\brender_template_string\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason:
+                "Server-side template injection (SSTI); avoid rendering user-controlled templates",
+        },
+        SourcePattern {
+            regex: r"\bTemplate\s*\([^)]*\+",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "Template with string concatenation may enable SSTI; use static templates",
+        },
+        SourcePattern {
+            regex: r#"\bos\.system\s*\(\s*f["']"#,
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason:
+                "Command injection via f-string in os.system(); use subprocess with shell=False",
+        },
+        // subprocess.run without shell=True is safe by default — not flagged
+        SourcePattern {
+            regex: r"\b__import__\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "Dynamic import can load arbitrary modules; avoid with untrusted input",
+        },
+        SourcePattern {
+            regex: r#"\bcompile\s*\([^)]*,\s*[^)]*,\s*['"]exec['"]"#,
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "compile() with exec mode enables code execution; avoid with untrusted input",
+        },
     ]
 }
 
