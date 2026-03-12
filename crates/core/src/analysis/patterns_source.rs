@@ -107,7 +107,7 @@ fn python_patterns() -> &'static [SourcePattern] {
             severity: Severity::Critical,
             reason: "SQL injection via string concatenation; use parameterized queries",
         },
-        // Weak cryptography (CWE-327)
+        // Weak cryptography (CWE-327) — from PR #107
         SourcePattern {
             regex: r"\bhashlib\.md5\s*\(",
             category: DangerCategory::Crypto,
@@ -161,6 +161,26 @@ fn python_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::Crypto,
             severity: Severity::Critical,
             reason: "RC2 is obsolete; use AES",
+        },
+        // Hard-coded credentials (CWE-798) — from PR #106
+        // Require 4+ char non-space values to avoid FPs on help text
+        SourcePattern {
+            regex: r#"(?i)(?:password|passwd|pwd)\s*=\s*["'][^\s"']{4,}["']"#,
+            category: DangerCategory::Crypto,
+            severity: Severity::Critical,
+            reason: "Hard-coded password; use environment variables or secret management",
+        },
+        SourcePattern {
+            regex: r#"(?i)(?:secret|api_key|apikey|access_key|token)\s*=\s*["'][^\s"']{4,}["']"#,
+            category: DangerCategory::Crypto,
+            severity: Severity::Critical,
+            reason: "Hard-coded secret/key; use environment variables or vault",
+        },
+        SourcePattern {
+            regex: r#"(?i)(?:password|passwd|pwd)\s*=\s*["']\s*["']"#,
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "Empty password assignment; authentication bypass risk",
         },
     ]
 }
@@ -893,6 +913,19 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "Custom read function with buffer parameter; validate size",
         },
+        // Hard-coded credentials (CWE-798)
+        SourcePattern {
+            regex: r#"(?i)(?:password|passwd|pwd)\s*=\s*"[^"]+""#,
+            category: DangerCategory::Crypto,
+            severity: Severity::Critical,
+            reason: "Hard-coded password in C code; use configuration or environment variables",
+        },
+        SourcePattern {
+            regex: r#"(?i)(?:secret|key|token)\s*=\s*"[^"]+""#,
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "Hard-coded secret/key in C code; use secure configuration",
+        },
     ]
 }
 
@@ -1199,6 +1232,33 @@ cipher = DES.new(key, DES.MODE_ECB)
             crypto_hits.len() >= 3,
             "Should detect md5, sha1, and DES; found {}",
             crypto_hits.len()
+        );
+    }
+
+    #[test]
+    fn test_detect_python_hardcoded_credentials() {
+        let src = r#"
+password = "super_secret_123"
+api_key = "sk-1234567890abcdef"
+"#;
+        let hits = detect_in_source_content(src, "python", "config.py").unwrap();
+        assert!(
+            hits.iter()
+                .any(|h| h.danger_category == DangerCategory::Crypto),
+            "Should detect hard-coded credentials"
+        );
+    }
+
+    #[test]
+    fn test_detect_c_hardcoded_credentials() {
+        let src = r#"
+const char* password = "admin123";
+"#;
+        let hits = detect_in_source_content(src, "c", "config.c").unwrap();
+        assert!(
+            hits.iter()
+                .any(|h| h.danger_category == DangerCategory::Crypto),
+            "Should detect hard-coded credentials in C"
         );
     }
 }

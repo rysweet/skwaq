@@ -141,7 +141,7 @@ pub fn cwe_family(cwe: u32) -> u32 {
         242 | 676 => 676,
         // Hardware crypto with short key -> crypto family
         1240 => 327,
-        // Type confusion -> memory safety family (often leads to buffer overflow)
+        // Type confusion -> memory safety family
         843 => 119,
         // Untrusted/expired/freed pointer dereference -> memory safety family
         822 | 823 | 825 => 119,
