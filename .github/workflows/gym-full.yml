@@ -1,0 +1,104 @@
+name: Gym Full
+
+on:
+  workflow_dispatch:
+    inputs:
+      suites:
+        description: "Comma-separated suite list"
+        required: true
+        default: "fixtures,juliet,owasp,cyberseceval,cgc"
+      procs:
+        description: "Processes per suite"
+        required: true
+        default: "5"
+      concurrency:
+        description: "In-process async concurrency"
+        required: true
+        default: "2"
+      post_issue:
+        description: "Post the rendered update to the tracking issue"
+        required: true
+        type: boolean
+        default: false
+      issue_number:
+        description: "Issue number for benchmark updates"
+        required: true
+        default: "28"
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  full-eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build
+
+      - name: Write explicit Copilot benchmark config
+        run: |
+          cat > skwaq.toml <<'EOF'
+          [llm]
+          reasoning = "copilot"
+
+          [llm.copilot]
+          model = "claude-opus-4.6"
+          EOF
+
+      - name: Preflight Copilot benchmark auth
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN}" ]]; then
+            echo "::error::Set the GH_TOKEN secret with GitHub Copilot access for hybrid benchmark runs."
+            exit 1
+          fi
+          ./target/debug/skwaq config show
+
+      - name: Run full hybrid gym eval
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          set -euo pipefail
+          ./target/debug/skwaq gym eval \
+            --suites "${{ inputs.suites }}" \
+            --procs "${{ inputs.procs }}" \
+            --concurrency "${{ inputs.concurrency }}" \
+            --output "${RUNNER_TEMP}/gym-full"
+
+      - name: Render issue comment preview
+        run: |
+          set -euo pipefail
+          bash scripts/post-gym-results.sh \
+            --repo "${GITHUB_REPOSITORY}" \
+            --issue "${{ inputs.issue_number }}" \
+            --summary "${RUNNER_TEMP}/gym-full/summary.md" \
+            --dashboard "${RUNNER_TEMP}/gym-full/dashboard.md" \
+            --output "${RUNNER_TEMP}/gym-full/issue-comment.md" \
+            --dry-run > /dev/null
+
+      - name: Post issue comment
+        if: ${{ inputs.post_issue }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          bash scripts/post-gym-results.sh \
+            --repo "${GITHUB_REPOSITORY}" \
+            --issue "${{ inputs.issue_number }}" \
+            --summary "${RUNNER_TEMP}/gym-full/summary.md" \
+            --dashboard "${RUNNER_TEMP}/gym-full/dashboard.md"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gym-full-results
+          path: ${{ runner.temp }}/gym-full

@@ -355,6 +355,7 @@ mod tests {
     fn test_category_to_cwes() {
         assert!(!category_to_cwes("memory").is_empty());
         assert!(!category_to_cwes("injection").is_empty());
+        assert_eq!(category_to_cwes("format_string"), vec![134]);
         assert!(category_to_cwes("unknown_category").is_empty());
     }
 

@@ -21,16 +21,18 @@ pub use rustyclawd_core::client::{
 };
 
 use crate::config::LlmConfig;
+use anyhow::Context;
 
 /// Create a RustyClawd [`Client`] from skwaq's LLM configuration.
 ///
-/// Backend selection:
-/// - `"copilot"` -- GitHub Copilot (async token discovery + Models API fallback).
-/// - `"anthropic"` (default) -- Anthropic Messages API (`ANTHROPIC_API_KEY`).
-/// - anything else -- auto-detect: try Anthropic if the env var is set,
-///   otherwise fall back to Copilot.
+/// Backend selection is explicit:
+/// - `"copilot"` -- GitHub Copilot via `api.githubcopilot.com`.
+/// - `"anthropic"` -- Anthropic Messages API (`ANTHROPIC_API_KEY`).
+///
+/// Any other value is rejected. skwaq does not silently switch providers.
 pub async fn create_client(config: &LlmConfig) -> anyhow::Result<Client> {
-    match config.reasoning.as_str() {
+    validate_backend_selection(config)?;
+    match normalized_backend(config).as_str() {
         "copilot" => {
             let client = Client::new_copilot()
                 .await
@@ -38,31 +40,42 @@ pub async fn create_client(config: &LlmConfig) -> anyhow::Result<Client> {
             Ok(client)
         }
         "anthropic" => create_anthropic_client(config),
-        other => {
-            // Auto-detect: try Anthropic if ANTHROPIC_API_KEY is set
-            if std::env::var("ANTHROPIC_API_KEY").is_ok() {
-                tracing::info!(
-                    "Unknown backend '{other}', but ANTHROPIC_API_KEY set; using Anthropic"
-                );
-                match create_anthropic_client(config) {
-                    Ok(client) => Ok(client),
-                    Err(e) => {
-                        tracing::warn!(
-                            "Anthropic client init failed ({e}), falling back to copilot"
-                        );
-                        Client::new_copilot()
-                            .await
-                            .map_err(|e| anyhow::anyhow!("Copilot fallback also failed: {e}"))
-                    }
-                }
-            } else {
-                tracing::info!("Unknown backend '{other}', falling back to copilot");
-                Client::new_copilot()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Copilot client creation failed: {e}"))
-            }
-        }
+        _ => unreachable!("validate_backend_selection rejected unsupported backends"),
     }
+}
+
+pub fn validate_benchmark_copilot_config(config: &LlmConfig) -> anyhow::Result<()> {
+    validate_backend_selection(config)?;
+
+    let backend = normalized_backend(config);
+    if backend != "copilot" {
+        anyhow::bail!(
+            "Hybrid benchmark runs require [llm].reasoning = \"copilot\", found {:?}",
+            config.reasoning
+        );
+    }
+
+    let model = config.copilot.model.trim();
+    if model.is_empty() || !model.to_ascii_lowercase().contains("opus") {
+        anyhow::bail!(
+            "Hybrid benchmark runs require an Opus-class Copilot model, found {:?}. \
+             Set [llm.copilot].model = \"claude-opus-4.6\".",
+            config.copilot.model
+        );
+    }
+
+    Ok(())
+}
+
+pub async fn ensure_benchmark_copilot_ready(config: &LlmConfig) -> anyhow::Result<()> {
+    validate_benchmark_copilot_config(config)?;
+    create_client(config)
+        .await
+        .map(|_| ())
+        .context(
+            "Hybrid benchmark runs require working GitHub Copilot authentication. \
+             Run `gh auth login` / `gh auth refresh --scopes copilot`, or set GH_TOKEN/GITHUB_TOKEN with Copilot access.",
+        )
 }
 
 /// Build an Anthropic-backend client from the environment key.
@@ -77,6 +90,20 @@ fn create_anthropic_client(_config: &LlmConfig) -> anyhow::Result<Client> {
     let client = Client::new(rc_config)
         .map_err(|e| anyhow::anyhow!("Failed to create Anthropic client: {e}"))?;
     Ok(client)
+}
+
+fn validate_backend_selection(config: &LlmConfig) -> anyhow::Result<()> {
+    match normalized_backend(config).as_str() {
+        "copilot" | "anthropic" => Ok(()),
+        other => anyhow::bail!(
+            "Unsupported llm.reasoning backend {:?}. Set [llm].reasoning explicitly to \"copilot\" or \"anthropic\"; hidden fallback is disabled.",
+            if other.is_empty() { "<empty>" } else { other }
+        ),
+    }
+}
+
+fn normalized_backend(config: &LlmConfig) -> String {
+    config.reasoning.trim().to_ascii_lowercase()
 }
 
 #[cfg(test)]
@@ -114,5 +141,41 @@ mod tests {
         if let Some(key) = original {
             std::env::set_var("ANTHROPIC_API_KEY", key);
         }
+    }
+
+    #[test]
+    fn test_validate_backend_selection_rejects_unknown_backend() {
+        let config = LlmConfig {
+            reasoning: "auto".into(),
+            ..Default::default()
+        };
+
+        let err = validate_backend_selection(&config).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Unsupported llm.reasoning backend"));
+        assert!(err.to_string().contains("hidden fallback is disabled"));
+    }
+
+    #[test]
+    fn test_validate_benchmark_copilot_config_requires_copilot() {
+        let config = LlmConfig {
+            reasoning: "anthropic".into(),
+            ..Default::default()
+        };
+
+        let err = validate_benchmark_copilot_config(&config).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("require [llm].reasoning = \"copilot\""));
+    }
+
+    #[test]
+    fn test_validate_benchmark_copilot_config_requires_opus_model() {
+        let mut config = LlmConfig::default();
+        config.copilot.model = "gpt-4o".into();
+
+        let err = validate_benchmark_copilot_config(&config).unwrap_err();
+        assert!(err.to_string().contains("Opus-class Copilot model"));
     }
 }

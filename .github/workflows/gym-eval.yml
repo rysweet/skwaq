@@ -1,0 +1,120 @@
+name: Gym Eval
+
+on:
+  workflow_dispatch:
+    inputs:
+      suites:
+        description: "Comma-separated suite list"
+        required: true
+        default: "fixtures"
+      quick:
+        description: "Use quick pattern-only mode"
+        required: true
+        type: boolean
+        default: true
+      procs:
+        description: "Processes per suite"
+        required: true
+        default: "1"
+      concurrency:
+        description: "In-process async concurrency"
+        required: true
+        default: "1"
+      post_issue:
+        description: "Post the rendered update to the tracking issue"
+        required: true
+        type: boolean
+        default: false
+      issue_number:
+        description: "Issue number for benchmark updates"
+        required: true
+        default: "28"
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build
+
+      - name: Write explicit Copilot benchmark config
+        run: |
+          cat > skwaq.toml <<'EOF'
+          [llm]
+          reasoning = "copilot"
+
+          [llm.copilot]
+          model = "claude-opus-4.6"
+          EOF
+
+      - name: Preflight Copilot benchmark auth
+        if: ${{ !inputs.quick }}
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN}" ]]; then
+            echo "::error::Set the GH_TOKEN secret with GitHub Copilot access for hybrid benchmark runs."
+            exit 1
+          fi
+          ./target/debug/skwaq config show
+
+      - name: Run gym eval
+        env:
+          SUITES: ${{ inputs.suites }}
+          PROCS: ${{ inputs.procs }}
+          CONCURRENCY: ${{ inputs.concurrency }}
+          QUICK: ${{ inputs.quick }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          set -euo pipefail
+          QUICK_FLAG=""
+          if [[ "${QUICK}" == "true" ]]; then
+            QUICK_FLAG="--quick"
+          fi
+
+          ./target/debug/skwaq gym eval \
+            --suites "${SUITES}" \
+            --procs "${PROCS}" \
+            --concurrency "${CONCURRENCY}" \
+            ${QUICK_FLAG} \
+            --output "${RUNNER_TEMP}/gym-eval"
+
+      - name: Render issue comment preview
+        run: |
+          set -euo pipefail
+          bash scripts/post-gym-results.sh \
+            --repo "${GITHUB_REPOSITORY}" \
+            --issue "${{ inputs.issue_number }}" \
+            --summary "${RUNNER_TEMP}/gym-eval/summary.md" \
+            --dashboard "${RUNNER_TEMP}/gym-eval/dashboard.md" \
+            --output "${RUNNER_TEMP}/gym-eval/issue-comment.md" \
+            --dry-run > /dev/null
+
+      - name: Post issue comment
+        if: ${{ inputs.post_issue }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          bash scripts/post-gym-results.sh \
+            --repo "${GITHUB_REPOSITORY}" \
+            --issue "${{ inputs.issue_number }}" \
+            --summary "${RUNNER_TEMP}/gym-eval/summary.md" \
+            --dashboard "${RUNNER_TEMP}/gym-eval/dashboard.md"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gym-eval-results
+          path: ${{ runner.temp }}/gym-eval

@@ -897,7 +897,7 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             reason: "calloc is safer than malloc for arrays but verify count*size doesn't overflow",
         },
         // Generalized dangerous API suffix detection.
-        // Catches prefixed wrappers like cgc_strcpy, my_memcpy, safe_strcat, etc.
+        // Catches prefixed wrappers like project_strcpy, my_memcpy, safe_strcat, etc.
         // This is NOT benchmark-specific — any project wrapping libc functions is caught.
         SourcePattern {
             regex: r"\b\w+_strcpy\s*\(",
@@ -952,25 +952,6 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::Memory,
             severity: Severity::Medium,
             reason: "Custom calloc wrapper: verify count*size doesn't overflow",
-        },
-        // Specific CGC I/O functions (not wildcards — wildcards cause FPs on real code)
-        SourcePattern {
-            regex: r"\bcgc_transmit\s*\(",
-            category: DangerCategory::Memory,
-            severity: Severity::Medium,
-            reason: "CGC transmit function: unchecked size may leak memory",
-        },
-        SourcePattern {
-            regex: r"\bcgc_receive\s*\(",
-            category: DangerCategory::Memory,
-            severity: Severity::High,
-            reason: "CGC receive function reads into buffer; validate buffer size",
-        },
-        SourcePattern {
-            regex: r"\bcgc_read\s*\(",
-            category: DangerCategory::Memory,
-            severity: Severity::High,
-            reason: "CGC read function reads into buffer; validate buffer size",
         },
         // Hard-coded credentials (CWE-798)
         SourcePattern {
@@ -1205,41 +1186,69 @@ void vuln(char *msg, char *num_str) {
     }
 
     #[test]
-    fn test_detect_cgc_patterns() {
+    fn test_detect_custom_wrapper_apis() {
         let detector = DangerousApiDetector::new();
         let src = r#"
-void handle_input(int fd) {
-    char buf[256];
-    size_t rx;
-    cgc_receive(fd, buf, sizeof(buf), &rx);
-    cgc_read(fd, buf, 256);
-    void *mem;
-    cgc_allocate(4096, 0, &mem);
-    cgc_transmit(fd, buf, rx, NULL);
+void handle_input(char *dst, const char *src, char *user_fmt, size_t len) {
+    project_strcpy(dst, src);
+    wrapper_memcpy(dst, src, len);
+    logger_sprintf(dst, "%s", src);
+    audit_printf(user_fmt);
+    void *mem = pool_allocate(4096, 0);
 }
 "#;
         let hits = detector
             .detect_in_source_content(src, "c", "challenge.c")
             .unwrap();
         assert!(
-            hits.iter().any(|h| h.function_name.contains("cgc_receive")),
-            "Expected cgc_receive detection"
-        );
-        assert!(
-            hits.iter().any(|h| h.function_name.contains("cgc_read")),
-            "Expected cgc_read detection"
+            hits.iter()
+                .any(|h| h.function_name.contains("project_strcpy")),
+            "Expected custom strcpy wrapper detection"
         );
         assert!(
             hits.iter()
-                .any(|h| h.function_name.contains("cgc_allocate")),
-            "Expected cgc_allocate detection"
+                .any(|h| h.function_name.contains("wrapper_memcpy")),
+            "Expected custom memcpy wrapper detection"
         );
         assert!(
             hits.iter()
-                .any(|h| h.function_name.contains("cgc_transmit")),
-            "Expected cgc_transmit detection"
+                .any(|h| h.function_name.contains("logger_sprintf")),
+            "Expected custom sprintf wrapper detection"
+        );
+        assert!(
+            hits.iter()
+                .any(|h| h.function_name.contains("audit_printf")),
+            "Expected custom printf wrapper detection"
         );
         assert!(hits.len() >= 4);
+    }
+
+    #[test]
+    fn test_source_patterns_remain_benchmark_agnostic() {
+        let disallowed_tokens = ["cgc", "juliet"];
+        let pattern_sets = [
+            ("python", python_patterns()),
+            ("javascript", javascript_patterns()),
+            ("go", go_patterns()),
+            ("rust", rust_patterns()),
+            ("java", java_patterns()),
+            ("c/c++", c_cpp_patterns()),
+        ];
+
+        for (language, patterns) in pattern_sets {
+            for pattern in patterns {
+                let pattern_text =
+                    format!("{} {}", pattern.regex, pattern.reason).to_ascii_lowercase();
+                for token in disallowed_tokens {
+                    assert!(
+                        !pattern_text.contains(token),
+                        "{language} pattern should stay benchmark-agnostic and avoid `{token}`: regex=`{}` reason=`{}`",
+                        pattern.regex,
+                        pattern.reason
+                    );
+                }
+            }
+        }
     }
 
     #[test]
