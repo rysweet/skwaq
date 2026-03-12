@@ -463,11 +463,15 @@ async fn run_overfitting_review(proposals: Vec<Improvement>, suite: &str) -> Vec
                 }
             }
 
-            let rejected_count = accepted.len();
+            let total_count = accepted.len()
+                + output
+                    .lines()
+                    .filter(|l| l.to_uppercase().contains("REJECT"))
+                    .count();
             tracing::info!(
                 "Overfitting review: {}/{} proposals accepted",
-                rejected_count,
-                rejected_count + (accepted.len() - rejected_count).max(0)
+                accepted.len(),
+                total_count
             );
             accepted
         }
