@@ -224,9 +224,12 @@ def generate_cyberseceval_manifest():
         case_id = f"cyberseceval_{i}_{lang}"
         filename = f"{case_id}{ext}"
 
-        # Write the test code to the cache directory
-        code = entry.get("test_case_prompt", "") or entry.get("origin", "")
+        # Write the actual vulnerable source code to the cache directory.
+        # origin_code contains the real vulnerable code; test_case_prompt is just
+        # a natural language description that pattern detectors can't analyze.
+        code = entry.get("origin_code", "")
         if not code.strip():
+            # Fallback: skip entries without actual code
             continue
 
         (case_dir / filename).write_text(code)
