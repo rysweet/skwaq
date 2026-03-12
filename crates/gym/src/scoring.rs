@@ -127,8 +127,8 @@ pub fn cwe_family(cwe: u32) -> u32 {
         367 => 362,
         // Integer overflow family -> CWE-190
         191 | 192 | 193 | 194 | 195 | 196 | 197 | 680 | 681 => 190,
-        // Dangerous function / free-of-non-heap -> Buffer overflow family
-        242 | 590 => 119,
+        // free-of-non-heap -> Buffer overflow family
+        590 => 119,
         // Null pointer family -> CWE-476
         252 | 253 => 476,
         // Out-of-bounds read/write -> Buffer overflow family
@@ -137,6 +137,16 @@ pub fn cwe_family(cwe: u32) -> u32 {
         23 | 36 => 22,
         // Crypto weakness family -> CWE-327
         326 | 328 | 330 | 338 | 310 | 295 => 327,
+        // Hard-coded credentials -> CWE-798
+        312 => 798,
+        // Use of potentially dangerous function -> CWE-676
+        242 | 676 => 676,
+        // Hardware crypto with short key -> crypto family
+        1240 => 327,
+        // Type confusion -> itself
+        843 => 843,
+        // Untrusted/expired pointer dereference -> null pointer family
+        822 | 823 | 825 => 476,
         // Everything else maps to itself.
         other => other,
     }
@@ -147,7 +157,7 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
     match category {
         "memory" => vec![
             119, 120, 121, 122, 125, 126, 787, 416, 415, 190, 191, 192, 193, 194, 195, 196, 197,
-            680, 681, 242, 590,
+            680, 681, 590, 822, 823, 825, 843,
         ],
         "injection" => vec![15, 77, 78, 89, 90, 94, 114, 501, 643, 917],
         "format_string" => vec![134, 119, 120, 121, 122, 787],
@@ -155,8 +165,8 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
         "temp_file" => vec![377],
         "path_traversal" => vec![22, 23, 36],
         "deserialization" => vec![502],
-        "crypto" => vec![326, 327, 328, 330, 338, 310, 295, 614, 798],
-        "unsafe_code" => vec![676],
+        "crypto" => vec![326, 327, 328, 330, 338, 310, 295, 614, 798, 312, 347, 1240],
+        "unsafe_code" => vec![676, 242],
         "prototype_pollution" => vec![1321],
         "xss" => vec![79, 80],
         _ => vec![],
@@ -394,5 +404,35 @@ mod tests {
         let outcome = score_case(&case, &findings, &|f| f.cwes.clone());
         // All findings count for negative cases
         assert_eq!(outcome.unmatched_finding_ids.len(), 1);
+    }
+
+    #[test]
+    fn test_new_cwe_family_mappings() {
+        assert_eq!(cwe_family(312), 798);
+        assert_eq!(cwe_family(822), 476);
+        assert_eq!(cwe_family(823), 476);
+        assert_eq!(cwe_family(825), 476);
+        assert_eq!(cwe_family(1240), 327);
+        assert_eq!(cwe_family(676), 676);
+        assert_eq!(cwe_family(242), 676);
+        assert_eq!(cwe_family(843), 843);
+    }
+
+    #[test]
+    fn test_updated_category_to_cwes() {
+        let crypto = category_to_cwes("crypto");
+        assert!(crypto.contains(&798));
+        assert!(crypto.contains(&312));
+        assert!(crypto.contains(&347));
+        assert!(crypto.contains(&1240));
+
+        let memory = category_to_cwes("memory");
+        assert!(memory.contains(&822));
+        assert!(memory.contains(&825));
+        assert!(!memory.contains(&242));
+
+        let unsafe_code = category_to_cwes("unsafe_code");
+        assert!(unsafe_code.contains(&676));
+        assert!(unsafe_code.contains(&242));
     }
 }
