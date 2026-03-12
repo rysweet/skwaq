@@ -12,6 +12,7 @@ pub mod gym_cmd;
 pub mod hypothesize_cmd;
 pub mod ingest;
 pub mod investigate;
+pub mod investigate_binary;
 pub mod kb_cmd;
 pub mod report;
 pub mod selftest_cmd;
@@ -212,6 +213,12 @@ pub enum Commands {
     Gym {
         #[command(subcommand)]
         sub: gym_cmd::GymSub,
+    },
+
+    /// Investigate a binary with full AI agent pipeline (native + optional Ghidra)
+    InvestigateBinary {
+        /// Path to the binary to investigate
+        binary: PathBuf,
     },
 
     /// Compare two binary versions and analyze security-relevant differences
