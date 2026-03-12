@@ -213,6 +213,12 @@ pub(crate) const DANGEROUS_APIS: &[DangerousEntry] = &[
         severity: Severity::Medium,
         reason: "TOCTOU race; use tmpfile or mkstemp",
     },
+    DangerousEntry {
+        name: "access",
+        category: DangerCategory::Race,
+        severity: Severity::Medium,
+        reason: "TOCTOU race between access() check and subsequent open(); use fstat on open fd",
+    },
     // Path traversal
     DangerousEntry {
         name: "realpath",
