@@ -82,9 +82,9 @@ impl Gym {
             cache_dir,
             cwe_filter: None,
             max_cases: None,
-            quick_mode: true,
+            quick_mode: false,
             parallelism: 4,
-            timeout_secs: 30,
+            timeout_secs: 1800,
         };
 
         Ok(Self {
@@ -110,12 +110,15 @@ impl Gym {
     }
 
     /// Run a specific suite or all suites.
+    ///
+    /// By default, runs full analysis (pattern detection + AI agents).
+    /// Pass `quick_only=true` to use pattern-only mode (faster, no LLM).
     pub async fn run(
         &mut self,
         suite: Option<&str>,
         cwe_filter: Option<Vec<u32>>,
         max_cases: Option<usize>,
-        full: bool,
+        quick_only: bool,
     ) -> anyhow::Result<()> {
         let commit = get_git_commit(&self.skwaq_root)?;
 
@@ -133,7 +136,10 @@ impl Gym {
         if let Some(max) = max_cases {
             config.max_cases = Some(max);
         }
-        if full {
+        if quick_only {
+            config.quick_mode = true;
+            config.timeout_secs = 30;
+        } else {
             config.quick_mode = false;
             // Agentic analysis with 5 LLM agents can take 10+ minutes per case.
             // 30 minutes is generous but prevents infinite hangs.

@@ -1,8 +1,9 @@
 //! `skwaq analyze` - vulnerability analysis command.
 //!
-//! When `--quick` is given, runs fast pattern-based analysis (no LLM).
-//! Without `--quick`, drives the dynamic agent pipeline through real LLM calls.
-//! Use `--agents` or `--agent` to override which agents run.
+//! When `--quick` is given, runs fast pattern-based analysis only (no LLM).
+//! Without `--quick` (the default), runs BOTH pattern-based analysis AND
+//! the AI agent pipeline, synthesizing results from both for maximum coverage.
+//! Use `--agents` or `--agent` to override which agents run in AI mode.
 
 use super::common::resolve_investigation;
 use skwaq_core::agents::{default_pipeline, pipeline_from_names};
@@ -22,12 +23,16 @@ pub async fn run(
     if quick {
         run_quick_analysis(investigation_id)
     } else {
-        run_ai_analysis(investigation_id, budget, agents, agent).await
+        run_combined_analysis(investigation_id, budget, agents, agent).await
     }
 }
 
-/// Run the LLM-driven agent pipeline for deep analysis.
-async fn run_ai_analysis(
+/// Run combined analysis: pattern detection + multi-cycle orchestrator + AI agents.
+///
+/// This synthesizes results from both the fast pattern-based analysis and the
+/// LLM agent pipeline. Pattern findings anchor precision; AI findings add recall.
+/// Only non-invalidated findings from both sources are reported.
+async fn run_combined_analysis(
     investigation_id: Option<&str>,
     budget: Option<u64>,
     agents_flag: Option<&str>,
@@ -49,10 +54,30 @@ async fn run_ai_analysis(
         )
         .unwrap_or_else(|_| inv_id.clone());
 
-    let budget_amount = budget.unwrap_or(config.analysis.default_token_budget);
-    // Model is determined per-agent from their markdown definitions
+    // --- Phase 1: Pattern detection + multi-cycle orchestrator ---
+    eprintln!("Phase 1: Running pattern detection + data flow analysis...");
+    let orchestrator = AnalysisOrchestrator::new(&db, 5);
+    let cycles = orchestrator.run_quick_analysis(&inv_id)?;
 
-    // Build the pipeline based on flags
+    let pattern_finding_count: usize = cycles
+        .last()
+        .map(|c| {
+            c.findings
+                .iter()
+                .filter(|f| f.status != FindingStatus::Invalidated)
+                .count()
+        })
+        .unwrap_or(0);
+
+    eprintln!(
+        "  Pattern analysis: {} active finding(s) after {} cycle(s)",
+        pattern_finding_count,
+        cycles.len()
+    );
+
+    // --- Phase 2: AI agent pipeline ---
+    let budget_amount = budget.unwrap_or(config.analysis.default_token_budget);
+
     let pipeline = if let Some(single) = agent_flag {
         pipeline_from_names(&[single.to_string()])
     } else if let Some(names) = agents_flag {
@@ -68,7 +93,6 @@ async fn run_ai_analysis(
         .map(|s| s.agent_name.as_str())
         .collect();
 
-    // Show model from first agent (each agent specifies its own model in frontmatter)
     let display_model = pipeline
         .stages
         .first()
@@ -76,33 +100,30 @@ async fn run_ai_analysis(
         .map(|a| a.model)
         .unwrap_or_else(|| config.llm.copilot.model.clone());
 
-    eprintln!("Running AI vulnerability analysis...");
-    eprintln!("  Investigation: {inv_id}");
+    eprintln!("Phase 2: Running AI agent pipeline...");
     eprintln!("  Model: {display_model}");
     eprintln!("  Token budget: {budget_amount}");
     eprintln!("  Pipeline: {}", stage_names.join(" -> "));
     println!();
 
-    // Create the LLM client (delegates to RustyClawd)
     let llm_client = skwaq_core::llm::create_client(&config.llm).await?;
-
     let mut token_budget = skwaq_core::llm::TokenBudget::new(budget_amount);
 
     let results = pipeline
         .run(&target, &inv_id, &db, llm_client, &mut token_budget)
         .await?;
 
-    // Print results from each agent
     for result in &results {
         println!("--- {} ---", result.agent_name);
         println!("{}", result.output);
         println!();
     }
 
-    // Query findings created by the agents
+    // --- Phase 3: Synthesize all findings ---
+    // Query ALL findings from both pattern analysis and AI agents
     let mut stmt = db.conn().prepare(
-        "SELECT title, severity, category, evidence FROM findings \
-         WHERE investigation_id = ?1 \
+        "SELECT title, severity, category, evidence, agent FROM findings \
+         WHERE investigation_id = ?1 AND status != 'invalidated' \
          ORDER BY CASE severity \
            WHEN 'critical' THEN 0 \
            WHEN 'high' THEN 1 \
@@ -111,13 +132,14 @@ async fn run_ai_analysis(
            ELSE 4 END",
     )?;
 
-    let findings: Vec<(String, String, String, String)> = stmt
+    let findings: Vec<(String, String, String, String, String)> = stmt
         .query_map([&inv_id], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
                 row.get::<_, String>(3)?,
+                row.get::<_, String>(4).unwrap_or_default(),
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -125,15 +147,24 @@ async fn run_ai_analysis(
     if findings.is_empty() {
         println!("No findings recorded.");
     } else {
-        println!("{} finding(s) recorded:\n", findings.len());
-        println!("  {:<40} {:<10} CATEGORY", "TITLE", "SEVERITY");
-        println!("  {}", "-".repeat(70));
-        for (title, severity, category, _evidence) in &findings {
+        println!("{} finding(s) from combined analysis:\n", findings.len());
+        println!(
+            "  {:<40} {:<10} {:<15} SOURCE",
+            "TITLE", "SEVERITY", "CATEGORY"
+        );
+        println!("  {}", "-".repeat(85));
+        for (title, severity, category, _evidence, agent) in &findings {
+            let source = if agent.contains("pattern") || agent.contains("taint") {
+                "pattern"
+            } else {
+                "AI agent"
+            };
             println!(
-                "  {:<40} {:<10} {}",
+                "  {:<40} {:<10} {:<15} {}",
                 truncate(title, 40),
                 severity,
                 category,
+                source,
             );
         }
         println!();
