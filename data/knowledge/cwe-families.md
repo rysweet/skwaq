@@ -122,10 +122,43 @@ Untrusted input determines which code/library is loaded.
 - **CWE-476**: Null Pointer Dereference
 - **CWE-252**: Unchecked Return Value (leading to null deref)
 - **CWE-253**: Incorrect Check of Function Return Value
+- **CWE-822**: Untrusted Pointer Dereference
+- **CWE-823**: Use of Out-of-range Pointer Offset
+- **CWE-825**: Expired Pointer Dereference
 
 **Detection signals:**
 - Dereferencing return value of malloc/calloc without null check
 - Using function return value without checking error conditions
+
+## Hard-coded Credentials Family (Root: CWE-798)
+- **CWE-798**: Use of Hard-coded Credentials (passwords, keys, tokens in source)
+- **CWE-312**: Cleartext Storage of Sensitive Information
+- **CWE-347**: Improper Verification of Cryptographic Signature
+
+**Detection signals:**
+- String literals assigned to variables named password, secret, key, token
+- Empty password strings
+- API keys and tokens embedded in source code
+
+## Dangerous Function Family (Root: CWE-676)
+- **CWE-676**: Use of Potentially Dangerous Function
+- **CWE-242**: Use of Inherently Dangerous Function
+- **CWE-1240**: Use of a Cryptographic Primitive with a Risky Implementation
+
+**Detection signals:**
+- Use of banned/deprecated APIs (gets, strcpy, etc.)
+- Cryptographic primitives with known weaknesses
+
+## Type Confusion / Pointer Safety Family
+- **CWE-843**: Access of Resource Using Incompatible Type (Type Confusion)
+- **CWE-822**: Untrusted Pointer Dereference
+- **CWE-823**: Use of Out-of-range Pointer Offset
+- **CWE-825**: Expired Pointer Dereference
+
+**Detection signals:**
+- Unsafe type casts without validation
+- Pointer arithmetic without bounds checking
+- Use of freed/expired pointer references
 
 ## CGC-Specific Patterns
 CGC challenges use custom APIs instead of standard libc:
