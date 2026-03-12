@@ -1,20 +1,19 @@
-//! `skwaq investigate <binary>` — interactive binary investigation with AI agents.
+//! `skwaq investigate-binary <binary>` — binary investigation with AI agents.
 //!
-//! Starts a Ghidra headless session (if available), ingests the binary into the
-//! graph, and runs the full agent pipeline with optional MCP tool access.
+//! Ingests the binary, runs Ghidra decompilation, pattern analysis,
+//! and the full AI agent pipeline. Errors propagate — no silent fallbacks.
 
 use std::path::Path;
 
-/// Run interactive investigation on a binary.
+/// Run investigation on a binary.
 pub async fn run(binary: &Path) -> anyhow::Result<()> {
-    use skwaq_core::agents::mcp_client::McpServerRegistry;
     use skwaq_core::binary::native::parse_binary;
     use skwaq_core::graph::builder::GraphBuilder;
     use skwaq_core::graph::GraphDb;
 
     println!("Investigating binary: {}", binary.display());
 
-    // Parse binary with goblin (always available)
+    // Parse binary
     let binary_info = parse_binary(binary)?;
     println!(
         "  Format: {:?}, {} symbols, {} imports",
@@ -49,66 +48,30 @@ pub async fn run(binary: &Path) -> anyhow::Result<()> {
         counts.functions, counts.imports, counts.strings
     );
 
-    // Try Ghidra enrichment if available
-    let ghidra_path = skwaq_core::binary::ghidra::GhidraRunner::find_ghidra();
-    let ghidra_runner = skwaq_core::binary::ghidra::GhidraRunner::new(ghidra_path.clone());
-    if ghidra_path.is_some() {
-        println!("  Ghidra found — running decompilation analysis...");
-        match ghidra_runner.analyze(binary, 600).await {
-            Ok(analysis) => {
-                let ghidra_counts = builder.build_from_ghidra_analysis(&analysis, &inv_id)?;
-                println!(
-                    "  Ghidra enrichment: {} functions updated, {} added, {} calls",
-                    ghidra_counts.functions_updated,
-                    ghidra_counts.functions_added,
-                    ghidra_counts.calls_added
-                );
-            }
-            Err(e) => {
-                println!(
-                    "  Ghidra analysis failed: {} (continuing without decompilation)",
-                    e
-                );
-            }
-        }
-    } else {
-        println!("  Ghidra not available — using native analysis only");
-        println!("    Install: https://ghidra-sre.org/ and set GHIDRA_INSTALL_DIR");
-    }
+    // Ghidra decompilation — required
+    let ghidra_path = skwaq_core::binary::ghidra::GhidraRunner::find_ghidra().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Ghidra not found. Install from https://ghidra-sre.org/ and set GHIDRA_INSTALL_DIR"
+        )
+    })?;
+    let ghidra_runner = skwaq_core::binary::ghidra::GhidraRunner::new(Some(ghidra_path));
+    println!("  Running Ghidra decompilation...");
+    let analysis = ghidra_runner.analyze(binary, 600).await?;
+    let ghidra_counts = builder.build_from_ghidra_analysis(&analysis, &inv_id)?;
+    println!(
+        "  Ghidra: {} functions updated, {} added, {} calls",
+        ghidra_counts.functions_updated, ghidra_counts.functions_added, ghidra_counts.calls_added
+    );
 
-    // Check for GhidraMCP server availability
-    let mcp_registry = McpServerRegistry::new();
-    if mcp_registry.is_server_available("ghidra") {
-        println!("  GhidraMCP server found — agents can decompile on-demand");
-    }
-
-    // Run pattern detection
-    println!("\n  Running pattern analysis...");
+    // Pattern analysis
+    println!("  Running pattern analysis...");
     let orchestrator = skwaq_core::analysis::AnalysisOrchestrator::new(&db, 3);
     let cycles = orchestrator.run_quick_analysis(&inv_id)?;
     println!("  Pattern analysis: {} cycles completed", cycles.len());
 
-    // Run LLM agent pipeline if available
-    let config = match skwaq_core::config::Config::load() {
-        Ok(c) => c,
-        Err(_) => {
-            println!("\n  No LLM configured. Pattern-only analysis complete.");
-            print_findings(&db, &inv_id)?;
-            return Ok(());
-        }
-    };
-
-    let llm_client = match skwaq_core::llm::create_client(&config.llm).await {
-        Ok(c) => c,
-        Err(e) => {
-            println!(
-                "\n  LLM not available ({}). Pattern-only analysis complete.",
-                e
-            );
-            print_findings(&db, &inv_id)?;
-            return Ok(());
-        }
-    };
+    // LLM agent pipeline — required
+    let config = skwaq_core::config::Config::load()?;
+    let llm_client = skwaq_core::llm::create_client(&config.llm).await?;
 
     println!("  Running AI agent pipeline...");
     let pipeline = skwaq_core::agents::deep_pipeline();
@@ -120,33 +83,18 @@ pub async fn run(binary: &Path) -> anyhow::Result<()> {
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| target.clone());
 
-    match tokio::time::timeout(
-        std::time::Duration::from_secs(1800),
-        pipeline.run(&file_name, &inv_id, &db, llm_client, &mut budget),
-    )
-    .await
-    {
-        Ok(Ok(results)) => {
-            let total_tokens: u64 = results.iter().map(|r| r.tokens_used).sum();
-            println!(
-                "  Agent pipeline: {} agents, {} tokens used",
-                results.len(),
-                total_tokens
-            );
-        }
-        Ok(Err(e)) => {
-            println!("  Agent pipeline failed: {}", e);
-        }
-        Err(_) => {
-            println!("  Agent pipeline timed out after 30 minutes");
-        }
-    }
+    let results = pipeline
+        .run(&file_name, &inv_id, &db, llm_client, &mut budget)
+        .await?;
 
-    print_findings(&db, &inv_id)?;
-    Ok(())
-}
+    let total_tokens: u64 = results.iter().map(|r| r.tokens_used).sum();
+    println!(
+        "  Agent pipeline: {} agents, {} tokens used",
+        results.len(),
+        total_tokens
+    );
 
-fn print_findings(db: &skwaq_core::graph::GraphDb, inv_id: &str) -> anyhow::Result<()> {
+    // Print findings
     let mut stmt = db.conn().prepare(
         "SELECT title, severity, category FROM findings \
          WHERE investigation_id = ?1 AND status != 'invalidated' \
@@ -159,7 +107,7 @@ fn print_findings(db: &skwaq_core::graph::GraphDb, inv_id: &str) -> anyhow::Resu
     )?;
 
     let findings: Vec<(String, String, String)> = stmt
-        .query_map([inv_id], |row| {
+        .query_map([&inv_id], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1).unwrap_or_default(),

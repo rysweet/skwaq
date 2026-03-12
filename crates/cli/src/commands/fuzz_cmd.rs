@@ -144,7 +144,7 @@ pub async fn run_fuzz_analyze(binary: &Path, duration_secs: u64) -> anyhow::Resu
             "CRASH: address={}, signal={}, input_file={}\nStack trace:\n{}",
             crash.address, crash.signal, crash.input_file, crash.stack_trace
         );
-        let _ = db.execute(
+        db.execute(
             "INSERT INTO annotations (id, content, agent, timestamp, investigation_id) \
              VALUES (?1, ?2, 'fuzzer', ?3, ?4)",
             &[
@@ -153,28 +153,12 @@ pub async fn run_fuzz_analyze(binary: &Path, duration_secs: u64) -> anyhow::Resu
                 &now.as_str(),
                 &inv_id.as_str(),
             ],
-        );
+        )?;
     }
 
-    // Run crash-analyst agent
-    let config = match skwaq_core::config::Config::load() {
-        Ok(c) => c,
-        Err(_) => {
-            println!("  LLM not configured. Crash data stored but not analyzed.");
-            return Ok(());
-        }
-    };
-
-    let llm_client = match skwaq_core::llm::create_client(&config.llm).await {
-        Ok(c) => c,
-        Err(e) => {
-            println!(
-                "  LLM not available ({}). Crash data stored but not analyzed.",
-                e
-            );
-            return Ok(());
-        }
-    };
+    // Run crash-analyst agent — LLM is required
+    let config = skwaq_core::config::Config::load()?;
+    let llm_client = skwaq_core::llm::create_client(&config.llm).await?;
 
     let agent = skwaq_core::agents::definition::load_agent("crash-analyst")?;
     let mut budget =
@@ -201,18 +185,11 @@ pub async fn run_fuzz_analyze(binary: &Path, duration_secs: u64) -> anyhow::Resu
          Determine the root cause, exploitability, and CWE. Use create_finding for each vulnerability.\n",
     );
 
-    match runner
+    let result = runner
         .run_agent_with_db(&agent, &inv_id, &context, &db, &mut budget)
-        .await
-    {
-        Ok(result) => {
-            println!("\n{}", result.output);
-            println!("({} tokens used)", result.tokens_used);
-        }
-        Err(e) => {
-            println!("  Crash analysis failed: {}", e);
-        }
-    }
+        .await?;
+    println!("\n{}", result.output);
+    println!("({} tokens used)", result.tokens_used);
 
     // Print findings
     let mut stmt = db
@@ -385,9 +362,13 @@ fn collect_crashes(crashes_dir: &Path) -> anyhow::Result<Vec<CrashInfo>> {
     Ok(crashes)
 }
 
-/// Store crash data in graph DB for later analysis.
+/// Store crash data to the default graph database for later analysis.
 async fn store_crash_data(binary: &Path, crashes: &[CrashInfo]) -> anyhow::Result<()> {
-    let db = skwaq_core::graph::GraphDb::in_memory()?;
+    let config = skwaq_core::config::Config::load().unwrap_or_default();
+    let db_path = config.database_path();
+    std::fs::create_dir_all(db_path.parent().unwrap_or(std::path::Path::new(".")))?;
+    let db = skwaq_core::graph::GraphDb::open(&db_path)?;
+
     let inv_id = format!("fuzz-{}", &uuid::Uuid::new_v4().to_string()[..8]);
     let now = chrono::Utc::now().to_rfc3339();
 
@@ -421,5 +402,6 @@ async fn store_crash_data(binary: &Path, crashes: &[CrashInfo]) -> anyhow::Resul
         )?;
     }
 
+    println!("  Crash data stored in investigation '{}'", inv_id);
     Ok(())
 }

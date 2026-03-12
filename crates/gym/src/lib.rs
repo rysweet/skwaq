@@ -83,7 +83,7 @@ impl Gym {
             cwe_filter: None,
             max_cases: None,
             quick_mode: false,
-            binary_mode: false,
+            binary_mode: true, // Binary analysis is the default for cases with binary_path
             parallelism: 4,
             timeout_secs: 1800,
         };

@@ -91,24 +91,9 @@ pub async fn run(v1: &Path, v2: &Path, advisory: Option<&str>) -> anyhow::Result
          then use create_finding for any security-relevant changes you discover.\n",
     );
 
-    // Run the patch-diff-analyst agent
-    let config = match skwaq_core::config::Config::load() {
-        Ok(c) => c,
-        Err(_) => {
-            // No LLM configured, print diff summary and exit
-            println!("\nLLM not configured. Install an API key to run AI analysis.");
-            println!("Diff summary above shows function-level changes.");
-            return Ok(());
-        }
-    };
-
-    let llm_client = match skwaq_core::llm::create_client(&config.llm).await {
-        Ok(c) => c,
-        Err(e) => {
-            println!("\nLLM not available ({}). Showing diff summary only.", e);
-            return Ok(());
-        }
-    };
+    // Run the patch-diff-analyst agent — LLM is required
+    let config = skwaq_core::config::Config::load()?;
+    let llm_client = skwaq_core::llm::create_client(&config.llm).await?;
 
     let agent = skwaq_core::agents::definition::load_agent("patch-diff-analyst")?;
 

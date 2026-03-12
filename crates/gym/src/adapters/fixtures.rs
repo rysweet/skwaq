@@ -65,20 +65,20 @@ impl BenchmarkAdapter for FixturesAdapter {
         if config.binary_mode {
             if let Some(bp) = &case.binary_path {
                 let binary = data_dir.join(bp);
-                if binary.exists() {
-                    return if config.quick_mode {
-                        run_binary_pattern_detection(&binary)
-                    } else {
-                        crate::agentic::run_agentic_binary_analysis(&binary, config.timeout_secs)
-                            .await
-                    };
+                if !binary.exists() {
+                    anyhow::bail!(
+                        "Binary '{}' not found for case '{}'. Run `skwaq gym setup` to compile fixtures.",
+                        binary.display(),
+                        case.id
+                    );
                 }
-                tracing::warn!(
-                    "Binary {} not found for case {}, falling back to source",
-                    binary.display(),
-                    case.id
-                );
+                return if config.quick_mode {
+                    run_binary_pattern_detection(&binary)
+                } else {
+                    crate::agentic::run_agentic_binary_analysis(&binary, config.timeout_secs).await
+                };
             }
+            // No binary_path for this case — non-C cases (python, js) analyzed as source
         }
 
         let path = data_dir.join(&case.path);
@@ -256,9 +256,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_run_case_binary_mode_falls_back_to_source() {
+    async fn test_run_case_binary_mode_uses_source_for_non_c() {
         let adapter = FixturesAdapter::new(test_manifest_path(), test_fixtures_dir());
-        // Python case has no binary_path, should fall back to source
+        // Python case has no binary_path — binary_mode still analyzes source for non-C cases
         let case = TestCase {
             id: "vuln_app_py".to_string(),
             path: "vuln_app.py".to_string(),
@@ -271,10 +271,10 @@ mod tests {
             .run_case(&case, &test_fixtures_dir(), &binary_test_config())
             .await
             .unwrap();
-        // Should still produce findings from source analysis fallback
+        // Non-C cases without binary_path are analyzed as source
         assert!(
             !findings.is_empty(),
-            "Expected findings from source fallback for vuln_app.py"
+            "Expected findings from source analysis for vuln_app.py"
         );
     }
 }

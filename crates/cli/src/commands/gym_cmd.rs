@@ -25,9 +25,9 @@ pub enum GymSub {
         #[arg(long)]
         quick: bool,
 
-        /// Analyze compiled binaries instead of source code
+        /// Analyze source code only, skip binary analysis (binary is the default for C cases)
         #[arg(long)]
-        binary: bool,
+        source_only: bool,
 
         /// Output JSON report to file
         #[arg(long)]
@@ -83,7 +83,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             cwe,
             max_cases,
             quick,
-            binary,
+            source_only,
             json,
             markdown,
         } => {
@@ -91,8 +91,15 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 .as_ref()
                 .map(|c| parse_cwe_number(c).map(|n| vec![n]))
                 .transpose()?;
-            gym.run(suite.as_deref(), cwe_filter, *max_cases, *quick, *binary)
-                .await?;
+            let binary_mode = !*source_only;
+            gym.run(
+                suite.as_deref(),
+                cwe_filter,
+                *max_cases,
+                *quick,
+                binary_mode,
+            )
+            .await?;
 
             if let Some(path) = json {
                 let report = gym.report(skwaq_gym::ReportFormat::Json)?;
