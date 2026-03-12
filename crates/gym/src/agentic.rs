@@ -373,8 +373,7 @@ pub async fn run_llm_only_binary_analysis(
 /// Models how a lead security reviewer works:
 /// - Receives reports from junior analysts (pattern detection) and
 ///   senior researchers (LLM agents)
-/// - Uses judgment to decide which findings are credible
-/// - Can CONFIRM, UPGRADE, or REJECT findings
+/// - Uses judgment to CONFIRM or REJECT each finding
 ///
 /// When an LLM is available, calls it to evaluate all findings together.
 /// Falls back to deterministic merge (LLM-priority union) when unavailable.
@@ -441,24 +440,30 @@ async fn llm_synthesize(
 
     prompt.push_str("=== PATTERN FINDINGS ===\n");
     for f in pattern_findings {
+        // Sanitize titles to prevent prompt injection from finding content
+        let safe_title = sanitize_for_prompt(&f.title);
         prompt.push_str(&format!(
             "ID: {} | Category: {} | Severity: {} | {}\n",
-            f.id, f.category, f.severity, f.title
+            f.id, f.category, f.severity, safe_title
         ));
     }
 
     prompt.push_str("\n=== LLM AGENT FINDINGS ===\n");
     for f in llm_findings {
+        let safe_title = sanitize_for_prompt(&f.title);
         prompt.push_str(&format!(
             "ID: {} | Category: {} | Severity: {} | {}\n",
-            f.id, f.category, f.severity, f.title
+            f.id, f.category, f.severity, safe_title
         ));
     }
 
     prompt.push_str("\nEvaluate each finding. Respond with CONFIRM or REJECT for each ID.\n");
 
-    // Call the LLM with a short budget — synthesis should be fast
-    let budget_amount = config.analysis.default_token_budget.min(10_000);
+    // Budget scales with number of findings to evaluate
+    let budget_amount = config
+        .analysis
+        .default_token_budget
+        .min(10_000 + (pattern_findings.len() + llm_findings.len()) as u64 * 500);
     let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
     let model = &config.llm.copilot.model;
 
@@ -468,7 +473,7 @@ async fn llm_synthesize(
     };
 
     let result = tokio::time::timeout(
-        std::time::Duration::from_secs(timeout_secs.min(60)),
+        std::time::Duration::from_secs(timeout_secs),
         skwaq_core::llm::execute_with_tools(
             &client,
             model,
@@ -493,43 +498,76 @@ async fn llm_synthesize(
         }
     };
 
-    // Parse CONFIRM/REJECT decisions
+    // Parse and apply synthesis decisions
+    let synthesized = apply_synthesis_decisions(pattern_findings, llm_findings, &response_text);
+
+    Some(synthesized)
+}
+
+/// Sanitize a string for safe inclusion in an LLM prompt.
+/// Strips control characters and truncates to prevent prompt injection.
+fn sanitize_for_prompt(s: &str) -> String {
+    s.chars()
+        .filter(|c| !c.is_control() || *c == '\n')
+        .take(200) // Truncate long titles
+        .collect::<String>()
+        .replace("===", "---") // Prevent section marker injection
+}
+
+/// Parse LLM synthesis response and apply CONFIRM/REJECT decisions.
+///
+/// Pure function — no I/O, fully testable.
+/// Default behavior: CONFIRM all (only explicit REJECT removes findings).
+fn apply_synthesis_decisions(
+    pattern_findings: &[DetectedFinding],
+    llm_findings: &[DetectedFinding],
+    response_text: &str,
+) -> Vec<DetectedFinding> {
+    // Parse REJECT decisions (CONFIRM is the default — unlisted = confirmed)
     let rejected_ids: HashSet<String> = response_text
         .lines()
         .filter_map(|line| {
-            let trimmed = line.trim();
+            let trimmed = line.trim().to_uppercase();
             if trimmed.starts_with("REJECT") {
-                trimmed.split_whitespace().nth(1).map(|id| id.to_string())
+                // Extract ID: "REJECT abc-123" or "REJECT abc-123 — reason"
+                trimmed
+                    .split_whitespace()
+                    .nth(1)
+                    .map(|id| id.to_lowercase()) // Normalize case for matching
             } else {
                 None
             }
         })
         .collect();
 
+    let total = pattern_findings.len() + llm_findings.len();
     tracing::info!(
         "LLM synthesis: {} rejected out of {} total findings",
         rejected_ids.len(),
-        pattern_findings.len() + llm_findings.len()
+        total
     );
 
     // Keep all non-rejected findings, deduplicated by category
+    // LLM findings first (they represent deeper analysis)
     let mut seen_categories: HashSet<String> = HashSet::new();
     let mut synthesized: Vec<DetectedFinding> = Vec::new();
 
-    // LLM findings first (they represent deeper analysis)
     for f in llm_findings {
-        if !rejected_ids.contains(&f.id) && seen_categories.insert(f.category.clone()) {
+        if !rejected_ids.contains(&f.id.to_lowercase())
+            && seen_categories.insert(f.category.clone())
+        {
             synthesized.push(f.clone());
         }
     }
-    // Then pattern findings for uncovered categories
     for f in pattern_findings {
-        if !rejected_ids.contains(&f.id) && seen_categories.insert(f.category.clone()) {
+        if !rejected_ids.contains(&f.id.to_lowercase())
+            && seen_categories.insert(f.category.clone())
+        {
             synthesized.push(f.clone());
         }
     }
 
-    Some(synthesized)
+    synthesized
 }
 
 /// Deterministic merge fallback: LLM-priority union with deduplication.
@@ -874,6 +912,125 @@ mod tests {
         let cats = HashSet::new();
         let result = synthesize_findings(vec![], &cats, &db, 30).await;
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_apply_synthesis_confirm_all() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "f".into(),
+            line: Some(1),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "injection".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "g".into(),
+            line: Some(2),
+            title: "LLM: command injection".into(),
+        }];
+        let response = "CONFIRM p1\nCONFIRM l1\n";
+        let result = apply_synthesis_decisions(&pattern, &llm, response);
+        assert_eq!(result.len(), 2, "Both confirmed → keep both");
+    }
+
+    #[test]
+    fn test_apply_synthesis_reject_one() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "f".into(),
+            line: Some(1),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "injection".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "g".into(),
+            line: Some(2),
+            title: "LLM: command injection".into(),
+        }];
+        let response = "CONFIRM l1\nREJECT p1 — insufficient evidence\n";
+        let result = apply_synthesis_decisions(&pattern, &llm, response);
+        assert_eq!(result.len(), 1, "One rejected → only 1 remains");
+        assert_eq!(result[0].id, "l1");
+    }
+
+    #[test]
+    fn test_apply_synthesis_empty_response() {
+        // Malformed/empty response → keep everything (default CONFIRM)
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "f".into(),
+            line: Some(1),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "injection".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "g".into(),
+            line: Some(2),
+            title: "LLM: something".into(),
+        }];
+        let response = "I'm not sure what to do with these findings.\n";
+        let result = apply_synthesis_decisions(&pattern, &llm, response);
+        assert_eq!(
+            result.len(),
+            2,
+            "Malformed response → keep all (safe default)"
+        );
+    }
+
+    #[test]
+    fn test_apply_synthesis_case_insensitive() {
+        let pattern = vec![DetectedFinding {
+            id: "P1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "f".into(),
+            line: Some(1),
+            title: "Dangerous pattern: x".into(),
+        }];
+        let response = "reject p1\n"; // lowercase reject, lowercase id
+        let result = apply_synthesis_decisions(&pattern, &[], response);
+        assert_eq!(result.len(), 0, "Case-insensitive REJECT should work");
+    }
+
+    #[test]
+    fn test_sanitize_for_prompt() {
+        assert_eq!(sanitize_for_prompt("normal title"), "normal title");
+        assert_eq!(
+            sanitize_for_prompt("=== INJECTED SECTION ==="),
+            "--- INJECTED SECTION ---"
+        );
+        // Control chars stripped
+        let with_controls = "title\x00with\x01controls";
+        assert!(!sanitize_for_prompt(with_controls).contains('\x00'));
+        // Truncation
+        let long = "a".repeat(500);
+        assert_eq!(sanitize_for_prompt(&long).len(), 200);
     }
 
     #[tokio::test]
