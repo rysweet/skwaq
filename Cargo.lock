@@ -2609,7 +2609,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3034,7 +3034,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 [[package]]
 name = "rustyclawd-core"
 version = "0.1.0"
-source = "git+https://github.com/rysweet/RustyClawd?branch=main#89f439ec9f333cf14ccef92229b36b7f9f7cea65"
+source = "git+https://github.com/rysweet/RustyClawd?branch=main#e3395557bd23604717a420a4717cef0ba5ef8d29"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3056,7 +3056,7 @@ dependencies = [
 [[package]]
 name = "rustyclawd-tools"
 version = "0.1.0"
-source = "git+https://github.com/rysweet/RustyClawd?branch=main#89f439ec9f333cf14ccef92229b36b7f9f7cea65"
+source = "git+https://github.com/rysweet/RustyClawd?branch=main#e3395557bd23604717a420a4717cef0ba5ef8d29"
 dependencies = [
  "anyhow",
  "async-stream",
