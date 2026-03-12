@@ -13,6 +13,9 @@ pub mod improve;
 pub mod reporting;
 pub mod scoring;
 
+use futures::stream::{FuturesUnordered, StreamExt};
+use std::pin::Pin;
+
 use adapters::{BenchmarkAdapter, BenchmarkConfig};
 use history::HistoryDb;
 use std::path::PathBuf;
@@ -97,6 +100,8 @@ impl Gym {
             quick_mode: false,
             binary_mode: true, // Binary analysis is the default for cases with binary_path
             parallelism: 4,
+            skip: 0,
+            concurrency: 1,
             timeout_secs: 1800,
         };
 
@@ -127,6 +132,7 @@ impl Gym {
     /// By default, runs full analysis (pattern detection + AI agents).
     /// Pass `quick_only=true` to use pattern-only mode (faster, no LLM).
     /// Pass `binary_mode=true` to analyze compiled binaries instead of source.
+    #[allow(clippy::too_many_arguments)]
     pub async fn run(
         &mut self,
         suite: Option<&str>,
@@ -134,6 +140,8 @@ impl Gym {
         max_cases: Option<usize>,
         quick_only: bool,
         binary_mode: bool,
+        skip: usize,
+        concurrency: usize,
     ) -> anyhow::Result<()> {
         let commit = get_git_commit(&self.skwaq_root)?;
 
@@ -161,6 +169,8 @@ impl Gym {
             config.timeout_secs = 1800;
         }
         config.binary_mode = binary_mode;
+        config.skip = skip;
+        config.concurrency = concurrency.max(1);
 
         for adapter in adapters {
             let suite_name = adapter.name().to_string();
@@ -170,7 +180,7 @@ impl Gym {
             let gt = adapter.ground_truth()?;
             let data_dir = adapter.setup(&config).await?;
 
-            let cases: Vec<_> = gt
+            let cases: Vec<&ground_truth::TestCase> = gt
                 .cases
                 .iter()
                 .filter(|c| {
@@ -179,34 +189,133 @@ impl Gym {
                             || c.expected_cwes.is_empty()
                     })
                 })
+                .skip(config.skip)
                 .take(config.max_cases.unwrap_or(usize::MAX))
                 .collect();
 
-            let mut outcomes = Vec::new();
             let total = cases.len();
+            let concurrency = config.concurrency;
 
-            for (i, case) in cases.iter().enumerate() {
-                if i % 100 == 0 && i > 0 {
-                    tracing::info!("[{}/{}] Processing {}", i, total, case.id);
+            tracing::info!(
+                "{}: {} cases (skip={}, concurrency={})",
+                suite_name,
+                total,
+                config.skip,
+                concurrency
+            );
+
+            // Run cases with in-process async concurrency.
+            // Each case creates its own in-memory GraphDb, so no shared state.
+            // Concurrency > 1 lets multiple LLM API calls overlap (network I/O).
+            let mut outcomes = Vec::with_capacity(total);
+            let timeout_secs = config.timeout_secs;
+
+            if concurrency <= 1 {
+                // Sequential mode (original behavior)
+                for (i, case) in cases.iter().enumerate() {
+                    if i % 10 == 0 && i > 0 {
+                        tracing::info!("[{}/{}] Processing {}", i, total, case.id);
+                    }
+                    match tokio::time::timeout(
+                        std::time::Duration::from_secs(timeout_secs),
+                        adapter.run_case(case, &data_dir, &config),
+                    )
+                    .await
+                    {
+                        Ok(Ok(findings)) => {
+                            let mut outcome = scoring::score_case(case, &findings, &|f| {
+                                adapter.map_finding_to_cwes(f)
+                            });
+                            outcome.suite = suite_name.clone();
+                            outcomes.push(outcome);
+                        }
+                        Ok(Err(e)) => {
+                            tracing::warn!("Case {} failed: {}", case.id, e);
+                        }
+                        Err(_) => {
+                            tracing::warn!("Case {} timed out after {}s", case.id, timeout_secs);
+                        }
+                    }
                 }
-                match tokio::time::timeout(
-                    std::time::Duration::from_secs(config.timeout_secs),
-                    adapter.run_case(case, &data_dir, &config),
-                )
-                .await
-                {
-                    Ok(Ok(findings)) => {
-                        let mut outcome = scoring::score_case(case, &findings, &|f| {
-                            adapter.map_finding_to_cwes(f)
-                        });
-                        outcome.suite = suite_name.clone();
-                        outcomes.push(outcome);
+            } else {
+                // Concurrent mode: run N cases at once using FuturesUnordered.
+                // On a single-threaded runtime, this interleaves at await points
+                // (network I/O), giving true concurrency on LLM API calls.
+                // Each case gets its own in-memory GraphDb, so no shared state.
+                type CaseResult<'a> = (
+                    usize,
+                    &'a ground_truth::TestCase,
+                    String,
+                    Result<
+                        anyhow::Result<Vec<adapters::DetectedFinding>>,
+                        tokio::time::error::Elapsed,
+                    >,
+                );
+
+                let data_dir = &data_dir;
+                let config = &config;
+
+                let mut pending: FuturesUnordered<
+                    Pin<Box<dyn std::future::Future<Output = CaseResult<'_>>>>,
+                > = FuturesUnordered::new();
+                let mut case_iter = cases.iter().enumerate();
+                let mut completed = 0usize;
+
+                // Seed the initial batch
+                for _ in 0..concurrency {
+                    if let Some((i, &case)) = case_iter.next() {
+                        let suite = suite_name.clone();
+                        pending.push(Box::pin(async move {
+                            let result = tokio::time::timeout(
+                                std::time::Duration::from_secs(timeout_secs),
+                                adapter.run_case(case, data_dir, config),
+                            )
+                            .await;
+                            (i, case, suite, result)
+                        }));
                     }
-                    Ok(Err(e)) => {
-                        tracing::warn!("Case {} failed: {}", case.id, e);
+                }
+
+                // Process completions and feed new cases
+                while let Some((i, case, suite, result)) = pending.next().await {
+                    completed += 1;
+                    if completed.is_multiple_of(10) {
+                        tracing::info!("[{}/{}] Completed {}", completed, total, case.id);
                     }
-                    Err(_) => {
-                        tracing::warn!("Case {} timed out after {}s", case.id, config.timeout_secs);
+
+                    match result {
+                        Ok(Ok(findings)) => {
+                            let mut outcome = scoring::score_case(case, &findings, &|f| {
+                                adapter.map_finding_to_cwes(f)
+                            });
+                            outcome.suite = suite;
+                            outcomes.push(outcome);
+                        }
+                        Ok(Err(e)) => {
+                            tracing::warn!("[{}/{}] Case {} failed: {}", i, total, case.id, e);
+                        }
+                        Err(_) => {
+                            tracing::warn!(
+                                "[{}/{}] Case {} timed out after {}s",
+                                i,
+                                total,
+                                case.id,
+                                timeout_secs
+                            );
+                        }
+                    }
+
+                    // Feed next case into the pool
+                    if let Some((next_i, &next_case)) = case_iter.next() {
+                        let suite = suite_name.clone();
+                        pending.push(Box::pin(async move {
+                            let result = tokio::time::timeout(
+                                std::time::Duration::from_secs(timeout_secs),
+                                adapter.run_case(next_case, data_dir, config),
+                            )
+                            .await;
+                            (next_i, next_case, suite, result)
+                        }));
                     }
                 }
             }

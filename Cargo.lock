@@ -3435,6 +3435,7 @@ dependencies = [
  "chrono",
  "dirs",
  "flate2",
+ "futures",
  "indicatif",
  "rayon",
  "regex",
