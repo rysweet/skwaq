@@ -539,7 +539,7 @@ async fn llm_synthesize(
         Err(e) => {
             tracing::warn!("LLM synthesis unavailable: config load failed: {}", e);
             eprintln!(
-                "  WARNING: LLM synthesis unavailable (config load failed: {}), using merge fallback",
+                "  WARNING: LLM synthesis unavailable (config load failed: {}), returning pattern-only results",
                 e
             );
             return None;
@@ -550,7 +550,7 @@ async fn llm_synthesize(
         Err(e) => {
             tracing::warn!("LLM synthesis unavailable: client creation failed: {}", e);
             eprintln!(
-                "  WARNING: LLM synthesis unavailable (client creation failed: {}), using merge fallback",
+                "  WARNING: LLM synthesis unavailable (client creation failed: {}), returning pattern-only results",
                 e
             );
             return None;
@@ -623,7 +623,7 @@ async fn llm_synthesize(
         Ok(Err(e)) => {
             tracing::warn!("LLM synthesis call failed: {}", e);
             eprintln!(
-                "  WARNING: LLM synthesis call failed ({}), using merge fallback",
+                "  WARNING: LLM synthesis call failed ({}), returning pattern-only results",
                 e
             );
             return None;
@@ -631,7 +631,7 @@ async fn llm_synthesize(
         Err(_) => {
             tracing::warn!("LLM synthesis timed out after {}s", timeout_secs);
             eprintln!(
-                "  WARNING: LLM synthesis timed out after {}s, using merge fallback",
+                "  WARNING: LLM synthesis timed out after {}s, returning pattern-only results",
                 timeout_secs
             );
             return None;
