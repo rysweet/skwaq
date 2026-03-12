@@ -12,14 +12,14 @@ language = "c"
 
 [[cases]]
 id = "AIS-Lite"
-path = "challenges/AIS-Lite/src/sentence.c"
+path = "challenges/AIS-Lite/src/service.c"
 expected_cwes = [20, 120, 122, 129, 788]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "ASCII_Content_Server"
-path = "challenges/ASCII_Content_Server/src/page.c"
+path = "challenges/ASCII_Content_Server/src/service.c"
 expected_cwes = [195, 476, 787]
 is_negative = false
 language = "c"
@@ -68,14 +68,14 @@ language = "c"
 
 [[cases]]
 id = "Board_Game"
-path = "challenges/Board_Game/src/moves.c"
+path = "challenges/Board_Game/src/service.c"
 expected_cwes = [787]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "BudgIT"
-path = "challenges/BudgIT/src/map.c"
+path = "challenges/BudgIT/src/service.c"
 expected_cwes = [122, 125, 131, 193, 469, 787]
 is_negative = false
 language = "c"
@@ -89,28 +89,28 @@ language = "c"
 
 [[cases]]
 id = "CGC_File_System"
-path = "challenges/CGC_File_System/src/recv.c"
+path = "challenges/CGC_File_System/src/service.c"
 expected_cwes = [125]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "CGC_Hangman_Game"
-path = "challenges/CGC_Hangman_Game/src/words.c"
+path = "challenges/CGC_Hangman_Game/src/service.c"
 expected_cwes = [121, 134]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "CGC_Image_Parser"
-path = "challenges/CGC_Image_Parser/src/tpai_image_data.c"
+path = "challenges/CGC_Image_Parser/src/service.c"
 expected_cwes = [129, 416]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "CGC_Planet_Markup_Language_Parser"
-path = "challenges/CGC_Planet_Markup_Language_Parser/src/planetParsers.c"
+path = "challenges/CGC_Planet_Markup_Language_Parser/src/service.c"
 expected_cwes = [120, 122, 476]
 is_negative = false
 language = "c"
@@ -124,7 +124,7 @@ language = "c"
 
 [[cases]]
 id = "CGC_Video_Format_Parser_and_Viewer"
-path = "challenges/CGC_Video_Format_Parser_and_Viewer/src/bitstream.c"
+path = "challenges/CGC_Video_Format_Parser_and_Viewer/src/service.c"
 expected_cwes = [120]
 is_negative = false
 language = "c"
@@ -145,7 +145,7 @@ language = "c"
 
 [[cases]]
 id = "COLLIDEOSCOPE"
-path = "challenges/COLLIDEOSCOPE/src/parser.c"
+path = "challenges/COLLIDEOSCOPE/src/service.c"
 expected_cwes = [119, 703, 704, 843]
 is_negative = false
 language = "c"
@@ -159,14 +159,14 @@ language = "c"
 
 [[cases]]
 id = "CableGrind"
-path = "challenges/CableGrind/src/cablegrind.c"
+path = "challenges/CableGrind/src/service.c"
 expected_cwes = [121, 131]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "CableGrindLlama"
-path = "challenges/CableGrindLlama/src/cablegrind.c"
+path = "challenges/CableGrindLlama/src/service.c"
 expected_cwes = [122, 131]
 is_negative = false
 language = "c"
@@ -187,7 +187,7 @@ language = "c"
 
 [[cases]]
 id = "Cereal_Mixup__A_Cereal_Vending_Machine_Controller"
-path = "challenges/Cereal_Mixup__A_Cereal_Vending_Machine_Controller/src/breakfast.c"
+path = "challenges/Cereal_Mixup__A_Cereal_Vending_Machine_Controller/src/service.c"
 expected_cwes = [502, 822]
 is_negative = false
 language = "c"
@@ -201,14 +201,14 @@ language = "c"
 
 [[cases]]
 id = "Charter"
-path = "challenges/Charter/src/bars.c"
+path = "challenges/Charter/src/service.c"
 expected_cwes = [120, 122]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "Checkmate"
-path = "challenges/Checkmate/src/ai.c"
+path = "challenges/Checkmate/src/service.c"
 expected_cwes = [20, 134, 201]
 is_negative = false
 language = "c"
@@ -222,7 +222,7 @@ language = "c"
 
 [[cases]]
 id = "Corinth"
-path = "challenges/Corinth/src/monte.c"
+path = "challenges/Corinth/src/service.c"
 expected_cwes = [121]
 is_negative = false
 language = "c"
@@ -231,6 +231,13 @@ language = "c"
 id = "Cromulence_All_Service"
 path = "challenges/Cromulence_All_Service/src/encode_data.c"
 expected_cwes = [121, 131, 190, 195]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "DFARS_Sample_Service"
+path = "challenges/DFARS_Sample_Service/src/service.c"
+expected_cwes = [119]
 is_negative = false
 language = "c"
 
@@ -257,7 +264,7 @@ language = "c"
 
 [[cases]]
 id = "Dive_Logger"
-path = "challenges/Dive_Logger/src/ui.c"
+path = "challenges/Dive_Logger/src/service.c"
 expected_cwes = [787, 839]
 is_negative = false
 language = "c"
@@ -271,21 +278,21 @@ language = "c"
 
 [[cases]]
 id = "Dungeon_Master"
-path = "challenges/Dungeon_Master/src/dungeon.c"
+path = "challenges/Dungeon_Master/src/service.c"
 expected_cwes = [121, 125, 170, 193, 787, 788]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "Eddy"
-path = "challenges/Eddy/src/editor.c"
+path = "challenges/Eddy/src/service.c"
 expected_cwes = [120, 122, 201, 787]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "Email_System_2"
-path = "challenges/Email_System_2/src/message.c"
+path = "challenges/Email_System_2/src/service.c"
 expected_cwes = [121]
 is_negative = false
 language = "c"
@@ -299,21 +306,28 @@ language = "c"
 
 [[cases]]
 id = "Estadio"
-path = "challenges/Estadio/src/messages.c"
+path = "challenges/Estadio/src/service.c"
 expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "EternalPass"
-path = "challenges/EternalPass/src/adverbs.c"
+path = "challenges/EternalPass/src/service.c"
 expected_cwes = [822]
 is_negative = false
 language = "c"
 
 [[cases]]
+id = "FASTLANE"
+path = "challenges/FASTLANE/src/service.c"
+expected_cwes = [119]
+is_negative = false
+language = "c"
+
+[[cases]]
 id = "FISHYXML"
-path = "challenges/FISHYXML/src/hand.c"
+path = "challenges/FISHYXML/src/service.c"
 expected_cwes = [20, 122, 129, 131, 787]
 is_negative = false
 language = "c"
@@ -327,7 +341,7 @@ language = "c"
 
 [[cases]]
 id = "FSK_Messaging_Service"
-path = "challenges/FSK_Messaging_Service/src/packet.c"
+path = "challenges/FSK_Messaging_Service/src/service.c"
 expected_cwes = [120, 122]
 is_negative = false
 language = "c"
@@ -348,9 +362,1071 @@ language = "c"
 
 [[cases]]
 id = "FaceMag"
-path = "challenges/FaceMag/src/stickyposts.c"
+path = "challenges/FaceMag/src/service.c"
 expected_cwes = [121]
 is_negative = false
 language = "c"
 
-# Total challenges with CWE info: 195
+[[cases]]
+id = "Facilities_Access_Control_System"
+path = "challenges/Facilities_Access_Control_System/src/service.c"
+expected_cwes = [190, 787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "FileSys"
+path = "challenges/FileSys/src/main.cc"
+expected_cwes = [416]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Filesystem_Command_Shell"
+path = "challenges/Filesystem_Command_Shell/src/service.c"
+expected_cwes = [193]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Flight_Routes"
+path = "challenges/Flight_Routes/src/service.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "GREYMATTER"
+path = "challenges/GREYMATTER/src/service.c"
+expected_cwes = [119]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Game_Night"
+path = "challenges/Game_Night/src/service.c"
+expected_cwes = [119, 201, 665]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Glue"
+path = "challenges/Glue/src/service.c"
+expected_cwes = [125, 129]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "GreatView"
+path = "challenges/GreatView/src/service.c"
+expected_cwes = [131, 787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Griswold"
+path = "challenges/Griswold/src/service.c"
+expected_cwes = [20, 129, 193, 476]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "H20FlowInc"
+path = "challenges/H20FlowInc/src/service.c"
+expected_cwes = [20, 128, 129, 190, 788, 805, 824]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "HIGHCOO"
+path = "challenges/HIGHCOO/src/service.c"
+expected_cwes = [20, 129, 190, 191, 193, 195, 680]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "HackMan"
+path = "challenges/HackMan/src/main.c"
+expected_cwes = [457]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Headscratch"
+path = "challenges/Headscratch/src/service.c"
+expected_cwes = [787, 823]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "HeartThrob"
+path = "challenges/HeartThrob/src/service.c"
+expected_cwes = [120, 122, 125]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "HighFrequencyTradingAlgo"
+path = "challenges/HighFrequencyTradingAlgo/src/service.c"
+expected_cwes = [190, 476, 787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Hug_Game"
+path = "challenges/Hug_Game/src/service.c"
+expected_cwes = [119]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "INSULATR"
+path = "challenges/INSULATR/src/service.c"
+expected_cwes = [119]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Image_Compressor"
+path = "challenges/Image_Compressor/src/main.c"
+expected_cwes = [787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "KTY_Pretty_Printer"
+path = "challenges/KTY_Pretty_Printer/src/main.c"
+expected_cwes = [121, 415, 908]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Kaprica_Go"
+path = "challenges/Kaprica_Go/src/main.c"
+expected_cwes = [134]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Kaprica_Script_Interpreter"
+path = "challenges/Kaprica_Script_Interpreter/src/main.c"
+expected_cwes = [134, 476, 674]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "LMS"
+path = "challenges/LMS/src/service.c"
+expected_cwes = [122, 193, 416, 825]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "LazyCalc"
+path = "challenges/LazyCalc/src/service.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Lazybox"
+path = "challenges/Lazybox/src/service.c"
+expected_cwes = [20, 193]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Loud_Square_Instant_Messaging_Protocol_LSIMP"
+path = "challenges/Loud_Square_Instant_Messaging_Protocol_LSIMP/src/main.c"
+expected_cwes = [843]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Matchmaker"
+path = "challenges/Matchmaker/src/service.c"
+expected_cwes = [20, 129, 190, 201]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Material_Temperature_Simulation"
+path = "challenges/Material_Temperature_Simulation/src/service.c"
+expected_cwes = [129, 131, 190]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Mathematical_Solver"
+path = "challenges/Mathematical_Solver/src/service.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Matrix_Math_Calculator"
+path = "challenges/Matrix_Math_Calculator/src/main.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Message_Service"
+path = "challenges/Message_Service/src/service.c"
+expected_cwes = [131, 798]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Minimalistic_Memo_Manager_3M"
+path = "challenges/Minimalistic_Memo_Manager_3M/src/main.c"
+expected_cwes = [122, 367, 476]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Mixology"
+path = "challenges/Mixology/src/service.c"
+expected_cwes = [120, 193]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Modern_Family_Tree"
+path = "challenges/Modern_Family_Tree/src/service.c"
+expected_cwes = [122, 129, 193, 788]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Monster_Game"
+path = "challenges/Monster_Game/src/service.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Movie_Rental_Service"
+path = "challenges/Movie_Rental_Service/src/main.c"
+expected_cwes = [121, 416]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Movie_Rental_Service_Redux"
+path = "challenges/Movie_Rental_Service_Redux/src/main.c"
+expected_cwes = [134]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Multi_Arena_Pursuit_Simulator"
+path = "challenges/Multi_Arena_Pursuit_Simulator/src/service.c"
+expected_cwes = [125, 170]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Multi_User_Calendar"
+path = "challenges/Multi_User_Calendar/src/main.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Multicast_Chat_Server"
+path = "challenges/Multicast_Chat_Server/src/service.c"
+expected_cwes = [200, 209, 457, 665]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Multipass"
+path = "challenges/Multipass/src/main.c"
+expected_cwes = [822]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Multipass2"
+path = "challenges/Multipass2/src/service.c"
+expected_cwes = [476]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Multipass3"
+path = "challenges/Multipass3/src/service.c"
+expected_cwes = [476]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Music_Store_Client"
+path = "challenges/Music_Store_Client/src/service.c"
+expected_cwes = [20, 120, 122, 787, 839]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "NarfAgainShell"
+path = "challenges/NarfAgainShell/src/service.c"
+expected_cwes = [59, 61, 275, 434, 674]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "NarfRPN"
+path = "challenges/NarfRPN/src/service.c"
+expected_cwes = [125, 190, 369, 682, 704, 843]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Network_File_System"
+path = "challenges/Network_File_System/src/service.c"
+expected_cwes = [122, 131, 190]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Network_Queuing_Simulator"
+path = "challenges/Network_Queuing_Simulator/src/service.c"
+expected_cwes = [120, 131]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "NoHiC"
+path = "challenges/NoHiC/src/service.c"
+expected_cwes = [20, 476]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "No_Paper._Not_Ever._NOPE"
+path = "challenges/No_Paper._Not_Ever._NOPE/src/service.c"
+expected_cwes = [120, 121, 665, 787, 823, 908]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "OTPSim"
+path = "challenges/OTPSim/src/main.c"
+expected_cwes = [126]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "On_Sale"
+path = "challenges/On_Sale/src/service.c"
+expected_cwes = [120, 121, 122, 131, 787, 788]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "One_Vote"
+path = "challenges/One_Vote/src/service.c"
+expected_cwes = [120, 121, 134, 201, 787, 788, 806]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Overflow_Parking"
+path = "challenges/Overflow_Parking/src/service.c"
+expected_cwes = [190]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "PCM_Message_decoder"
+path = "challenges/PCM_Message_decoder/src/service.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "PKK_Steganography"
+path = "challenges/PKK_Steganography/src/main.c"
+expected_cwes = [121, 190]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "PRU"
+path = "challenges/PRU/src/alu.c"
+expected_cwes = [125]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "PTaaS"
+path = "challenges/PTaaS/src/service.c"
+expected_cwes = [119, 416, 703, 704, 825, 843]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Pac_for_Edges"
+path = "challenges/Pac_for_Edges/src/service.c"
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Packet_Analyzer"
+path = "challenges/Packet_Analyzer/src/service.c"
+expected_cwes = [125, 134]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Palindrome"
+path = "challenges/Palindrome/src/service.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Palindrome2"
+path = "challenges/Palindrome2/src/service.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Parking_Permit_Management_System_PPMS"
+path = "challenges/Parking_Permit_Management_System_PPMS/src/main.c"
+expected_cwes = [121, 193]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Particle_Simulator"
+path = "challenges/Particle_Simulator/src/service.c"
+expected_cwes = [787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Pattern_Finder"
+path = "challenges/Pattern_Finder/src/service.c"
+expected_cwes = [121, 787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Printer"
+path = "challenges/Printer/src/main.c"
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "QUIETSQUARE"
+path = "challenges/QUIETSQUARE/src/service.c"
+expected_cwes = [674]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "QuadtreeConways"
+path = "challenges/QuadtreeConways/src/main.c"
+expected_cwes = [690]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Query_Calculator"
+path = "challenges/Query_Calculator/src/service.c"
+expected_cwes = [129]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "RAM_based_filesystem"
+path = "challenges/RAM_based_filesystem/src/service.c"
+expected_cwes = [476, 787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "REMATCH_2--Mail_Server--Crackaddr"
+path = "challenges/REMATCH_2--Mail_Server--Crackaddr/src/sendmail.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "REMATCH_3--Address_Resolution_Service--SQL_Slammer"
+path = "challenges/REMATCH_3--Address_Resolution_Service--SQL_Slammer/src/service.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "REMATCH_4--CGCRPC_Server--MS08-067"
+path = "challenges/REMATCH_4--CGCRPC_Server--MS08-067/src/service.c"
+expected_cwes = [135]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "REMATCH_5--File_Explorer--LNK_Bug"
+path = "challenges/REMATCH_5--File_Explorer--LNK_Bug/src/shell.c"
+expected_cwes = [193]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "REMATCH_6--Secure_Server--Heartbleed"
+path = "challenges/REMATCH_6--Secure_Server--Heartbleed/src/service.c"
+expected_cwes = [788]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "RRPN"
+path = "challenges/RRPN/src/main.c"
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Recipe_Database"
+path = "challenges/Recipe_Database/src/service.c"
+expected_cwes = [193, 476]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Recipe_and_Pantry_Manager"
+path = "challenges/Recipe_and_Pantry_Manager/src/service.c"
+expected_cwes = [129]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Rejistar"
+path = "challenges/Rejistar/src/service.c"
+expected_cwes = [122, 125, 170, 193, 787, 788]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Resort_Modeller"
+path = "challenges/Resort_Modeller/src/service.c"
+expected_cwes = [468, 822]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "SAuth"
+path = "challenges/SAuth/src/service.c"
+expected_cwes = [121, 190]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "SCUBA_Dive_Logging"
+path = "challenges/SCUBA_Dive_Logging/src/service.c"
+expected_cwes = [122, 129]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "SFTSCBSISS"
+path = "challenges/SFTSCBSISS/src/service.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "SIGSEGV"
+path = "challenges/SIGSEGV/src/service.c"
+expected_cwes = [20, 187, 347, 393, 561]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "SLUR_reference_implementation"
+path = "challenges/SLUR_reference_implementation/src/main.c"
+expected_cwes = [476, 843]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "SOLFEDGE"
+path = "challenges/SOLFEDGE/src/service.c"
+expected_cwes = [20, 129, 193]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "SPIFFS"
+path = "challenges/SPIFFS/src/service.c"
+expected_cwes = [416, 785]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Sad_Face_Template_Engine_SFTE"
+path = "challenges/Sad_Face_Template_Engine_SFTE/src/main.c"
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Sample_Shipgame"
+path = "challenges/Sample_Shipgame/src/sample_shipgame.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Scrum_Database"
+path = "challenges/Scrum_Database/src/service.c"
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Secure_Compression"
+path = "challenges/Secure_Compression/src/main.c"
+expected_cwes = [121, 125, 129]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Sensr"
+path = "challenges/Sensr/src/service.c"
+expected_cwes = [125, 226]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Shortest_Path_Tree_Calculator"
+path = "challenges/Shortest_Path_Tree_Calculator/src/service.c"
+expected_cwes = [124, 131]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "ShoutCTF"
+path = "challenges/ShoutCTF/src/service.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Simple_Stack_Machine"
+path = "challenges/Simple_Stack_Machine/src/main.c"
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Single-Sign-On"
+path = "challenges/Single-Sign-On/src/service.c"
+expected_cwes = [122, 457, 787, 788]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Snail_Mail"
+path = "challenges/Snail_Mail/src/service.c"
+expected_cwes = [201]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Sorter"
+path = "challenges/Sorter/src/service.c"
+expected_cwes = [119, 122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Space_Attackers"
+path = "challenges/Space_Attackers/src/service.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Square_Rabbit"
+path = "challenges/Square_Rabbit/src/hand.c"
+expected_cwes = [190]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Stock_Exchange_Simulator"
+path = "challenges/Stock_Exchange_Simulator/src/service.c"
+expected_cwes = [388, 822]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Street_map_service"
+path = "challenges/Street_map_service/src/service.c"
+expected_cwes = [467]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "String_Info_Calculator"
+path = "challenges/String_Info_Calculator/src/service.c"
+expected_cwes = [201]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "String_Storage_and_Retrieval"
+path = "challenges/String_Storage_and_Retrieval/src/service.c"
+expected_cwes = [476]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "TAINTEDLOVE"
+path = "challenges/TAINTEDLOVE/src/service.c"
+expected_cwes = [119]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "TFTTP"
+path = "challenges/TFTTP/src/service.c"
+expected_cwes = [125, 457]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "TIACA"
+path = "challenges/TIACA/src/service.c"
+expected_cwes = [787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "TVS"
+path = "challenges/TVS/src/main.c"
+expected_cwes = [822]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Tennis_Ball_Motion_Calculator"
+path = "challenges/Tennis_Ball_Motion_Calculator/src/tennisball.c"
+expected_cwes = [681, 682, 787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "TextSearch"
+path = "challenges/TextSearch/src/main.c"
+expected_cwes = [193, 457, 674]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "The_Longest_Road"
+path = "challenges/The_Longest_Road/src/service.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Thermal_Controller_v3"
+path = "challenges/Thermal_Controller_v3/src/service.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Tick-A-Tack"
+path = "challenges/Tick-A-Tack/src/service.c"
+expected_cwes = [120, 476]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "UTF-late"
+path = "challenges/UTF-late/src/service.c"
+expected_cwes = [20, 22, 176, 822]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "ValveChecks"
+path = "challenges/ValveChecks/src/service.c"
+expected_cwes = [120, 121, 191, 195]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Vector_Graphics_2"
+path = "challenges/Vector_Graphics_2/src/service.c"
+expected_cwes = [119, 805]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Vector_Graphics_Format"
+path = "challenges/Vector_Graphics_Format/src/service.c"
+expected_cwes = [119, 191, 196]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "Water_Treatment_Facility_Simulator"
+path = "challenges/Water_Treatment_Facility_Simulator/src/service.c"
+expected_cwes = [131, 196]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "WhackJack"
+path = "challenges/WhackJack/src/service.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "WordCompletion"
+path = "challenges/WordCompletion/src/main.c"
+expected_cwes = [125]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "XStore"
+path = "challenges/XStore/src/service.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "anagram_game"
+path = "challenges/anagram_game/src/main.c"
+expected_cwes = [122, 755]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "basic_emulator"
+path = "challenges/basic_emulator/src/main.c"
+expected_cwes = [170]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "basic_messaging"
+path = "challenges/basic_messaging/src/service.c"
+expected_cwes = [120, 131, 190]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "chess_mimic"
+path = "challenges/chess_mimic/src/service.c"
+expected_cwes = [787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cotton_swab_arithmetic"
+path = "challenges/cotton_swab_arithmetic/src/service.c"
+expected_cwes = [119]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cyber_blogger"
+path = "challenges/cyber_blogger/src/main.cc"
+expected_cwes = [704, 783]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "electronictrading"
+path = "challenges/electronictrading/src/service.c"
+expected_cwes = [122, 129, 190, 416, 822, 843]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "expression_database"
+path = "challenges/expression_database/src/service.c"
+expected_cwes = [119]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "greeter"
+path = "challenges/greeter/src/service.c"
+expected_cwes = [121, 201, 326, 327, 328, 471, 822]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "hawaii_sets"
+path = "challenges/hawaii_sets/src/service.c"
+expected_cwes = [120, 400]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "humaninterface"
+path = "challenges/humaninterface/src/main.c"
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "matrices_for_sale"
+path = "challenges/matrices_for_sale/src/service.c"
+expected_cwes = [129, 190, 787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "middleout"
+path = "challenges/middleout/src/main.c"
+expected_cwes = [121, 787, 788]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "middleware_handshake"
+path = "challenges/middleware_handshake/src/main.c"
+expected_cwes = [134]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "netstorage"
+path = "challenges/netstorage/src/msc.c"
+expected_cwes = [787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "online_job_application"
+path = "challenges/online_job_application/src/main.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "online_job_application2"
+path = "challenges/online_job_application2/src/main.c"
+expected_cwes = [120, 122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "payroll"
+path = "challenges/payroll/src/service.c"
+expected_cwes = [118, 121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "pizza_ordering_system"
+path = "challenges/pizza_ordering_system/src/main.cc"
+expected_cwes = [476]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "reallystream"
+path = "challenges/reallystream/src/service.c"
+expected_cwes = [680]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "root64_and_parcour"
+path = "challenges/root64_and_parcour/src/main.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "router_simulator"
+path = "challenges/router_simulator/src/main.c"
+expected_cwes = [129]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "simpleOCR"
+path = "challenges/simpleOCR/src/main.c"
+expected_cwes = [121, 190, 787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "simple_integer_calculator"
+path = "challenges/simple_integer_calculator/src/service.c"
+expected_cwes = [125, 190, 476, 787, 843]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "simplenote"
+path = "challenges/simplenote/src/main.c"
+expected_cwes = [122, 674]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "stack_vm"
+path = "challenges/stack_vm/src/service.c"
+expected_cwes = [121, 122, 125, 193]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "stream_vm"
+path = "challenges/stream_vm/src/main.c"
+expected_cwes = [127]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "stream_vm2"
+path = "challenges/stream_vm2/src/main.c"
+expected_cwes = [129, 665, 787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "university_enrollment"
+path = "challenges/university_enrollment/src/main.c"
+expected_cwes = [122, 783]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "vFilter"
+path = "challenges/vFilter/src/service.c"
+expected_cwes = [123, 125, 465]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "virtual_pet"
+path = "challenges/virtual_pet/src/main.cc"
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "yolodex"
+path = "challenges/yolodex/src/yolodex.c"
+expected_cwes = [787]
+is_negative = false
+language = "c"
