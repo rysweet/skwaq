@@ -154,7 +154,7 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
         "temp_file" => vec![377],
         "path_traversal" => vec![22, 23, 36],
         "deserialization" => vec![502],
-        "crypto" => vec![326, 327, 328, 330, 338, 310, 295, 614],
+        "crypto" => vec![326, 327, 328, 330, 338, 310, 295, 614, 798],
         "unsafe_code" => vec![676],
         "prototype_pollution" => vec![1321],
         "xss" => vec![79, 80],

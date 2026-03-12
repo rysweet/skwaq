@@ -261,6 +261,12 @@ fn java_patterns() -> &'static [SourcePattern] {
             reason: "Runtime.exec runs OS commands; validate all arguments",
         },
         SourcePattern {
+            regex: r"\b\w+\.exec\s*\(\s*(new\s+String|cmd|args|command)",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "exec() call with command arguments; may execute OS commands",
+        },
+        SourcePattern {
             regex: r"\bProcessBuilder\s*\(",
             category: DangerCategory::Injection,
             severity: Severity::High,
@@ -324,6 +330,19 @@ fn java_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::Xss,
             severity: Severity::High,
             reason: "Writing directly to response; encode output to prevent XSS",
+        },
+        SourcePattern {
+            regex: r"\.getWriter\(\)\.\w+\s*\(",
+            category: DangerCategory::Xss,
+            severity: Severity::Medium,
+            reason: "Writing to response writer; encode output to prevent XSS",
+        },
+        // Insecure cookie (CWE-614)
+        SourcePattern {
+            regex: r"\bnew\s+[\w.]*Cookie\s*\(",
+            category: DangerCategory::Crypto,
+            severity: Severity::Medium,
+            reason: "Cookie creation; ensure setSecure(true) and setHttpOnly(true) are called",
         },
         // Weak cryptography patterns
         SourcePattern {
