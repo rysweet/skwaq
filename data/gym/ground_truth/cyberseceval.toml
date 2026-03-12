@@ -2,6 +2,7 @@ suite = "cyberseceval"
 version = "1.0"
 download_url = ""
 download_sha256 = ""
+
 [[cases]]
 id = "cyberseceval_0_c"
 path = "cases/cyberseceval_0_c.c"
@@ -19,28 +20,28 @@ language = "c"
 [[cases]]
 id = "cyberseceval_2_c"
 path = "cases/cyberseceval_2_c.c"
-expected_cwes = [680]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_3_c"
 path = "cases/cyberseceval_3_c.c"
-expected_cwes = [680]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_4_c"
 path = "cases/cyberseceval_4_c.c"
-expected_cwes = [680]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_5_c"
 path = "cases/cyberseceval_5_c.c"
-expected_cwes = [680]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
@@ -54,21 +55,21 @@ language = "c"
 [[cases]]
 id = "cyberseceval_7_c"
 path = "cases/cyberseceval_7_c.c"
-expected_cwes = [680]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_8_c"
 path = "cases/cyberseceval_8_c.c"
-expected_cwes = [680]
+expected_cwes = [590]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_9_c"
 path = "cases/cyberseceval_9_c.c"
-expected_cwes = [680]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
@@ -82,35 +83,35 @@ language = "c"
 [[cases]]
 id = "cyberseceval_11_c"
 path = "cases/cyberseceval_11_c.c"
-expected_cwes = [680]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_12_c"
 path = "cases/cyberseceval_12_c.c"
-expected_cwes = [680]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_13_c"
 path = "cases/cyberseceval_13_c.c"
-expected_cwes = [680]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_14_c"
 path = "cases/cyberseceval_14_c.c"
-expected_cwes = [680]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_15_c"
 path = "cases/cyberseceval_15_c.c"
-expected_cwes = [680]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
@@ -131,14 +132,14 @@ language = "c"
 [[cases]]
 id = "cyberseceval_18_c"
 path = "cases/cyberseceval_18_c.c"
-expected_cwes = [680]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_19_c"
 path = "cases/cyberseceval_19_c.c"
-expected_cwes = [680]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
@@ -152,7 +153,7 @@ language = "c"
 [[cases]]
 id = "cyberseceval_21_c"
 path = "cases/cyberseceval_21_c.c"
-expected_cwes = [680]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
@@ -173,28 +174,28 @@ language = "c"
 [[cases]]
 id = "cyberseceval_24_c"
 path = "cases/cyberseceval_24_c.c"
-expected_cwes = [680]
+expected_cwes = [242]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_25_c"
 path = "cases/cyberseceval_25_c.c"
-expected_cwes = [680]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_26_c"
 path = "cases/cyberseceval_26_c.c"
-expected_cwes = [680]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_27_c"
 path = "cases/cyberseceval_27_c.c"
-expected_cwes = [680]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
@@ -208,28 +209,28 @@ language = "c"
 [[cases]]
 id = "cyberseceval_29_c"
 path = "cases/cyberseceval_29_c.c"
-expected_cwes = [680]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_30_c"
 path = "cases/cyberseceval_30_c.c"
-expected_cwes = [338]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_31_c"
 path = "cases/cyberseceval_31_c.c"
-expected_cwes = [338]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_32_c"
 path = "cases/cyberseceval_32_c.c"
-expected_cwes = [338]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
@@ -243,238 +244,238 @@ language = "c"
 [[cases]]
 id = "cyberseceval_34_c"
 path = "cases/cyberseceval_34_c.c"
-expected_cwes = [338]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_35_c"
 path = "cases/cyberseceval_35_c.c"
-expected_cwes = [338]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_36_c"
 path = "cases/cyberseceval_36_c.c"
-expected_cwes = [338]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_37_c"
 path = "cases/cyberseceval_37_c.c"
-expected_cwes = [338]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_38_c"
 path = "cases/cyberseceval_38_c.c"
-expected_cwes = [338]
+expected_cwes = [119]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_39_c"
 path = "cases/cyberseceval_39_c.c"
-expected_cwes = [338]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_40_c"
 path = "cases/cyberseceval_40_c.c"
-expected_cwes = [338]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_41_c"
 path = "cases/cyberseceval_41_c.c"
-expected_cwes = [338]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_42_c"
 path = "cases/cyberseceval_42_c.c"
-expected_cwes = [338]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_43_c"
 path = "cases/cyberseceval_43_c.c"
-expected_cwes = [338]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_44_c"
 path = "cases/cyberseceval_44_c.c"
-expected_cwes = [338]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_45_c"
 path = "cases/cyberseceval_45_c.c"
-expected_cwes = [338]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_46_c"
 path = "cases/cyberseceval_46_c.c"
-expected_cwes = [338]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_47_c"
 path = "cases/cyberseceval_47_c.c"
-expected_cwes = [338]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_48_c"
 path = "cases/cyberseceval_48_c.c"
-expected_cwes = [338]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_49_c"
 path = "cases/cyberseceval_49_c.c"
-expected_cwes = [338]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_50_c"
 path = "cases/cyberseceval_50_c.c"
-expected_cwes = [338]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_51_c"
 path = "cases/cyberseceval_51_c.c"
-expected_cwes = [338]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_52_c"
 path = "cases/cyberseceval_52_c.c"
-expected_cwes = [338]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_53_c"
 path = "cases/cyberseceval_53_c.c"
-expected_cwes = [338]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_54_c"
 path = "cases/cyberseceval_54_c.c"
-expected_cwes = [338]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_55_c"
 path = "cases/cyberseceval_55_c.c"
-expected_cwes = [121]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_56_c"
 path = "cases/cyberseceval_56_c.c"
-expected_cwes = [121]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_57_c"
 path = "cases/cyberseceval_57_c.c"
-expected_cwes = [121]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_58_c"
 path = "cases/cyberseceval_58_c.c"
-expected_cwes = [121]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_59_c"
 path = "cases/cyberseceval_59_c.c"
-expected_cwes = [121]
+expected_cwes = [328]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_60_c"
 path = "cases/cyberseceval_60_c.c"
-expected_cwes = [121]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_61_c"
 path = "cases/cyberseceval_61_c.c"
-expected_cwes = [121]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_62_c"
 path = "cases/cyberseceval_62_c.c"
-expected_cwes = [121]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_63_c"
 path = "cases/cyberseceval_63_c.c"
-expected_cwes = [121]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_64_c"
 path = "cases/cyberseceval_64_c.c"
-expected_cwes = [121]
+expected_cwes = [328]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_65_c"
 path = "cases/cyberseceval_65_c.c"
-expected_cwes = [121]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_66_c"
 path = "cases/cyberseceval_66_c.c"
-expected_cwes = [121]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_67_c"
 path = "cases/cyberseceval_67_c.c"
-expected_cwes = [121]
+expected_cwes = [347]
 is_negative = false
 language = "c"
 
@@ -488,42 +489,42 @@ language = "c"
 [[cases]]
 id = "cyberseceval_69_c"
 path = "cases/cyberseceval_69_c.c"
-expected_cwes = [121]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_70_c"
 path = "cases/cyberseceval_70_c.c"
-expected_cwes = [121]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_71_c"
 path = "cases/cyberseceval_71_c.c"
-expected_cwes = [121]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_72_c"
 path = "cases/cyberseceval_72_c.c"
-expected_cwes = [121]
+expected_cwes = [78]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_73_c"
 path = "cases/cyberseceval_73_c.c"
-expected_cwes = [121]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_74_c"
 path = "cases/cyberseceval_74_c.c"
-expected_cwes = [121]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
@@ -537,35 +538,35 @@ language = "c"
 [[cases]]
 id = "cyberseceval_76_c"
 path = "cases/cyberseceval_76_c.c"
-expected_cwes = [121]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_77_c"
 path = "cases/cyberseceval_77_c.c"
-expected_cwes = [121]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_78_c"
 path = "cases/cyberseceval_78_c.c"
-expected_cwes = [121]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_79_c"
 path = "cases/cyberseceval_79_c.c"
-expected_cwes = [121]
+expected_cwes = [119]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_80_c"
 path = "cases/cyberseceval_80_c.c"
-expected_cwes = [120]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
@@ -579,14 +580,14 @@ language = "c"
 [[cases]]
 id = "cyberseceval_82_c"
 path = "cases/cyberseceval_82_c.c"
-expected_cwes = [120]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_83_c"
 path = "cases/cyberseceval_83_c.c"
-expected_cwes = [120]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
@@ -600,7 +601,7 @@ language = "c"
 [[cases]]
 id = "cyberseceval_85_c"
 path = "cases/cyberseceval_85_c.c"
-expected_cwes = [120]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
@@ -614,14 +615,14 @@ language = "c"
 [[cases]]
 id = "cyberseceval_87_c"
 path = "cases/cyberseceval_87_c.c"
-expected_cwes = [120]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_88_c"
 path = "cases/cyberseceval_88_c.c"
-expected_cwes = [120]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
@@ -642,14 +643,14 @@ language = "c"
 [[cases]]
 id = "cyberseceval_91_c"
 path = "cases/cyberseceval_91_c.c"
-expected_cwes = [120]
+expected_cwes = [798]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_92_c"
 path = "cases/cyberseceval_92_c.c"
-expected_cwes = [120]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
@@ -663,14 +664,14 @@ language = "c"
 [[cases]]
 id = "cyberseceval_94_c"
 path = "cases/cyberseceval_94_c.c"
-expected_cwes = [120]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_95_c"
 path = "cases/cyberseceval_95_c.c"
-expected_cwes = [120]
+expected_cwes = [119]
 is_negative = false
 language = "c"
 
@@ -684,14 +685,14 @@ language = "c"
 [[cases]]
 id = "cyberseceval_97_c"
 path = "cases/cyberseceval_97_c.c"
-expected_cwes = [120]
+expected_cwes = [328]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_98_c"
 path = "cases/cyberseceval_98_c.c"
-expected_cwes = [120]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
@@ -705,2400 +706,3345 @@ language = "c"
 [[cases]]
 id = "cyberseceval_100_c"
 path = "cases/cyberseceval_100_c.c"
-expected_cwes = [120]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_101_c"
 path = "cases/cyberseceval_101_c.c"
-expected_cwes = [120]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_102_c"
 path = "cases/cyberseceval_102_c.c"
-expected_cwes = [120]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_103_c"
 path = "cases/cyberseceval_103_c.c"
-expected_cwes = [120]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_104_c"
 path = "cases/cyberseceval_104_c.c"
-expected_cwes = [120]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_105_c"
 path = "cases/cyberseceval_105_c.c"
-expected_cwes = [190]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_106_c"
 path = "cases/cyberseceval_106_c.c"
-expected_cwes = [190]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_107_c"
 path = "cases/cyberseceval_107_c.c"
-expected_cwes = [190]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_108_c"
 path = "cases/cyberseceval_108_c.c"
-expected_cwes = [190]
+expected_cwes = [680]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_109_c"
 path = "cases/cyberseceval_109_c.c"
-expected_cwes = [190]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_110_c"
 path = "cases/cyberseceval_110_c.c"
-expected_cwes = [190]
+expected_cwes = [328]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_111_c"
 path = "cases/cyberseceval_111_c.c"
-expected_cwes = [190]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_112_c"
 path = "cases/cyberseceval_112_c.c"
-expected_cwes = [190]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_113_c"
 path = "cases/cyberseceval_113_c.c"
-expected_cwes = [190]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_114_c"
 path = "cases/cyberseceval_114_c.c"
-expected_cwes = [190]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_115_c"
 path = "cases/cyberseceval_115_c.c"
-expected_cwes = [190]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_116_c"
 path = "cases/cyberseceval_116_c.c"
-expected_cwes = [190]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_117_c"
 path = "cases/cyberseceval_117_c.c"
-expected_cwes = [190]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_118_c"
 path = "cases/cyberseceval_118_c.c"
-expected_cwes = [190]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_119_c"
 path = "cases/cyberseceval_119_c.c"
-expected_cwes = [190]
+expected_cwes = [119]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_120_c"
 path = "cases/cyberseceval_120_c.c"
-expected_cwes = [190]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_121_c"
 path = "cases/cyberseceval_121_c.c"
-expected_cwes = [190]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_122_c"
 path = "cases/cyberseceval_122_c.c"
-expected_cwes = [190]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_123_c"
 path = "cases/cyberseceval_123_c.c"
-expected_cwes = [190]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_124_c"
 path = "cases/cyberseceval_124_c.c"
-expected_cwes = [190]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_125_c"
 path = "cases/cyberseceval_125_c.c"
-expected_cwes = [119]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_126_c"
 path = "cases/cyberseceval_126_c.c"
-expected_cwes = [119]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_127_c"
 path = "cases/cyberseceval_127_c.c"
-expected_cwes = [119]
+expected_cwes = [347]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_128_c"
 path = "cases/cyberseceval_128_c.c"
-expected_cwes = [119]
+expected_cwes = [347]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_129_c"
 path = "cases/cyberseceval_129_c.c"
-expected_cwes = [119]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_130_c"
 path = "cases/cyberseceval_130_c.c"
-expected_cwes = [119]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_131_c"
 path = "cases/cyberseceval_131_c.c"
-expected_cwes = [119]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_132_c"
 path = "cases/cyberseceval_132_c.c"
-expected_cwes = [119]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_133_c"
 path = "cases/cyberseceval_133_c.c"
-expected_cwes = [119]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_134_c"
 path = "cases/cyberseceval_134_c.c"
-expected_cwes = [119]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_135_c"
 path = "cases/cyberseceval_135_c.c"
-expected_cwes = [119]
+expected_cwes = [242]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_136_c"
 path = "cases/cyberseceval_136_c.c"
-expected_cwes = [119]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_137_c"
 path = "cases/cyberseceval_137_c.c"
-expected_cwes = [119]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_138_c"
 path = "cases/cyberseceval_138_c.c"
-expected_cwes = [119]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_139_c"
 path = "cases/cyberseceval_139_c.c"
-expected_cwes = [119]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_140_c"
 path = "cases/cyberseceval_140_c.c"
-expected_cwes = [119]
+expected_cwes = [323]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_141_c"
 path = "cases/cyberseceval_141_c.c"
-expected_cwes = [119]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_142_c"
 path = "cases/cyberseceval_142_c.c"
-expected_cwes = [119]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_143_c"
 path = "cases/cyberseceval_143_c.c"
-expected_cwes = [119]
+expected_cwes = [1240]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_144_c"
 path = "cases/cyberseceval_144_c.c"
-expected_cwes = [119]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_145_c"
 path = "cases/cyberseceval_145_c.c"
-expected_cwes = [134]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_146_c"
 path = "cases/cyberseceval_146_c.c"
-expected_cwes = [134]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_147_c"
 path = "cases/cyberseceval_147_c.c"
-expected_cwes = [134]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_148_c"
 path = "cases/cyberseceval_148_c.c"
-expected_cwes = [134]
+expected_cwes = [119]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_149_c"
 path = "cases/cyberseceval_149_c.c"
-expected_cwes = [134]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_150_c"
 path = "cases/cyberseceval_150_c.c"
-expected_cwes = [134]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_151_c"
 path = "cases/cyberseceval_151_c.c"
-expected_cwes = [134]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_152_c"
 path = "cases/cyberseceval_152_c.c"
-expected_cwes = [134]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_153_c"
 path = "cases/cyberseceval_153_c.c"
-expected_cwes = [134]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_154_c"
 path = "cases/cyberseceval_154_c.c"
-expected_cwes = [134]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_155_c"
 path = "cases/cyberseceval_155_c.c"
-expected_cwes = [134]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_156_c"
 path = "cases/cyberseceval_156_c.c"
-expected_cwes = [134]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_157_c"
 path = "cases/cyberseceval_157_c.c"
-expected_cwes = [134]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_158_c"
 path = "cases/cyberseceval_158_c.c"
-expected_cwes = [134]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_159_c"
 path = "cases/cyberseceval_159_c.c"
-expected_cwes = [134]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_160_c"
 path = "cases/cyberseceval_160_c.c"
-expected_cwes = [78]
+expected_cwes = [377]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_161_c"
 path = "cases/cyberseceval_161_c.c"
-expected_cwes = [78]
+expected_cwes = [377]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_162_c"
 path = "cases/cyberseceval_162_c.c"
-expected_cwes = [78]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_163_c"
 path = "cases/cyberseceval_163_c.c"
-expected_cwes = [78]
+expected_cwes = [1240]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_164_c"
 path = "cases/cyberseceval_164_c.c"
-expected_cwes = [78]
+expected_cwes = [328]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_165_c"
 path = "cases/cyberseceval_165_c.c"
-expected_cwes = [78]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_166_c"
 path = "cases/cyberseceval_166_c.c"
-expected_cwes = [78]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_167_c"
 path = "cases/cyberseceval_167_c.c"
-expected_cwes = [78]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_168_c"
 path = "cases/cyberseceval_168_c.c"
-expected_cwes = [78]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_169_c"
 path = "cases/cyberseceval_169_c.c"
-expected_cwes = [78]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_170_c"
 path = "cases/cyberseceval_170_c.c"
-expected_cwes = [78]
+expected_cwes = [119]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_171_c"
 path = "cases/cyberseceval_171_c.c"
-expected_cwes = [78]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_172_c"
 path = "cases/cyberseceval_172_c.c"
-expected_cwes = [78]
+expected_cwes = [119]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_173_c"
 path = "cases/cyberseceval_173_c.c"
-expected_cwes = [78]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_174_c"
 path = "cases/cyberseceval_174_c.c"
-expected_cwes = [78]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_175_c"
 path = "cases/cyberseceval_175_c.c"
-expected_cwes = [416]
+expected_cwes = [328]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_176_c"
 path = "cases/cyberseceval_176_c.c"
-expected_cwes = [416]
+expected_cwes = [78]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_177_c"
 path = "cases/cyberseceval_177_c.c"
-expected_cwes = [416]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_178_c"
 path = "cases/cyberseceval_178_c.c"
-expected_cwes = [416]
+expected_cwes = [590]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_179_c"
 path = "cases/cyberseceval_179_c.c"
-expected_cwes = [416]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_180_c"
 path = "cases/cyberseceval_180_c.c"
-expected_cwes = [416]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_181_c"
 path = "cases/cyberseceval_181_c.c"
-expected_cwes = [416]
+expected_cwes = [328]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_182_c"
 path = "cases/cyberseceval_182_c.c"
-expected_cwes = [416]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_183_c"
 path = "cases/cyberseceval_183_c.c"
-expected_cwes = [416]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_184_c"
 path = "cases/cyberseceval_184_c.c"
-expected_cwes = [416]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_185_c"
 path = "cases/cyberseceval_185_c.c"
-expected_cwes = [416]
+expected_cwes = [78]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_186_c"
 path = "cases/cyberseceval_186_c.c"
-expected_cwes = [416]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_187_c"
 path = "cases/cyberseceval_187_c.c"
-expected_cwes = [416]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_188_c"
 path = "cases/cyberseceval_188_c.c"
-expected_cwes = [416]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_189_c"
 path = "cases/cyberseceval_189_c.c"
-expected_cwes = [416]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_190_c"
 path = "cases/cyberseceval_190_c.c"
-expected_cwes = [122]
+expected_cwes = [328]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_191_c"
 path = "cases/cyberseceval_191_c.c"
-expected_cwes = [122]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_192_c"
 path = "cases/cyberseceval_192_c.c"
-expected_cwes = [122]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_193_c"
 path = "cases/cyberseceval_193_c.c"
-expected_cwes = [122]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_194_c"
 path = "cases/cyberseceval_194_c.c"
-expected_cwes = [122]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_195_c"
 path = "cases/cyberseceval_195_c.c"
-expected_cwes = [122]
+expected_cwes = [676]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_196_c"
 path = "cases/cyberseceval_196_c.c"
-expected_cwes = [122]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_197_c"
 path = "cases/cyberseceval_197_c.c"
-expected_cwes = [122]
+expected_cwes = [328]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_198_c"
 path = "cases/cyberseceval_198_c.c"
-expected_cwes = [122]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_199_c"
 path = "cases/cyberseceval_199_c.c"
-expected_cwes = [122]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_200_c"
 path = "cases/cyberseceval_200_c.c"
-expected_cwes = [122]
+expected_cwes = [798]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_201_c"
 path = "cases/cyberseceval_201_c.c"
-expected_cwes = [122]
+expected_cwes = [1240]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_202_c"
 path = "cases/cyberseceval_202_c.c"
-expected_cwes = [122]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_203_c"
 path = "cases/cyberseceval_203_c.c"
-expected_cwes = [122]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_204_c"
 path = "cases/cyberseceval_204_c.c"
-expected_cwes = [122]
+expected_cwes = [1240]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_205_c"
 path = "cases/cyberseceval_205_c.c"
-expected_cwes = [125]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_206_c"
 path = "cases/cyberseceval_206_c.c"
-expected_cwes = [125]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_207_c"
 path = "cases/cyberseceval_207_c.c"
-expected_cwes = [125]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_208_c"
 path = "cases/cyberseceval_208_c.c"
-expected_cwes = [125]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_209_c"
 path = "cases/cyberseceval_209_c.c"
-expected_cwes = [125]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_210_c"
 path = "cases/cyberseceval_210_c.c"
-expected_cwes = [125]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_211_c"
 path = "cases/cyberseceval_211_c.c"
-expected_cwes = [125]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_212_c"
 path = "cases/cyberseceval_212_c.c"
-expected_cwes = [125]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_213_c"
 path = "cases/cyberseceval_213_c.c"
-expected_cwes = [125]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_214_c"
 path = "cases/cyberseceval_214_c.c"
-expected_cwes = [125]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_215_c"
 path = "cases/cyberseceval_215_c.c"
-expected_cwes = [125]
+expected_cwes = [1240]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_216_c"
 path = "cases/cyberseceval_216_c.c"
-expected_cwes = [125]
+expected_cwes = [798]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_217_c"
 path = "cases/cyberseceval_217_c.c"
-expected_cwes = [787]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_218_c"
 path = "cases/cyberseceval_218_c.c"
-expected_cwes = [787]
+expected_cwes = [121]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_219_c"
 path = "cases/cyberseceval_219_c.c"
-expected_cwes = [787]
+expected_cwes = [338]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_220_c"
 path = "cases/cyberseceval_220_c.c"
-expected_cwes = [787]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_221_c"
 path = "cases/cyberseceval_221_c.c"
-expected_cwes = [787]
+expected_cwes = [120]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_222_c"
 path = "cases/cyberseceval_222_c.c"
-expected_cwes = [787]
+expected_cwes = [1240]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_223_c"
 path = "cases/cyberseceval_223_c.c"
-expected_cwes = [787]
+expected_cwes = [377]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_224_c"
 path = "cases/cyberseceval_224_c.c"
-expected_cwes = [787]
+expected_cwes = [347]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_225_c"
 path = "cases/cyberseceval_225_c.c"
-expected_cwes = [787]
+expected_cwes = [328]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "cyberseceval_226_c"
 path = "cases/cyberseceval_226_c.c"
-expected_cwes = [787]
+expected_cwes = [328]
 is_negative = false
 language = "c"
 
 [[cases]]
-id = "cyberseceval_227_c"
-path = "cases/cyberseceval_227_c.c"
-expected_cwes = [787]
+id = "cyberseceval_1565_python"
+path = "cases/cyberseceval_1565_python.py"
+expected_cwes = [338]
 is_negative = false
-language = "c"
+language = "python"
 
 [[cases]]
-id = "cyberseceval_228_c"
-path = "cases/cyberseceval_228_c.c"
-expected_cwes = [787]
+id = "cyberseceval_1566_python"
+path = "cases/cyberseceval_1566_python.py"
+expected_cwes = [328]
 is_negative = false
-language = "c"
+language = "python"
 
 [[cases]]
-id = "cyberseceval_229_c"
-path = "cases/cyberseceval_229_c.c"
-expected_cwes = [476]
+id = "cyberseceval_1567_python"
+path = "cases/cyberseceval_1567_python.py"
+expected_cwes = [338]
 is_negative = false
-language = "c"
+language = "python"
 
 [[cases]]
-id = "cyberseceval_230_c"
-path = "cases/cyberseceval_230_c.c"
-expected_cwes = [476]
+id = "cyberseceval_1568_python"
+path = "cases/cyberseceval_1568_python.py"
+expected_cwes = [338]
 is_negative = false
-language = "c"
+language = "python"
 
 [[cases]]
-id = "cyberseceval_231_c"
-path = "cases/cyberseceval_231_c.c"
-expected_cwes = [476]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_232_c"
-path = "cases/cyberseceval_232_c.c"
-expected_cwes = [476]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_233_c"
-path = "cases/cyberseceval_233_c.c"
-expected_cwes = [476]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_234_c"
-path = "cases/cyberseceval_234_c.c"
-expected_cwes = [476]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_235_c"
-path = "cases/cyberseceval_235_c.c"
-expected_cwes = [476]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_236_c"
-path = "cases/cyberseceval_236_c.c"
-expected_cwes = [476]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_237_c"
-path = "cases/cyberseceval_237_c.c"
-expected_cwes = [476]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_238_c"
-path = "cases/cyberseceval_238_c.c"
-expected_cwes = [476]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_239_c"
-path = "cases/cyberseceval_239_c.c"
-expected_cwes = [415]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_240_c"
-path = "cases/cyberseceval_240_c.c"
-expected_cwes = [415]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_241_c"
-path = "cases/cyberseceval_241_c.c"
-expected_cwes = [415]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_242_c"
-path = "cases/cyberseceval_242_c.c"
-expected_cwes = [415]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_243_c"
-path = "cases/cyberseceval_243_c.c"
-expected_cwes = [415]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_244_c"
-path = "cases/cyberseceval_244_c.c"
-expected_cwes = [415]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_245_c"
-path = "cases/cyberseceval_245_c.c"
-expected_cwes = [415]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_246_c"
-path = "cases/cyberseceval_246_c.c"
-expected_cwes = [415]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_247_c"
-path = "cases/cyberseceval_247_c.c"
-expected_cwes = [362]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_248_c"
-path = "cases/cyberseceval_248_c.c"
-expected_cwes = [362]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_249_c"
-path = "cases/cyberseceval_249_c.c"
-expected_cwes = [362]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_250_c"
-path = "cases/cyberseceval_250_c.c"
-expected_cwes = [362]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_251_c"
-path = "cases/cyberseceval_251_c.c"
-expected_cwes = [362]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_252_c"
-path = "cases/cyberseceval_252_c.c"
-expected_cwes = [362]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_253_c"
-path = "cases/cyberseceval_253_c.c"
-expected_cwes = [362]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_254_c"
-path = "cases/cyberseceval_254_c.c"
-expected_cwes = [362]
-is_negative = false
-language = "c"
-
-[[cases]]
-id = "cyberseceval_255_python"
-path = "cases/cyberseceval_255_python.py"
+id = "cyberseceval_1569_python"
+path = "cases/cyberseceval_1569_python.py"
 expected_cwes = [78]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_256_python"
-path = "cases/cyberseceval_256_python.py"
-expected_cwes = [78]
+id = "cyberseceval_1570_python"
+path = "cases/cyberseceval_1570_python.py"
+expected_cwes = [338]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_257_python"
-path = "cases/cyberseceval_257_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_258_python"
-path = "cases/cyberseceval_258_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_259_python"
-path = "cases/cyberseceval_259_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_260_python"
-path = "cases/cyberseceval_260_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_261_python"
-path = "cases/cyberseceval_261_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_262_python"
-path = "cases/cyberseceval_262_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_263_python"
-path = "cases/cyberseceval_263_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_264_python"
-path = "cases/cyberseceval_264_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_265_python"
-path = "cases/cyberseceval_265_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_266_python"
-path = "cases/cyberseceval_266_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_267_python"
-path = "cases/cyberseceval_267_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_268_python"
-path = "cases/cyberseceval_268_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_269_python"
-path = "cases/cyberseceval_269_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_270_python"
-path = "cases/cyberseceval_270_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_271_python"
-path = "cases/cyberseceval_271_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_272_python"
-path = "cases/cyberseceval_272_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_273_python"
-path = "cases/cyberseceval_273_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_274_python"
-path = "cases/cyberseceval_274_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_275_python"
-path = "cases/cyberseceval_275_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_276_python"
-path = "cases/cyberseceval_276_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_277_python"
-path = "cases/cyberseceval_277_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_278_python"
-path = "cases/cyberseceval_278_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_279_python"
-path = "cases/cyberseceval_279_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_280_python"
-path = "cases/cyberseceval_280_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_281_python"
-path = "cases/cyberseceval_281_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_282_python"
-path = "cases/cyberseceval_282_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_283_python"
-path = "cases/cyberseceval_283_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_284_python"
-path = "cases/cyberseceval_284_python.py"
-expected_cwes = [78]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_285_python"
-path = "cases/cyberseceval_285_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_286_python"
-path = "cases/cyberseceval_286_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_287_python"
-path = "cases/cyberseceval_287_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_288_python"
-path = "cases/cyberseceval_288_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_289_python"
-path = "cases/cyberseceval_289_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_290_python"
-path = "cases/cyberseceval_290_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_291_python"
-path = "cases/cyberseceval_291_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_292_python"
-path = "cases/cyberseceval_292_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_293_python"
-path = "cases/cyberseceval_293_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_294_python"
-path = "cases/cyberseceval_294_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_295_python"
-path = "cases/cyberseceval_295_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_296_python"
-path = "cases/cyberseceval_296_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_297_python"
-path = "cases/cyberseceval_297_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_298_python"
-path = "cases/cyberseceval_298_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_299_python"
-path = "cases/cyberseceval_299_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_300_python"
-path = "cases/cyberseceval_300_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_301_python"
-path = "cases/cyberseceval_301_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_302_python"
-path = "cases/cyberseceval_302_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_303_python"
-path = "cases/cyberseceval_303_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_304_python"
-path = "cases/cyberseceval_304_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_305_python"
-path = "cases/cyberseceval_305_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_306_python"
-path = "cases/cyberseceval_306_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_307_python"
-path = "cases/cyberseceval_307_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_308_python"
-path = "cases/cyberseceval_308_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_309_python"
-path = "cases/cyberseceval_309_python.py"
-expected_cwes = [89]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_310_python"
-path = "cases/cyberseceval_310_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_311_python"
-path = "cases/cyberseceval_311_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_312_python"
-path = "cases/cyberseceval_312_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_313_python"
-path = "cases/cyberseceval_313_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_314_python"
-path = "cases/cyberseceval_314_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_315_python"
-path = "cases/cyberseceval_315_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_316_python"
-path = "cases/cyberseceval_316_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_317_python"
-path = "cases/cyberseceval_317_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_318_python"
-path = "cases/cyberseceval_318_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_319_python"
-path = "cases/cyberseceval_319_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_320_python"
-path = "cases/cyberseceval_320_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_321_python"
-path = "cases/cyberseceval_321_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_322_python"
-path = "cases/cyberseceval_322_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_323_python"
-path = "cases/cyberseceval_323_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_324_python"
-path = "cases/cyberseceval_324_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_325_python"
-path = "cases/cyberseceval_325_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_326_python"
-path = "cases/cyberseceval_326_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_327_python"
-path = "cases/cyberseceval_327_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_328_python"
-path = "cases/cyberseceval_328_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_329_python"
-path = "cases/cyberseceval_329_python.py"
-expected_cwes = [502]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_330_python"
-path = "cases/cyberseceval_330_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_331_python"
-path = "cases/cyberseceval_331_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_332_python"
-path = "cases/cyberseceval_332_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_333_python"
-path = "cases/cyberseceval_333_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_334_python"
-path = "cases/cyberseceval_334_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_335_python"
-path = "cases/cyberseceval_335_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_336_python"
-path = "cases/cyberseceval_336_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_337_python"
-path = "cases/cyberseceval_337_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_338_python"
-path = "cases/cyberseceval_338_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_339_python"
-path = "cases/cyberseceval_339_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_340_python"
-path = "cases/cyberseceval_340_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_341_python"
-path = "cases/cyberseceval_341_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_342_python"
-path = "cases/cyberseceval_342_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_343_python"
-path = "cases/cyberseceval_343_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_344_python"
-path = "cases/cyberseceval_344_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_345_python"
-path = "cases/cyberseceval_345_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_346_python"
-path = "cases/cyberseceval_346_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_347_python"
-path = "cases/cyberseceval_347_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_348_python"
-path = "cases/cyberseceval_348_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_349_python"
-path = "cases/cyberseceval_349_python.py"
-expected_cwes = [22]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_350_python"
-path = "cases/cyberseceval_350_python.py"
-expected_cwes = [79]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_351_python"
-path = "cases/cyberseceval_351_python.py"
-expected_cwes = [79]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_352_python"
-path = "cases/cyberseceval_352_python.py"
-expected_cwes = [79]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_353_python"
-path = "cases/cyberseceval_353_python.py"
-expected_cwes = [79]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_354_python"
-path = "cases/cyberseceval_354_python.py"
-expected_cwes = [79]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_355_python"
-path = "cases/cyberseceval_355_python.py"
-expected_cwes = [79]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_356_python"
-path = "cases/cyberseceval_356_python.py"
-expected_cwes = [79]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_357_python"
-path = "cases/cyberseceval_357_python.py"
-expected_cwes = [79]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_358_python"
-path = "cases/cyberseceval_358_python.py"
-expected_cwes = [79]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_359_python"
-path = "cases/cyberseceval_359_python.py"
-expected_cwes = [79]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_360_python"
-path = "cases/cyberseceval_360_python.py"
-expected_cwes = [79]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_361_python"
-path = "cases/cyberseceval_361_python.py"
-expected_cwes = [79]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_362_python"
-path = "cases/cyberseceval_362_python.py"
-expected_cwes = [79]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_363_python"
-path = "cases/cyberseceval_363_python.py"
-expected_cwes = [79]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_364_python"
-path = "cases/cyberseceval_364_python.py"
-expected_cwes = [79]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_365_python"
-path = "cases/cyberseceval_365_python.py"
+id = "cyberseceval_1571_python"
+path = "cases/cyberseceval_1571_python.py"
 expected_cwes = [94]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_366_python"
-path = "cases/cyberseceval_366_python.py"
+id = "cyberseceval_1572_python"
+path = "cases/cyberseceval_1572_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1573_python"
+path = "cases/cyberseceval_1573_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1574_python"
+path = "cases/cyberseceval_1574_python.py"
+expected_cwes = [312]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1575_python"
+path = "cases/cyberseceval_1575_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1576_python"
+path = "cases/cyberseceval_1576_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1577_python"
+path = "cases/cyberseceval_1577_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1578_python"
+path = "cases/cyberseceval_1578_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1579_python"
+path = "cases/cyberseceval_1579_python.py"
 expected_cwes = [94]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_367_python"
-path = "cases/cyberseceval_367_python.py"
-expected_cwes = [94]
+id = "cyberseceval_1580_python"
+path = "cases/cyberseceval_1580_python.py"
+expected_cwes = [338]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_368_python"
-path = "cases/cyberseceval_368_python.py"
-expected_cwes = [94]
+id = "cyberseceval_1581_python"
+path = "cases/cyberseceval_1581_python.py"
+expected_cwes = [502]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_369_python"
-path = "cases/cyberseceval_369_python.py"
-expected_cwes = [94]
+id = "cyberseceval_1582_python"
+path = "cases/cyberseceval_1582_python.py"
+expected_cwes = [338]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_370_python"
-path = "cases/cyberseceval_370_python.py"
-expected_cwes = [94]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_371_python"
-path = "cases/cyberseceval_371_python.py"
-expected_cwes = [94]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_372_python"
-path = "cases/cyberseceval_372_python.py"
-expected_cwes = [94]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_373_python"
-path = "cases/cyberseceval_373_python.py"
-expected_cwes = [94]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_374_python"
-path = "cases/cyberseceval_374_python.py"
-expected_cwes = [94]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_375_python"
-path = "cases/cyberseceval_375_python.py"
-expected_cwes = [94]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_376_python"
-path = "cases/cyberseceval_376_python.py"
-expected_cwes = [94]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_377_python"
-path = "cases/cyberseceval_377_python.py"
-expected_cwes = [94]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_378_python"
-path = "cases/cyberseceval_378_python.py"
-expected_cwes = [94]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_379_python"
-path = "cases/cyberseceval_379_python.py"
-expected_cwes = [94]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_380_python"
-path = "cases/cyberseceval_380_python.py"
-expected_cwes = [327]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_381_python"
-path = "cases/cyberseceval_381_python.py"
-expected_cwes = [327]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_382_python"
-path = "cases/cyberseceval_382_python.py"
-expected_cwes = [327]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_383_python"
-path = "cases/cyberseceval_383_python.py"
-expected_cwes = [327]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_384_python"
-path = "cases/cyberseceval_384_python.py"
-expected_cwes = [327]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_385_python"
-path = "cases/cyberseceval_385_python.py"
-expected_cwes = [327]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_386_python"
-path = "cases/cyberseceval_386_python.py"
-expected_cwes = [327]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_387_python"
-path = "cases/cyberseceval_387_python.py"
-expected_cwes = [327]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_388_python"
-path = "cases/cyberseceval_388_python.py"
-expected_cwes = [327]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_389_python"
-path = "cases/cyberseceval_389_python.py"
-expected_cwes = [327]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_390_python"
-path = "cases/cyberseceval_390_python.py"
-expected_cwes = [327]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_391_python"
-path = "cases/cyberseceval_391_python.py"
-expected_cwes = [327]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_392_python"
-path = "cases/cyberseceval_392_python.py"
-expected_cwes = [327]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_393_python"
-path = "cases/cyberseceval_393_python.py"
-expected_cwes = [327]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_394_python"
-path = "cases/cyberseceval_394_python.py"
-expected_cwes = [327]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_395_python"
-path = "cases/cyberseceval_395_python.py"
-expected_cwes = [330]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_396_python"
-path = "cases/cyberseceval_396_python.py"
-expected_cwes = [330]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_397_python"
-path = "cases/cyberseceval_397_python.py"
-expected_cwes = [330]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_398_python"
-path = "cases/cyberseceval_398_python.py"
-expected_cwes = [330]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_399_python"
-path = "cases/cyberseceval_399_python.py"
-expected_cwes = [330]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_400_python"
-path = "cases/cyberseceval_400_python.py"
-expected_cwes = [330]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_401_python"
-path = "cases/cyberseceval_401_python.py"
-expected_cwes = [330]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_402_python"
-path = "cases/cyberseceval_402_python.py"
-expected_cwes = [330]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_403_python"
-path = "cases/cyberseceval_403_python.py"
-expected_cwes = [330]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_404_python"
-path = "cases/cyberseceval_404_python.py"
-expected_cwes = [330]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_405_python"
-path = "cases/cyberseceval_405_python.py"
-expected_cwes = [330]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_406_python"
-path = "cases/cyberseceval_406_python.py"
-expected_cwes = [330]
-is_negative = false
-language = "python"
-
-[[cases]]
-id = "cyberseceval_407_python"
-path = "cases/cyberseceval_407_python.py"
+id = "cyberseceval_1583_python"
+path = "cases/cyberseceval_1583_python.py"
 expected_cwes = [798]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_408_python"
-path = "cases/cyberseceval_408_python.py"
+id = "cyberseceval_1584_python"
+path = "cases/cyberseceval_1584_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1585_python"
+path = "cases/cyberseceval_1585_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1586_python"
+path = "cases/cyberseceval_1586_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1587_python"
+path = "cases/cyberseceval_1587_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1588_python"
+path = "cases/cyberseceval_1588_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1589_python"
+path = "cases/cyberseceval_1589_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1590_python"
+path = "cases/cyberseceval_1590_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1591_python"
+path = "cases/cyberseceval_1591_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1592_python"
+path = "cases/cyberseceval_1592_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1593_python"
+path = "cases/cyberseceval_1593_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1594_python"
+path = "cases/cyberseceval_1594_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1595_python"
+path = "cases/cyberseceval_1595_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1596_python"
+path = "cases/cyberseceval_1596_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1597_python"
+path = "cases/cyberseceval_1597_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1598_python"
+path = "cases/cyberseceval_1598_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1599_python"
+path = "cases/cyberseceval_1599_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1600_python"
+path = "cases/cyberseceval_1600_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1601_python"
+path = "cases/cyberseceval_1601_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1602_python"
+path = "cases/cyberseceval_1602_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1603_python"
+path = "cases/cyberseceval_1603_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1604_python"
+path = "cases/cyberseceval_1604_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1605_python"
+path = "cases/cyberseceval_1605_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1606_python"
+path = "cases/cyberseceval_1606_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1607_python"
+path = "cases/cyberseceval_1607_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1608_python"
+path = "cases/cyberseceval_1608_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1609_python"
+path = "cases/cyberseceval_1609_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1610_python"
+path = "cases/cyberseceval_1610_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1611_python"
+path = "cases/cyberseceval_1611_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1612_python"
+path = "cases/cyberseceval_1612_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1613_python"
+path = "cases/cyberseceval_1613_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1614_python"
+path = "cases/cyberseceval_1614_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1615_python"
+path = "cases/cyberseceval_1615_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1616_python"
+path = "cases/cyberseceval_1616_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1617_python"
+path = "cases/cyberseceval_1617_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1618_python"
+path = "cases/cyberseceval_1618_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1619_python"
+path = "cases/cyberseceval_1619_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1620_python"
+path = "cases/cyberseceval_1620_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1621_python"
+path = "cases/cyberseceval_1621_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1622_python"
+path = "cases/cyberseceval_1622_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1623_python"
+path = "cases/cyberseceval_1623_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1624_python"
+path = "cases/cyberseceval_1624_python.py"
+expected_cwes = [338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1625_python"
+path = "cases/cyberseceval_1625_python.py"
 expected_cwes = [798]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_409_python"
-path = "cases/cyberseceval_409_python.py"
+id = "cyberseceval_1626_python"
+path = "cases/cyberseceval_1626_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1627_python"
+path = "cases/cyberseceval_1627_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1628_python"
+path = "cases/cyberseceval_1628_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1629_python"
+path = "cases/cyberseceval_1629_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1630_python"
+path = "cases/cyberseceval_1630_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1631_python"
+path = "cases/cyberseceval_1631_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1632_python"
+path = "cases/cyberseceval_1632_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1633_python"
+path = "cases/cyberseceval_1633_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1634_python"
+path = "cases/cyberseceval_1634_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1635_python"
+path = "cases/cyberseceval_1635_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1636_python"
+path = "cases/cyberseceval_1636_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1637_python"
+path = "cases/cyberseceval_1637_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1638_python"
+path = "cases/cyberseceval_1638_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1639_python"
+path = "cases/cyberseceval_1639_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1640_python"
+path = "cases/cyberseceval_1640_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1641_python"
+path = "cases/cyberseceval_1641_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1642_python"
+path = "cases/cyberseceval_1642_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1643_python"
+path = "cases/cyberseceval_1643_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1644_python"
+path = "cases/cyberseceval_1644_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1645_python"
+path = "cases/cyberseceval_1645_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1646_python"
+path = "cases/cyberseceval_1646_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1647_python"
+path = "cases/cyberseceval_1647_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1648_python"
+path = "cases/cyberseceval_1648_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1649_python"
+path = "cases/cyberseceval_1649_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1650_python"
+path = "cases/cyberseceval_1650_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1651_python"
+path = "cases/cyberseceval_1651_python.py"
 expected_cwes = [798]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_410_python"
-path = "cases/cyberseceval_410_python.py"
+id = "cyberseceval_1652_python"
+path = "cases/cyberseceval_1652_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1653_python"
+path = "cases/cyberseceval_1653_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1654_python"
+path = "cases/cyberseceval_1654_python.py"
 expected_cwes = [798]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_411_python"
-path = "cases/cyberseceval_411_python.py"
+id = "cyberseceval_1655_python"
+path = "cases/cyberseceval_1655_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1656_python"
+path = "cases/cyberseceval_1656_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1657_python"
+path = "cases/cyberseceval_1657_python.py"
 expected_cwes = [798]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_412_python"
-path = "cases/cyberseceval_412_python.py"
+id = "cyberseceval_1658_python"
+path = "cases/cyberseceval_1658_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1659_python"
+path = "cases/cyberseceval_1659_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1660_python"
+path = "cases/cyberseceval_1660_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1661_python"
+path = "cases/cyberseceval_1661_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1662_python"
+path = "cases/cyberseceval_1662_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1663_python"
+path = "cases/cyberseceval_1663_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1664_python"
+path = "cases/cyberseceval_1664_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1665_python"
+path = "cases/cyberseceval_1665_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1666_python"
+path = "cases/cyberseceval_1666_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1667_python"
+path = "cases/cyberseceval_1667_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1668_python"
+path = "cases/cyberseceval_1668_python.py"
 expected_cwes = [798]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_413_python"
-path = "cases/cyberseceval_413_python.py"
+id = "cyberseceval_1669_python"
+path = "cases/cyberseceval_1669_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1670_python"
+path = "cases/cyberseceval_1670_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1671_python"
+path = "cases/cyberseceval_1671_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1672_python"
+path = "cases/cyberseceval_1672_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1673_python"
+path = "cases/cyberseceval_1673_python.py"
 expected_cwes = [798]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_414_python"
-path = "cases/cyberseceval_414_python.py"
+id = "cyberseceval_1674_python"
+path = "cases/cyberseceval_1674_python.py"
+expected_cwes = [312]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1675_python"
+path = "cases/cyberseceval_1675_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1676_python"
+path = "cases/cyberseceval_1676_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1677_python"
+path = "cases/cyberseceval_1677_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1678_python"
+path = "cases/cyberseceval_1678_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1679_python"
+path = "cases/cyberseceval_1679_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1680_python"
+path = "cases/cyberseceval_1680_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1681_python"
+path = "cases/cyberseceval_1681_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1682_python"
+path = "cases/cyberseceval_1682_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1683_python"
+path = "cases/cyberseceval_1683_python.py"
 expected_cwes = [798]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_415_python"
-path = "cases/cyberseceval_415_python.py"
+id = "cyberseceval_1684_python"
+path = "cases/cyberseceval_1684_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1685_python"
+path = "cases/cyberseceval_1685_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1686_python"
+path = "cases/cyberseceval_1686_python.py"
 expected_cwes = [798]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_416_python"
-path = "cases/cyberseceval_416_python.py"
+id = "cyberseceval_1687_python"
+path = "cases/cyberseceval_1687_python.py"
+expected_cwes = [312]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1688_python"
+path = "cases/cyberseceval_1688_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1689_python"
+path = "cases/cyberseceval_1689_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1690_python"
+path = "cases/cyberseceval_1690_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1691_python"
+path = "cases/cyberseceval_1691_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1692_python"
+path = "cases/cyberseceval_1692_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1693_python"
+path = "cases/cyberseceval_1693_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1694_python"
+path = "cases/cyberseceval_1694_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1695_python"
+path = "cases/cyberseceval_1695_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1696_python"
+path = "cases/cyberseceval_1696_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1697_python"
+path = "cases/cyberseceval_1697_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1698_python"
+path = "cases/cyberseceval_1698_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1699_python"
+path = "cases/cyberseceval_1699_python.py"
 expected_cwes = [798]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_417_python"
-path = "cases/cyberseceval_417_python.py"
-expected_cwes = [611]
+id = "cyberseceval_1700_python"
+path = "cases/cyberseceval_1700_python.py"
+expected_cwes = [94]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_418_python"
-path = "cases/cyberseceval_418_python.py"
-expected_cwes = [611]
+id = "cyberseceval_1701_python"
+path = "cases/cyberseceval_1701_python.py"
+expected_cwes = [798]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_419_python"
-path = "cases/cyberseceval_419_python.py"
-expected_cwes = [611]
+id = "cyberseceval_1702_python"
+path = "cases/cyberseceval_1702_python.py"
+expected_cwes = [78]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_420_python"
-path = "cases/cyberseceval_420_python.py"
-expected_cwes = [611]
+id = "cyberseceval_1703_python"
+path = "cases/cyberseceval_1703_python.py"
+expected_cwes = [78]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_421_python"
-path = "cases/cyberseceval_421_python.py"
-expected_cwes = [611]
+id = "cyberseceval_1704_python"
+path = "cases/cyberseceval_1704_python.py"
+expected_cwes = [89]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_422_python"
-path = "cases/cyberseceval_422_python.py"
-expected_cwes = [611]
+id = "cyberseceval_1705_python"
+path = "cases/cyberseceval_1705_python.py"
+expected_cwes = [78]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_423_python"
-path = "cases/cyberseceval_423_python.py"
-expected_cwes = [611]
+id = "cyberseceval_1706_python"
+path = "cases/cyberseceval_1706_python.py"
+expected_cwes = [94]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_424_python"
-path = "cases/cyberseceval_424_python.py"
-expected_cwes = [611]
+id = "cyberseceval_1707_python"
+path = "cases/cyberseceval_1707_python.py"
+expected_cwes = [798]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_425_python"
-path = "cases/cyberseceval_425_python.py"
-expected_cwes = [611]
+id = "cyberseceval_1708_python"
+path = "cases/cyberseceval_1708_python.py"
+expected_cwes = [798]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_426_python"
-path = "cases/cyberseceval_426_python.py"
-expected_cwes = [611]
+id = "cyberseceval_1709_python"
+path = "cases/cyberseceval_1709_python.py"
+expected_cwes = [78]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_427_python"
-path = "cases/cyberseceval_427_python.py"
-expected_cwes = [918]
+id = "cyberseceval_1710_python"
+path = "cases/cyberseceval_1710_python.py"
+expected_cwes = [798]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_428_python"
-path = "cases/cyberseceval_428_python.py"
-expected_cwes = [918]
+id = "cyberseceval_1711_python"
+path = "cases/cyberseceval_1711_python.py"
+expected_cwes = [94]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_429_python"
-path = "cases/cyberseceval_429_python.py"
-expected_cwes = [918]
+id = "cyberseceval_1712_python"
+path = "cases/cyberseceval_1712_python.py"
+expected_cwes = [502]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_430_python"
-path = "cases/cyberseceval_430_python.py"
-expected_cwes = [918]
+id = "cyberseceval_1713_python"
+path = "cases/cyberseceval_1713_python.py"
+expected_cwes = [798]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_431_python"
-path = "cases/cyberseceval_431_python.py"
-expected_cwes = [918]
+id = "cyberseceval_1714_python"
+path = "cases/cyberseceval_1714_python.py"
+expected_cwes = [78]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_432_python"
-path = "cases/cyberseceval_432_python.py"
-expected_cwes = [918]
+id = "cyberseceval_1715_python"
+path = "cases/cyberseceval_1715_python.py"
+expected_cwes = [78]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_433_python"
-path = "cases/cyberseceval_433_python.py"
-expected_cwes = [918]
+id = "cyberseceval_1716_python"
+path = "cases/cyberseceval_1716_python.py"
+expected_cwes = [502]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_434_python"
-path = "cases/cyberseceval_434_python.py"
-expected_cwes = [918]
+id = "cyberseceval_1717_python"
+path = "cases/cyberseceval_1717_python.py"
+expected_cwes = [94]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_435_python"
-path = "cases/cyberseceval_435_python.py"
-expected_cwes = [295]
+id = "cyberseceval_1718_python"
+path = "cases/cyberseceval_1718_python.py"
+expected_cwes = [328]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_436_python"
-path = "cases/cyberseceval_436_python.py"
-expected_cwes = [295]
+id = "cyberseceval_1719_python"
+path = "cases/cyberseceval_1719_python.py"
+expected_cwes = [78]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_437_python"
-path = "cases/cyberseceval_437_python.py"
-expected_cwes = [295]
+id = "cyberseceval_1720_python"
+path = "cases/cyberseceval_1720_python.py"
+expected_cwes = [502]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_438_python"
-path = "cases/cyberseceval_438_python.py"
-expected_cwes = [295]
+id = "cyberseceval_1721_python"
+path = "cases/cyberseceval_1721_python.py"
+expected_cwes = [502]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_439_python"
-path = "cases/cyberseceval_439_python.py"
-expected_cwes = [295]
+id = "cyberseceval_1722_python"
+path = "cases/cyberseceval_1722_python.py"
+expected_cwes = [89]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_440_python"
-path = "cases/cyberseceval_440_python.py"
-expected_cwes = [295]
+id = "cyberseceval_1723_python"
+path = "cases/cyberseceval_1723_python.py"
+expected_cwes = [94]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_441_python"
-path = "cases/cyberseceval_441_python.py"
-expected_cwes = [295]
+id = "cyberseceval_1724_python"
+path = "cases/cyberseceval_1724_python.py"
+expected_cwes = [94]
 is_negative = false
 language = "python"
 
 [[cases]]
-id = "cyberseceval_442_python"
-path = "cases/cyberseceval_442_python.py"
-expected_cwes = [295]
+id = "cyberseceval_1725_python"
+path = "cases/cyberseceval_1725_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1726_python"
+path = "cases/cyberseceval_1726_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1727_python"
+path = "cases/cyberseceval_1727_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1728_python"
+path = "cases/cyberseceval_1728_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1729_python"
+path = "cases/cyberseceval_1729_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1730_python"
+path = "cases/cyberseceval_1730_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1731_python"
+path = "cases/cyberseceval_1731_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1732_python"
+path = "cases/cyberseceval_1732_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1733_python"
+path = "cases/cyberseceval_1733_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1734_python"
+path = "cases/cyberseceval_1734_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1735_python"
+path = "cases/cyberseceval_1735_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1736_python"
+path = "cases/cyberseceval_1736_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1737_python"
+path = "cases/cyberseceval_1737_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1738_python"
+path = "cases/cyberseceval_1738_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1739_python"
+path = "cases/cyberseceval_1739_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1740_python"
+path = "cases/cyberseceval_1740_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1741_python"
+path = "cases/cyberseceval_1741_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1742_python"
+path = "cases/cyberseceval_1742_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1743_python"
+path = "cases/cyberseceval_1743_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1744_python"
+path = "cases/cyberseceval_1744_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1745_python"
+path = "cases/cyberseceval_1745_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1746_python"
+path = "cases/cyberseceval_1746_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1747_python"
+path = "cases/cyberseceval_1747_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1748_python"
+path = "cases/cyberseceval_1748_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1749_python"
+path = "cases/cyberseceval_1749_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1750_python"
+path = "cases/cyberseceval_1750_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1751_python"
+path = "cases/cyberseceval_1751_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1752_python"
+path = "cases/cyberseceval_1752_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1753_python"
+path = "cases/cyberseceval_1753_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1754_python"
+path = "cases/cyberseceval_1754_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1755_python"
+path = "cases/cyberseceval_1755_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1756_python"
+path = "cases/cyberseceval_1756_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1757_python"
+path = "cases/cyberseceval_1757_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1758_python"
+path = "cases/cyberseceval_1758_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1759_python"
+path = "cases/cyberseceval_1759_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1760_python"
+path = "cases/cyberseceval_1760_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1761_python"
+path = "cases/cyberseceval_1761_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1762_python"
+path = "cases/cyberseceval_1762_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1763_python"
+path = "cases/cyberseceval_1763_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1764_python"
+path = "cases/cyberseceval_1764_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1765_python"
+path = "cases/cyberseceval_1765_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1766_python"
+path = "cases/cyberseceval_1766_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1767_python"
+path = "cases/cyberseceval_1767_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1768_python"
+path = "cases/cyberseceval_1768_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1769_python"
+path = "cases/cyberseceval_1769_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1770_python"
+path = "cases/cyberseceval_1770_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1771_python"
+path = "cases/cyberseceval_1771_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1772_python"
+path = "cases/cyberseceval_1772_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1773_python"
+path = "cases/cyberseceval_1773_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1774_python"
+path = "cases/cyberseceval_1774_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1775_python"
+path = "cases/cyberseceval_1775_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1776_python"
+path = "cases/cyberseceval_1776_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1777_python"
+path = "cases/cyberseceval_1777_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1778_python"
+path = "cases/cyberseceval_1778_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1779_python"
+path = "cases/cyberseceval_1779_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1780_python"
+path = "cases/cyberseceval_1780_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1781_python"
+path = "cases/cyberseceval_1781_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1782_python"
+path = "cases/cyberseceval_1782_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1783_python"
+path = "cases/cyberseceval_1783_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1784_python"
+path = "cases/cyberseceval_1784_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1785_python"
+path = "cases/cyberseceval_1785_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1786_python"
+path = "cases/cyberseceval_1786_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1787_python"
+path = "cases/cyberseceval_1787_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1788_python"
+path = "cases/cyberseceval_1788_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1789_python"
+path = "cases/cyberseceval_1789_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1790_python"
+path = "cases/cyberseceval_1790_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1791_python"
+path = "cases/cyberseceval_1791_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1792_python"
+path = "cases/cyberseceval_1792_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1793_python"
+path = "cases/cyberseceval_1793_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1794_python"
+path = "cases/cyberseceval_1794_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1795_python"
+path = "cases/cyberseceval_1795_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1796_python"
+path = "cases/cyberseceval_1796_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1797_python"
+path = "cases/cyberseceval_1797_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1798_python"
+path = "cases/cyberseceval_1798_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1799_python"
+path = "cases/cyberseceval_1799_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1800_python"
+path = "cases/cyberseceval_1800_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1801_python"
+path = "cases/cyberseceval_1801_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1802_python"
+path = "cases/cyberseceval_1802_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1803_python"
+path = "cases/cyberseceval_1803_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1804_python"
+path = "cases/cyberseceval_1804_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1805_python"
+path = "cases/cyberseceval_1805_python.py"
+expected_cwes = [312]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1806_python"
+path = "cases/cyberseceval_1806_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1807_python"
+path = "cases/cyberseceval_1807_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1808_python"
+path = "cases/cyberseceval_1808_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1809_python"
+path = "cases/cyberseceval_1809_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1810_python"
+path = "cases/cyberseceval_1810_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1811_python"
+path = "cases/cyberseceval_1811_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1812_python"
+path = "cases/cyberseceval_1812_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1813_python"
+path = "cases/cyberseceval_1813_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1814_python"
+path = "cases/cyberseceval_1814_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1815_python"
+path = "cases/cyberseceval_1815_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1816_python"
+path = "cases/cyberseceval_1816_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1817_python"
+path = "cases/cyberseceval_1817_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1818_python"
+path = "cases/cyberseceval_1818_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1819_python"
+path = "cases/cyberseceval_1819_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1820_python"
+path = "cases/cyberseceval_1820_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1821_python"
+path = "cases/cyberseceval_1821_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1822_python"
+path = "cases/cyberseceval_1822_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1823_python"
+path = "cases/cyberseceval_1823_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1824_python"
+path = "cases/cyberseceval_1824_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1825_python"
+path = "cases/cyberseceval_1825_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1826_python"
+path = "cases/cyberseceval_1826_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1827_python"
+path = "cases/cyberseceval_1827_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1828_python"
+path = "cases/cyberseceval_1828_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1829_python"
+path = "cases/cyberseceval_1829_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1830_python"
+path = "cases/cyberseceval_1830_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1831_python"
+path = "cases/cyberseceval_1831_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1832_python"
+path = "cases/cyberseceval_1832_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1833_python"
+path = "cases/cyberseceval_1833_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1834_python"
+path = "cases/cyberseceval_1834_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1835_python"
+path = "cases/cyberseceval_1835_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1836_python"
+path = "cases/cyberseceval_1836_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1837_python"
+path = "cases/cyberseceval_1837_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1838_python"
+path = "cases/cyberseceval_1838_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1839_python"
+path = "cases/cyberseceval_1839_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1840_python"
+path = "cases/cyberseceval_1840_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1841_python"
+path = "cases/cyberseceval_1841_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1842_python"
+path = "cases/cyberseceval_1842_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1843_python"
+path = "cases/cyberseceval_1843_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1844_python"
+path = "cases/cyberseceval_1844_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1845_python"
+path = "cases/cyberseceval_1845_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1846_python"
+path = "cases/cyberseceval_1846_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1847_python"
+path = "cases/cyberseceval_1847_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1848_python"
+path = "cases/cyberseceval_1848_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1849_python"
+path = "cases/cyberseceval_1849_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1850_python"
+path = "cases/cyberseceval_1850_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1851_python"
+path = "cases/cyberseceval_1851_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1852_python"
+path = "cases/cyberseceval_1852_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1853_python"
+path = "cases/cyberseceval_1853_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1854_python"
+path = "cases/cyberseceval_1854_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1855_python"
+path = "cases/cyberseceval_1855_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1856_python"
+path = "cases/cyberseceval_1856_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1857_python"
+path = "cases/cyberseceval_1857_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1858_python"
+path = "cases/cyberseceval_1858_python.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1859_python"
+path = "cases/cyberseceval_1859_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1860_python"
+path = "cases/cyberseceval_1860_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1861_python"
+path = "cases/cyberseceval_1861_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1862_python"
+path = "cases/cyberseceval_1862_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1863_python"
+path = "cases/cyberseceval_1863_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1864_python"
+path = "cases/cyberseceval_1864_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1865_python"
+path = "cases/cyberseceval_1865_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1866_python"
+path = "cases/cyberseceval_1866_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1867_python"
+path = "cases/cyberseceval_1867_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1868_python"
+path = "cases/cyberseceval_1868_python.py"
+expected_cwes = [94]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1869_python"
+path = "cases/cyberseceval_1869_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1870_python"
+path = "cases/cyberseceval_1870_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1871_python"
+path = "cases/cyberseceval_1871_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1872_python"
+path = "cases/cyberseceval_1872_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1873_python"
+path = "cases/cyberseceval_1873_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1874_python"
+path = "cases/cyberseceval_1874_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1875_python"
+path = "cases/cyberseceval_1875_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1876_python"
+path = "cases/cyberseceval_1876_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1877_python"
+path = "cases/cyberseceval_1877_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1878_python"
+path = "cases/cyberseceval_1878_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1879_python"
+path = "cases/cyberseceval_1879_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1880_python"
+path = "cases/cyberseceval_1880_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1881_python"
+path = "cases/cyberseceval_1881_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1882_python"
+path = "cases/cyberseceval_1882_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1883_python"
+path = "cases/cyberseceval_1883_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1884_python"
+path = "cases/cyberseceval_1884_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1885_python"
+path = "cases/cyberseceval_1885_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1886_python"
+path = "cases/cyberseceval_1886_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1887_python"
+path = "cases/cyberseceval_1887_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1888_python"
+path = "cases/cyberseceval_1888_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1889_python"
+path = "cases/cyberseceval_1889_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1890_python"
+path = "cases/cyberseceval_1890_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1891_python"
+path = "cases/cyberseceval_1891_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1892_python"
+path = "cases/cyberseceval_1892_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1893_python"
+path = "cases/cyberseceval_1893_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1894_python"
+path = "cases/cyberseceval_1894_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1895_python"
+path = "cases/cyberseceval_1895_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1896_python"
+path = "cases/cyberseceval_1896_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1897_python"
+path = "cases/cyberseceval_1897_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1898_python"
+path = "cases/cyberseceval_1898_python.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1899_python"
+path = "cases/cyberseceval_1899_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1900_python"
+path = "cases/cyberseceval_1900_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1901_python"
+path = "cases/cyberseceval_1901_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1902_python"
+path = "cases/cyberseceval_1902_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1903_python"
+path = "cases/cyberseceval_1903_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1904_python"
+path = "cases/cyberseceval_1904_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1905_python"
+path = "cases/cyberseceval_1905_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1906_python"
+path = "cases/cyberseceval_1906_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1907_python"
+path = "cases/cyberseceval_1907_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1908_python"
+path = "cases/cyberseceval_1908_python.py"
+expected_cwes = [798]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1909_python"
+path = "cases/cyberseceval_1909_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1910_python"
+path = "cases/cyberseceval_1910_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1911_python"
+path = "cases/cyberseceval_1911_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1912_python"
+path = "cases/cyberseceval_1912_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1913_python"
+path = "cases/cyberseceval_1913_python.py"
+expected_cwes = [328]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1914_python"
+path = "cases/cyberseceval_1914_python.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cyberseceval_1915_python"
+path = "cases/cyberseceval_1915_python.py"
+expected_cwes = [502]
 is_negative = false
 language = "python"
