@@ -151,6 +151,102 @@ pub fn agent_tools() -> Vec<ToolDefinition> {
     ]
 }
 
+/// Return Ghidra MCP tool definitions for agents that need Ghidra access.
+///
+/// These tools are routed to a GhidraMCP server via the MCP protocol.
+/// They are only available when a Ghidra MCP server is running.
+pub fn ghidra_mcp_tools() -> Vec<ToolDefinition> {
+    vec![
+        ToolDefinition::new(
+            "ghidra_decompile",
+            "Get decompiled C output for a function at the given address or name via Ghidra.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "function": {
+                        "type": "string",
+                        "description": "Function name or hex address (e.g., '0x401000' or 'main')"
+                    }
+                },
+                "required": ["function"]
+            }),
+        ),
+        ToolDefinition::new(
+            "ghidra_rename",
+            "Rename a symbol (function or variable) in the Ghidra project.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "address": {
+                        "type": "string",
+                        "description": "Address of the symbol to rename"
+                    },
+                    "new_name": {
+                        "type": "string",
+                        "description": "New name for the symbol"
+                    }
+                },
+                "required": ["address", "new_name"]
+            }),
+        ),
+        ToolDefinition::new(
+            "ghidra_set_type",
+            "Set a data type annotation at an address in the Ghidra project.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "address": {
+                        "type": "string",
+                        "description": "Address to annotate"
+                    },
+                    "type_name": {
+                        "type": "string",
+                        "description": "Data type (e.g., 'int', 'char *', 'struct_t')"
+                    }
+                },
+                "required": ["address", "type_name"]
+            }),
+        ),
+        ToolDefinition::new(
+            "ghidra_get_xrefs",
+            "Get all cross-references to/from an address.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "address": {
+                        "type": "string",
+                        "description": "Address to find cross-references for"
+                    }
+                },
+                "required": ["address"]
+            }),
+        ),
+        ToolDefinition::new(
+            "ghidra_search_strings",
+            "Search for strings matching a pattern in the binary.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "String pattern to search for (supports basic glob)"
+                    }
+                },
+                "required": ["pattern"]
+            }),
+        ),
+        ToolDefinition::new(
+            "ghidra_get_segments",
+            "List binary segments with their permissions (R/W/X).",
+            serde_json::json!({
+                "type": "object",
+                "properties": {},
+                "required": []
+            }),
+        ),
+    ]
+}
+
 /// Filter the full tool set to only tools listed in an agent's definition.
 pub fn filter_tools(all_tools: &[ToolDefinition], allowed: &[String]) -> Vec<ToolDefinition> {
     if allowed.is_empty() {

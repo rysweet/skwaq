@@ -11,6 +11,7 @@
 
 pub mod definition;
 pub mod discovery;
+pub mod mcp_client;
 pub mod pipeline;
 pub mod runner;
 pub mod tool_definitions;

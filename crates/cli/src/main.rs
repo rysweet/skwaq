@@ -29,6 +29,26 @@ async fn main() -> anyhow::Result<()> {
         Commands::Version => {
             skwaq::commands::version_cmd::run();
         }
+        Commands::InvestigateBinary { binary } => {
+            skwaq::commands::investigate_binary::run(binary).await?;
+        }
+        Commands::Fuzz {
+            binary,
+            duration,
+            corpus,
+            output,
+        } => {
+            skwaq::commands::fuzz_cmd::run_fuzz(
+                binary,
+                *duration,
+                corpus.as_deref(),
+                output.as_deref(),
+            )
+            .await?;
+        }
+        Commands::FuzzAnalyze { binary, duration } => {
+            skwaq::commands::fuzz_cmd::run_fuzz_analyze(binary, *duration).await?;
+        }
         Commands::DiffAnalyze { v1, v2, advisory } => {
             skwaq::commands::diff_analyze::run(v1, v2, advisory.as_deref()).await?;
         }
