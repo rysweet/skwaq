@@ -42,14 +42,39 @@ pub struct CweScore {
 }
 
 /// Score a single test case against ground truth.
+///
+/// Only findings whose CWE family overlaps with the expected CWE families
+/// are counted. This prevents irrelevant detections (e.g. a memory pattern
+/// in a CWE-78 injection test case) from inflating the false-positive count.
 pub fn score_case(
     case: &TestCase,
     findings: &[DetectedFinding],
     finding_to_cwes: &dyn Fn(&DetectedFinding) -> Vec<u32>,
 ) -> CaseOutcome {
-    let detected_cwe_set: HashSet<u32> = findings.iter().flat_map(finding_to_cwes).collect();
-
     let expected_set: HashSet<u32> = case.expected_cwes.iter().copied().collect();
+    let expected_families: HashSet<u32> = expected_set.iter().map(|&e| cwe_family(e)).collect();
+
+    // Filter findings: only keep those relevant to expected CWE families.
+    let relevant_findings: Vec<&DetectedFinding> = if expected_set.is_empty() {
+        // Negative test case: all findings count (any detection is a false positive).
+        findings.iter().collect()
+    } else {
+        findings
+            .iter()
+            .filter(|f| {
+                let f_cwes = finding_to_cwes(f);
+                f_cwes.iter().any(|&d| {
+                    expected_families.contains(&cwe_family(d)) || expected_set.contains(&d)
+                })
+            })
+            .collect()
+    };
+
+    let detected_cwe_set: HashSet<u32> = relevant_findings
+        .iter()
+        .flat_map(|f| finding_to_cwes(f))
+        .filter(|d| expected_families.contains(&cwe_family(*d)) || expected_set.contains(d))
+        .collect();
 
     let mut cwe_hits = HashMap::new();
 
@@ -65,7 +90,7 @@ pub fn score_case(
     let mut matched_ids = Vec::new();
     let mut unmatched_ids = Vec::new();
 
-    for f in findings {
+    for f in &relevant_findings {
         let f_cwes: HashSet<u32> = finding_to_cwes(f).into_iter().collect();
         let matches_any_expected = expected_set.iter().any(|&e| {
             let family = cwe_family(e);
@@ -314,5 +339,49 @@ mod tests {
         assert!(!category_to_cwes("memory").is_empty());
         assert!(!category_to_cwes("injection").is_empty());
         assert!(category_to_cwes("unknown_category").is_empty());
+    }
+
+    #[test]
+    fn test_score_case_filters_irrelevant_findings() {
+        // CWE-78 injection test case should ignore memory findings (strcpy etc.)
+        let case = TestCase {
+            id: "cwe78_test".to_string(),
+            path: "test.c".to_string(),
+            expected_cwes: vec![78],
+            is_negative: false,
+            language: "c".to_string(),
+        };
+        let findings = vec![
+            make_finding("injection", vec![78]), // relevant: matches expected
+            make_finding("memory", vec![119]),   // irrelevant: different family
+            make_finding("format_string", vec![134]), // irrelevant: different family
+        ];
+
+        let outcome = score_case(&case, &findings, &|f| f.cwes.clone());
+        // CWE-78 should be detected
+        assert!(outcome.cwe_hits[&78]);
+        // Only the injection finding should be matched; memory/format_string filtered out
+        assert_eq!(outcome.matched_finding_ids.len(), 1);
+        assert_eq!(outcome.unmatched_finding_ids.len(), 0);
+        // Only relevant CWEs in detected set
+        assert!(!outcome.detected_cwes.contains(&119));
+        assert!(!outcome.detected_cwes.contains(&134));
+    }
+
+    #[test]
+    fn test_score_case_negative_case_counts_all() {
+        // Negative test case: any finding is a false positive
+        let case = TestCase {
+            id: "negative".to_string(),
+            path: "clean.c".to_string(),
+            expected_cwes: vec![],
+            is_negative: true,
+            language: "c".to_string(),
+        };
+        let findings = vec![make_finding("memory", vec![119])];
+
+        let outcome = score_case(&case, &findings, &|f| f.cwes.clone());
+        // All findings count for negative cases
+        assert_eq!(outcome.unmatched_finding_ids.len(), 1);
     }
 }
