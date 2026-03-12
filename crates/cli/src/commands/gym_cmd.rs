@@ -64,6 +64,30 @@ pub enum GymSub {
         limit: u32,
     },
 
+    /// Full evaluation: run all benchmarks in parallel, collect, and report.
+    /// Combines --skip, --concurrency, and multi-process execution into one command.
+    Eval {
+        /// Comma-separated suite list (default: all)
+        #[arg(long, default_value = "fixtures,juliet,owasp,cyberseceval,cgc")]
+        suites: String,
+
+        /// Processes per suite for multi-process parallelism
+        #[arg(long, default_value = "5")]
+        procs: usize,
+
+        /// In-process async concurrency per process
+        #[arg(long, short = 'j', default_value = "2")]
+        concurrency: usize,
+
+        /// Use quick pattern-only mode
+        #[arg(long)]
+        quick: bool,
+
+        /// Output directory for results
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+
     /// Run self-improvement loop: analyze failures and propose fixes
     Improve {
         /// Suite to improve (fixtures, juliet, cgc, owasp, cyberseceval)
@@ -141,6 +165,186 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
         }
         GymSub::History { limit } => {
             gym.history(*limit)?;
+        }
+        GymSub::Eval {
+            suites,
+            procs,
+            concurrency,
+            quick,
+            output,
+        } => {
+            let eval_dir = output.clone().unwrap_or_else(|| {
+                let ts = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+                PathBuf::from(format!("/tmp/gym-eval-{}", ts))
+            });
+            std::fs::create_dir_all(&eval_dir)?;
+
+            let exe = std::env::current_exe()?;
+            let suite_cases: std::collections::HashMap<&str, usize> = [
+                ("fixtures", 7),
+                ("juliet", 5000),
+                ("owasp", 2740),
+                ("cyberseceval", 578),
+                ("cgc", 204),
+            ]
+            .into_iter()
+            .collect();
+
+            let mode = if *quick { "pattern-only" } else { "hybrid" };
+            println!("=== Skwaq Gym Evaluation ({mode}) ===");
+            println!("  Suites:      {suites}");
+            println!("  Procs/suite: {procs}");
+            println!("  Concurrency: {concurrency}");
+            println!("  Output:      {}", eval_dir.display());
+            println!();
+
+            let suite_list: Vec<&str> = suites.split(',').map(|s| s.trim()).collect();
+            let mut all_children: Vec<(String, Vec<std::process::Child>)> = Vec::new();
+
+            for suite in &suite_list {
+                let total = suite_cases.get(suite).copied().unwrap_or(100);
+                let n_procs = if *suite == "fixtures" { 1 } else { *procs };
+                let cases_per = total.div_ceil(n_procs);
+                let suite_dir = eval_dir.join(suite);
+                std::fs::create_dir_all(&suite_dir)?;
+
+                println!("[{suite}] Launching {n_procs} processes ({total} cases)...");
+
+                let mut children = Vec::new();
+                for i in 0..n_procs {
+                    let skip = i * cases_per;
+                    let log_path = suite_dir.join(format!("shard-{i}.log"));
+                    let log_file = std::fs::File::create(&log_path)?;
+
+                    let mut cmd = std::process::Command::new(&exe);
+                    cmd.args(["gym", "run", suite])
+                        .args(["--skip", &skip.to_string()])
+                        .args(["--max-cases", &cases_per.to_string()])
+                        .args(["-j", &concurrency.to_string()])
+                        .args([
+                            "--json",
+                            &suite_dir.join(format!("shard-{i}.json")).to_string_lossy(),
+                        ])
+                        .stdout(log_file.try_clone()?)
+                        .stderr(log_file);
+
+                    if *quick {
+                        cmd.arg("--quick");
+                    }
+
+                    children.push(cmd.spawn()?);
+                }
+                all_children.push((suite.to_string(), children));
+            }
+
+            // Monitor loop
+            println!();
+            println!("=== Monitoring ===");
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(30));
+
+                let mut all_done = true;
+                println!();
+                for (suite, children) in &mut all_children {
+                    let mut running = 0;
+                    for child in children.iter_mut() {
+                        if let Ok(None) = child.try_wait() {
+                            running += 1;
+                            all_done = false;
+                        }
+                    }
+
+                    // Count cases from logs
+                    let suite_dir = eval_dir.join(suite.as_str());
+                    let mut total_cases = 0;
+                    let mut total_retries = 0;
+                    for i in 0..children.len() {
+                        let log = suite_dir.join(format!("shard-{i}.log"));
+                        if let Ok(content) = std::fs::read_to_string(&log) {
+                            total_cases += content.matches("Agent").count().saturating_sub(1) / 5;
+                            total_retries += content.matches("Retrying").count();
+                        }
+                    }
+                    let target = suite_cases.get(suite.as_str()).copied().unwrap_or(0);
+                    let pct = if target > 0 {
+                        total_cases * 100 / target
+                    } else {
+                        0
+                    };
+                    println!(
+                        "  {suite}: ~{total_cases}/{target} ({pct}%) | {running} procs | {total_retries} retries"
+                    );
+                }
+
+                if all_done {
+                    break;
+                }
+            }
+
+            // Collect and report
+            println!();
+            println!("=== Results ===");
+            println!(
+                "{:<15} {:>8} {:>8} {:>8} {:>6} {:>6} {:>6}",
+                "Suite", "F1%", "Prec%", "Rec%", "TP", "FP", "FN"
+            );
+            println!("{}", "-".repeat(70));
+
+            for suite in &suite_list {
+                let suite_dir = eval_dir.join(suite);
+                let mut tp = 0u32;
+                let mut fp = 0u32;
+                let mut fn_ = 0u32;
+
+                // Parse TP/FP/FN from each shard log
+                let n = if *suite == "fixtures" { 1 } else { *procs };
+                for i in 0..n {
+                    let log = suite_dir.join(format!("shard-{i}.log"));
+                    if let Ok(content) = std::fs::read_to_string(&log) {
+                        let extract_from_line = |line: &str, prefix: &str| -> u32 {
+                            line.find(prefix)
+                                .and_then(|i| {
+                                    line[i + prefix.len()..]
+                                        .split_whitespace()
+                                        .next()
+                                        .and_then(|s| s.parse().ok())
+                                })
+                                .unwrap_or(0)
+                        };
+                        for line in content.lines() {
+                            if line.contains("TP:") && line.contains("FP:") {
+                                tp += extract_from_line(line, "TP: ");
+                                fp += extract_from_line(line, "FP: ");
+                                fn_ += extract_from_line(line, "FN: ");
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                let prec = if tp + fp > 0 {
+                    tp as f64 / (tp + fp) as f64 * 100.0
+                } else {
+                    0.0
+                };
+                let rec = if tp + fn_ > 0 {
+                    tp as f64 / (tp + fn_) as f64 * 100.0
+                } else {
+                    0.0
+                };
+                let f1 = if prec + rec > 0.0 {
+                    2.0 * prec * rec / (prec + rec)
+                } else {
+                    0.0
+                };
+
+                println!(
+                    "{:<15} {:>7.1} {:>7.1} {:>7.1} {:>6} {:>6} {:>6}",
+                    suite, f1, prec, rec, tp, fp, fn_
+                );
+            }
+            println!();
+            println!("Results saved to: {}", eval_dir.display());
         }
         GymSub::Improve { suite, max_cases } => {
             let config = skwaq_gym::adapters::BenchmarkConfig {
