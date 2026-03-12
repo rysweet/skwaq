@@ -71,7 +71,7 @@ pub enum GymSub {
         #[arg(long, default_value = "fixtures,juliet,owasp,cyberseceval,cgc")]
         suites: String,
 
-        /// Processes per suite for multi-process parallelism
+        /// Processes per suite for multi-process parallelism (1-50)
         #[arg(long, default_value = "5")]
         procs: usize,
 
@@ -219,7 +219,11 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
 
             for suite in &suite_list {
                 let total = suite_cases.get(suite).copied().unwrap_or(100);
-                let n_procs = if *suite == "fixtures" { 1 } else { *procs };
+                let n_procs = if *suite == "fixtures" {
+                    1
+                } else {
+                    (*procs).clamp(1, 50)
+                };
                 let cases_per = total.div_ceil(n_procs);
                 let suite_dir = eval_dir.join(suite);
                 std::fs::create_dir_all(&suite_dir)?;

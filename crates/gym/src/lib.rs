@@ -204,6 +204,20 @@ impl Gym {
                 concurrency
             );
 
+            // Skip empty shards (can happen when skip >= total cases in multi-process mode)
+            if cases.is_empty() {
+                tracing::warn!(
+                    "{}: no cases after skip={}, skipping",
+                    suite_name,
+                    config.skip
+                );
+                reporting::terminal::print_summary(
+                    &scoring::AggregateScore::default(),
+                    &suite_name,
+                );
+                continue;
+            }
+
             // Run cases with in-process async concurrency.
             // Each case creates its own in-memory GraphDb, so no shared state.
             // Concurrency > 1 lets multiple LLM API calls overlap (network I/O).
