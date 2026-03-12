@@ -2,9 +2,11 @@
 //!
 //! A pipeline runs a sequence of agents, passing context forward.
 //! Each stage can build its input from the graph database and previous results.
+//! Relevant skill content is automatically injected into agent system prompts.
 
 use crate::graph::GraphDb;
 use crate::llm::{Client, TokenBudget};
+use crate::skills::discovery::load_skill;
 
 use super::definition::load_agent;
 use super::runner::{build_analysis_context, AgentResult, AgentRunner};
@@ -58,7 +60,12 @@ impl AnalysisPipeline {
                 break;
             }
 
-            let agent = load_agent(&stage.agent_name)?;
+            let mut agent = load_agent(&stage.agent_name)?;
+
+            // Inject relevant skill content into the agent's system prompt.
+            // This gives agents access to research-backed techniques and
+            // best practices from skills like llm-binary-vuln-guide.
+            inject_skill_context(&mut agent);
 
             let context = match &stage.context_mode {
                 ContextMode::FromGraph => build_analysis_context(target, investigation_id, db),
@@ -231,5 +238,41 @@ fn ordinal(n: usize) -> String {
         2 => "2nd".into(),
         3 => "3rd".into(),
         _ => format!("{n}th"),
+    }
+}
+
+/// Mapping from agent names to skills that enhance their analysis.
+const AGENT_SKILL_MAP: &[(&str, &str)] = &[
+    ("vuln-hunter", "llm-binary-vuln-guide"),
+    ("decompile-analyst", "llm-binary-vuln-guide"),
+    ("taint-tracer", "llm-binary-vuln-guide"),
+    ("exploit-analyst", "llm-binary-vuln-guide"),
+    ("attack-surface", "llm-binary-vuln-guide"),
+];
+
+/// Inject relevant skill content into an agent's system prompt.
+///
+/// Looks up skills mapped to this agent and appends their content
+/// as a reference section at the end of the system prompt.
+fn inject_skill_context(agent: &mut super::definition::AgentDefinition) {
+    let relevant_skills: Vec<&str> = AGENT_SKILL_MAP
+        .iter()
+        .filter(|(agent_name, _)| *agent_name == agent.name)
+        .map(|(_, skill_name)| *skill_name)
+        .collect();
+
+    for skill_name in relevant_skills {
+        match load_skill(skill_name) {
+            Ok(skill) if !skill.content.is_empty() => {
+                agent.system_prompt.push_str(&format!(
+                    "\n\n--- Reference: {} ---\n{}",
+                    skill.name, skill.content
+                ));
+            }
+            _ => {
+                // Skill not found or empty — not an error, just skip.
+                tracing::debug!("Skill '{}' not available for injection", skill_name);
+            }
+        }
     }
 }
