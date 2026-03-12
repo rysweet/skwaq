@@ -159,6 +159,55 @@
             </div>
         </div>
 
+        <h2>How Does Skwaq Compare?</h2>
+        <p>Published results from academic papers and vendor disclosures on the same benchmarks. Methodologies differ (Skwaq uses pattern mode by default; others use various SAST/hybrid approaches), so comparisons are approximate. All data sourced from published papers and vendor documentation.</p>
+
+        <h3>OWASP Benchmark (Java, 2,740 cases)</h3>
+        <p>OWASP uses the Youden Index (TPR - FPR) as its primary metric. Most vendors don't publish results; OWASP anonymizes commercial scores.</p>
+        <table>
+            <tr><th>Tool</th><th>Type</th><th>TPR</th><th>FPR</th><th>Youden / F1</th><th>Source</th></tr>
+            <tr style="background:#3fb95022"><td><strong>Skwaq (pattern)</strong></td><td>Hybrid AI+Pattern</td><td>86.9%</td><td>0%</td><td>F1=93.0%</td><td>This project</td></tr>
+            <tr><td>Qwiet AI (ShiftLeft)</td><td>Commercial SAST</td><td>100%</td><td>25%</td><td>Youden=75%</td><td><a href="https://qwiet.ai/beating-the-owasp-benchmark/">Qwiet 2023</a></td></tr>
+            <tr><td>Fortify</td><td>Commercial SAST</td><td>~83%</td><td>~50%</td><td>Youden=~33%</td><td><a href="https://www.researchgate.net/publication/342597384">Alqahtani 2020</a></td></tr>
+            <tr><td>Checkmarx</td><td>Commercial SAST</td><td>~77%</td><td>~30%</td><td>Youden=~47%</td><td><a href="https://www.researchgate.net/publication/342597384">Alqahtani 2020</a></td></tr>
+            <tr><td>FindSecBugs</td><td>Free SAST</td><td>~70%</td><td>~15%</td><td>Best free F-measure</td><td><a href="https://www.researchgate.net/publication/342597384">Alqahtani 2020</a></td></tr>
+            <tr><td>Commercial Average (6 tools)</td><td>Commercial SAST</td><td>~62%</td><td>~23%</td><td>Youden=~39%</td><td><a href="https://owasp.org/www-project-benchmark/">OWASP 2016</a></td></tr>
+        </table>
+        <p style="font-size:0.85rem;color:#484f58">Note: Skwaq's 0% FPR reflects pattern-mode precision; agentic mode trades some precision for recall. OWASP scores use Youden Index while Skwaq reports F1. Different metrics make direct comparison approximate.</p>
+
+        <h3>NIST Juliet C/C++ (54,484 cases, 116 CWEs)</h3>
+        <p>Academic benchmarks from published studies on open-source SAST tools.</p>
+        <table>
+            <tr><th>Tool</th><th>Type</th><th>Precision</th><th>Recall</th><th>F1</th><th>Source</th></tr>
+            <tr style="background:#3fb95022"><td><strong>Skwaq (pattern, 5K cases)</strong></td><td>Hybrid AI+Pattern</td><td>100%</td><td>48.5%</td><td>65.4%</td><td>This project</td></tr>
+            <tr><td>Frama-C</td><td>Formal verification</td><td>~35%</td><td>~55%</td><td>~43%</td><td><a href="https://medium.com/codex/11-static-analysis-tools-for-c-4fe5f63c18a5">Plazar 2022</a></td></tr>
+            <tr><td>IKOS</td><td>Abstract interpretation</td><td>~40%</td><td>~50%</td><td>~44%</td><td><a href="https://medium.com/codex/11-static-analysis-tools-for-c-4fe5f63c18a5">Plazar 2022</a></td></tr>
+            <tr><td>CodeQL</td><td>Semantic SAST</td><td>96%</td><td>~15%</td><td>~26%</td><td><a href="https://arxiv.org/html/2407.12241v1">Steenhoek 2024</a></td></tr>
+            <tr><td>CppCheck</td><td>Open-source SAST</td><td>~30%</td><td>~15%</td><td>~21%</td><td><a href="https://medium.com/codex/11-static-analysis-tools-for-c-4fe5f63c18a5">Plazar 2022</a></td></tr>
+            <tr><td>Flawfinder</td><td>Pattern matcher</td><td>~12%</td><td>~22%</td><td>~16%</td><td><a href="https://medium.com/codex/11-static-analysis-tools-for-c-4fe5f63c18a5">Plazar 2022</a></td></tr>
+        </table>
+        <p style="font-size:0.85rem;color:#484f58">Note: Published studies test different CWE subsets and use strict line-number matching. Skwaq uses CWE-family matching (e.g., CWE-121 matches CWE-119 family). Numbers are approximate from published figures.</p>
+
+        <h3>LLM-Assisted Vulnerability Detection (CWE-Bench-Java, 120 vulns)</h3>
+        <p>IRIS (ICLR 2025) is the closest comparable system: LLM + static analysis hybrid.</p>
+        <table>
+            <tr><th>Tool</th><th>Type</th><th>Detection Rate</th><th>F1</th><th>Vulns Found</th><th>Source</th></tr>
+            <tr><td>IRIS + GPT-4</td><td>LLM + CodeQL</td><td>45.8%</td><td>17.7%</td><td>55 / 120</td><td><a href="https://arxiv.org/abs/2405.17238">IRIS, ICLR 2025</a></td></tr>
+            <tr><td>IRIS + Llama-3 70B</td><td>LLM + CodeQL</td><td>45.0%</td><td>—</td><td>54 / 120</td><td><a href="https://arxiv.org/abs/2405.17238">IRIS, ICLR 2025</a></td></tr>
+            <tr><td>CodeQL (standalone)</td><td>Semantic SAST</td><td>22.5%</td><td>7.6%</td><td>27 / 120</td><td><a href="https://arxiv.org/abs/2405.17238">IRIS, ICLR 2025</a></td></tr>
+        </table>
+        <p style="font-size:0.85rem;color:#484f58">IRIS uses a different dataset (CWE-Bench-Java) so direct F1 comparison with Skwaq isn't valid, but the architecture validates the hybrid LLM+static approach.</p>
+
+        <h3>DARPA AI Cyber Challenge (2025)</h3>
+        <p>The most recent large-scale automated vulnerability competition.</p>
+        <table>
+            <tr><th>Metric</th><th>Result</th><th>Source</th></tr>
+            <tr><td>Vulnerabilities discovered (final round)</td><td>77% of presented vulns</td><td><a href="https://cyberscoop.com/darpa-ai-cyber-challenge-winners-def-con-2025/">CyberScoop 2025</a></td></tr>
+            <tr><td>Vulnerabilities patched</td><td>61% of discovered</td><td><a href="https://cyberscoop.com/darpa-ai-cyber-challenge-winners-def-con-2025/">CyberScoop 2025</a></td></tr>
+            <tr><td>Real zero-days found</td><td>18 (6 C, 12 Java)</td><td><a href="https://cyberscoop.com/darpa-ai-cyber-challenge-winners-def-con-2025/">CyberScoop 2025</a></td></tr>
+            <tr><td>Average time per vuln</td><td>45 minutes</td><td><a href="https://cyberscoop.com/darpa-ai-cyber-challenge-winners-def-con-2025/">CyberScoop 2025</a></td></tr>
+        </table>
+
         <h2>Methodology</h2>
         <h3>Four-Layer Analysis</h3>
         <p><strong>Layer 1 - Pattern Detection:</strong> Regex-based dangerous API detection (strcpy, sprintf, system, atoi, etc.). Fast, high precision, limited recall.</p>
