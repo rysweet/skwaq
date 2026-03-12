@@ -1,7 +1,7 @@
 ---
 name: attack-surface
 description: Attack surface mapper
-model: claude-opus-4-6
+model: claude-opus-4.6
 tools:
   - lookup_knowledge
   - query_graph

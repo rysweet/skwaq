@@ -1,7 +1,7 @@
 ---
 name: failure-analyst
 description: Analyzes why vulnerabilities were missed and proposes detection strategies
-model: claude-opus-4-6
+model: claude-opus-4.6
 tools:
   - query_graph
   - read_function
