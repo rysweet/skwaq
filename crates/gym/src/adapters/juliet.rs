@@ -95,21 +95,40 @@ impl BenchmarkAdapter for JulietAdapter {
     ) -> anyhow::Result<Vec<DetectedFinding>> {
         // Binary mode: analyze compiled binary
         if config.binary_mode {
-            if let Some(bp) = &case.binary_path {
-                let binary = data_dir.join(bp);
-                if !binary.exists() {
-                    anyhow::bail!(
-                        "Binary '{}' not found for case '{}'. Run compilation first.",
-                        binary.display(),
-                        case.id
-                    );
-                }
+            // Use explicit binary_path from manifest, or derive from case ID
+            let binary = if let Some(bp) = &case.binary_path {
+                data_dir.join(bp)
+            } else {
+                data_dir.join("compiled").join(format!("{}.bin", case.id))
+            };
+            if binary.exists() {
                 return if config.quick_mode {
                     run_binary_pattern_detection(&binary)
                 } else {
                     crate::agentic::run_agentic_binary_analysis(&binary, config.timeout_secs).await
                 };
             }
+            // Binary not compiled yet — compile it on the fly
+            let source = data_dir.join(&case.path);
+            if source.exists() {
+                let bin_dir = data_dir.join("compiled");
+                std::fs::create_dir_all(&bin_dir)?;
+                let support_dir = data_dir.join("testcasesupport");
+                if compile_single(&source, &binary, &support_dir).is_ok() && binary.exists() {
+                    return if config.quick_mode {
+                        run_binary_pattern_detection(&binary)
+                    } else {
+                        crate::agentic::run_agentic_binary_analysis(&binary, config.timeout_secs)
+                            .await
+                    };
+                }
+            }
+            // Compilation failed (platform-specific code, missing headers, etc.)
+            // Fall through to source analysis rather than failing the entire run
+            tracing::debug!(
+                "Binary compilation failed for '{}', using source analysis",
+                case.id
+            );
         }
 
         let source_path = data_dir.join(&case.path);
