@@ -1,5 +1,7 @@
 //! Benchmark adapter trait and implementations.
 
+pub mod binmetric;
+pub mod binpool;
 pub mod cgc;
 pub mod cyberseceval;
 pub mod fixtures;
@@ -83,18 +85,26 @@ pub struct DetectedFinding {
 }
 
 /// Run skwaq's binary analysis on a compiled binary and collect findings.
-/// Uses native parsing (goblin) + DangerousApiDetector on imports.
+///
+/// Two-layer detection:
+/// 1. Import scanning: check binary imports for dangerous APIs
+/// 2. Graph-based detection: ingest binary into graph, run DangerousApiDetector
+///    on function names, symbols, and call relationships
 pub fn run_binary_pattern_detection(path: &Path) -> anyhow::Result<Vec<DetectedFinding>> {
     use skwaq_core::analysis::patterns_binary::DangerousApiDetector;
     use skwaq_core::binary::native::parse_binary;
+    use skwaq_core::graph::builder::GraphBuilder;
+    use skwaq_core::graph::GraphDb;
+    use std::collections::HashSet;
 
     let binary_info = parse_binary(path)?;
     let file_str = path.to_string_lossy().to_string();
 
+    // Layer 1: Import scanning
     let detector = DangerousApiDetector::new();
-    let hits = detector.check_imports(&binary_info.imports);
+    let import_hits = detector.check_imports(&binary_info.imports);
 
-    let findings = hits
+    let mut findings: Vec<DetectedFinding> = import_hits
         .into_iter()
         .map(|hit| DetectedFinding {
             id: uuid::Uuid::new_v4().to_string(),
@@ -107,6 +117,51 @@ pub fn run_binary_pattern_detection(path: &Path) -> anyhow::Result<Vec<DetectedF
             title: format!("Binary import: {}", hit.function_name),
         })
         .collect();
+
+    // Layer 2: Graph-based detection (function names, call relationships)
+    let db = GraphDb::in_memory()?;
+    let inv_id = format!("bin-pat-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+    let now = chrono::Utc::now().to_rfc3339();
+    db.execute(
+        "INSERT INTO investigations (id, name, target, status, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
+        &[
+            &inv_id.as_str(),
+            &file_str.as_str(),
+            &file_str.as_str(),
+            &now.as_str(),
+            &now.as_str(),
+        ],
+    )?;
+
+    let builder = GraphBuilder::new(&db);
+    builder.build_from_binary_info(&binary_info, &inv_id)?;
+
+    // Detect dangerous APIs via graph (catches call relationships + versioned names)
+    let graph_hits = detector.detect(&db)?;
+
+    // Deduplicate: track function names already found via imports
+    let seen: HashSet<String> = findings.iter().map(|f| f.function.clone()).collect();
+
+    for hit in graph_hits {
+        let base_name = hit
+            .function_name
+            .split('@')
+            .next()
+            .unwrap_or(&hit.function_name);
+        if !seen.contains(base_name) {
+            findings.push(DetectedFinding {
+                id: uuid::Uuid::new_v4().to_string(),
+                category: hit.danger_category.to_string(),
+                severity: hit.severity.to_string(),
+                cwes: vec![],
+                file: file_str.clone(),
+                function: hit.function_name.clone(),
+                line: None,
+                title: format!("Binary function: {}", hit.function_name),
+            });
+        }
+    }
 
     Ok(findings)
 }
