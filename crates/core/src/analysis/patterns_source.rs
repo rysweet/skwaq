@@ -107,6 +107,61 @@ fn python_patterns() -> &'static [SourcePattern] {
             severity: Severity::Critical,
             reason: "SQL injection via string concatenation; use parameterized queries",
         },
+        // Weak cryptography (CWE-327)
+        SourcePattern {
+            regex: r"\bhashlib\.md5\s*\(",
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "MD5 is cryptographically broken; use SHA-256 or SHA-3",
+        },
+        SourcePattern {
+            regex: r"\bhashlib\.sha1\s*\(",
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "SHA-1 is cryptographically weak; use SHA-256 or SHA-3",
+        },
+        SourcePattern {
+            regex: r#"\bhashlib\.new\s*\(\s*['"](?:md5|sha1|md4|md2)['"]"#,
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "Weak hash algorithm; use SHA-256 or stronger",
+        },
+        SourcePattern {
+            regex: r"(?i)\bfrom\s+Crypto\.Cipher\s+import\s+DES\b",
+            category: DangerCategory::Crypto,
+            severity: Severity::Critical,
+            reason: "DES is broken with 56-bit key; use AES",
+        },
+        SourcePattern {
+            regex: r"(?i)\bfrom\s+Cryptodome\.Cipher\s+import\s+DES\b",
+            category: DangerCategory::Crypto,
+            severity: Severity::Critical,
+            reason: "DES is broken with 56-bit key; use AES",
+        },
+        SourcePattern {
+            regex: r"(?i)\bDES\.new\s*\(",
+            category: DangerCategory::Crypto,
+            severity: Severity::Critical,
+            reason: "DES cipher is broken; use AES with adequate key size",
+        },
+        SourcePattern {
+            regex: r"(?i)\bBlowfish\.new\s*\(",
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "Blowfish has known weaknesses; use AES",
+        },
+        SourcePattern {
+            regex: r"(?i)\bRC4\.new\s*\(",
+            category: DangerCategory::Crypto,
+            severity: Severity::Critical,
+            reason: "RC4 is broken; use AES-GCM or ChaCha20",
+        },
+        SourcePattern {
+            regex: r"(?i)\bARC2\.new\s*\(",
+            category: DangerCategory::Crypto,
+            severity: Severity::Critical,
+            reason: "RC2 is obsolete; use AES",
+        },
     ]
 }
 
@@ -1069,6 +1124,30 @@ void safe(const char *msg) {
                 .iter()
                 .map(|h| &h.function_name)
                 .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_detect_python_weak_crypto() {
+        let detector = DangerousApiDetector::new();
+        let src = r#"
+import hashlib
+h = hashlib.md5(data)
+h2 = hashlib.sha1(data)
+from Crypto.Cipher import DES
+cipher = DES.new(key, DES.MODE_ECB)
+"#;
+        let hits = detector
+            .detect_in_source_content(src, "python", "crypto.py")
+            .unwrap();
+        let crypto_hits: Vec<_> = hits
+            .iter()
+            .filter(|h| h.danger_category == DangerCategory::Crypto)
+            .collect();
+        assert!(
+            crypto_hits.len() >= 3,
+            "Should detect md5, sha1, and DES; found {}",
+            crypto_hits.len()
         );
     }
 }
