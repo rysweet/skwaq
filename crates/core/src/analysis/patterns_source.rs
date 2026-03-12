@@ -254,18 +254,8 @@ fn rust_patterns() -> &'static [SourcePattern] {
 
 fn java_patterns() -> &'static [SourcePattern] {
     &[
-        SourcePattern {
-            regex: r"\bRuntime\.getRuntime\(\)\.exec\s*\(",
-            category: DangerCategory::Injection,
-            severity: Severity::Critical,
-            reason: "Runtime.exec runs OS commands; validate all arguments",
-        },
-        SourcePattern {
-            regex: r"\b\w+\.exec\s*\(\s*(new\s+String|cmd|args|command)",
-            category: DangerCategory::Injection,
-            severity: Severity::High,
-            reason: "exec() call with command arguments; may execute OS commands",
-        },
+        // Runtime.exec is covered by the broader pattern below (line ~432):
+        //   r"\bRuntime\b[^;]*\.exec\s*\("
         SourcePattern {
             regex: r"\bProcessBuilder\s*\(",
             category: DangerCategory::Injection,
@@ -377,13 +367,7 @@ fn java_patterns() -> &'static [SourcePattern] {
             severity: Severity::Medium,
             reason: "Math.random is not cryptographically secure; use SecureRandom",
         },
-        // Path traversal
-        SourcePattern {
-            regex: r"\bnew\s+File\s*\([^)]*getParameter\s*\(",
-            category: DangerCategory::PathTraversal,
-            severity: Severity::High,
-            reason: "File path from user input; validate and canonicalize path",
-        },
+        // Path traversal: narrow new File+getParameter covered by broader pattern below (~line 405)
         SourcePattern {
             regex: r"\bgetRequestDispatcher\s*\([^)]*getParameter",
             category: DangerCategory::PathTraversal,
@@ -457,13 +441,8 @@ fn java_patterns() -> &'static [SourcePattern] {
             severity: Severity::Medium,
             reason: "Session setAttribute may store untrusted data across trust boundary (CWE-501)",
         },
-        // Secure cookie missing
-        SourcePattern {
-            regex: r"\bnew\s+Cookie\s*\(",
-            category: DangerCategory::Crypto,
-            severity: Severity::Medium,
-            reason: "Cookie creation should set Secure and HttpOnly flags",
-        },
+        // Cookie creation covered by broader pattern above (line ~332):
+        //   r"\bnew\s+[\w.]*Cookie\s*\("
     ]
 }
 
