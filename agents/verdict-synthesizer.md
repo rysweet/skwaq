@@ -3,6 +3,7 @@ name: verdict-synthesizer
 description: Synthesizes multi-agent validation into final verdicts
 model: claude-opus-4-6
 tools:
+  - lookup_knowledge
   - query_graph
   - read_function
   - create_finding

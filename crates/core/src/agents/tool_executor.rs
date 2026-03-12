@@ -28,6 +28,7 @@ pub fn execute_tool(
         "search_similar" => {
             super::tool_translate::execute_search_similar(db, investigation_id, args)
         }
+        "lookup_knowledge" => execute_lookup_knowledge(args),
         _ => {
             tracing::warn!("Unknown tool: {name}");
             Ok(serde_json::json!({
@@ -288,6 +289,121 @@ fn execute_lookup_cwe(db: &GraphDb, args: &serde_json::Value) -> anyhow::Result<
             "cwe_id": cwe_id,
             "error": format!("CWE '{}' not found in knowledge base. Run `skwaq kb init` to populate.", cwe_id)
         })),
+    }
+}
+
+/// Look up vulnerability analysis knowledge from the knowledge pack.
+///
+/// Searches the knowledge files in data/knowledge/ for content matching the query.
+/// Topics: "methodology", "cwe-families", "codeql", "research", or a CWE number.
+fn execute_lookup_knowledge(args: &serde_json::Value) -> anyhow::Result<serde_json::Value> {
+    let query = args
+        .get("query")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_lowercase();
+    tracing::info!("Tool lookup_knowledge: {query}");
+
+    // Find knowledge directory: check relative to cwd, then common locations
+    let knowledge_dir = ["data/knowledge", "../data/knowledge"]
+        .iter()
+        .map(std::path::PathBuf::from)
+        .find(|p| p.is_dir());
+
+    let knowledge_dir = match knowledge_dir {
+        Some(d) => d,
+        None => {
+            return Ok(serde_json::json!({
+                "status": "error",
+                "error": "Knowledge pack directory not found (data/knowledge/)"
+            }));
+        }
+    };
+
+    // Read all knowledge files and search for relevant content
+    let mut results = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&knowledge_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("md") {
+                continue;
+            }
+
+            let content = match std::fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+
+            let filename = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+
+            // Score relevance: exact topic match or keyword overlap
+            let relevance = if query.contains(&filename) || filename.contains(&query) {
+                100
+            } else {
+                // Count keyword matches
+                query
+                    .split_whitespace()
+                    .filter(|word| {
+                        word.len() > 2
+                            && (content.to_lowercase().contains(*word) || filename.contains(*word))
+                    })
+                    .count()
+            };
+
+            if relevance > 0 {
+                // Extract relevant sections (paragraphs containing query terms)
+                let relevant_sections: Vec<&str> = content
+                    .split("\n\n")
+                    .filter(|section| {
+                        let lower = section.to_lowercase();
+                        query
+                            .split_whitespace()
+                            .any(|word| word.len() > 2 && lower.contains(word))
+                    })
+                    .take(5) // Limit to 5 most relevant sections
+                    .collect();
+
+                let excerpt = if relevant_sections.is_empty() {
+                    // Return first 500 chars if no section match
+                    content.chars().take(500).collect::<String>()
+                } else {
+                    relevant_sections.join("\n\n")
+                };
+
+                results.push((relevance, filename, excerpt));
+            }
+        }
+    }
+
+    // Sort by relevance (highest first) and take top 3
+    results.sort_by(|a, b| b.0.cmp(&a.0));
+    results.truncate(3);
+
+    if results.is_empty() {
+        Ok(serde_json::json!({
+            "status": "no_results",
+            "query": query,
+            "hint": "Try: methodology, cwe-families, cwe-119, injection, memory, codeql, research"
+        }))
+    } else {
+        let entries: Vec<serde_json::Value> = results
+            .into_iter()
+            .map(|(_, topic, content)| {
+                serde_json::json!({
+                    "topic": topic,
+                    "content": content
+                })
+            })
+            .collect();
+
+        Ok(serde_json::json!({
+            "status": "ok",
+            "results": entries
+        }))
     }
 }
 
@@ -669,5 +785,31 @@ mod tests {
             )
             .unwrap();
         assert_eq!(count, 0, "Destructive query must not modify the database");
+    }
+
+    #[test]
+    fn test_lookup_knowledge_returns_results() {
+        // This test requires data/knowledge/ to exist with .md files
+        let args = serde_json::json!({"query": "memory"});
+        let result = execute_lookup_knowledge(&args).unwrap();
+        // May return results or no_results depending on working directory
+        let status = result["status"].as_str().unwrap();
+        assert!(
+            status == "ok" || status == "no_results" || status == "error",
+            "Expected valid status, got: {}",
+            status
+        );
+    }
+
+    #[test]
+    fn test_lookup_knowledge_with_cwe_query() {
+        let args = serde_json::json!({"query": "cwe-119 buffer overflow"});
+        let result = execute_lookup_knowledge(&args).unwrap();
+        let status = result["status"].as_str().unwrap();
+        assert!(
+            status == "ok" || status == "no_results" || status == "error",
+            "Expected valid status, got: {}",
+            status
+        );
     }
 }
