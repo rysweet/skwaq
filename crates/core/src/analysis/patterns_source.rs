@@ -700,6 +700,31 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::Critical,
             reason: "_execl (MSVC) executes a program; validate all arguments",
         },
+        // CGC (DARPA Cyber Grand Challenge) custom syscalls — from self-improvement iteration 6
+        SourcePattern {
+            regex: r"\bcgc_allocate\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "cgc_allocate allocates memory without bounds validation; check size parameter",
+        },
+        SourcePattern {
+            regex: r"\bcgc_receive\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "cgc_receive reads from fd into buffer without bounds checking; validate buffer size",
+        },
+        SourcePattern {
+            regex: r"\bcgc_read\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "cgc_read reads input into buffer; unchecked size can cause buffer overflow",
+        },
+        SourcePattern {
+            regex: r"\bcgc_transmit\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "cgc_transmit sends buffer contents; unchecked size may leak memory (info disclosure)",
+        },
     ]
 }
 
@@ -917,6 +942,44 @@ void vuln(char *msg, char *num_str) {
             hits.iter().any(|h| h.function_name.contains("atol")),
             "Expected atol detection"
         );
+    }
+
+    #[test]
+    fn test_detect_cgc_patterns() {
+        let detector = DangerousApiDetector::new();
+        let src = r#"
+void handle_input(int fd) {
+    char buf[256];
+    size_t rx;
+    cgc_receive(fd, buf, sizeof(buf), &rx);
+    cgc_read(fd, buf, 256);
+    void *mem;
+    cgc_allocate(4096, 0, &mem);
+    cgc_transmit(fd, buf, rx, NULL);
+}
+"#;
+        let hits = detector
+            .detect_in_source_content(src, "c", "challenge.c")
+            .unwrap();
+        assert!(
+            hits.iter().any(|h| h.function_name.contains("cgc_receive")),
+            "Expected cgc_receive detection"
+        );
+        assert!(
+            hits.iter().any(|h| h.function_name.contains("cgc_read")),
+            "Expected cgc_read detection"
+        );
+        assert!(
+            hits.iter()
+                .any(|h| h.function_name.contains("cgc_allocate")),
+            "Expected cgc_allocate detection"
+        );
+        assert!(
+            hits.iter()
+                .any(|h| h.function_name.contains("cgc_transmit")),
+            "Expected cgc_transmit detection"
+        );
+        assert!(hits.len() >= 4);
     }
 
     #[test]
