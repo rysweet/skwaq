@@ -1,5 +1,5 @@
 suite = "fixtures"
-version = "2.0"
+version = "3.0"
 download_url = ""
 download_sha256 = ""
 
@@ -9,7 +9,6 @@ download_sha256 = ""
 id = "buffer_overflow"
 path = "buffer_overflow.c"
 binary_path = "binaries/buffer_overflow_O0"
-# strcpy without bounds (CWE-121) + sprintf overflow (CWE-134)
 expected_cwes = [121, 134]
 is_negative = false
 language = "c"
@@ -50,7 +49,6 @@ language = "c"
 id = "null_pointer"
 path = "null_pointer.c"
 binary_path = "binaries/null_pointer_O0"
-# NULL dereference without check (CWE-476)
 expected_cwes = [476]
 is_negative = false
 language = "c"
@@ -59,7 +57,6 @@ language = "c"
 id = "double_free"
 path = "double_free.c"
 binary_path = "binaries/double_free_O0"
-# Double-free of heap memory (CWE-415), part of memory/UAF family
 expected_cwes = [415]
 is_negative = false
 language = "c"
@@ -68,7 +65,6 @@ language = "c"
 id = "heap_overflow"
 path = "heap_overflow.c"
 binary_path = "binaries/heap_overflow_O0"
-# Heap-based buffer overflow via strcpy/memcpy on malloc'd buffer (CWE-122)
 expected_cwes = [122]
 is_negative = false
 language = "c"
@@ -77,7 +73,6 @@ language = "c"
 id = "race_condition"
 path = "race_condition.c"
 binary_path = "binaries/race_condition_O0"
-# TOCTOU race condition: access() then fopen() (CWE-367)
 expected_cwes = [367]
 is_negative = false
 language = "c"
@@ -86,8 +81,52 @@ language = "c"
 id = "signed_unsigned"
 path = "signed_unsigned.c"
 binary_path = "binaries/signed_unsigned_O0"
-# Signed-to-unsigned conversion (CWE-195) and integer truncation (CWE-197)
 expected_cwes = [195, 197]
+is_negative = false
+language = "c"
+
+# Multi-file: inter-procedural vulnerability chain across compilation units
+[[cases]]
+id = "multi_file"
+path = "multi_file/main.c"
+binary_path = "binaries/multi_file_O0"
+# Heap overflow in parser.c (CWE-122) + command injection in processor.c (CWE-78)
+expected_cwes = [122, 78]
+is_negative = false
+language = "c"
+
+# C++ vulnerability patterns
+[[cases]]
+id = "cpp_vulns"
+path = "cpp_vulns.cpp"
+binary_path = "binaries/cpp_vulns_O0"
+# UAF via shared_ptr (CWE-416), buffer overflow (CWE-120), command injection (CWE-78)
+expected_cwes = [416, 120, 78]
+is_negative = false
+language = "cpp"
+
+# Stripped binary variants (no symbols — real-world scenario)
+[[cases]]
+id = "buffer_overflow_stripped"
+path = "buffer_overflow.c"
+binary_path = "binaries/buffer_overflow_O0_stripped"
+expected_cwes = [121, 134]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "command_injection_stripped"
+path = "command_injection.c"
+binary_path = "binaries/command_injection_O0_stripped"
+expected_cwes = [78]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "heap_overflow_stripped"
+path = "heap_overflow.c"
+binary_path = "binaries/heap_overflow_O0_stripped"
+expected_cwes = [122]
 is_negative = false
 language = "c"
 
@@ -109,12 +148,35 @@ expected_cwes = []
 is_negative = true
 language = "c"
 
+[[cases]]
+id = "format_string_safe"
+path = "format_string_safe.c"
+binary_path = "binaries/format_string_safe_O0"
+expected_cwes = []
+is_negative = true
+language = "c"
+
+[[cases]]
+id = "use_after_free_safe"
+path = "use_after_free_safe.c"
+binary_path = "binaries/use_after_free_safe_O0"
+expected_cwes = []
+is_negative = true
+language = "c"
+
+[[cases]]
+id = "heap_overflow_safe"
+path = "heap_overflow_safe.c"
+binary_path = "binaries/heap_overflow_safe_O0"
+expected_cwes = []
+is_negative = true
+language = "c"
+
 # === Multi-language test cases ===
 
 [[cases]]
 id = "vuln_app_py"
 path = "vuln_app.py"
-# os.system (CWE-78), SQL injection (CWE-89), eval/exec (CWE-94), pickle/yaml (CWE-502)
 expected_cwes = [78, 89, 94, 502]
 is_negative = false
 language = "python"
@@ -122,7 +184,6 @@ language = "python"
 [[cases]]
 id = "vuln_app_js"
 path = "vuln_app.js"
-# eval/exec (CWE-78,94), XSS (CWE-79), prototype pollution (CWE-1321), path traversal (CWE-22)
 expected_cwes = [78, 79, 94, 1321, 22]
 is_negative = false
 language = "javascript"
