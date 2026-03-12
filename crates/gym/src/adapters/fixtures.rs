@@ -74,6 +74,8 @@ impl BenchmarkAdapter for FixturesAdapter {
                 }
                 return if config.quick_mode {
                     run_binary_pattern_detection(&binary)
+                } else if config.llm_only {
+                    crate::agentic::run_llm_only_binary_analysis(&binary, config.timeout_secs).await
                 } else {
                     crate::agentic::run_agentic_binary_analysis(&binary, config.timeout_secs).await
                 };
@@ -84,6 +86,8 @@ impl BenchmarkAdapter for FixturesAdapter {
         let path = data_dir.join(&case.path);
         if config.quick_mode {
             run_source_pattern_detection(&path)
+        } else if config.llm_only {
+            crate::agentic::run_llm_only_source_analysis(&path, config.timeout_secs).await
         } else {
             // Full agentic analysis: ingest → multi-agent pipeline → findings
             crate::agentic::run_agentic_source_analysis(&path, config.timeout_secs).await
@@ -124,6 +128,7 @@ mod tests {
             cwe_filter: None,
             max_cases: None,
             quick_mode: true,
+            llm_only: false,
             binary_mode: false,
             parallelism: 1,
             skip: 0,
@@ -225,6 +230,7 @@ mod tests {
             cwe_filter: None,
             max_cases: None,
             quick_mode: true,
+            llm_only: false,
             binary_mode: true,
             parallelism: 1,
             skip: 0,

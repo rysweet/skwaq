@@ -22,8 +22,13 @@ pub enum GymSub {
         max_cases: Option<usize>,
 
         /// Use quick pattern-only mode (default is full analysis with AI agents)
-        #[arg(long)]
+        #[arg(long, alias = "pattern-only", conflicts_with = "llm_only")]
         quick: bool,
+
+        /// Use LLM-only mode (no pattern detection, agents only).
+        /// Measures what agents actually understand vs what patterns match.
+        #[arg(long, conflicts_with = "quick")]
+        llm_only: bool,
 
         /// Skip the first N cases (for multi-process parallelism)
         #[arg(long, default_value = "0")]
@@ -80,8 +85,12 @@ pub enum GymSub {
         concurrency: usize,
 
         /// Use quick pattern-only mode
-        #[arg(long)]
+        #[arg(long, alias = "pattern-only", conflicts_with = "llm_only")]
         quick: bool,
+
+        /// Use LLM-only mode (no pattern detection, agents only)
+        #[arg(long, conflicts_with = "quick")]
+        llm_only: bool,
 
         /// Output directory for results
         #[arg(long)]
@@ -116,6 +125,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             cwe,
             max_cases,
             quick,
+            llm_only,
             skip,
             concurrency,
             source_only,
@@ -134,6 +144,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 cwe_filter,
                 *max_cases,
                 *quick,
+                *llm_only,
                 binary_mode,
                 *skip,
                 conc,
@@ -171,6 +182,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             procs,
             concurrency,
             quick,
+            llm_only,
             output,
         } => {
             let eval_dir = output.clone().unwrap_or_else(|| {
@@ -190,7 +202,13 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             .into_iter()
             .collect();
 
-            let mode = if *quick { "pattern-only" } else { "hybrid" };
+            let mode = if *quick {
+                "pattern-only"
+            } else if *llm_only {
+                "llm-only"
+            } else {
+                "hybrid"
+            };
             println!("=== Skwaq Gym Evaluation ({mode}) ===");
             println!("  Suites:      {suites}");
             println!("  Procs/suite: {procs}");
@@ -250,6 +268,8 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
 
                     if *quick {
                         cmd.arg("--quick");
+                    } else if *llm_only {
+                        cmd.arg("--llm-only");
                     }
 
                     children.push(cmd.spawn()?);
@@ -374,6 +394,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 cwe_filter: None,
                 max_cases: Some(*max_cases),
                 quick_mode: true,
+                llm_only: false,
                 binary_mode: false,
                 parallelism: 4,
                 skip: 0,

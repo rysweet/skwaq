@@ -158,7 +158,7 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
             680, 681, 590, 822, 823, 825, 843,
         ],
         "injection" => vec![15, 77, 78, 89, 90, 94, 114, 501, 643, 917],
-        "format_string" => vec![134, 119, 120, 121, 122, 787],
+        "format_string" => vec![134],
         "race" => vec![362, 367],
         "temp_file" => vec![377],
         "path_traversal" => vec![22, 23, 36],

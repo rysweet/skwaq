@@ -105,6 +105,8 @@ impl BenchmarkAdapter for CgcAdapter {
             if binary.exists() {
                 return if config.quick_mode {
                     run_binary_pattern_detection(&binary)
+                } else if config.llm_only {
+                    crate::agentic::run_llm_only_binary_analysis(&binary, config.timeout_secs).await
                 } else {
                     crate::agentic::run_agentic_binary_analysis(&binary, config.timeout_secs).await
                 };
@@ -130,6 +132,9 @@ impl BenchmarkAdapter for CgcAdapter {
                 if path.extension().and_then(|e| e.to_str()) == Some("c") {
                     let findings = if config.quick_mode {
                         run_source_pattern_detection(&path)
+                    } else if config.llm_only {
+                        crate::agentic::run_llm_only_source_analysis(&path, config.timeout_secs)
+                            .await
                     } else {
                         crate::agentic::run_agentic_source_analysis(&path, config.timeout_secs)
                             .await
@@ -146,6 +151,10 @@ impl BenchmarkAdapter for CgcAdapter {
         if all_findings.is_empty() && source_path.exists() {
             if config.quick_mode {
                 all_findings = run_source_pattern_detection(&source_path)?;
+            } else if config.llm_only {
+                all_findings =
+                    crate::agentic::run_llm_only_source_analysis(&source_path, config.timeout_secs)
+                        .await?;
             } else {
                 all_findings =
                     crate::agentic::run_agentic_source_analysis(&source_path, config.timeout_secs)

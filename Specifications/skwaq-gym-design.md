@@ -2396,3 +2396,95 @@ Two independent reviews (code reviewer + security specialist) identified issues 
 - 4-tier CI strategy: **Approved** with cache fix
 - Conservative accept/revert for improvements: **Approved** with human gate addition
 - SQLite for results history: **Approved** with file permission enforcement (0o600)
+
+---
+
+## Architecture Diagrams
+
+### Analysis Pipeline (Synthesis Model)
+
+```
+┌─────────────────────────────────────────────────────┐
+│                  Source/Binary File                   │
+└──────────┬──────────────────────┬────────────────────┘
+           │                      │
+           ▼                      ▼
+┌──────────────────┐   ┌──────────────────────────────┐
+│  Layer 1-3:      │   │  Layer 4:                     │
+│  Pattern Det.    │   │  LLM Agent Pipeline           │
+│  + Dataflow      │   │  (vuln-hunter, taint-tracer,  │
+│  + Context Val.  │   │   cwe-classifier, etc.)       │
+│                  │   │                                │
+│  "Junior Analyst"│   │  "Senior Researcher"           │
+└────────┬─────────┘   └──────────┬────────────────────┘
+         │                        │
+         └──────────┬─────────────┘
+                    ▼
+         ┌──────────────────────┐
+         │  Layer 5: SYNTHESIS  │
+         │  (Lead Reviewer)     │
+         │                      │
+         │  Weighs ALL evidence │
+         │  LLM findings first, │
+         │  then pattern-only   │
+         │  for uncovered cats  │
+         └──────────┬───────────┘
+                    ▼
+         ┌──────────────────────┐
+         │  Deduplicated        │
+         │  Findings            │
+         └──────────────────────┘
+```
+
+**Key change**: Layer 5 was previously "dual-judge intersection" which
+discarded LLM-only findings. Now it synthesizes ALL evidence.
+
+### Benchmark Modes
+
+```
+--pattern-only (--quick)    Full (default)           --llm-only
+┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
+│ Patterns only    │    │ Patterns + LLM   │    │ LLM agents only  │
+│ No LLM agents   │    │ + Synthesis       │    │ No patterns      │
+│ 30s timeout      │    │ 1800s timeout    │    │ 1800s timeout    │
+│ Fast baseline    │    │ Best accuracy    │    │ Measures agent   │
+│                  │    │                  │    │ understanding    │
+└──────────────────┘    └──────────────────┘    └──────────────────┘
+```
+
+### Self-Improvement Loop (with Overfitting Gate)
+
+```
+┌──────────┐    ┌──────────┐    ┌──────────────┐    ┌──────────────┐
+│ Run      │───▶│ Score    │───▶│ Analyze FN   │───▶│ Propose      │
+│ Benchmark│    │ Results  │    │ Cases        │    │ Improvements │
+└──────────┘    └──────────┘    └──────────────┘    └──────┬───────┘
+                                                           │
+                                                           ▼
+                                                   ┌──────────────────┐
+                                                   │ OVERFITTING      │
+                                                   │ REVIEW GATE      │
+                                                   │                  │
+                                                   │ Checks:          │
+                                                   │ • Real-world     │
+                                                   │   generality?    │
+                                                   │ • Pattern        │
+                                                   │   specificity?   │
+                                                   │ • CWE mapping    │
+                                                   │   accuracy?      │
+                                                   └──────┬───────────┘
+                                                          │
+                                    ┌─────────────────────┼──────────┐
+                                    │ ACCEPT              │ REJECT   │
+                                    ▼                     ▼          │
+                             ┌──────────────┐    ┌──────────────┐   │
+                             │ Implement    │    │ Logged &     │   │
+                             │ Change       │    │ Discarded    │   │
+                             └──────┬───────┘    └──────────────┘   │
+                                    │                                │
+                                    ▼                                │
+                             ┌──────────────┐                       │
+                             │ Verify       │                       │
+                             │ No Regression│                       │
+                             └──────────────┘                       │
+```

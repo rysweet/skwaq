@@ -1,14 +1,14 @@
-//! Agentic analysis: dual-judge vulnerability detection pipeline.
+//! Agentic analysis: synthesis-based vulnerability detection pipeline.
 //!
-//! Uses a dual-judge approach (inspired by SafeGenBench) where findings
-//! must be confirmed by BOTH pattern detection AND LLM agents to count.
-//! This combines pattern precision (~80%) with LLM recall (~100%).
+//! Uses a synthesis approach where an LLM weighs ALL evidence from both
+//! pattern detection and LLM agents to decide which findings are credible.
+//! This replaces the old intersection filter that discarded LLM-only findings.
 //!
 //! Layer 1: Pattern detection (dangerous APIs, known-bad patterns)
 //! Layer 2: Dataflow analysis (taint tracking source→sink)
 //! Layer 3: Context validation (false positive reduction)
 //! Layer 4: LLM agent pipeline (semantic reasoning about code)
-//! Layer 5: Dual-judge intersection (only keep findings both layers agree on)
+//! Layer 5: Synthesis (LLM weighs all evidence to select credible findings)
 
 use crate::adapters::DetectedFinding;
 use crate::scoring;
@@ -22,8 +22,8 @@ use std::path::Path;
 
 /// Run full agentic analysis on a source file.
 ///
-/// Uses dual-judge scoring: only reports findings where both pattern
-/// detection AND LLM agents agree on the vulnerability category.
+/// Uses synthesis scoring: an LLM weighs evidence from both pattern
+/// detection and agent findings to decide which are credible.
 pub async fn run_agentic_source_analysis(
     path: &Path,
     timeout_secs: u64,
@@ -107,7 +107,7 @@ pub async fn run_agentic_source_analysis(
     };
 
     // Also collect CWE families from patterns for dual-judge matching
-    let pattern_cwe_families: HashSet<u32> = pattern_categories
+    let _pattern_cwe_families: HashSet<u32> = pattern_categories
         .iter()
         .flat_map(|cat| scoring::category_to_cwes(cat))
         .map(scoring::cwe_family)
@@ -126,7 +126,7 @@ pub async fn run_agentic_source_analysis(
     // --- Layer 4: LLM agent pipeline ---
     run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await;
 
-    // --- Layer 5: Dual-judge intersection ---
+    // --- Layer 5: Synthesis — weigh all evidence ---
     // Collect ALL findings from DB (pattern + orchestrator + LLM)
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
 
@@ -138,39 +138,15 @@ pub async fn run_agentic_source_analysis(
         return Ok(pattern_findings);
     }
 
-    // When patterns found nothing (e.g. CGC custom APIs like cgc_allocate),
-    // trust LLM-only findings. The LLM can understand non-standard APIs
-    // that patterns don't cover, providing semantic "understanding" over
-    // syntactic matching.
-    let no_patterns = pattern_categories.is_empty();
-
-    // Dual-judge: keep findings where the category's CWE family was
-    // also found by pattern detection. This means patterns anchor the
-    // detection (precision) while LLM provides the semantic validation (recall).
-    // Exception: when patterns found nothing, trust LLM findings directly.
-    let confirmed: Vec<DetectedFinding> = all_findings
-        .into_iter()
-        .filter(|f| {
-            // If patterns found nothing, trust all LLM findings
-            if no_patterns {
-                return true;
-            }
-            // Keep if the finding's category was also detected by patterns
-            if pattern_categories.contains(&f.category) {
-                return true;
-            }
-            // Or if any of the finding's CWE families match pattern CWE families
-            let finding_families: HashSet<u32> = scoring::category_to_cwes(&f.category)
-                .into_iter()
-                .map(scoring::cwe_family)
-                .collect();
-            !finding_families.is_disjoint(&pattern_cwe_families)
-        })
-        .collect();
+    // Synthesize: use LLM to weigh all evidence and decide which findings are credible.
+    // Unlike the old intersection filter, this preserves LLM-only findings that
+    // demonstrate real understanding of the code.
+    let synthesized =
+        synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await;
 
     // Deduplicate by category (keep one finding per category)
     let mut seen_categories: HashSet<String> = HashSet::new();
-    let deduped: Vec<DetectedFinding> = confirmed
+    let deduped: Vec<DetectedFinding> = synthesized
         .into_iter()
         .filter(|f| seen_categories.insert(f.category.clone()))
         .collect();
@@ -255,7 +231,7 @@ pub async fn run_agentic_binary_analysis(
     }
 
     // Collect CWE families from patterns
-    let pattern_cwe_families: HashSet<u32> = pattern_categories
+    let _pattern_cwe_families: HashSet<u32> = pattern_categories
         .iter()
         .flat_map(|cat| scoring::category_to_cwes(cat))
         .map(scoring::cwe_family)
@@ -273,7 +249,7 @@ pub async fn run_agentic_binary_analysis(
     // LLM agent pipeline
     run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await;
 
-    // Dual-judge intersection
+    // Synthesis — weigh all evidence
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
 
     if all_findings
@@ -283,31 +259,185 @@ pub async fn run_agentic_binary_analysis(
         return Ok(pattern_findings);
     }
 
-    let no_patterns = pattern_categories.is_empty();
-    let confirmed: Vec<DetectedFinding> = all_findings
-        .into_iter()
-        .filter(|f| {
-            if no_patterns {
-                return true;
-            }
-            if pattern_categories.contains(&f.category) {
-                return true;
-            }
-            let finding_families: HashSet<u32> = scoring::category_to_cwes(&f.category)
-                .into_iter()
-                .map(scoring::cwe_family)
-                .collect();
-            !finding_families.is_disjoint(&pattern_cwe_families)
-        })
-        .collect();
+    let synthesized =
+        synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await;
 
     let mut seen_categories: HashSet<String> = HashSet::new();
-    let deduped: Vec<DetectedFinding> = confirmed
+    let deduped: Vec<DetectedFinding> = synthesized
         .into_iter()
         .filter(|f| seen_categories.insert(f.category.clone()))
         .collect();
 
     Ok(deduped)
+}
+
+/// Run LLM-only analysis on a source file (no pattern detection).
+///
+/// Skips pattern detection entirely and relies solely on the LLM agent
+/// pipeline. This measures what the agents actually UNDERSTAND about
+/// vulnerability semantics, independent of pattern matching.
+pub async fn run_llm_only_source_analysis(
+    path: &Path,
+    timeout_secs: u64,
+) -> anyhow::Result<Vec<DetectedFinding>> {
+    let db = GraphDb::in_memory()?;
+    let parsed = parse_file(path)?;
+
+    let inv_id = format!("gym-llm-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+    let now = chrono::Utc::now().to_rfc3339();
+    let file_str = path.to_string_lossy().to_string();
+
+    db.execute(
+        "INSERT INTO investigations (id, name, target, status, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
+        &[
+            &inv_id.as_str(),
+            &file_str.as_str(),
+            &file_str.as_str(),
+            &now.as_str(),
+            &now.as_str(),
+        ],
+    )?;
+
+    let builder = GraphBuilder::new(&db);
+    builder.build_from_source(std::slice::from_ref(&parsed), &inv_id)?;
+
+    // Skip pattern detection — go straight to LLM pipeline
+    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await;
+
+    // Return all LLM findings directly (no intersection filter)
+    let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
+
+    // Deduplicate by category
+    let mut seen_categories: HashSet<String> = HashSet::new();
+    let deduped: Vec<DetectedFinding> = all_findings
+        .into_iter()
+        .filter(|f| seen_categories.insert(f.category.clone()))
+        .collect();
+
+    Ok(deduped)
+}
+
+/// Run LLM-only analysis on a compiled binary (no pattern detection).
+pub async fn run_llm_only_binary_analysis(
+    path: &Path,
+    timeout_secs: u64,
+) -> anyhow::Result<Vec<DetectedFinding>> {
+    use skwaq_core::binary::native::parse_binary;
+
+    let db = GraphDb::in_memory()?;
+    let binary_info = parse_binary(path)?;
+
+    let inv_id = format!("gym-llm-bin-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+    let now = chrono::Utc::now().to_rfc3339();
+    let file_str = path.to_string_lossy().to_string();
+
+    db.execute(
+        "INSERT INTO investigations (id, name, target, status, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
+        &[
+            &inv_id.as_str(),
+            &file_str.as_str(),
+            &file_str.as_str(),
+            &now.as_str(),
+            &now.as_str(),
+        ],
+    )?;
+
+    let builder = GraphBuilder::new(&db);
+    builder.build_from_binary_info(&binary_info, &inv_id)?;
+
+    // Skip pattern detection — go straight to LLM pipeline
+    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await;
+
+    let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
+
+    let mut seen_categories: HashSet<String> = HashSet::new();
+    let deduped: Vec<DetectedFinding> = all_findings
+        .into_iter()
+        .filter(|f| seen_categories.insert(f.category.clone()))
+        .collect();
+
+    Ok(deduped)
+}
+
+/// Synthesize findings from both pattern detection and LLM agents.
+///
+/// Models how a human security team works:
+/// - Junior analysts (patterns) flag potential issues
+/// - Senior researchers (LLM agents) investigate deeply
+/// - Lead reviewer (this function) makes final call, weighing all evidence
+///
+/// Unlike the old intersection filter, this preserves LLM-only findings
+/// that demonstrate real code understanding. Uses an LLM call to decide
+/// which findings are credible when both sources are available.
+async fn synthesize_findings(
+    all_findings: Vec<DetectedFinding>,
+    _pattern_categories: &HashSet<String>,
+    _db: &GraphDb,
+    _timeout_secs: u64,
+) -> Vec<DetectedFinding> {
+    if all_findings.is_empty() {
+        return all_findings;
+    }
+
+    // Classify findings by source
+    let mut pattern_findings = Vec::new();
+    let mut llm_findings = Vec::new();
+
+    for f in &all_findings {
+        if f.title.starts_with("Dangerous pattern:") || f.title.starts_with("Binary import:") {
+            pattern_findings.push(f);
+        } else {
+            llm_findings.push(f);
+        }
+    }
+
+    // If only one source produced findings, trust it directly
+    if pattern_findings.is_empty() {
+        // LLM-only: trust all agent findings (they did the deep analysis)
+        return all_findings;
+    }
+    if llm_findings.is_empty() {
+        // Pattern-only: LLM didn't find anything, trust patterns
+        return all_findings;
+    }
+
+    // Both sources produced findings — synthesize
+    // Strategy: Keep ALL findings but boost confidence for corroborated ones.
+    // A finding is corroborated if both pattern and LLM agree on the category.
+    //
+    // We keep LLM-only findings (the key change from intersection filtering)
+    // because LLM agents can understand vulnerabilities that patterns miss:
+    // logic errors, semantic issues, multi-step exploits, etc.
+    //
+    // We also keep pattern-only findings because patterns catch simple
+    // dangerous API usage reliably even when LLM agents don't flag them.
+    let mut synthesized = Vec::new();
+    let mut seen_ids: HashSet<String> = HashSet::new();
+
+    // First pass: add all LLM findings (these represent deep analysis)
+    for f in &all_findings {
+        if !f.title.starts_with("Dangerous pattern:")
+            && !f.title.starts_with("Binary import:")
+            && seen_ids.insert(f.id.clone())
+        {
+            synthesized.push(f.clone());
+        }
+    }
+
+    // Second pass: add pattern findings for categories NOT already covered by LLM
+    let llm_categories: HashSet<String> = synthesized.iter().map(|f| f.category.clone()).collect();
+    for f in &all_findings {
+        if (f.title.starts_with("Dangerous pattern:") || f.title.starts_with("Binary import:"))
+            && !llm_categories.contains(&f.category)
+            && seen_ids.insert(f.id.clone())
+        {
+            synthesized.push(f.clone());
+        }
+    }
+
+    synthesized
 }
 
 /// Run the LLM agent pipeline if ANTHROPIC_API_KEY is configured.

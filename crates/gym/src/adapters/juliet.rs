@@ -104,6 +104,8 @@ impl BenchmarkAdapter for JulietAdapter {
             if binary.exists() {
                 return if config.quick_mode {
                     run_binary_pattern_detection(&binary)
+                } else if config.llm_only {
+                    crate::agentic::run_llm_only_binary_analysis(&binary, config.timeout_secs).await
                 } else {
                     crate::agentic::run_agentic_binary_analysis(&binary, config.timeout_secs).await
                 };
@@ -117,6 +119,9 @@ impl BenchmarkAdapter for JulietAdapter {
                 if compile_single(&source, &binary, &support_dir).is_ok() && binary.exists() {
                     return if config.quick_mode {
                         run_binary_pattern_detection(&binary)
+                    } else if config.llm_only {
+                        crate::agentic::run_llm_only_binary_analysis(&binary, config.timeout_secs)
+                            .await
                     } else {
                         crate::agentic::run_agentic_binary_analysis(&binary, config.timeout_secs)
                             .await
@@ -134,6 +139,8 @@ impl BenchmarkAdapter for JulietAdapter {
         let source_path = data_dir.join(&case.path);
         if config.quick_mode {
             run_source_pattern_detection(&source_path)
+        } else if config.llm_only {
+            crate::agentic::run_llm_only_source_analysis(&source_path, config.timeout_secs).await
         } else {
             crate::agentic::run_agentic_source_analysis(&source_path, config.timeout_secs).await
         }

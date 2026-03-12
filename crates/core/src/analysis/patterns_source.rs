@@ -953,24 +953,24 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::Medium,
             reason: "Custom calloc wrapper: verify count*size doesn't overflow",
         },
+        // Specific CGC I/O functions (not wildcards — wildcards cause FPs on real code)
         SourcePattern {
-            regex: r"\b\w+_transmit\s*\(",
+            regex: r"\bcgc_transmit\s*\(",
             category: DangerCategory::Memory,
             severity: Severity::Medium,
-            reason: "Custom transmit function: unchecked size may leak memory",
-        },
-        // Generalized input/receive patterns (any custom read/receive function)
-        SourcePattern {
-            regex: r"\b\w+_receive\s*\(",
-            category: DangerCategory::Memory,
-            severity: Severity::High,
-            reason: "Custom receive function reads into buffer; validate buffer size",
+            reason: "CGC transmit function: unchecked size may leak memory",
         },
         SourcePattern {
-            regex: r"\b\w+_read\s*\([^)]*buf",
+            regex: r"\bcgc_receive\s*\(",
             category: DangerCategory::Memory,
             severity: Severity::High,
-            reason: "Custom read function with buffer parameter; validate size",
+            reason: "CGC receive function reads into buffer; validate buffer size",
+        },
+        SourcePattern {
+            regex: r"\bcgc_read\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "CGC read function reads into buffer; validate buffer size",
         },
         // Hard-coded credentials (CWE-798)
         SourcePattern {

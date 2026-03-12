@@ -98,6 +98,7 @@ impl Gym {
             cwe_filter: None,
             max_cases: None,
             quick_mode: false,
+            llm_only: false,
             binary_mode: true, // Binary analysis is the default for cases with binary_path
             parallelism: 4,
             skip: 0,
@@ -131,6 +132,7 @@ impl Gym {
     ///
     /// By default, runs full analysis (pattern detection + AI agents).
     /// Pass `quick_only=true` to use pattern-only mode (faster, no LLM).
+    /// Pass `llm_only=true` to use LLM-only mode (no patterns, agents only).
     /// Pass `binary_mode=true` to analyze compiled binaries instead of source.
     #[allow(clippy::too_many_arguments)]
     pub async fn run(
@@ -139,6 +141,7 @@ impl Gym {
         cwe_filter: Option<Vec<u32>>,
         max_cases: Option<usize>,
         quick_only: bool,
+        llm_only: bool,
         binary_mode: bool,
         skip: usize,
         concurrency: usize,
@@ -161,9 +164,15 @@ impl Gym {
         }
         if quick_only {
             config.quick_mode = true;
+            config.llm_only = false;
             config.timeout_secs = 30;
+        } else if llm_only {
+            config.quick_mode = false;
+            config.llm_only = true;
+            config.timeout_secs = 1800;
         } else {
             config.quick_mode = false;
+            config.llm_only = false;
             // Agentic analysis with 5 LLM agents can take 10+ minutes per case.
             // 30 minutes is generous but prevents infinite hangs.
             config.timeout_secs = 1800;
