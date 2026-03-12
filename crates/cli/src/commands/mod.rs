@@ -6,6 +6,7 @@ pub mod annotate_cmd;
 pub mod checksec_cmd;
 pub mod common;
 pub mod config_cmd;
+pub mod diff_analyze;
 pub mod doctor;
 pub mod gym_cmd;
 pub mod hypothesize_cmd;
@@ -211,6 +212,19 @@ pub enum Commands {
     Gym {
         #[command(subcommand)]
         sub: gym_cmd::GymSub,
+    },
+
+    /// Compare two binary versions and analyze security-relevant differences
+    DiffAnalyze {
+        /// Path to the first (older) binary
+        v1: PathBuf,
+
+        /// Path to the second (newer) binary
+        v2: PathBuf,
+
+        /// Optional security advisory text for context
+        #[arg(long)]
+        advisory: Option<String>,
     },
 
     /// Check system dependencies and connectivity

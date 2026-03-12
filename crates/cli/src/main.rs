@@ -29,6 +29,9 @@ async fn main() -> anyhow::Result<()> {
         Commands::Version => {
             skwaq::commands::version_cmd::run();
         }
+        Commands::DiffAnalyze { v1, v2, advisory } => {
+            skwaq::commands::diff_analyze::run(v1, v2, advisory.as_deref()).await?;
+        }
         Commands::Doctor => {
             skwaq::commands::doctor::run().await?;
         }
