@@ -1,7 +1,7 @@
 ---
 name: crash-analyst
 description: Analyze fuzzer crash sites to determine root cause and exploitability
-model: claude-opus-4-6
+model: claude-opus-4.6
 tools:
   - query_graph
   - read_function

@@ -1,7 +1,7 @@
 ---
 name: critic
 description: Finding validation and false positive reduction
-model: claude-opus-4-6
+model: claude-opus-4.6
 tools:
   - query_graph
   - read_function

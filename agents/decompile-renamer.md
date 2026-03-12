@@ -1,7 +1,7 @@
 ---
 name: decompile-renamer
 description: Rename decompiler-generated variables to meaningful names before vulnerability analysis
-model: claude-haiku-4-5-20251001
+model: claude-haiku-4.5
 tools:
   - query_graph
   - read_function

@@ -1,7 +1,7 @@
 ---
 name: defense-analyst
 description: Identifies mitigations and defensive controls
-model: claude-opus-4-6
+model: claude-opus-4.6
 tools:
   - lookup_knowledge
   - query_graph
