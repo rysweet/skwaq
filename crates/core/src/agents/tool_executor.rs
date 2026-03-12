@@ -24,6 +24,7 @@ pub fn execute_tool(
         "create_finding" => {
             super::tool_translate::execute_create_finding(db, investigation_id, args)
         }
+        "rename_function" => execute_rename_function(db, investigation_id, args),
         "search_similar" => {
             super::tool_translate::execute_search_similar(db, investigation_id, args)
         }
@@ -290,6 +291,78 @@ fn execute_lookup_cwe(db: &GraphDb, args: &serde_json::Value) -> anyhow::Result<
     }
 }
 
+/// Update a function's decompiled code with renamed variables.
+fn execute_rename_function(
+    db: &GraphDb,
+    investigation_id: &str,
+    args: &serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
+    let func_name = args
+        .get("function")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+    let renamed_code = args
+        .get("renamed_code")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let annotations = args
+        .get("annotations")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    tracing::info!("Tool rename_function: {func_name}");
+
+    if renamed_code.is_empty() {
+        return Ok(serde_json::json!({
+            "status": "error",
+            "error": "renamed_code is required"
+        }));
+    }
+
+    // Update the function's decompiled code with the renamed version
+    let rows_affected = db.conn().execute(
+        "UPDATE functions SET decompiled = ?1 WHERE name = ?2 AND investigation_id = ?3",
+        rusqlite::params![renamed_code, func_name, investigation_id],
+    )?;
+
+    if rows_affected == 0 {
+        // Try by address
+        let rows = db.conn().execute(
+            "UPDATE functions SET decompiled = ?1 WHERE address = ?2 AND investigation_id = ?3",
+            rusqlite::params![renamed_code, func_name, investigation_id],
+        )?;
+        if rows == 0 {
+            return Ok(serde_json::json!({
+                "status": "not_found",
+                "function": func_name,
+                "error": format!("Function '{}' not found in investigation", func_name)
+            }));
+        }
+    }
+
+    // Store annotations as an annotation node if provided
+    if !annotations.is_empty() {
+        let ann_id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+        let _ = db.execute(
+            "INSERT INTO annotations (id, content, agent, timestamp, investigation_id) \
+             VALUES (?1, ?2, 'decompile-renamer', ?3, ?4)",
+            &[
+                &ann_id.as_str(),
+                &format!("Type annotations for {}: {}", func_name, annotations).as_str(),
+                &now.as_str(),
+                &investigation_id,
+            ],
+        );
+    }
+
+    Ok(serde_json::json!({
+        "status": "ok",
+        "function": func_name,
+        "message": format!("Updated decompiled code for '{}'", func_name)
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -527,6 +600,46 @@ mod tests {
         let args = serde_json::json!({});
         let result = execute_tool(&db, "inv1", "nonexistent_tool", &args).unwrap();
         assert!(result.get("error").is_some());
+    }
+
+    #[test]
+    fn test_execute_tool_rename_function() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv";
+
+        db.execute(
+            "INSERT INTO functions (id, name, address, decompiled, confidence, investigation_id) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            &[
+                &"f1" as &dyn rusqlite::types::ToSql,
+                &"process_data",
+                &"0x401000",
+                &"void process_data(int param_1, char *param_2) { char var_1[32]; strcpy(var_1, param_2); }",
+                &0.8_f64 as &dyn rusqlite::types::ToSql,
+                &inv_id,
+            ],
+        )
+        .unwrap();
+
+        let args = serde_json::json!({
+            "function": "process_data",
+            "renamed_code": "void process_data(int buf_size, char *user_input) { char local_buffer[32]; strcpy(local_buffer, user_input); }",
+            "annotations": "param_1 is a buffer size, param_2 is user-controlled input"
+        });
+        let result = execute_tool(&db, inv_id, "rename_function", &args).unwrap();
+        assert_eq!(result["status"], "ok");
+
+        // Verify the decompiled code was updated
+        let updated: String = db
+            .conn()
+            .query_row(
+                "SELECT decompiled FROM functions WHERE name = ?1 AND investigation_id = ?2",
+                rusqlite::params!["process_data", inv_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(updated.contains("user_input"));
+        assert!(updated.contains("local_buffer"));
     }
 
     #[test]

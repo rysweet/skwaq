@@ -107,6 +107,29 @@ pub fn agent_tools() -> Vec<ToolDefinition> {
             }),
         ),
         ToolDefinition::new(
+            "rename_function",
+            "Rename a decompiler-generated variable or update the renamed decompiled code for a function. \
+             Use this to store an improved version of decompiled code with meaningful variable names.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "function": {
+                        "type": "string",
+                        "description": "Function name to update"
+                    },
+                    "renamed_code": {
+                        "type": "string",
+                        "description": "The renamed/improved decompiled code"
+                    },
+                    "annotations": {
+                        "type": "string",
+                        "description": "Optional type annotations or struct layout notes"
+                    }
+                },
+                "required": ["function", "renamed_code"]
+            }),
+        ),
+        ToolDefinition::new(
             "search_similar",
             "Search for code patterns similar to a given snippet using pattern matching.",
             serde_json::json!({

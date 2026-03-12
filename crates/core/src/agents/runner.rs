@@ -102,19 +102,41 @@ pub fn build_analysis_context_with_limit(
 ) -> String {
     let mut parts = vec![format!("Analyze target: {target}\n\nGraph DB summary:\n")];
 
-    // Summarize functions (reduced from 50 to 20)
+    // Summarize functions with confidence indicators
     if let Ok(mut stmt) = db.conn().prepare(
-        "SELECT name, address FROM functions WHERE investigation_id = ?1 ORDER BY name LIMIT 20",
+        "SELECT name, address, confidence FROM functions WHERE investigation_id = ?1 ORDER BY name LIMIT 20",
     ) {
         if let Ok(rows) = stmt.query_map([investigation_id], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, f64>(2).unwrap_or(0.0),
+            ))
         }) {
-            let funcs: Vec<(String, String)> =
+            let funcs: Vec<(String, String, f64)> =
                 rows.collect::<Result<Vec<_>, _>>().unwrap_or_default();
             if !funcs.is_empty() {
                 parts.push(format!("\n## Functions ({} shown):\n", funcs.len()));
-                for (name, addr) in &funcs {
-                    parts.push(format!("- {name} @ {addr}"));
+                let mut low_confidence_count = 0;
+                for (name, addr, confidence) in &funcs {
+                    if *confidence > 0.0 && *confidence < 0.5 {
+                        parts.push(format!(
+                            "- {name} @ {addr} [WARNING: LOW CONFIDENCE {:.0}% — decompiled output may be unreliable]",
+                            confidence * 100.0
+                        ));
+                        low_confidence_count += 1;
+                    } else if *confidence > 0.0 {
+                        parts.push(format!("- {name} @ {addr} [confidence: {:.0}%]", confidence * 100.0));
+                    } else {
+                        parts.push(format!("- {name} @ {addr}"));
+                    }
+                }
+                if low_confidence_count > 0 {
+                    parts.push(format!(
+                        "\n⚠ {} function(s) have low decompilation confidence. \
+                         Treat findings in these functions with extra skepticism.",
+                        low_confidence_count
+                    ));
                 }
             }
         }

@@ -109,10 +109,15 @@ impl AnalysisPipeline {
     }
 }
 
-/// Build the default analysis pipeline: attack-surface -> vuln-hunter -> critic.
+/// Build the default analysis pipeline: decompile-renamer -> attack-surface -> vuln-hunter -> critic.
 pub fn default_pipeline() -> AnalysisPipeline {
     AnalysisPipeline {
         stages: vec![
+            // Pre-processing: improve decompiled code readability
+            PipelineStage {
+                agent_name: "decompile-renamer".into(),
+                context_mode: ContextMode::FromGraph,
+            },
             PipelineStage {
                 agent_name: "attack-surface".into(),
                 context_mode: ContextMode::FromGraph,
@@ -149,6 +154,11 @@ pub fn default_pipeline() -> AnalysisPipeline {
 pub fn deep_pipeline() -> AnalysisPipeline {
     AnalysisPipeline {
         stages: vec![
+            // Pre-processing: improve decompiled code readability
+            PipelineStage {
+                agent_name: "decompile-renamer".into(),
+                context_mode: ContextMode::FromGraph,
+            },
             // Discovery phase
             PipelineStage {
                 agent_name: "attack-surface".into(),
@@ -245,6 +255,7 @@ fn ordinal(n: usize) -> String {
 const AGENT_SKILL_MAP: &[(&str, &str)] = &[
     ("vuln-hunter", "llm-binary-vuln-guide"),
     ("decompile-analyst", "llm-binary-vuln-guide"),
+    ("decompile-renamer", "llm-binary-vuln-guide"),
     ("taint-tracer", "llm-binary-vuln-guide"),
     ("exploit-analyst", "llm-binary-vuln-guide"),
     ("attack-surface", "llm-binary-vuln-guide"),
