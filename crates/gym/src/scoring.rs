@@ -118,19 +118,25 @@ pub fn score_case(
 pub fn cwe_family(cwe: u32) -> u32 {
     match cwe {
         // Buffer overflow family -> CWE-119
-        120 | 121 | 122 | 123 | 124 | 125 | 126 | 127 | 787 => 119,
+        120 | 121 | 122 | 123 | 124 | 125 | 126 | 127 | 787 | 788 => 119,
         // Use-after-free family -> CWE-416
         415 => 416,
         // Injection family -> CWE-74
-        77 | 78 | 79 | 80 | 89 | 90 | 94 | 95 | 96 | 114 => 74,
+        15 | 77 | 78 | 79 | 80 | 89 | 90 | 94 | 95 | 96 | 114 => 74,
         // Race condition family -> CWE-362
         367 => 362,
         // Integer overflow family -> CWE-190
-        191 | 192 | 194 | 195 | 196 | 197 | 680 => 190,
+        191 | 192 | 193 | 194 | 195 | 196 | 197 | 680 | 681 => 190,
         // Dangerous function / free-of-non-heap -> Buffer overflow family
         242 | 590 => 119,
         // Null pointer family -> CWE-476
         252 | 253 => 476,
+        // Out-of-bounds read/write -> Buffer overflow family
+        129 | 131 | 170 | 805 => 119,
+        // Path traversal family -> CWE-22
+        23 | 36 => 22,
+        // Crypto weakness family -> CWE-327
+        326 | 328 | 330 | 338 | 310 | 295 => 327,
         // Everything else maps to itself.
         other => other,
     }
@@ -143,7 +149,7 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
             119, 120, 121, 122, 125, 126, 787, 416, 415, 190, 191, 680, 242, 590,
         ],
         "injection" => vec![15, 77, 78, 89, 90, 94, 114, 501, 643, 917],
-        "format_string" => vec![134],
+        "format_string" => vec![134, 119, 120, 121, 122, 787],
         "race" => vec![362, 367],
         "temp_file" => vec![377],
         "path_traversal" => vec![22, 23, 36],
