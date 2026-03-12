@@ -8,6 +8,7 @@ pub mod common;
 pub mod config_cmd;
 pub mod diff_analyze;
 pub mod doctor;
+pub mod fuzz_cmd;
 pub mod gym_cmd;
 pub mod hypothesize_cmd;
 pub mod ingest;
@@ -219,6 +220,34 @@ pub enum Commands {
     InvestigateBinary {
         /// Path to the binary to investigate
         binary: PathBuf,
+    },
+
+    /// Run a fuzzer (AFL++/libFuzzer) on a binary
+    Fuzz {
+        /// Path to the binary to fuzz
+        binary: PathBuf,
+
+        /// Fuzzing duration in seconds
+        #[arg(long, default_value = "300")]
+        duration: u64,
+
+        /// Corpus directory (seeds for the fuzzer)
+        #[arg(long)]
+        corpus: Option<PathBuf>,
+
+        /// Output directory for results
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+
+    /// Fuzz a binary then analyze crashes with AI agents (end-to-end)
+    FuzzAnalyze {
+        /// Path to the binary to fuzz
+        binary: PathBuf,
+
+        /// Fuzzing duration in seconds
+        #[arg(long, default_value = "300")]
+        duration: u64,
     },
 
     /// Compare two binary versions and analyze security-relevant differences
