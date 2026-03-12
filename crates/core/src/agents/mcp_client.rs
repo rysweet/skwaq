@@ -21,7 +21,8 @@ pub struct McpToolDef {
 
 /// An active connection to an MCP server process.
 pub struct McpConnection {
-    child: Child,
+    child: Option<Child>,
+    reader: Option<BufReader<tokio::process::ChildStdout>>,
     request_id: u64,
 }
 
@@ -30,7 +31,7 @@ impl McpConnection {
     ///
     /// The server is expected to communicate via JSON-RPC over stdin/stdout.
     pub async fn start(command: &str, args: &[&str]) -> anyhow::Result<Self> {
-        let child = Command::new(command)
+        let mut child = Command::new(command)
             .args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -45,8 +46,15 @@ impl McpConnection {
                 )
             })?;
 
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("MCP server stdout not available"))?;
+        let reader = BufReader::new(stdout);
+
         let mut conn = Self {
-            child,
+            child: Some(child),
+            reader: Some(reader),
             request_id: 0,
         };
 
@@ -150,8 +158,11 @@ impl McpConnection {
             "params": params
         });
 
-        let stdin = self
+        let child = self
             .child
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("MCP server not running"))?;
+        let stdin = child
             .stdin
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("MCP server stdin not available"))?;
@@ -161,14 +172,11 @@ impl McpConnection {
         stdin.write_all(b"\n").await?;
         stdin.flush().await?;
 
-        // Read response
-        let stdout = self
-            .child
-            .stdout
+        // Read response from stored reader (preserves buffer across calls)
+        let reader = self
+            .reader
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("MCP server stdout not available"))?;
-
-        let mut reader = BufReader::new(stdout);
         let mut line = String::new();
 
         match tokio::time::timeout(
@@ -205,11 +213,13 @@ impl McpConnection {
             "params": params
         });
 
-        if let Some(stdin) = self.child.stdin.as_mut() {
-            let msg = serde_json::to_string(&notification)?;
-            stdin.write_all(msg.as_bytes()).await?;
-            stdin.write_all(b"\n").await?;
-            stdin.flush().await?;
+        if let Some(child) = self.child.as_mut() {
+            if let Some(stdin) = child.stdin.as_mut() {
+                let msg = serde_json::to_string(&notification)?;
+                stdin.write_all(msg.as_bytes()).await?;
+                stdin.write_all(b"\n").await?;
+                stdin.flush().await?;
+            }
         }
 
         Ok(())
@@ -218,22 +228,22 @@ impl McpConnection {
     /// Shut down the MCP server.
     pub async fn shutdown(&mut self) -> anyhow::Result<()> {
         let _ = self.send_request("shutdown", serde_json::json!({})).await;
-        self.child.kill().await.ok();
+        if let Some(mut child) = self.child.take() {
+            child.kill().await.ok();
+        }
         Ok(())
     }
 }
 
 impl Drop for McpConnection {
     fn drop(&mut self) {
-        // Best-effort kill on drop
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            let mut child = std::mem::replace(&mut self.child, {
-                // Create a dummy - this is a bit awkward but necessary for Drop
-                Command::new("true").spawn().expect("true should exist")
-            });
-            handle.spawn(async move {
-                child.kill().await.ok();
-            });
+        // Best-effort kill on drop — take() avoids needing a placeholder
+        if let Some(mut child) = self.child.take() {
+            if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                handle.spawn(async move {
+                    child.kill().await.ok();
+                });
+            }
         }
     }
 }

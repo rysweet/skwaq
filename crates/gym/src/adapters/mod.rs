@@ -144,8 +144,17 @@ pub fn run_binary_pattern_detection(path: &Path) -> anyhow::Result<Vec<DetectedF
     // Detect dangerous APIs via graph (catches call relationships + versioned names)
     let graph_hits = detector.detect(&db)?;
 
-    // Deduplicate: track function names already found via imports
-    let seen: HashSet<String> = findings.iter().map(|f| f.function.clone()).collect();
+    // Deduplicate: normalize to base names (strip @GLIBC_2.x version suffixes)
+    let seen: HashSet<String> = findings
+        .iter()
+        .map(|f| {
+            f.function
+                .split('@')
+                .next()
+                .unwrap_or(&f.function)
+                .to_string()
+        })
+        .collect();
 
     for hit in graph_hits {
         let base_name = hit

@@ -153,21 +153,21 @@ fn compute_function_diff(
 ) -> FunctionDiff {
     use std::collections::{HashMap, HashSet};
 
-    // Build name→address maps from symbols
+    // Build name→size maps from symbols (size is stable across relocation; address is not)
     let v1_funcs: HashMap<&str, u64> = v1
         .symbols
         .iter()
         .filter(|s| s.symbol_type == "2" || s.symbol_type.contains("Func"))
-        .filter(|s| !s.name.is_empty() && s.address != 0)
-        .map(|s| (s.name.as_str(), s.address))
+        .filter(|s| !s.name.is_empty() && s.size > 0)
+        .map(|s| (s.name.as_str(), s.size))
         .collect();
 
     let v2_funcs: HashMap<&str, u64> = v2
         .symbols
         .iter()
         .filter(|s| s.symbol_type == "2" || s.symbol_type.contains("Func"))
-        .filter(|s| !s.name.is_empty() && s.address != 0)
-        .map(|s| (s.name.as_str(), s.address))
+        .filter(|s| !s.name.is_empty() && s.size > 0)
+        .map(|s| (s.name.as_str(), s.size))
         .collect();
 
     let v1_names: HashSet<&str> = v1_funcs.keys().copied().collect();
@@ -183,14 +183,14 @@ fn compute_function_diff(
         .map(|s| s.to_string())
         .collect();
 
-    // "Changed" = present in both but at different addresses (recompilation shifts)
-    // This is a heuristic — same name, different address suggests code change
+    // "Changed" = present in both but different size (code was modified)
+    // Size comparison is stable across relocation/ASLR unlike addresses.
     let changed: Vec<String> = v1_names
         .intersection(&v2_names)
         .filter(|name| {
-            let a1 = v1_funcs.get(*name).unwrap_or(&0);
-            let a2 = v2_funcs.get(*name).unwrap_or(&0);
-            a1 != a2
+            let s1 = v1_funcs.get(*name).unwrap_or(&0);
+            let s2 = v2_funcs.get(*name).unwrap_or(&0);
+            s1 != s2
         })
         .map(|s| s.to_string())
         .collect();

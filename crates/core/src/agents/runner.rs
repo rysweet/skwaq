@@ -213,9 +213,13 @@ pub fn build_analysis_context_with_limit(
 
     let full = parts.join("\n");
 
-    // Truncate to stay within LLM token limits.
+    // Truncate to stay within LLM token limits (char-boundary safe).
     if full.len() > max_context_chars {
-        let mut truncated = full[..max_context_chars].to_string();
+        let mut boundary = max_context_chars;
+        while boundary > 0 && !full.is_char_boundary(boundary) {
+            boundary -= 1;
+        }
+        let mut truncated = full[..boundary].to_string();
         truncated.push_str("\n...[truncated]");
         truncated
     } else {
