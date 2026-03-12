@@ -138,12 +138,23 @@ pub async fn run_agentic_source_analysis(
         return Ok(pattern_findings);
     }
 
+    // When patterns found nothing (e.g. CGC custom APIs like cgc_allocate),
+    // trust LLM-only findings. The LLM can understand non-standard APIs
+    // that patterns don't cover, providing semantic "understanding" over
+    // syntactic matching.
+    let no_patterns = pattern_categories.is_empty();
+
     // Dual-judge: keep findings where the category's CWE family was
     // also found by pattern detection. This means patterns anchor the
     // detection (precision) while LLM provides the semantic validation (recall).
+    // Exception: when patterns found nothing, trust LLM findings directly.
     let confirmed: Vec<DetectedFinding> = all_findings
         .into_iter()
         .filter(|f| {
+            // If patterns found nothing, trust all LLM findings
+            if no_patterns {
+                return true;
+            }
             // Keep if the finding's category was also detected by patterns
             if pattern_categories.contains(&f.category) {
                 return true;
