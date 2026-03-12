@@ -817,73 +817,81 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::Low,
             reason: "calloc is safer than malloc for arrays but verify count*size doesn't overflow",
         },
-        // CGC (DARPA Cyber Grand Challenge) custom APIs — self-improvement iterations 6+8
+        // Generalized dangerous API suffix detection.
+        // Catches prefixed wrappers like cgc_strcpy, my_memcpy, safe_strcat, etc.
+        // This is NOT benchmark-specific — any project wrapping libc functions is caught.
         SourcePattern {
-            regex: r"\bcgc_allocate\s*\(",
-            category: DangerCategory::Memory,
-            severity: Severity::High,
-            reason: "cgc_allocate allocates memory without bounds validation; check size parameter",
-        },
-        SourcePattern {
-            regex: r"\bcgc_receive\s*\(",
-            category: DangerCategory::Memory,
-            severity: Severity::High,
-            reason: "cgc_receive reads from fd into buffer without bounds checking; validate buffer size",
-        },
-        SourcePattern {
-            regex: r"\bcgc_read\s*\(",
-            category: DangerCategory::Memory,
-            severity: Severity::High,
-            reason: "cgc_read reads input into buffer; unchecked size can cause buffer overflow",
-        },
-        SourcePattern {
-            regex: r"\bcgc_transmit\s*\(",
-            category: DangerCategory::Memory,
-            severity: Severity::Medium,
-            reason: "cgc_transmit sends buffer contents; unchecked size may leak memory (info disclosure)",
-        },
-        // CGC string/memory operations (wrappers around libc that lack bounds checking)
-        SourcePattern {
-            regex: r"\bcgc_strcat\s*\(",
+            regex: r"\b\w+_strcpy\s*\(",
             category: DangerCategory::Memory,
             severity: Severity::Critical,
-            reason: "cgc_strcat has no bounds checking; vulnerable to buffer overflow",
+            reason: "Wrapper around strcpy likely has no bounds checking; vulnerable to buffer overflow",
         },
         SourcePattern {
-            regex: r"\bcgc_strcpy\s*\(",
+            regex: r"\b\w+_strcat\s*\(",
             category: DangerCategory::Memory,
             severity: Severity::Critical,
-            reason: "cgc_strcpy has no bounds checking; vulnerable to buffer overflow",
+            reason: "Wrapper around strcat likely has no bounds checking; vulnerable to buffer overflow",
         },
         SourcePattern {
-            regex: r"\bcgc_memcpy\s*\(",
+            regex: r"\b\w+_memcpy\s*\(",
             category: DangerCategory::Memory,
             severity: Severity::High,
-            reason: "cgc_memcpy with unchecked size can cause buffer overflow",
+            reason: "Wrapper around memcpy with unchecked size can cause buffer overflow",
         },
         SourcePattern {
-            regex: r"\bcgc_malloc\s*\(",
-            category: DangerCategory::Memory,
-            severity: Severity::Medium,
-            reason: "cgc_malloc: verify allocation size is not attacker-controlled",
-        },
-        SourcePattern {
-            regex: r"\bcgc_calloc\s*\(",
-            category: DangerCategory::Memory,
-            severity: Severity::Medium,
-            reason: "cgc_calloc: verify count*size doesn't overflow",
-        },
-        SourcePattern {
-            regex: r"\bcgc_free\s*\(",
-            category: DangerCategory::Memory,
-            severity: Severity::Low,
-            reason: "cgc_free: verify no double-free or use-after-free",
-        },
-        SourcePattern {
-            regex: r"\bcgc_printf\s*\(\s*[a-zA-Z_]\w*\s*\)",
+            regex: r"\b\w+_sprintf\s*\(",
             category: DangerCategory::FormatString,
             severity: Severity::High,
-            reason: "cgc_printf with variable as format string; format string vulnerability",
+            reason: "Wrapper around sprintf likely has no bounds checking; use snprintf variant",
+        },
+        SourcePattern {
+            regex: r"\b\w+_printf\s*\(\s*[a-zA-Z_]\w*\s*\)",
+            category: DangerCategory::FormatString,
+            severity: Severity::High,
+            reason: "Printf wrapper with variable format string; format string vulnerability",
+        },
+        SourcePattern {
+            regex: r"\b\w+_malloc\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "Allocation wrapper: verify size is not attacker-controlled",
+        },
+        SourcePattern {
+            regex: r"\b\w+_free\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Low,
+            reason: "Free wrapper: verify no double-free or use-after-free",
+        },
+        SourcePattern {
+            regex: r"\b\w+_allocate\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Custom allocator: verify size parameter is not attacker-controlled",
+        },
+        SourcePattern {
+            regex: r"\b\w+_calloc\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "Custom calloc wrapper: verify count*size doesn't overflow",
+        },
+        SourcePattern {
+            regex: r"\b\w+_transmit\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "Custom transmit function: unchecked size may leak memory",
+        },
+        // Generalized input/receive patterns (any custom read/receive function)
+        SourcePattern {
+            regex: r"\b\w+_receive\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Custom receive function reads into buffer; validate buffer size",
+        },
+        SourcePattern {
+            regex: r"\b\w+_read\s*\([^)]*buf",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Custom read function with buffer parameter; validate size",
         },
     ]
 }
