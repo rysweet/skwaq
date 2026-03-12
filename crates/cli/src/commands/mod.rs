@@ -93,13 +93,13 @@ pub enum Commands {
     /// Map the attack surface
     Surface,
 
-    /// Run AI-driven vulnerability analysis
+    /// Run vulnerability analysis (patterns + AI agents by default)
     Analyze {
         /// Investigation ID to analyze (uses most recent if omitted)
         #[arg(long)]
         investigation: Option<String>,
 
-        /// Quick scan (reduced depth)
+        /// Pattern-only mode (no AI agents, faster but less thorough)
         #[arg(long)]
         quick: bool,
 

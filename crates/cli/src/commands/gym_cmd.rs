@@ -21,9 +21,9 @@ pub enum GymSub {
         #[arg(long)]
         max_cases: Option<usize>,
 
-        /// Use full analysis (default is quick mode)
+        /// Use quick pattern-only mode (default is full analysis with AI agents)
         #[arg(long)]
-        full: bool,
+        quick: bool,
 
         /// Output JSON report to file
         #[arg(long)]
@@ -78,7 +78,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             suite,
             cwe,
             max_cases,
-            full,
+            quick,
             json,
             markdown,
         } => {
@@ -86,7 +86,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 .as_ref()
                 .map(|c| parse_cwe_number(c).map(|n| vec![n]))
                 .transpose()?;
-            gym.run(suite.as_deref(), cwe_filter, *max_cases, *full)
+            gym.run(suite.as_deref(), cwe_filter, *max_cases, *quick)
                 .await?;
 
             if let Some(path) = json {

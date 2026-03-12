@@ -14,7 +14,7 @@ jobs:
 
       - name: Gym smoke test (fixtures, pattern mode)
         run: |
-          ./target/debug/skwaq gym run fixtures --max-cases 5
+          ./target/debug/skwaq gym run fixtures --max-cases 5 --quick
           echo "Gym smoke test passed"
 
       - name: Gym report (JSON)
