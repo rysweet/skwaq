@@ -60,7 +60,7 @@ impl BenchmarkAdapter for CgcAdapter {
         &self,
         case: &TestCase,
         data_dir: &Path,
-        _config: &BenchmarkConfig,
+        config: &BenchmarkConfig,
     ) -> anyhow::Result<Vec<DetectedFinding>> {
         // CGC challenges span multiple source files. Analyze ALL .c files
         // in the challenge's src/ directory, not just the one listed in path.
@@ -77,8 +77,14 @@ impl BenchmarkAdapter for CgcAdapter {
                 let entry = entry?;
                 let path = entry.path();
                 if path.extension().and_then(|e| e.to_str()) == Some("c") {
-                    match run_source_pattern_detection(&path) {
-                        Ok(findings) => all_findings.extend(findings),
+                    let findings = if config.quick_mode {
+                        run_source_pattern_detection(&path)
+                    } else {
+                        crate::agentic::run_agentic_source_analysis(&path, config.timeout_secs)
+                            .await
+                    };
+                    match findings {
+                        Ok(f) => all_findings.extend(f),
                         Err(e) => tracing::debug!("CGC file {} failed: {}", path.display(), e),
                     }
                 }
@@ -87,7 +93,13 @@ impl BenchmarkAdapter for CgcAdapter {
 
         // Fallback: analyze just the listed file if directory walk found nothing
         if all_findings.is_empty() && source_path.exists() {
-            all_findings = run_source_pattern_detection(&source_path)?;
+            if config.quick_mode {
+                all_findings = run_source_pattern_detection(&source_path)?;
+            } else {
+                all_findings =
+                    crate::agentic::run_agentic_source_analysis(&source_path, config.timeout_secs)
+                        .await?;
+            }
         }
 
         Ok(all_findings)
