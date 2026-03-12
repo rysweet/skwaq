@@ -21,20 +21,20 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-/// Tracks how many cases used LLM synthesis vs. deterministic fallback.
+/// Tracks how many cases used LLM synthesis successfully.
 ///
 /// Thread-safe counters for use across concurrent gym case execution.
 /// Call [`SynthesisStats::report`] at end of a gym run to log the summary.
 pub struct SynthesisStats {
     llm_synthesis_count: AtomicU32,
-    fallback_count: AtomicU32,
+    llm_synthesis_error_count: AtomicU32,
 }
 
 impl Default for SynthesisStats {
     fn default() -> Self {
         Self {
             llm_synthesis_count: AtomicU32::new(0),
-            fallback_count: AtomicU32::new(0),
+            llm_synthesis_error_count: AtomicU32::new(0),
         }
     }
 }
@@ -48,30 +48,26 @@ impl SynthesisStats {
         self.llm_synthesis_count.fetch_add(1, Ordering::Relaxed);
     }
 
-    fn record_fallback(&self) {
-        self.fallback_count.fetch_add(1, Ordering::Relaxed);
+    fn record_synthesis_error(&self) {
+        self.llm_synthesis_error_count
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     /// Log end-of-run synthesis summary. Call after all cases complete.
     pub fn report(&self) {
         let llm = self.llm_synthesis_count.load(Ordering::Relaxed);
-        let fallback = self.fallback_count.load(Ordering::Relaxed);
-        let total = llm + fallback;
+        let errors = self.llm_synthesis_error_count.load(Ordering::Relaxed);
+        let total = llm + errors;
         if total == 0 {
             tracing::info!("Synthesis: no dual-source cases (nothing to synthesize)");
             return;
         }
-        if fallback > 0 {
+        if errors > 0 {
             tracing::warn!(
-                "Synthesis summary: {}/{} cases used LLM synthesis, {} used deterministic fallback",
+                "Synthesis summary: {}/{} cases used LLM synthesis, {} returned errors (caller used pattern-only)",
                 llm,
                 total,
-                fallback,
-            );
-            eprintln!(
-                "\n  WARNING: {}/{} synthesis cases fell back to deterministic merge.\n  \
-                 LLM synthesis may not be working. Check warnings above.\n",
-                fallback, total,
+                errors,
             );
         } else {
             tracing::info!(
@@ -196,13 +192,23 @@ pub async fn run_agentic_source_analysis(
     }
 
     // --- Layer 4: LLM agent pipeline ---
-    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await;
+    if let Err(e) = run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await {
+        tracing::warn!(
+            "WARNING: LLM pipeline failed ({}), returning pattern-only results",
+            e
+        );
+        eprintln!(
+            "  WARNING: LLM pipeline failed ({}), returning pattern-only results",
+            e
+        );
+        return Ok(pattern_findings);
+    }
 
     // --- Layer 5: Synthesis — weigh all evidence ---
     // Collect ALL findings from DB (pattern + orchestrator + LLM)
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
 
-    // If no LLM was available, return pattern findings directly
+    // If no LLM findings were produced, return pattern findings directly
     if all_findings
         .iter()
         .all(|f| f.title.starts_with("Dangerous pattern:"))
@@ -213,17 +219,29 @@ pub async fn run_agentic_source_analysis(
     // Synthesize: use LLM to weigh all evidence and decide which findings are credible.
     // Unlike the old intersection filter, this preserves LLM-only findings that
     // demonstrate real understanding of the code.
-    let synthesized =
-        synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await;
-
-    // Deduplicate by category (keep one finding per category)
-    let mut seen_categories: HashSet<String> = HashSet::new();
-    let deduped: Vec<DetectedFinding> = synthesized
-        .into_iter()
-        .filter(|f| seen_categories.insert(f.category.clone()))
-        .collect();
-
-    Ok(deduped)
+    match synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await {
+        Ok(synthesized) => {
+            // Deduplicate by category (keep one finding per category)
+            let mut seen_categories: HashSet<String> = HashSet::new();
+            let deduped: Vec<DetectedFinding> = synthesized
+                .into_iter()
+                .filter(|f| seen_categories.insert(f.category.clone()))
+                .collect();
+            Ok(deduped)
+        }
+        Err(e) => {
+            SYNTHESIS_STATS.record_synthesis_error();
+            tracing::warn!(
+                "WARNING: LLM synthesis failed ({}), returning pattern-only results",
+                e
+            );
+            eprintln!(
+                "  WARNING: LLM synthesis failed ({}), returning pattern-only results",
+                e
+            );
+            Ok(pattern_findings)
+        }
+    }
 }
 
 /// Run full agentic analysis on a compiled binary.
@@ -319,7 +337,17 @@ pub async fn run_agentic_binary_analysis(
     }
 
     // LLM agent pipeline
-    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await;
+    if let Err(e) = run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await {
+        tracing::warn!(
+            "WARNING: LLM pipeline failed ({}), returning pattern-only results",
+            e
+        );
+        eprintln!(
+            "  WARNING: LLM pipeline failed ({}), returning pattern-only results",
+            e
+        );
+        return Ok(pattern_findings);
+    }
 
     // Synthesis — weigh all evidence
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
@@ -331,16 +359,28 @@ pub async fn run_agentic_binary_analysis(
         return Ok(pattern_findings);
     }
 
-    let synthesized =
-        synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await;
-
-    let mut seen_categories: HashSet<String> = HashSet::new();
-    let deduped: Vec<DetectedFinding> = synthesized
-        .into_iter()
-        .filter(|f| seen_categories.insert(f.category.clone()))
-        .collect();
-
-    Ok(deduped)
+    match synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await {
+        Ok(synthesized) => {
+            let mut seen_categories: HashSet<String> = HashSet::new();
+            let deduped: Vec<DetectedFinding> = synthesized
+                .into_iter()
+                .filter(|f| seen_categories.insert(f.category.clone()))
+                .collect();
+            Ok(deduped)
+        }
+        Err(e) => {
+            SYNTHESIS_STATS.record_synthesis_error();
+            tracing::warn!(
+                "WARNING: LLM synthesis failed ({}), returning pattern-only results",
+                e
+            );
+            eprintln!(
+                "  WARNING: LLM synthesis failed ({}), returning pattern-only results",
+                e
+            );
+            Ok(pattern_findings)
+        }
+    }
 }
 
 /// Run LLM-only analysis on a source file (no pattern detection).
@@ -375,7 +415,7 @@ pub async fn run_llm_only_source_analysis(
     builder.build_from_source(std::slice::from_ref(&parsed), &inv_id)?;
 
     // Skip pattern detection — go straight to LLM pipeline
-    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await;
+    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
 
     // Return all LLM findings directly (no intersection filter)
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
@@ -420,7 +460,7 @@ pub async fn run_llm_only_binary_analysis(
     builder.build_from_binary_info(&binary_info, &inv_id)?;
 
     // Skip pattern detection — go straight to LLM pipeline
-    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await;
+    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
 
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
 
@@ -448,15 +488,15 @@ pub async fn run_llm_only_binary_analysis(
 /// - Uses judgment to CONFIRM or REJECT each finding
 ///
 /// When an LLM is available, calls it to evaluate all findings together.
-/// Falls back to deterministic merge (LLM-priority union) when unavailable.
+/// Returns an error when LLM synthesis fails — the caller decides what to do.
 async fn synthesize_findings(
     all_findings: Vec<DetectedFinding>,
     _pattern_categories: &HashSet<String>,
     _db: &GraphDb,
     timeout_secs: u64,
-) -> Vec<DetectedFinding> {
+) -> anyhow::Result<Vec<DetectedFinding>> {
     if all_findings.is_empty() {
-        return all_findings;
+        return Ok(all_findings);
     }
 
     // Classify findings by source
@@ -473,21 +513,16 @@ async fn synthesize_findings(
 
     // If only one source produced findings, trust it directly
     if pattern_findings.is_empty() || llm_findings.is_empty() {
-        return all_findings;
+        return Ok(all_findings);
     }
 
-    // Both sources have findings — attempt LLM synthesis
-    match llm_synthesize(&pattern_findings, &llm_findings, timeout_secs).await {
-        Some(synthesized) => {
-            SYNTHESIS_STATS.record_llm_synthesis();
-            synthesized
-        }
-        None => {
-            SYNTHESIS_STATS.record_fallback();
-            // Fallback: deterministic merge with LLM priority
-            merge_findings_deterministic(all_findings)
-        }
-    }
+    // Both sources have findings — LLM synthesis required
+    let synthesized = llm_synthesize(&pattern_findings, &llm_findings, timeout_secs)
+        .await
+        .ok_or_else(|| anyhow::anyhow!("LLM synthesis failed (see warnings above)"))?;
+
+    SYNTHESIS_STATS.record_llm_synthesis();
+    Ok(synthesized)
 }
 
 /// Call the LLM to evaluate findings like a lead security reviewer.
@@ -675,50 +710,16 @@ fn apply_synthesis_decisions(
     synthesized
 }
 
-/// Deterministic merge fallback: LLM-priority union with deduplication.
-/// Used when the LLM synthesis call is unavailable.
-fn merge_findings_deterministic(all_findings: Vec<DetectedFinding>) -> Vec<DetectedFinding> {
-    let mut synthesized = Vec::new();
-    let mut seen_ids: HashSet<String> = HashSet::new();
+/// Run the LLM agent pipeline. Returns an error if config, client, or pipeline fails.
+async fn run_llm_pipeline(
+    db: &GraphDb,
+    inv_id: &str,
+    file_str: &str,
+    timeout_secs: u64,
+) -> anyhow::Result<()> {
+    let config = Config::load()?;
 
-    // First pass: add all LLM findings
-    for f in &all_findings {
-        if !f.title.starts_with("Dangerous pattern:")
-            && !f.title.starts_with("Binary import:")
-            && seen_ids.insert(f.id.clone())
-        {
-            synthesized.push(f.clone());
-        }
-    }
-
-    // Second pass: add pattern findings for uncovered categories
-    let llm_categories: HashSet<String> = synthesized.iter().map(|f| f.category.clone()).collect();
-    for f in &all_findings {
-        if (f.title.starts_with("Dangerous pattern:") || f.title.starts_with("Binary import:"))
-            && !llm_categories.contains(&f.category)
-            && seen_ids.insert(f.id.clone())
-        {
-            synthesized.push(f.clone());
-        }
-    }
-
-    synthesized
-}
-
-/// Run the LLM agent pipeline if ANTHROPIC_API_KEY is configured.
-async fn run_llm_pipeline(db: &GraphDb, inv_id: &str, file_str: &str, timeout_secs: u64) {
-    let config = match Config::load() {
-        Ok(c) => c,
-        Err(_) => return,
-    };
-
-    let llm_client = match skwaq_core::llm::create_client(&config.llm).await {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::warn!("LLM not available ({}), using pattern-only analysis", e);
-            return;
-        }
-    };
+    let llm_client = skwaq_core::llm::create_client(&config.llm).await?;
 
     let pipeline = skwaq_core::agents::deep_pipeline();
     let budget_amount = config.analysis.default_token_budget.min(100_000);
@@ -731,32 +732,22 @@ async fn run_llm_pipeline(db: &GraphDb, inv_id: &str, file_str: &str, timeout_se
 
     tracing::info!("Running LLM agent pipeline on {}", target);
 
-    match tokio::time::timeout(
+    let results = tokio::time::timeout(
         std::time::Duration::from_secs(timeout_secs),
         pipeline.run(&target, inv_id, db, llm_client, &mut budget),
     )
     .await
-    {
-        Ok(Ok(results)) => {
-            let total_tokens: u64 = results.iter().map(|r| r.tokens_used).sum();
-            tracing::info!(
-                "LLM pipeline completed for {}: {} agents, {} tokens",
-                target,
-                results.len(),
-                total_tokens,
-            );
-        }
-        Ok(Err(e)) => {
-            tracing::warn!("LLM pipeline failed for {}: {}", file_str, e);
-        }
-        Err(_) => {
-            tracing::warn!(
-                "LLM pipeline timed out for {} after {}s",
-                file_str,
-                timeout_secs
-            );
-        }
-    }
+    .map_err(|_| anyhow::anyhow!("LLM pipeline timed out after {}s", timeout_secs))??;
+
+    let total_tokens: u64 = results.iter().map(|r| r.tokens_used).sum();
+    tracing::info!(
+        "LLM pipeline completed for {}: {} agents, {} tokens",
+        target,
+        results.len(),
+        total_tokens,
+    );
+
+    Ok(())
 }
 
 /// Collect findings from DB, optionally excluding a specific agent.
@@ -917,105 +908,11 @@ mod tests {
         assert_eq!(deduped.len(), 1);
     }
 
-    #[test]
-    fn test_merge_findings_pattern_only() {
-        let findings = vec![DetectedFinding {
-            id: "p1".into(),
-            category: "memory".into(),
-            severity: "high".into(),
-            cwes: vec![],
-            file: "test.c".into(),
-            function: "strcpy".into(),
-            line: Some(10),
-            title: "Dangerous pattern: strcpy".into(),
-        }];
-        let result = merge_findings_deterministic(findings);
-        assert_eq!(result.len(), 1, "Pattern-only: should keep all");
-    }
-
-    #[test]
-    fn test_merge_findings_llm_only() {
-        let findings = vec![DetectedFinding {
-            id: "l1".into(),
-            category: "memory".into(),
-            severity: "critical".into(),
-            cwes: vec![],
-            file: "test.c".into(),
-            function: "strcpy".into(),
-            line: Some(10),
-            title: "LLM: buffer overflow in strcpy".into(),
-        }];
-        let result = merge_findings_deterministic(findings);
-        assert_eq!(result.len(), 1, "LLM-only: should keep all");
-    }
-
-    #[test]
-    fn test_merge_findings_overlapping_categories() {
-        // Both sources find "memory" — should deduplicate to 1 finding (LLM preferred)
-        let findings = vec![
-            DetectedFinding {
-                id: "p1".into(),
-                category: "memory".into(),
-                severity: "high".into(),
-                cwes: vec![],
-                file: "test.c".into(),
-                function: "strcpy".into(),
-                line: Some(10),
-                title: "Dangerous pattern: strcpy".into(),
-            },
-            DetectedFinding {
-                id: "l1".into(),
-                category: "memory".into(),
-                severity: "critical".into(),
-                cwes: vec![],
-                file: "test.c".into(),
-                function: "strcpy".into(),
-                line: Some(10),
-                title: "LLM: buffer overflow with taint path".into(),
-            },
-        ];
-        let result = merge_findings_deterministic(findings);
-        assert_eq!(result.len(), 1, "Overlapping: should deduplicate");
-        assert!(
-            result[0].title.starts_with("LLM:"),
-            "LLM finding should be preferred"
-        );
-    }
-
-    #[test]
-    fn test_merge_findings_disjoint_categories() {
-        // Pattern finds "memory", LLM finds "injection" — keep both
-        let findings = vec![
-            DetectedFinding {
-                id: "p1".into(),
-                category: "memory".into(),
-                severity: "high".into(),
-                cwes: vec![],
-                file: "test.c".into(),
-                function: "strcpy".into(),
-                line: Some(10),
-                title: "Dangerous pattern: strcpy".into(),
-            },
-            DetectedFinding {
-                id: "l1".into(),
-                category: "injection".into(),
-                severity: "critical".into(),
-                cwes: vec![],
-                file: "test.c".into(),
-                function: "system".into(),
-                line: Some(20),
-                title: "LLM: command injection via user input".into(),
-            },
-        ];
-        let result = merge_findings_deterministic(findings);
-        assert_eq!(result.len(), 2, "Disjoint: should keep both");
-    }
-
     #[tokio::test]
     async fn test_synthesize_findings_empty() {
         let db = GraphDb::in_memory().unwrap();
         let cats = HashSet::new();
-        let result = synthesize_findings(vec![], &cats, &db, 30).await;
+        let result = synthesize_findings(vec![], &cats, &db, 30).await.unwrap();
         assert!(result.is_empty());
     }
 
@@ -1154,7 +1051,9 @@ mod tests {
             line: Some(1),
             title: "LLM: something dangerous".into(),
         }];
-        let result = synthesize_findings(findings.clone(), &cats, &db, 30).await;
+        let result = synthesize_findings(findings.clone(), &cats, &db, 30)
+            .await
+            .unwrap();
         assert_eq!(result.len(), 1, "Single-source should pass through");
     }
 
@@ -1172,10 +1071,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_synthesis_is_tracked() {
-        // When both sources have findings, synthesize_findings should
-        // attempt LLM synthesis and track the outcome (either success or fallback).
-        // It must NOT silently skip tracking.
+    async fn test_synthesis_returns_result_not_silent_fallback() {
+        // When both sources have findings, synthesize_findings returns Result:
+        // - Ok(findings) when LLM synthesis succeeds
+        // - Err when LLM synthesis fails (no silent deterministic fallback)
         let db = GraphDb::in_memory().unwrap();
         let cats = HashSet::new();
 
@@ -1202,24 +1101,27 @@ mod tests {
             },
         ];
 
-        let stats = synthesis_stats();
-        let before_llm = stats.llm_synthesis_count.load(Ordering::Relaxed);
-        let before_fallback = stats.fallback_count.load(Ordering::Relaxed);
-
+        // synthesize_findings returns Result, not a silent fallback Vec
         let result = synthesize_findings(findings, &cats, &db, 30).await;
-        assert!(!result.is_empty(), "Should produce findings");
-
-        let after_llm = stats.llm_synthesis_count.load(Ordering::Relaxed);
-        let after_fallback = stats.fallback_count.load(Ordering::Relaxed);
-
-        // Either LLM synthesis succeeded or fallback was used — one counter must increase
-        let total_increase = (after_llm - before_llm) + (after_fallback - before_fallback);
-        assert!(
-            total_increase > 0,
-            "Synthesis must track its outcome: llm_delta={}, fallback_delta={} (neither changed!)",
-            after_llm - before_llm,
-            after_fallback - before_fallback,
-        );
+        // Either Ok (LLM available) or Err (LLM unavailable) — never a silent merge
+        match &result {
+            Ok(findings) => {
+                assert!(
+                    !findings.is_empty(),
+                    "Successful synthesis should have findings"
+                );
+            }
+            Err(e) => {
+                let msg = e.to_string();
+                assert!(
+                    msg.contains("synthesis failed")
+                        || msg.contains("config")
+                        || msg.contains("client"),
+                    "Error should describe the LLM failure, got: {}",
+                    msg
+                );
+            }
+        }
     }
 
     #[test]
@@ -1227,8 +1129,8 @@ mod tests {
         let stats = SynthesisStats::new();
         stats.record_llm_synthesis();
         stats.record_llm_synthesis();
-        stats.record_fallback();
-        // Just verify it doesn't panic — the output goes to tracing/eprintln
+        stats.record_synthesis_error();
+        // Just verify it doesn't panic — the output goes to tracing
         stats.report();
     }
 }
