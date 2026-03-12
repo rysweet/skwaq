@@ -1,10 +1,10 @@
 //! CLI command for `skwaq diff-analyze`: compare two binary versions
 //! and analyze security-relevant differences using AI agents.
 
-use std::path::PathBuf;
+use std::path::Path;
 
 /// Run diff-analyze: ingest both binaries, diff functions, analyze with AI.
-pub async fn run(v1: &PathBuf, v2: &PathBuf, advisory: Option<&str>) -> anyhow::Result<()> {
+pub async fn run(v1: &Path, v2: &Path, advisory: Option<&str>) -> anyhow::Result<()> {
     use skwaq_core::binary::native::parse_binary;
     use skwaq_core::graph::builder::GraphBuilder;
     use skwaq_core::graph::GraphDb;
