@@ -762,7 +762,7 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::Low,
             reason: "calloc is safer than malloc for arrays but verify count*size doesn't overflow",
         },
-        // CGC (DARPA Cyber Grand Challenge) custom syscalls — from self-improvement iteration 6
+        // CGC (DARPA Cyber Grand Challenge) custom APIs — self-improvement iterations 6+8
         SourcePattern {
             regex: r"\bcgc_allocate\s*\(",
             category: DangerCategory::Memory,
@@ -786,6 +786,49 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::Memory,
             severity: Severity::Medium,
             reason: "cgc_transmit sends buffer contents; unchecked size may leak memory (info disclosure)",
+        },
+        // CGC string/memory operations (wrappers around libc that lack bounds checking)
+        SourcePattern {
+            regex: r"\bcgc_strcat\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Critical,
+            reason: "cgc_strcat has no bounds checking; vulnerable to buffer overflow",
+        },
+        SourcePattern {
+            regex: r"\bcgc_strcpy\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Critical,
+            reason: "cgc_strcpy has no bounds checking; vulnerable to buffer overflow",
+        },
+        SourcePattern {
+            regex: r"\bcgc_memcpy\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "cgc_memcpy with unchecked size can cause buffer overflow",
+        },
+        SourcePattern {
+            regex: r"\bcgc_malloc\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "cgc_malloc: verify allocation size is not attacker-controlled",
+        },
+        SourcePattern {
+            regex: r"\bcgc_calloc\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "cgc_calloc: verify count*size doesn't overflow",
+        },
+        SourcePattern {
+            regex: r"\bcgc_free\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Low,
+            reason: "cgc_free: verify no double-free or use-after-free",
+        },
+        SourcePattern {
+            regex: r"\bcgc_printf\s*\(\s*[a-zA-Z_]\w*\s*\)",
+            category: DangerCategory::FormatString,
+            severity: Severity::High,
+            reason: "cgc_printf with variable as format string; format string vulnerability",
         },
     ]
 }
