@@ -69,11 +69,8 @@ impl BenchmarkAdapter for FixturesAdapter {
                     return if config.quick_mode {
                         run_binary_pattern_detection(&binary)
                     } else {
-                        crate::agentic::run_agentic_binary_analysis(
-                            &binary,
-                            config.timeout_secs,
-                        )
-                        .await
+                        crate::agentic::run_agentic_binary_analysis(&binary, config.timeout_secs)
+                            .await
                     };
                 }
                 tracing::warn!(

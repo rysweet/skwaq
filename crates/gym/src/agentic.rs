@@ -265,8 +265,7 @@ pub async fn run_agentic_binary_analysis(
     let orchestrator = skwaq_core::analysis::AnalysisOrchestrator::new(&db, 3);
     let _cycles = orchestrator.run_quick_analysis(&inv_id)?;
 
-    let orchestrator_findings =
-        collect_findings_from_db(&db, &inv_id, "binary-pattern-detector")?;
+    let orchestrator_findings = collect_findings_from_db(&db, &inv_id, "binary-pattern-detector")?;
     for f in &orchestrator_findings {
         pattern_categories.insert(f.category.clone());
     }
