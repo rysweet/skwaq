@@ -21,8 +21,10 @@ pub struct BenchmarkConfig {
     pub cwe_filter: Option<Vec<u32>>,
     /// Maximum test cases to run (for quick validation). None = all.
     pub max_cases: Option<usize>,
-    /// Whether to use skwaq's quick mode or full analysis.
+    /// Whether to use skwaq's quick mode (pattern-only, no LLM agents).
     pub quick_mode: bool,
+    /// Whether to use LLM-only mode (no pattern detection, agents only).
+    pub llm_only: bool,
     /// Whether to analyze compiled binaries instead of source code.
     pub binary_mode: bool,
     /// Number of parallel compilation/analysis jobs.

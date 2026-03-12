@@ -194,6 +194,9 @@ async fn analyze_false_negatives(
     let mut seen = std::collections::HashSet::new();
     proposals.retain(|p| seen.insert(p.description.clone()));
 
+    // Run overfitting review gate on proposals
+    proposals = run_overfitting_review(proposals, suite).await;
+
     proposals
 }
 
@@ -350,6 +353,129 @@ fn parse_analyst_proposals(
     }
 
     proposals
+}
+
+/// Run the overfitting-reviewer agent as a gate on proposals.
+///
+/// Each proposal is evaluated for real-world generality vs benchmark overfitting.
+/// Proposals that the reviewer rejects (benchmark-specific, wildcard FP risk,
+/// inflated CWE mapping) are filtered out.
+async fn run_overfitting_review(proposals: Vec<Improvement>, suite: &str) -> Vec<Improvement> {
+    if proposals.is_empty() {
+        return proposals;
+    }
+
+    let config = match skwaq_core::config::Config::load() {
+        Ok(c) => c,
+        Err(_) => {
+            tracing::debug!("Config not available for overfitting review, passing all proposals");
+            return proposals;
+        }
+    };
+
+    let llm_client = match skwaq_core::llm::create_client(&config.llm).await {
+        Ok(c) => c,
+        Err(_) => {
+            tracing::debug!("LLM not available for overfitting review, passing all proposals");
+            return proposals;
+        }
+    };
+
+    let agent = match skwaq_core::agents::definition::load_agent("overfitting-reviewer") {
+        Ok(a) => a,
+        Err(_) => {
+            tracing::warn!("overfitting-reviewer agent not found, passing all proposals");
+            return proposals;
+        }
+    };
+
+    let runner = skwaq_core::agents::runner::AgentRunner::new(llm_client);
+    let budget_amount = config.analysis.default_token_budget.min(20_000);
+
+    // Format all proposals for review
+    let mut proposal_text = format!(
+        "Review these {} improvement proposals from the {} benchmark for overfitting risk:\n\n",
+        proposals.len(),
+        suite
+    );
+    for (i, p) in proposals.iter().enumerate() {
+        let kind = match &p.kind {
+            ImprovementKind::NewPattern => "NEW_PATTERN",
+            ImprovementKind::AgentPrompt => "AGENT_PROMPT",
+            ImprovementKind::CweMapping => "CWE_MAPPING",
+            ImprovementKind::TaintRule => "TAINT_RULE",
+            ImprovementKind::GroundTruthFix => "GROUND_TRUTH",
+        };
+        proposal_text.push_str(&format!(
+            "{}. [{}] {}\n   Target CWEs: {:?}\n   Patch: {}\n   From case: {}\n\n",
+            i + 1,
+            kind,
+            p.description,
+            p.target_cwes,
+            p.patch.replace,
+            p.source_case,
+        ));
+    }
+
+    let db = match skwaq_core::graph::GraphDb::in_memory() {
+        Ok(d) => d,
+        Err(_) => return proposals,
+    };
+    let inv_id = "overfitting-review";
+    let now = chrono::Utc::now().to_rfc3339();
+    if db
+        .execute(
+            "INSERT INTO investigations (id, name, target, status, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
+            &[&inv_id, &"review", &"review", &now.as_str(), &now.as_str()],
+        )
+        .is_err()
+    {
+        return proposals;
+    }
+
+    let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
+
+    match runner
+        .run_agent_with_db(&agent, inv_id, &proposal_text, &db, &mut budget)
+        .await
+    {
+        Ok(result) => {
+            let output = &result.output;
+            let mut accepted = Vec::new();
+
+            for (i, proposal) in proposals.into_iter().enumerate() {
+                // Look for verdict for this proposal number
+                let marker = format!("{}.", i + 1);
+                let is_rejected = output.lines().any(|line| {
+                    let l = line.to_uppercase();
+                    (l.contains(&marker) || l.contains(&format!("Proposal {}", i + 1)))
+                        && l.contains("REJECT")
+                });
+
+                if is_rejected {
+                    tracing::info!(
+                        "Overfitting reviewer REJECTED proposal: {}",
+                        proposal.description
+                    );
+                } else {
+                    accepted.push(proposal);
+                }
+            }
+
+            let rejected_count = accepted.len();
+            tracing::info!(
+                "Overfitting review: {}/{} proposals accepted",
+                rejected_count,
+                rejected_count + (accepted.len() - rejected_count).max(0)
+            );
+            accepted
+        }
+        Err(e) => {
+            tracing::warn!("Overfitting reviewer failed: {}, passing all proposals", e);
+            proposals
+        }
+    }
 }
 
 /// Heuristic analysis of false negatives (no LLM needed).

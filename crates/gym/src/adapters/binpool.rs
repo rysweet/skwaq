@@ -79,6 +79,8 @@ impl BenchmarkAdapter for BinPoolAdapter {
             }
             return if config.quick_mode {
                 run_binary_pattern_detection(&binary)
+            } else if config.llm_only {
+                crate::agentic::run_llm_only_binary_analysis(&binary, config.timeout_secs).await
             } else {
                 crate::agentic::run_agentic_binary_analysis(&binary, config.timeout_secs).await
             };
