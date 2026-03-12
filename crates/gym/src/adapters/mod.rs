@@ -21,6 +21,8 @@ pub struct BenchmarkConfig {
     pub max_cases: Option<usize>,
     /// Whether to use skwaq's quick mode or full analysis.
     pub quick_mode: bool,
+    /// Whether to analyze compiled binaries instead of source code.
+    pub binary_mode: bool,
     /// Number of parallel compilation/analysis jobs.
     pub parallelism: usize,
     /// Per-case timeout in seconds.
@@ -78,6 +80,35 @@ pub struct DetectedFinding {
     pub line: Option<u32>,
     /// Short description.
     pub title: String,
+}
+
+/// Run skwaq's binary analysis on a compiled binary and collect findings.
+/// Uses native parsing (goblin) + DangerousApiDetector on imports.
+pub fn run_binary_pattern_detection(path: &Path) -> anyhow::Result<Vec<DetectedFinding>> {
+    use skwaq_core::analysis::patterns_binary::DangerousApiDetector;
+    use skwaq_core::binary::native::parse_binary;
+
+    let binary_info = parse_binary(path)?;
+    let file_str = path.to_string_lossy().to_string();
+
+    let detector = DangerousApiDetector::new();
+    let hits = detector.check_imports(&binary_info.imports);
+
+    let findings = hits
+        .into_iter()
+        .map(|hit| DetectedFinding {
+            id: uuid::Uuid::new_v4().to_string(),
+            category: hit.danger_category.to_string(),
+            severity: hit.severity.to_string(),
+            cwes: vec![],
+            file: file_str.clone(),
+            function: hit.function_name.clone(),
+            line: None,
+            title: format!("Binary import: {}", hit.function_name),
+        })
+        .collect();
+
+    Ok(findings)
 }
 
 /// Run skwaq's source analysis on a file and collect findings.

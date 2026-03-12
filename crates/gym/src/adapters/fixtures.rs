@@ -61,6 +61,26 @@ impl BenchmarkAdapter for FixturesAdapter {
         data_dir: &Path,
         config: &BenchmarkConfig,
     ) -> anyhow::Result<Vec<DetectedFinding>> {
+        // Binary mode: analyze compiled binary instead of source
+        if config.binary_mode {
+            if let Some(bp) = &case.binary_path {
+                let binary = data_dir.join(bp);
+                if binary.exists() {
+                    return if config.quick_mode {
+                        run_binary_pattern_detection(&binary)
+                    } else {
+                        crate::agentic::run_agentic_binary_analysis(&binary, config.timeout_secs)
+                            .await
+                    };
+                }
+                tracing::warn!(
+                    "Binary {} not found for case {}, falling back to source",
+                    binary.display(),
+                    case.id
+                );
+            }
+        }
+
         let path = data_dir.join(&case.path);
         if config.quick_mode {
             run_source_pattern_detection(&path)
@@ -104,6 +124,7 @@ mod tests {
             cwe_filter: None,
             max_cases: None,
             quick_mode: true,
+            binary_mode: false,
             parallelism: 1,
             timeout_secs: 30,
         }
@@ -144,6 +165,7 @@ mod tests {
         let case = TestCase {
             id: "buffer_overflow".to_string(),
             path: "buffer_overflow.c".to_string(),
+            binary_path: Some("binaries/buffer_overflow_O0".to_string()),
             expected_cwes: vec![121],
             is_negative: false,
             language: "c".to_string(),
@@ -172,6 +194,7 @@ mod tests {
         let case = TestCase {
             id: "command_injection".to_string(),
             path: "command_injection.c".to_string(),
+            binary_path: Some("binaries/command_injection_O0".to_string()),
             expected_cwes: vec![78],
             is_negative: false,
             language: "c".to_string(),
@@ -191,6 +214,67 @@ mod tests {
         assert!(
             has_injection,
             "Expected injection-family CWE in command_injection.c"
+        );
+    }
+
+    fn binary_test_config() -> BenchmarkConfig {
+        BenchmarkConfig {
+            cache_dir: PathBuf::from("/tmp/gym-test"),
+            cwe_filter: None,
+            max_cases: None,
+            quick_mode: true,
+            binary_mode: true,
+            parallelism: 1,
+            timeout_secs: 30,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_run_case_binary_mode() {
+        let adapter = FixturesAdapter::new(test_manifest_path(), test_fixtures_dir());
+        let case = TestCase {
+            id: "buffer_overflow".to_string(),
+            path: "buffer_overflow.c".to_string(),
+            binary_path: Some("binaries/buffer_overflow_O0".to_string()),
+            expected_cwes: vec![121],
+            is_negative: false,
+            language: "c".to_string(),
+        };
+        // Ensure binary exists
+        let binary = test_fixtures_dir().join("binaries/buffer_overflow_O0");
+        if !binary.exists() {
+            return; // Skip if fixtures not compiled
+        }
+        let findings = adapter
+            .run_case(&case, &test_fixtures_dir(), &binary_test_config())
+            .await
+            .unwrap();
+        assert!(
+            !findings.is_empty(),
+            "Expected findings from binary analysis of buffer_overflow"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_run_case_binary_mode_falls_back_to_source() {
+        let adapter = FixturesAdapter::new(test_manifest_path(), test_fixtures_dir());
+        // Python case has no binary_path, should fall back to source
+        let case = TestCase {
+            id: "vuln_app_py".to_string(),
+            path: "vuln_app.py".to_string(),
+            binary_path: None,
+            expected_cwes: vec![78],
+            is_negative: false,
+            language: "python".to_string(),
+        };
+        let findings = adapter
+            .run_case(&case, &test_fixtures_dir(), &binary_test_config())
+            .await
+            .unwrap();
+        // Should still produce findings from source analysis fallback
+        assert!(
+            !findings.is_empty(),
+            "Expected findings from source fallback for vuln_app.py"
         );
     }
 }

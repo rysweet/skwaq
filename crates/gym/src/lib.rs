@@ -83,6 +83,7 @@ impl Gym {
             cwe_filter: None,
             max_cases: None,
             quick_mode: false,
+            binary_mode: false,
             parallelism: 4,
             timeout_secs: 1800,
         };
@@ -113,12 +114,14 @@ impl Gym {
     ///
     /// By default, runs full analysis (pattern detection + AI agents).
     /// Pass `quick_only=true` to use pattern-only mode (faster, no LLM).
+    /// Pass `binary_mode=true` to analyze compiled binaries instead of source.
     pub async fn run(
         &mut self,
         suite: Option<&str>,
         cwe_filter: Option<Vec<u32>>,
         max_cases: Option<usize>,
         quick_only: bool,
+        binary_mode: bool,
     ) -> anyhow::Result<()> {
         let commit = get_git_commit(&self.skwaq_root)?;
 
@@ -145,6 +148,7 @@ impl Gym {
             // 30 minutes is generous but prevents infinite hangs.
             config.timeout_secs = 1800;
         }
+        config.binary_mode = binary_mode;
 
         for adapter in adapters {
             let suite_name = adapter.name().to_string();
