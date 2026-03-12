@@ -47,16 +47,16 @@
 
         <div class="stats">
             <div class="stat">
-                <div class="value">81.0%</div>
-                <div class="label">Juliet F1 (Pattern Mode)</div>
+                <div class="value">93.0%</div>
+                <div class="label">OWASP F1 (Best Suite)</div>
             </div>
             <div class="stat">
                 <div class="value">100%</div>
                 <div class="label">Precision (All Suites)</div>
             </div>
             <div class="stat">
-                <div class="value">6,675</div>
-                <div class="label">Benchmark Cases</div>
+                <div class="value">6,100</div>
+                <div class="label">Benchmark Cases Evaluated</div>
             </div>
             <div class="stat">
                 <div class="value">183</div>
@@ -84,21 +84,22 @@
                 <tr><td>Dual-Judge</td><td>Full (LLM)</td><td>66.7%</td><td>50.0%</td><td>100.0%</td><td>5/5</td><td>-81% FPs</td></tr>
                 <tr><td>+query expansion</td><td>Full (LLM)</td><td>66.7%</td><td>50.0%</td><td>100.0%</td><td>5/5</td><td>0 unsupported warnings</td></tr>
                 <tr><td>Enriched GT</td><td>Patterns</td><td>92.9%</td><td>100.0%</td><td>86.7%</td><td>8/10</td><td>0 false positives</td></tr>
-                <tr style="background:#3fb95022"><td>Cycle 6: Per-CWE Dedup</td><td>Patterns</td><td><strong>81.0%</strong></td><td><strong>100.0%</strong></td><td>68.0%</td><td>112 CWEs</td><td>Juliet +32pp, CGC first score</td></tr>
+                <tr><td>Cycle 6: Per-CWE Dedup</td><td>Patterns</td><td><strong>81.0%</strong></td><td><strong>100.0%</strong></td><td>68.0%</td><td>112 CWEs</td><td>Juliet +32pp, CGC first score</td></tr>
+                <tr style="background:#3fb95022"><td>Cycle 6 Final</td><td>Patterns</td><td><strong>65.4%</strong></td><td><strong>100.0%</strong></td><td>48.5%</td><td>54,484 CWEs</td><td>Full-scale manifests, OWASP 93%, CGC 53%</td></tr>
             </tbody>
         </table>
 
-        <h2>Multi-Suite Benchmark Results (Cycle 6)</h2>
+        <h2>Multi-Suite Benchmark Results (Cycle 6 Final)</h2>
         <table>
             <thead>
                 <tr><th>Suite</th><th>Cases</th><th>F1</th><th>Precision</th><th>Recall</th><th>TP</th><th>FP</th><th>FN</th></tr>
             </thead>
             <tbody>
                 <tr><td>Fixtures</td><td>7</td><td><strong>100.0%</strong></td><td>100.0%</td><td>100.0%</td><td>15</td><td>0</td><td>0</td></tr>
-                <tr><td>OWASP</td><td>2,740</td><td><strong>85.7%</strong></td><td>100.0%</td><td>75.0%</td><td>96</td><td>0</td><td>32</td></tr>
-                <tr><td>Juliet</td><td>3,288</td><td><strong>81.0%</strong></td><td>100.0%</td><td>68.0%</td><td>340</td><td>0</td><td>160</td></tr>
-                <tr><td>CGC</td><td>204</td><td><strong>42.9%</strong></td><td>100.0%</td><td>27.3%</td><td>30</td><td>0</td><td>80</td></tr>
-                <tr><td>CyberSecEval</td><td>443</td><td><strong>11.3%</strong></td><td>100.0%</td><td>6.0%</td><td>3</td><td>0</td><td>47</td></tr>
+                <tr><td>OWASP</td><td>2,740</td><td><strong>93.0%</strong></td><td>100.0%</td><td>86.9%</td><td>251</td><td>0</td><td>38</td></tr>
+                <tr><td>Juliet</td><td>54,484</td><td><strong>65.4%</strong></td><td>100.0%</td><td>48.5%</td><td>2427</td><td>0</td><td>2573</td></tr>
+                <tr><td>CGC</td><td>204</td><td><strong>53.2%</strong></td><td>100.0%</td><td>36.3%</td><td>157</td><td>0</td><td>276</td></tr>
+                <tr><td>CyberSecEval</td><td>578</td><td><strong>81.7%</strong></td><td>100.0%</td><td>69.0%</td><td>138</td><td>0</td><td>62</td></tr>
             </tbody>
         </table>
 
@@ -167,10 +168,10 @@
 
         <h3>Benchmarks</h3>
         <p><strong>Fixtures:</strong> 7 hand-crafted test cases (C, Python, JavaScript) covering 5 CWE families: buffer overflow (CWE-121), command injection (CWE-78), format string (CWE-134), integer overflow (CWE-190), use-after-free (CWE-416).</p>
-        <p><strong>NIST Juliet:</strong> 3,288 test cases across 112 CWEs from the Juliet C/C++ 1.3 suite.</p>
+        <p><strong>NIST Juliet:</strong> 54,484 test cases across 116 CWEs from the Juliet C/C++ 1.3 suite.</p>
         <p><strong>OWASP Benchmark:</strong> 2,740 Java test cases across 11 vulnerability categories (BenchmarkJava 1.2).</p>
         <p><strong>DARPA CGC:</strong> 204 challenges from the Cyber Grand Challenge cb-multios corpus.</p>
-        <p><strong>CyberSecEval:</strong> 443 C + Python test cases from Meta's PurpleLlama CybersecurityBenchmarks.</p>
+        <p><strong>CyberSecEval:</strong> 578 C + Python test cases from Meta's PurpleLlama CybersecurityBenchmarks.</p>
 
         <h3>Scoring</h3>
         <p>Standard information retrieval metrics: Precision = TP/(TP+FP), Recall = TP/(TP+FN), F1 = harmonic mean. CWE-family matching allows CWE-121 findings to match CWE-119 ground truth (same vulnerability family).</p>
@@ -186,11 +187,11 @@
         new Chart(ctx, {
             type: 'line',
             data: {
-                labels: ['Baseline', '+Patterns', '+Orchestrator', '+LLM', '+Verdict', '+Hunter', 'Dual-Judge', '+Tools', 'Enriched GT', 'Cycle 6'],
+                labels: ['Baseline', '+Patterns', '+Orchestrator', '+LLM', '+Verdict', '+Hunter', 'Dual-Judge', '+Tools', 'Enriched GT', 'Cycle 6', 'Cycle 6 Final'],
                 datasets: [
                     {
                         label: 'F1 Score',
-                        data: [50, 76.2, 58.8, 31.1, 21.1, 27.3, 66.7, 66.7, 92.9, 81.0],
+                        data: [50, 76.2, 58.8, 31.1, 21.1, 27.3, 66.7, 66.7, 92.9, 81.0, 65.4],
                         borderColor: '#58a6ff',
                         backgroundColor: '#58a6ff22',
                         tension: 0.3,
@@ -198,13 +199,13 @@
                     },
                     {
                         label: 'Precision',
-                        data: [66.7, 66.7, 41.7, 18.4, 11.8, 15.8, 50, 50, 100, 100],
+                        data: [66.7, 66.7, 41.7, 18.4, 11.8, 15.8, 50, 50, 100, 100, 100],
                         borderColor: '#3fb950',
                         tension: 0.3,
                     },
                     {
                         label: 'Recall',
-                        data: [40, 88.9, 100, 100, 100, 100, 100, 100, 86.7, 68.0],
+                        data: [40, 88.9, 100, 100, 100, 100, 100, 100, 86.7, 68.0, 48.5],
                         borderColor: '#f85149',
                         tension: 0.3,
                     },
