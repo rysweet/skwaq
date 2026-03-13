@@ -1,7 +1,7 @@
 ---
 name: overfitting-reviewer
 description: Reviews proposed pattern changes and scoring modifications for benchmark overfitting
-model: claude-opus-4-6
+model: claude-opus-4.6
 tools:
   - query_graph
   - read_function

@@ -1,7 +1,11 @@
 ---
 name: decompile-renamer
 description: Rename decompiler-generated variables to meaningful names before vulnerability analysis
+<<<<<<< Updated upstream
 model: claude-haiku-4.5
+=======
+model: claude-opus-4.6
+>>>>>>> Stashed changes
 tools:
   - query_graph
   - read_function
