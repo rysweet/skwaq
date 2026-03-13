@@ -95,6 +95,7 @@ skwaq kb search "buffer"       # Search CWEs
 ```bash
 skwaq doctor                   # Check prerequisites
 skwaq config show              # Show configuration
+skwaq gym preflight           # Verify Copilot benchmark readiness
 skwaq version                  # Show version
 ```
 
@@ -120,6 +121,7 @@ Create `skwaq.toml` in your project directory:
 ```toml
 [llm]
 reasoning = "copilot"       # default; or "anthropic" (requires ANTHROPIC_API_KEY)
+decompilation = "copilot"   # explicit no-fallback benchmark config
 
 [llm.copilot]
 model = "claude-opus-4.6"   # default model for Copilot backend
@@ -139,6 +141,41 @@ The default backend is **GitHub Copilot** (`reasoning = "copilot"`), which uses 
 To use Anthropic directly, set `reasoning = "anthropic"` and provide `ANTHROPIC_API_KEY`.
 
 See [docs/investigation-copilot-lm-api.md](docs/investigation-copilot-lm-api.md) for details on model availability and the Copilot integration architecture.
+
+### Benchmark preflight and eval artifacts
+
+Hybrid benchmark runs now require an explicit Copilot configuration with no hidden downgrade path. Before running a non-quick benchmark, run:
+
+```bash
+skwaq gym preflight
+```
+
+Use an explicit benchmark config like:
+
+```toml
+[llm]
+reasoning = "copilot"
+decompilation = "copilot"
+
+[llm.copilot]
+model = "claude-opus-4.6"
+```
+
+`skwaq gym preflight` verifies:
+
+- `[llm] reasoning = "copilot"` for benchmark runs
+- explicit no-fallback config shape for reasoning and decompilation
+- an Opus-class Copilot model such as `claude-opus-4.6`
+- active GitHub authentication and Copilot client creation
+
+For full eval runs, `skwaq gym eval` now writes reproducibility metadata alongside the usual reports:
+
+- `metadata.json`
+- `summary.json`
+- `summary.md`
+- `dashboard.md`
+
+The manual GitHub workflows under `.github/workflows/gym-eval.yml` and `.github/workflows/gym-full.yml` call the same preflight step before hybrid runs.
 
 ## License
 

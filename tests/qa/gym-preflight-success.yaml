@@ -1,0 +1,60 @@
+name: "skwaq gym preflight - Copilot benchmark readiness"
+description: "Verifies the benchmark preflight command succeeds with explicit Copilot no-fallback configuration."
+version: "1.0.0"
+
+config:
+  timeout: 120000
+  retries: 0
+  parallel: false
+
+agents:
+  - name: "skwaq-cli"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "/home/azureuser/src/skwaq-worktrees/copilot-benchmark-followups"
+      timeout: 120000
+      capture_output: true
+
+steps:
+  - name: "Run gym preflight"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "./tests/qa/bin/gym-preflight-success.sh"
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "skwaq gym preflight - verifying Copilot benchmark readiness"
+        - "LLM backend ......... OK (copilot)"
+        - "No-fallback check ... OK (reasoning=copilot, decompilation=copilot)"
+        - "Model ............... OK (claude-opus-4.6)"
+        - "Copilot client ...... OK (client created)"
+        - "All preflight checks passed. Ready for hybrid benchmark."
+    timeout: 120000
+
+assertions:
+  - name: "Preflight command succeeds"
+    type: "command_success"
+    agent: "skwaq-cli"
+    params:
+      step: "Run gym preflight"
+
+  - name: "Preflight output includes readiness checks"
+    type: "output_contains_all"
+    agent: "skwaq-cli"
+    params:
+      step: "Run gym preflight"
+      required_strings:
+        - "LLM backend ......... OK (copilot)"
+        - "No-fallback check ... OK (reasoning=copilot, decompilation=copilot)"
+        - "Copilot client ...... OK (client created)"
+
+metadata:
+  tags:
+    - "cli"
+    - "benchmark"
+    - "copilot"
+    - "preflight"
+  priority: "high"
+  author: "copilot-cli"

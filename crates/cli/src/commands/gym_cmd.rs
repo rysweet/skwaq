@@ -247,13 +247,17 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             } else {
                 "hybrid"
             };
+            let config = skwaq_core::config::Config::load()?;
+            if !quick {
+                ensure_hybrid_benchmark_ready_with_llm(&config.llm).await?;
+            }
+
             let eval_dir = output.clone().unwrap_or_else(|| {
                 let ts = chrono::Utc::now().format("%Y%m%d-%H%M%S");
                 PathBuf::from(format!("/tmp/gym-eval-{}", ts))
             });
             std::fs::create_dir_all(&eval_dir)?;
 
-            let config = skwaq_core::config::Config::load().unwrap_or_default();
             let eval_metadata = EvalRunMetadata {
                 started_at: chrono::Utc::now().to_rfc3339(),
                 git_commit: git_commit_full(&skwaq_root)?,
@@ -271,10 +275,6 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 eval_dir.join("metadata.json"),
                 serde_json::to_string_pretty(&eval_metadata)?,
             )?;
-
-            if !quick {
-                ensure_hybrid_benchmark_ready().await?;
-            }
 
             let exe = std::env::current_exe()?;
             let suite_cases = load_suite_case_counts(&gym)?;
@@ -522,7 +522,13 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
 
 async fn ensure_hybrid_benchmark_ready() -> anyhow::Result<()> {
     let config = skwaq_core::config::Config::load()?;
-    skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm)
+    ensure_hybrid_benchmark_ready_with_llm(&config.llm).await
+}
+
+async fn ensure_hybrid_benchmark_ready_with_llm(
+    llm: &skwaq_core::config::LlmConfig,
+) -> anyhow::Result<()> {
+    skwaq_core::llm::ensure_benchmark_copilot_ready(llm)
         .await
         .context(
             "Hybrid benchmark runs require explicit Copilot configuration and auth. \
@@ -534,7 +540,20 @@ async fn run_preflight() -> anyhow::Result<()> {
     println!("skwaq gym preflight - verifying Copilot benchmark readiness\n");
 
     let mut all_ok = true;
-    let config = skwaq_core::config::Config::load().unwrap_or_default();
+
+    print!("  Config .............. ");
+    let config = match skwaq_core::config::Config::load() {
+        Ok(config) => {
+            println!("OK");
+            config
+        }
+        Err(err) => {
+            println!("FAIL ({err})");
+            anyhow::bail!(
+                "Preflight failed. Fix the issues above before running hybrid benchmarks."
+            );
+        }
+    };
 
     print!("  LLM backend ......... ");
     match skwaq_core::llm::validate_benchmark_copilot_config(&config.llm) {
@@ -546,10 +565,7 @@ async fn run_preflight() -> anyhow::Result<()> {
     }
 
     print!("  No-fallback check ... ");
-    let valid_backends = ["copilot", "anthropic"];
-    if valid_backends.contains(&config.llm.reasoning.as_str())
-        && valid_backends.contains(&config.llm.decompilation.as_str())
-    {
+    if config.llm.reasoning == "copilot" && config.llm.decompilation == "copilot" {
         println!(
             "OK (reasoning={}, decompilation={})",
             config.llm.reasoning, config.llm.decompilation
@@ -810,6 +826,12 @@ fn git_commit_full(repo: &std::path::Path) -> anyhow::Result<String> {
         .args(["rev-parse", "HEAD"])
         .current_dir(repo)
         .output()?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git rev-parse HEAD failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
@@ -818,6 +840,12 @@ fn git_is_dirty(repo: &std::path::Path) -> anyhow::Result<bool> {
         .args(["status", "--porcelain"])
         .current_dir(repo)
         .output()?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git status --porcelain failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
     Ok(!output.stdout.is_empty())
 }
 

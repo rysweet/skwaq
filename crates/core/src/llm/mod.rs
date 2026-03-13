@@ -55,6 +55,14 @@ pub fn validate_benchmark_copilot_config(config: &LlmConfig) -> anyhow::Result<(
         );
     }
 
+    let decompilation = config.decompilation.trim().to_ascii_lowercase();
+    if decompilation != "copilot" {
+        anyhow::bail!(
+            "Hybrid benchmark runs require [llm].decompilation = \"copilot\", found {:?}",
+            config.decompilation
+        );
+    }
+
     let model = config.copilot.model.trim();
     if model.is_empty() || !model.to_ascii_lowercase().contains("opus") {
         anyhow::bail!(
@@ -177,5 +185,18 @@ mod tests {
 
         let err = validate_benchmark_copilot_config(&config).unwrap_err();
         assert!(err.to_string().contains("Opus-class Copilot model"));
+    }
+
+    #[test]
+    fn test_validate_benchmark_copilot_config_requires_copilot_decompilation() {
+        let config = LlmConfig {
+            decompilation: "anthropic".into(),
+            ..Default::default()
+        };
+
+        let err = validate_benchmark_copilot_config(&config).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("require [llm].decompilation = \"copilot\""));
     }
 }

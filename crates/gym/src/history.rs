@@ -251,7 +251,13 @@ impl HistoryDb {
                     .and_then(|s| s.parse().ok()),
                 suite: row.get(3)?,
                 skwaq_commit: row.get(4)?,
-                metadata: serde_json::from_str(&metadata_json).unwrap_or_default(),
+                metadata: serde_json::from_str(&metadata_json).map_err(|err| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        5,
+                        rusqlite::types::Type::Text,
+                        Box::new(err),
+                    )
+                })?,
                 precision: row.get(6)?,
                 recall: row.get(7)?,
                 f1: row.get(8)?,
@@ -369,5 +375,28 @@ mod tests {
         let cwes = db.cwe_results_for_run(&run_id).unwrap();
         assert_eq!(cwes.len(), 1);
         assert_eq!(cwes[0].cwe_id, 119);
+    }
+
+    #[test]
+    fn test_recent_runs_rejects_invalid_metadata_json() {
+        let db = HistoryDb::in_memory().unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO runs (
+                    id, started_at, suite, skwaq_commit, run_metadata_json,
+                    precision, recall, f1, true_positives, false_positives,
+                    false_negatives, true_negatives
+                ) VALUES (?1, ?2, ?3, ?4, ?5, 0.0, 0.0, 0.0, 0, 0, 0, 0)",
+                rusqlite::params![
+                    "bad-run",
+                    Utc::now().to_rfc3339(),
+                    "fixtures",
+                    "abc123",
+                    "{not-json",
+                ],
+            )
+            .unwrap();
+
+        assert!(db.recent_runs(1).is_err());
     }
 }

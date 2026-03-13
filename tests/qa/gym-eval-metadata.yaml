@@ -1,0 +1,61 @@
+name: "skwaq gym eval - metadata artifact persistence"
+description: "Verifies a quick fixtures eval writes reproducibility metadata and reports it back to the user."
+version: "1.0.0"
+
+config:
+  timeout: 240000
+  retries: 0
+  parallel: false
+
+agents:
+  - name: "skwaq-cli"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "/home/azureuser/src/skwaq-worktrees/copilot-benchmark-followups"
+      timeout: 240000
+      capture_output: true
+
+steps:
+  - name: "Run quick fixtures eval and print metadata"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "./tests/qa/bin/gym-eval-metadata.sh"
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "Results saved to:"
+        - "Metadata:"
+        - "=== metadata.json ==="
+        - "\"llm_backend\": \"copilot\""
+        - "\"llm_model\": \"claude-opus-4.6\""
+        - "\"mode\": \"pattern-only\""
+        - "\"suites\": \"fixtures\""
+    timeout: 240000
+
+assertions:
+  - name: "Eval command succeeds"
+    type: "command_success"
+    agent: "skwaq-cli"
+    params:
+      step: "Run quick fixtures eval and print metadata"
+
+  - name: "Eval output includes metadata fields"
+    type: "output_contains_all"
+    agent: "skwaq-cli"
+    params:
+      step: "Run quick fixtures eval and print metadata"
+      required_strings:
+        - "\"llm_backend\": \"copilot\""
+        - "\"llm_model\": \"claude-opus-4.6\""
+        - "\"suites\": \"fixtures\""
+
+metadata:
+  tags:
+    - "cli"
+    - "benchmark"
+    - "metadata"
+    - "regression"
+  priority: "high"
+  author: "copilot-cli"
