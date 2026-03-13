@@ -25,3 +25,8 @@ jobs:
         run: |
           ./target/debug/skwaq self-test
           echo "Self-analysis passed"
+
+      - name: Gym benchmark (pattern-only)
+        run: |
+          ./target/debug/skwaq gym run fixtures --quick
+          echo "Pattern-only benchmark passed"

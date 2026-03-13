@@ -33,7 +33,7 @@ echo "=== Parallel Gym Run ==="
 echo "Suite:      $SUITE"
 echo "Total:      $TOTAL cases"
 echo "Processes:  $NPROCS"
-echo "Per proc:   $CASES_PER_PROC cases"
+echo "Per proc:   $CASES_PER_PROC cases (last shard may be smaller)"
 echo "Binary:     $SKWAQ"
 echo "Output:     $OUTDIR"
 echo "Extra args: ${EXTRA_ARGS[*]}"
@@ -45,18 +45,34 @@ if [ ! -f "$SKWAQ" ]; then
     cargo build --release
 fi
 
-# Launch N processes
+# Launch N processes with non-overlapping shard ranges.
+# Each shard gets exactly [SKIP, SKIP+COUNT) where COUNT is capped so the
+# last shard never extends beyond TOTAL, preventing double-counting.
 PIDS=()
+ASSIGNED=0
 for i in $(seq 0 $((NPROCS - 1))); do
-    SKIP=$((i * CASES_PER_PROC))
+    SKIP=$ASSIGNED
+    REMAINING=$((TOTAL - ASSIGNED))
+
+    # Cap this shard's size so it never exceeds the remaining cases
+    if [ "$REMAINING" -le 0 ]; then
+        echo "  Process $i: skipped (no remaining cases)"
+        continue
+    fi
+    COUNT=$CASES_PER_PROC
+    if [ "$COUNT" -gt "$REMAINING" ]; then
+        COUNT=$REMAINING
+    fi
+    ASSIGNED=$((ASSIGNED + COUNT))
+
     LOG="$OUTDIR/proc-${i}.log"
     JSON="$OUTDIR/proc-${i}.json"
 
-    echo "  Process $i: skip=$SKIP max=$CASES_PER_PROC -> $LOG"
+    echo "  Process $i: skip=$SKIP count=$COUNT -> $LOG"
 
     "$SKWAQ" gym run "$SUITE" \
         --skip "$SKIP" \
-        --max-cases "$CASES_PER_PROC" \
+        --max-cases "$COUNT" \
         --json "$JSON" \
         "${EXTRA_ARGS[@]}" \
         > "$LOG" 2>&1 &
