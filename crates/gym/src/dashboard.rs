@@ -188,15 +188,17 @@ mod tests {
     #[test]
     fn test_generate_charts_with_data() {
         let db = HistoryDb::in_memory().unwrap();
+        let metadata = crate::history::RunMetadata::default();
 
         // Add some runs
-        let id1 = db.start_run("fixtures", "abc123").unwrap();
+        let id1 = db.start_run("fixtures", "abc123", &metadata).unwrap();
         db.finish_run(&BenchmarkRun {
             id: id1,
             started_at: Utc::now(),
             finished_at: Some(Utc::now()),
             suite: "fixtures".to_string(),
             skwaq_commit: "abc123".to_string(),
+            metadata: metadata.clone(),
             precision: 0.67,
             recall: 0.40,
             f1: 0.50,
@@ -207,13 +209,14 @@ mod tests {
         })
         .unwrap();
 
-        let id2 = db.start_run("fixtures", "def456").unwrap();
+        let id2 = db.start_run("fixtures", "def456", &metadata).unwrap();
         db.finish_run(&BenchmarkRun {
             id: id2,
             started_at: Utc::now(),
             finished_at: Some(Utc::now()),
             suite: "fixtures".to_string(),
             skwaq_commit: "def456".to_string(),
+            metadata: metadata.clone(),
             precision: 1.0,
             recall: 0.87,
             f1: 0.93,

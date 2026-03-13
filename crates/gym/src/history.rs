@@ -12,6 +12,7 @@ pub struct BenchmarkRun {
     pub finished_at: Option<DateTime<Utc>>,
     pub suite: String,
     pub skwaq_commit: String,
+    pub metadata: RunMetadata,
     pub precision: f64,
     pub recall: f64,
     pub f1: f64,
@@ -19,6 +20,18 @@ pub struct BenchmarkRun {
     pub false_positives: u32,
     pub false_negatives: u32,
     pub true_negatives: u32,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RunMetadata {
+    pub llm_backend: String,
+    pub llm_model: String,
+    pub run_mode: String,
+    pub binary_mode: bool,
+    pub git_dirty: bool,
+    pub concurrency: usize,
+    pub skip: usize,
+    pub max_cases: Option<usize>,
 }
 
 /// Per-CWE result within a run.
@@ -90,6 +103,7 @@ impl HistoryDb {
                 finished_at TEXT,
                 suite TEXT NOT NULL,
                 skwaq_commit TEXT NOT NULL,
+                run_metadata_json TEXT NOT NULL DEFAULT '{}',
                 precision REAL DEFAULT 0.0,
                 recall REAL DEFAULT 0.0,
                 f1 REAL DEFAULT 0.0,
@@ -128,16 +142,29 @@ impl HistoryDb {
             CREATE INDEX IF NOT EXISTS idx_runs_started ON runs(started_at);
             ",
         )?;
+        self.ensure_run_metadata_column()?;
         Ok(())
     }
 
     /// Insert a new run record. Returns the run ID.
-    pub fn start_run(&self, suite: &str, skwaq_commit: &str) -> anyhow::Result<String> {
+    pub fn start_run(
+        &self,
+        suite: &str,
+        skwaq_commit: &str,
+        metadata: &RunMetadata,
+    ) -> anyhow::Result<String> {
         let id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
         self.conn.execute(
-            "INSERT INTO runs (id, started_at, suite, skwaq_commit) VALUES (?1, ?2, ?3, ?4)",
-            rusqlite::params![id, now, suite, skwaq_commit],
+            "INSERT INTO runs (id, started_at, suite, skwaq_commit, run_metadata_json)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![
+                id,
+                now,
+                suite,
+                skwaq_commit,
+                serde_json::to_string(metadata)?
+            ],
         )?;
         Ok(id)
     }
@@ -147,8 +174,9 @@ impl HistoryDb {
         let finished = chrono::Utc::now().to_rfc3339();
         self.conn.execute(
             "UPDATE runs SET finished_at=?1, precision=?2, recall=?3, f1=?4,
-             true_positives=?5, false_positives=?6, false_negatives=?7, true_negatives=?8
-             WHERE id=?9",
+             true_positives=?5, false_positives=?6, false_negatives=?7, true_negatives=?8,
+             run_metadata_json=?9
+             WHERE id=?10",
             rusqlite::params![
                 finished,
                 run.precision,
@@ -158,6 +186,7 @@ impl HistoryDb {
                 run.false_positives,
                 run.false_negatives,
                 run.true_negatives,
+                serde_json::to_string(&run.metadata)?,
                 run.id
             ],
         )?;
@@ -207,12 +236,13 @@ impl HistoryDb {
     /// Load the N most recent runs.
     pub fn recent_runs(&self, limit: u32) -> anyhow::Result<Vec<BenchmarkRun>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, started_at, finished_at, suite, skwaq_commit,
+            "SELECT id, started_at, finished_at, suite, skwaq_commit, run_metadata_json,
                     precision, recall, f1, true_positives, false_positives,
                     false_negatives, true_negatives
-             FROM runs ORDER BY started_at DESC LIMIT ?1",
+              FROM runs ORDER BY started_at DESC LIMIT ?1",
         )?;
         let rows = stmt.query_map(rusqlite::params![limit], |row| {
+            let metadata_json: String = row.get(5)?;
             Ok(BenchmarkRun {
                 id: row.get(0)?,
                 started_at: row.get::<_, String>(1)?.parse().unwrap_or_default(),
@@ -221,16 +251,42 @@ impl HistoryDb {
                     .and_then(|s| s.parse().ok()),
                 suite: row.get(3)?,
                 skwaq_commit: row.get(4)?,
-                precision: row.get(5)?,
-                recall: row.get(6)?,
-                f1: row.get(7)?,
-                true_positives: row.get(8)?,
-                false_positives: row.get(9)?,
-                false_negatives: row.get(10)?,
-                true_negatives: row.get(11)?,
+                metadata: serde_json::from_str(&metadata_json).map_err(|err| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        5,
+                        rusqlite::types::Type::Text,
+                        Box::new(err),
+                    )
+                })?,
+                precision: row.get(6)?,
+                recall: row.get(7)?,
+                f1: row.get(8)?,
+                true_positives: row.get(9)?,
+                false_positives: row.get(10)?,
+                false_negatives: row.get(11)?,
+                true_negatives: row.get(12)?,
             })
         })?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
+    fn ensure_run_metadata_column(&self) -> anyhow::Result<()> {
+        let mut stmt = self.conn.prepare("PRAGMA table_info(runs)")?;
+        let columns = stmt.query_map([], |row| row.get::<_, String>(1))?;
+        let mut has_metadata = false;
+        for column in columns {
+            if column? == "run_metadata_json" {
+                has_metadata = true;
+                break;
+            }
+        }
+        if !has_metadata {
+            self.conn.execute(
+                "ALTER TABLE runs ADD COLUMN run_metadata_json TEXT NOT NULL DEFAULT '{}'",
+                [],
+            )?;
+        }
+        Ok(())
     }
 
     /// Load per-CWE results for a run.
@@ -263,9 +319,19 @@ mod tests {
     #[test]
     fn test_history_db_lifecycle() {
         let db = HistoryDb::in_memory().unwrap();
+        let metadata = RunMetadata {
+            llm_backend: "copilot".to_string(),
+            llm_model: "claude-opus-4.6".to_string(),
+            run_mode: "hybrid".to_string(),
+            binary_mode: true,
+            git_dirty: false,
+            concurrency: 2,
+            skip: 0,
+            max_cases: Some(5),
+        };
 
         // Start a run.
-        let run_id = db.start_run("fixtures", "abc123").unwrap();
+        let run_id = db.start_run("fixtures", "abc123", &metadata).unwrap();
 
         // Finish it.
         let run = BenchmarkRun {
@@ -274,6 +340,7 @@ mod tests {
             finished_at: Some(Utc::now()),
             suite: "fixtures".to_string(),
             skwaq_commit: "abc123".to_string(),
+            metadata: metadata.clone(),
             precision: 0.8,
             recall: 0.6,
             f1: 0.686,
@@ -301,11 +368,35 @@ mod tests {
         let runs = db.recent_runs(10).unwrap();
         assert_eq!(runs.len(), 1);
         assert_eq!(runs[0].suite, "fixtures");
+        assert_eq!(runs[0].metadata, metadata);
         assert!((runs[0].precision - 0.8).abs() < 0.001);
 
         // Query CWE results.
         let cwes = db.cwe_results_for_run(&run_id).unwrap();
         assert_eq!(cwes.len(), 1);
         assert_eq!(cwes[0].cwe_id, 119);
+    }
+
+    #[test]
+    fn test_recent_runs_rejects_invalid_metadata_json() {
+        let db = HistoryDb::in_memory().unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO runs (
+                    id, started_at, suite, skwaq_commit, run_metadata_json,
+                    precision, recall, f1, true_positives, false_positives,
+                    false_negatives, true_negatives
+                ) VALUES (?1, ?2, ?3, ?4, ?5, 0.0, 0.0, 0.0, 0, 0, 0, 0)",
+                rusqlite::params![
+                    "bad-run",
+                    Utc::now().to_rfc3339(),
+                    "fixtures",
+                    "abc123",
+                    "{not-json",
+                ],
+            )
+            .unwrap();
+
+        assert!(db.recent_runs(1).is_err());
     }
 }

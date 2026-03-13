@@ -1,5 +1,6 @@
 //! Machine-readable JSON report generation.
 
+use crate::history::RunMetadata;
 use crate::scoring::AggregateScore;
 use serde::{Deserialize, Serialize};
 
@@ -8,6 +9,7 @@ pub struct JsonReport {
     pub suite: String,
     pub timestamp: String,
     pub skwaq_commit: String,
+    pub metadata: RunMetadata,
     pub precision: f64,
     pub recall: f64,
     pub f1: f64,
@@ -29,11 +31,17 @@ pub struct JsonCweResult {
     pub precision: f64,
 }
 
-pub fn generate(score: &AggregateScore, suite: &str, commit: &str) -> String {
+pub fn generate(
+    score: &AggregateScore,
+    suite: &str,
+    commit: &str,
+    metadata: &RunMetadata,
+) -> String {
     let report = JsonReport {
         suite: suite.to_string(),
         timestamp: chrono::Utc::now().to_rfc3339(),
         skwaq_commit: commit.to_string(),
+        metadata: metadata.clone(),
         precision: score.precision,
         recall: score.recall,
         f1: score.f1,
