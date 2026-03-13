@@ -44,38 +44,43 @@ pub async fn create_client(config: &LlmConfig) -> anyhow::Result<Client> {
     }
 }
 
-pub fn validate_benchmark_copilot_config(config: &LlmConfig) -> anyhow::Result<()> {
+/// Validate that the LLM configuration can support hybrid benchmark runs.
+/// Accepts both Anthropic and Copilot backends.
+pub fn validate_benchmark_llm_config(config: &LlmConfig) -> anyhow::Result<()> {
     validate_backend_selection(config)?;
 
     let backend = normalized_backend(config);
-    if backend != "copilot" {
-        anyhow::bail!(
-            "Hybrid benchmark runs require [llm].reasoning = \"copilot\", found {:?}",
-            config.reasoning
-        );
+    match backend.as_str() {
+        "anthropic" => {
+            // Anthropic: just need the API key (checked at client creation)
+            Ok(())
+        }
+        "copilot" => {
+            let model = config.copilot.model.trim();
+            if model.is_empty() || !model.to_ascii_lowercase().contains("opus") {
+                anyhow::bail!(
+                    "Copilot benchmark runs require an Opus-class model, found {:?}. \
+                     Set [llm.copilot].model = \"claude-opus-4.6\".",
+                    config.copilot.model
+                );
+            }
+            Ok(())
+        }
+        other => {
+            anyhow::bail!(
+                "Hybrid benchmark runs require 'anthropic' or 'copilot' backend, found {:?}",
+                other
+            );
+        }
     }
-
-    let model = config.copilot.model.trim();
-    if model.is_empty() || !model.to_ascii_lowercase().contains("opus") {
-        anyhow::bail!(
-            "Hybrid benchmark runs require an Opus-class Copilot model, found {:?}. \
-             Set [llm.copilot].model = \"claude-opus-4.6\".",
-            config.copilot.model
-        );
-    }
-
-    Ok(())
 }
 
-pub async fn ensure_benchmark_copilot_ready(config: &LlmConfig) -> anyhow::Result<()> {
-    validate_benchmark_copilot_config(config)?;
+pub async fn ensure_benchmark_llm_ready(config: &LlmConfig) -> anyhow::Result<()> {
+    validate_benchmark_llm_config(config)?;
     create_client(config)
         .await
         .map(|_| ())
-        .context(
-            "Hybrid benchmark runs require working GitHub Copilot authentication. \
-             Run `gh auth login` / `gh auth refresh --scopes copilot`, or set GH_TOKEN/GITHUB_TOKEN with Copilot access.",
-        )
+        .context("Hybrid benchmark runs require a working LLM client. Check ANTHROPIC_API_KEY or Copilot auth.")
 }
 
 /// Build an Anthropic-backend client from the environment key.
@@ -158,27 +163,34 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_benchmark_copilot_config_requires_copilot() {
+    fn test_validate_benchmark_llm_config_accepts_anthropic() {
         let config = LlmConfig {
             reasoning: "anthropic".into(),
             ..Default::default()
         };
-
-        let err = validate_benchmark_copilot_config(&config).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("require [llm].reasoning = \"copilot\""));
+        // Anthropic is now a valid benchmark backend
+        assert!(validate_benchmark_llm_config(&config).is_ok());
     }
 
     #[test]
-    fn test_validate_benchmark_copilot_config_requires_opus_model() {
+    fn test_validate_benchmark_llm_config_rejects_unknown() {
+        let config = LlmConfig {
+            reasoning: "ollama".into(),
+            ..Default::default()
+        };
+        let err = validate_benchmark_llm_config(&config).unwrap_err();
+        assert!(err.to_string().contains("Unsupported"));
+    }
+
+    #[test]
+    fn test_validate_benchmark_llm_config_requires_opus_model() {
         let mut config = LlmConfig {
             reasoning: "copilot".into(),
             ..Default::default()
         };
         config.copilot.model = "gpt-4o".into();
 
-        let err = validate_benchmark_copilot_config(&config).unwrap_err();
-        assert!(err.to_string().contains("Opus-class Copilot model"));
+        let err = validate_benchmark_llm_config(&config).unwrap_err();
+        assert!(err.to_string().contains("Opus-class model"));
     }
 }

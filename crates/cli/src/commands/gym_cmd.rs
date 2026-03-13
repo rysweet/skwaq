@@ -467,10 +467,10 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
 
 async fn ensure_hybrid_benchmark_ready() -> anyhow::Result<()> {
     let config = skwaq_core::config::Config::load()?;
-    skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm)
+    skwaq_core::llm::ensure_benchmark_llm_ready(&config.llm)
         .await
         .context(
-            "Hybrid benchmark runs require explicit Copilot configuration and auth. \
+            "Hybrid benchmark runs require a working LLM (ANTHROPIC_API_KEY or Copilot auth). \
              Use `skwaq gym run --quick` for pattern-only smoke tests.",
         )
 }

@@ -972,7 +972,7 @@ mod tests {
         }
 
         let config = Config::load().unwrap_or_default();
-        if skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm)
+        if skwaq_core::llm::ensure_benchmark_llm_ready(&config.llm)
             .await
             .is_err()
         {
