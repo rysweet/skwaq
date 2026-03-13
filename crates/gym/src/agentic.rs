@@ -452,6 +452,9 @@ async fn llm_synthesize(
     timeout_secs: u64,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
     let config = Config::load().context("LLM synthesis requires a valid skwaq configuration")?;
+    skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm)
+        .await
+        .context("LLM synthesis requires explicit Copilot benchmark readiness")?;
     let client = skwaq_core::llm::create_client(&config.llm)
         .await
         .context("LLM synthesis requires a working LLM client")?;
@@ -604,6 +607,14 @@ async fn run_llm_pipeline(
 ) -> anyhow::Result<()> {
     let config = Config::load()
         .context("Failed to load skwaq configuration for hybrid benchmark analysis")?;
+    skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm)
+        .await
+        .with_context(|| {
+            format!(
+                "Hybrid benchmark analysis requires explicit Copilot benchmark readiness for {}",
+                file_str
+            )
+        })?;
 
     let llm_client = skwaq_core::llm::create_client(&config.llm)
         .await
@@ -972,7 +983,7 @@ mod tests {
         }
 
         let config = Config::load().unwrap_or_default();
-        if skwaq_core::llm::ensure_benchmark_llm_ready(&config.llm)
+        if skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm)
             .await
             .is_err()
         {

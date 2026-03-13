@@ -10,10 +10,11 @@ authors = ["Ryan Sweet <rysweet@microsoft.com>"]
 repository = "https://github.com/rysweet/skwaq"
 
 [workspace.dependencies]
-# RustyClawd agent framework (using main until next version tag)
-rustyclawd-core = { git = "https://github.com/rysweet/RustyClawd", branch = "main" }
-rustyclawd-tools = { git = "https://github.com/rysweet/RustyClawd", branch = "main" }
-rustyclawd-cli = { git = "https://github.com/rysweet/RustyClawd", branch = "main" }
+# RustyClawd agent framework — pinned to a known-good main commit for reproducible builds.
+# To update: run `cargo update -p rustyclawd-core -p rustyclawd-tools -p rustyclawd-cli --precise <commit>`
+rustyclawd-core = { git = "https://github.com/rysweet/RustyClawd", rev = "01f892236c3c66d53cf3a3141d7ff8ffbe3bf55b" }
+rustyclawd-tools = { git = "https://github.com/rysweet/RustyClawd", rev = "01f892236c3c66d53cf3a3141d7ff8ffbe3bf55b" }
+rustyclawd-cli = { git = "https://github.com/rysweet/RustyClawd", rev = "01f892236c3c66d53cf3a3141d7ff8ffbe3bf55b" }
 
 # Async
 tokio = { version = "1", features = ["full"] }

@@ -58,11 +58,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           set -euo pipefail
-          if [[ -z "${GH_TOKEN}" ]]; then
-            echo "::error::Set the GH_TOKEN secret with GitHub Copilot access for hybrid benchmark runs."
-            exit 1
-          fi
-          ./target/debug/skwaq config show
+          ./target/debug/skwaq gym preflight
 
       - name: Run full hybrid gym eval
         env:

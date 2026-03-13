@@ -99,11 +99,7 @@ fn default_log_level() -> String {
     "info".into()
 }
 fn default_llm_backend() -> String {
-    if std::env::var("ANTHROPIC_API_KEY").is_ok() {
-        "anthropic".into()
-    } else {
-        "copilot".into()
-    }
+    "copilot".into()
 }
 fn default_ollama() -> String {
     "ollama".into()
@@ -230,5 +226,26 @@ impl Config {
 
     pub fn cache_path(&self) -> PathBuf {
         PathBuf::from(&self.general.cache_path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_llm_backend_stays_copilot_even_with_anthropic_key() {
+        let original = std::env::var("ANTHROPIC_API_KEY").ok();
+        std::env::set_var("ANTHROPIC_API_KEY", "sk-ant-test-key-123");
+
+        assert_eq!(default_llm_backend(), "copilot");
+        let config = LlmConfig::default();
+        assert_eq!(config.reasoning, "copilot");
+        assert_eq!(config.decompilation, "copilot");
+
+        match original {
+            Some(key) => std::env::set_var("ANTHROPIC_API_KEY", key),
+            None => std::env::remove_var("ANTHROPIC_API_KEY"),
+        }
     }
 }

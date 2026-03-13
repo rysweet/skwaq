@@ -185,7 +185,10 @@ impl Gym {
             let suite_name = adapter.name().to_string();
             tracing::info!("Running {} benchmark...", suite_name);
 
-            let run_id = self.history_db.start_run(&suite_name, &commit)?;
+            let run_metadata = build_run_metadata(&self.skwaq_root, &config);
+            let run_id = self
+                .history_db
+                .start_run(&suite_name, &commit, &run_metadata)?;
             let gt = adapter.ground_truth()?;
             let data_dir = adapter.setup(&config).await?;
 
@@ -351,6 +354,7 @@ impl Gym {
                 finished_at: Some(chrono::Utc::now()),
                 suite: suite_name.clone(),
                 skwaq_commit: commit.clone(),
+                metadata: run_metadata.clone(),
                 precision: score.precision,
                 recall: score.recall,
                 f1: score.f1,
@@ -402,6 +406,7 @@ impl Gym {
                 &score,
                 &run.suite,
                 &run.skwaq_commit,
+                &run.metadata,
             )),
             ReportFormat::Markdown => Ok(reporting::markdown_report::generate(
                 &score,
@@ -460,10 +465,38 @@ pub enum ReportFormat {
 
 fn get_git_commit(repo: &std::path::Path) -> anyhow::Result<String> {
     let output = std::process::Command::new("git")
-        .args(["rev-parse", "--short", "HEAD"])
+        .args(["rev-parse", "HEAD"])
         .current_dir(repo)
         .output()?;
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn get_git_dirty(repo: &std::path::Path) -> anyhow::Result<bool> {
+    let output = std::process::Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(repo)
+        .output()?;
+    Ok(!output.stdout.is_empty())
+}
+
+fn build_run_metadata(repo: &std::path::Path, config: &BenchmarkConfig) -> history::RunMetadata {
+    let llm = skwaq_core::config::Config::load().unwrap_or_default().llm;
+    history::RunMetadata {
+        llm_backend: llm.reasoning.trim().to_string(),
+        llm_model: llm.copilot.model,
+        run_mode: if config.quick_mode {
+            "pattern-only".to_string()
+        } else if config.llm_only {
+            "llm-only".to_string()
+        } else {
+            "hybrid".to_string()
+        },
+        binary_mode: config.binary_mode,
+        git_dirty: get_git_dirty(repo).unwrap_or(false),
+        concurrency: config.concurrency,
+        skip: config.skip,
+        max_cases: config.max_cases,
+    }
 }
 
 fn reconstruct_score(

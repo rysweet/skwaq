@@ -111,6 +111,10 @@ pub enum GymSub {
 
     /// Generate dashboard: mermaid charts + scores table from run history
     Dashboard,
+
+    /// Preflight check: verify Copilot backend, auth, model, and no-fallback readiness.
+    /// Run this before hybrid benchmark runs to ensure the LLM pipeline will work.
+    Preflight,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -128,10 +132,26 @@ struct EvalSuiteSummary {
     target_cases: u32,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq)]
+struct EvalRunMetadata {
+    started_at: String,
+    git_commit: String,
+    git_dirty: bool,
+    mode: String,
+    suites: String,
+    procs_per_suite: usize,
+    concurrency: usize,
+    llm_backend: String,
+    llm_model: String,
+    binary_mode: bool,
+    skwaq_version: String,
+}
+
 #[derive(Debug, Serialize, PartialEq)]
 struct EvalSummaryReport {
     generated_at: String,
     mode: String,
+    metadata: EvalRunMetadata,
     suites: Vec<EvalSuiteSummary>,
 }
 
@@ -145,7 +165,7 @@ struct AggregatedCwe {
 
 pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
     let skwaq_root = find_skwaq_root()?;
-    let mut gym = skwaq_gym::Gym::new(skwaq_root)?;
+    let mut gym = skwaq_gym::Gym::new(skwaq_root.clone())?;
 
     match sub {
         GymSub::Setup => {
@@ -220,19 +240,6 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             llm_only,
             output,
         } => {
-            let eval_dir = output.clone().unwrap_or_else(|| {
-                let ts = chrono::Utc::now().format("%Y%m%d-%H%M%S");
-                PathBuf::from(format!("/tmp/gym-eval-{}", ts))
-            });
-            std::fs::create_dir_all(&eval_dir)?;
-
-            if !quick {
-                ensure_hybrid_benchmark_ready().await?;
-            }
-
-            let exe = std::env::current_exe()?;
-            let suite_cases = load_suite_case_counts(&gym)?;
-
             let mode = if *quick {
                 "pattern-only"
             } else if *llm_only {
@@ -240,6 +247,37 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             } else {
                 "hybrid"
             };
+            let eval_dir = output.clone().unwrap_or_else(|| {
+                let ts = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+                PathBuf::from(format!("/tmp/gym-eval-{}", ts))
+            });
+            std::fs::create_dir_all(&eval_dir)?;
+
+            let config = skwaq_core::config::Config::load().unwrap_or_default();
+            let eval_metadata = EvalRunMetadata {
+                started_at: chrono::Utc::now().to_rfc3339(),
+                git_commit: git_commit_full(&skwaq_root)?,
+                git_dirty: git_is_dirty(&skwaq_root)?,
+                mode: mode.to_string(),
+                suites: suites.clone(),
+                procs_per_suite: *procs,
+                concurrency: *concurrency,
+                llm_backend: config.llm.reasoning.clone(),
+                llm_model: config.llm.copilot.model.clone(),
+                binary_mode: true,
+                skwaq_version: env!("CARGO_PKG_VERSION").to_string(),
+            };
+            std::fs::write(
+                eval_dir.join("metadata.json"),
+                serde_json::to_string_pretty(&eval_metadata)?,
+            )?;
+
+            if !quick {
+                ensure_hybrid_benchmark_ready().await?;
+            }
+
+            let exe = std::env::current_exe()?;
+            let suite_cases = load_suite_case_counts(&gym)?;
             println!("=== Skwaq Gym Evaluation ({mode}) ===");
             println!("  Suites:      {suites}");
             println!("  Procs/suite: {procs}");
@@ -376,9 +414,21 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                         .expect("suite validated before spawning shards")
                         as u32,
                 )?;
-                let run_id = gym
-                    .history_db
-                    .start_run(&summary.suite, &summary.skwaq_commit)?;
+                let run_metadata = skwaq_gym::history::RunMetadata {
+                    llm_backend: eval_metadata.llm_backend.clone(),
+                    llm_model: eval_metadata.llm_model.clone(),
+                    run_mode: mode.to_string(),
+                    binary_mode: eval_metadata.binary_mode,
+                    git_dirty: eval_metadata.git_dirty,
+                    concurrency: *concurrency,
+                    skip: 0,
+                    max_cases: Some(summary.target_cases as usize),
+                };
+                let run_id = gym.history_db.start_run(
+                    &summary.suite,
+                    &summary.skwaq_commit,
+                    &run_metadata,
+                )?;
                 gym.history_db
                     .finish_run(&skwaq_gym::history::BenchmarkRun {
                         id: run_id.clone(),
@@ -386,6 +436,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                         finished_at: Some(chrono::Utc::now()),
                         suite: summary.suite.clone(),
                         skwaq_commit: summary.skwaq_commit.clone(),
+                        metadata: run_metadata,
                         precision: summary.precision,
                         recall: summary.recall,
                         f1: summary.f1,
@@ -416,8 +467,9 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 summaries.push(summary);
             }
             println!();
-            write_eval_artifacts(&eval_dir, mode, &summaries, &gym.history_db)?;
+            write_eval_artifacts(&eval_dir, &eval_metadata, &summaries, &gym.history_db)?;
             println!("Results saved to: {}", eval_dir.display());
+            println!("Metadata: {}", eval_dir.join("metadata.json").display());
             println!("Summary: {}", eval_dir.join("summary.md").display());
             println!("Dashboard: {}", eval_dir.join("dashboard.md").display());
         }
@@ -460,6 +512,9 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 skwaq_gym::dashboard::generate_scores_table(&gym.history_db)?
             );
         }
+        GymSub::Preflight => {
+            run_preflight().await?;
+        }
     }
 
     Ok(())
@@ -467,12 +522,78 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
 
 async fn ensure_hybrid_benchmark_ready() -> anyhow::Result<()> {
     let config = skwaq_core::config::Config::load()?;
-    skwaq_core::llm::ensure_benchmark_llm_ready(&config.llm)
+    skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm)
         .await
         .context(
-            "Hybrid benchmark runs require a working LLM (ANTHROPIC_API_KEY or Copilot auth). \
+            "Hybrid benchmark runs require explicit Copilot configuration and auth. \
              Use `skwaq gym run --quick` for pattern-only smoke tests.",
         )
+}
+
+async fn run_preflight() -> anyhow::Result<()> {
+    println!("skwaq gym preflight - verifying Copilot benchmark readiness\n");
+
+    let mut all_ok = true;
+    let config = skwaq_core::config::Config::load().unwrap_or_default();
+
+    print!("  LLM backend ......... ");
+    match skwaq_core::llm::validate_benchmark_copilot_config(&config.llm) {
+        Ok(_) => println!("OK ({})", config.llm.reasoning),
+        Err(err) => {
+            println!("FAIL ({err})");
+            all_ok = false;
+        }
+    }
+
+    print!("  No-fallback check ... ");
+    let valid_backends = ["copilot", "anthropic"];
+    if valid_backends.contains(&config.llm.reasoning.as_str())
+        && valid_backends.contains(&config.llm.decompilation.as_str())
+    {
+        println!(
+            "OK (reasoning={}, decompilation={})",
+            config.llm.reasoning, config.llm.decompilation
+        );
+    } else {
+        println!(
+            "FAIL (reasoning={}, decompilation={})",
+            config.llm.reasoning, config.llm.decompilation
+        );
+        all_ok = false;
+    }
+
+    print!("  Model ............... ");
+    let model = config.llm.copilot.model.trim();
+    if model.is_empty() {
+        println!("FAIL (missing)");
+        println!("    Set [llm.copilot] model = \"claude-opus-4.6\" in skwaq.toml");
+        all_ok = false;
+    } else {
+        println!("OK ({model})");
+    }
+
+    print!("  GitHub account ...... ");
+    match resolve_github_identity() {
+        Some(login) => println!("OK ({login})"),
+        None => println!("UNKNOWN (no gh auth identity available)"),
+    }
+
+    print!("  Copilot client ...... ");
+    match skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm).await {
+        Ok(_) => println!("OK (client created)"),
+        Err(err) => {
+            println!("FAIL ({err})");
+            all_ok = false;
+        }
+    }
+
+    println!();
+    if all_ok {
+        println!("All preflight checks passed. Ready for hybrid benchmark.");
+        Ok(())
+    } else {
+        anyhow::bail!("Preflight failed. Fix the issues above before running hybrid benchmarks.");
+    }
 }
 
 fn load_suite_case_counts(
@@ -604,13 +725,14 @@ fn load_shard_reports(
 
 fn write_eval_artifacts(
     eval_dir: &std::path::Path,
-    mode: &str,
+    metadata: &EvalRunMetadata,
     summaries: &[EvalSuiteSummary],
     history_db: &skwaq_gym::history::HistoryDb,
 ) -> anyhow::Result<()> {
     let summary_report = EvalSummaryReport {
         generated_at: chrono::Utc::now().to_rfc3339(),
-        mode: mode.to_string(),
+        mode: metadata.mode.clone(),
+        metadata: metadata.clone(),
         suites: summaries.to_vec(),
     };
     std::fs::write(
@@ -619,7 +741,7 @@ fn write_eval_artifacts(
     )?;
     std::fs::write(
         eval_dir.join("summary.md"),
-        render_eval_summary_markdown(mode, summaries),
+        render_eval_summary_markdown(metadata, summaries),
     )?;
 
     let mut dashboard = skwaq_gym::dashboard::generate_charts(history_db)?;
@@ -634,13 +756,20 @@ fn write_eval_artifacts(
     Ok(())
 }
 
-fn render_eval_summary_markdown(mode: &str, summaries: &[EvalSuiteSummary]) -> String {
+fn render_eval_summary_markdown(
+    metadata: &EvalRunMetadata,
+    summaries: &[EvalSuiteSummary],
+) -> String {
     let mut output = String::new();
     output.push_str("# Skwaq Gym Evaluation Summary\n\n");
     output.push_str(&format!(
-        "- Generated: {}\n- Mode: {}\n\n",
+        "- Generated: {}\n- Mode: {}\n- Commit: {}\n- Git dirty: {}\n- LLM backend: {}\n- LLM model: {}\n\n",
         chrono::Utc::now().format("%Y-%m-%d %H:%M UTC"),
-        mode
+        metadata.mode,
+        metadata.git_commit,
+        metadata.git_dirty,
+        metadata.llm_backend,
+        metadata.llm_model,
     ));
     output.push_str(
         "| Suite | F1 | Precision | Recall | TP | FP | FN | TN | Shards | Target cases |\n",
@@ -676,6 +805,39 @@ fn ratio(numerator: u32, denominator: u32) -> f64 {
     }
 }
 
+fn git_commit_full(repo: &std::path::Path) -> anyhow::Result<String> {
+    let output = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(repo)
+        .output()?;
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn git_is_dirty(repo: &std::path::Path) -> anyhow::Result<bool> {
+    let output = std::process::Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(repo)
+        .output()?;
+    Ok(!output.stdout.is_empty())
+}
+
+fn resolve_github_identity() -> Option<String> {
+    let output = std::process::Command::new("gh")
+        .args(["api", "user", "--jq", ".login"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let login = String::from_utf8(output.stdout).ok()?;
+    let login = login.trim();
+    if login.is_empty() {
+        None
+    } else {
+        Some(login.to_string())
+    }
+}
+
 /// Parse a CWE filter string like "CWE-119", "cwe-119", or "119" into a number.
 fn parse_cwe_number(s: &str) -> anyhow::Result<u32> {
     s.trim_start_matches("CWE-")
@@ -704,7 +866,10 @@ fn find_skwaq_root() -> anyhow::Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use skwaq_gym::reporting::json_report::{JsonCweResult, JsonReport};
+    use skwaq_gym::{
+        history::RunMetadata,
+        reporting::json_report::{JsonCweResult, JsonReport},
+    };
     use tempfile::tempdir;
 
     #[test]
@@ -738,6 +903,7 @@ mod tests {
             suite: "fixtures".to_string(),
             timestamp: "2026-01-01T00:00:00Z".to_string(),
             skwaq_commit: "abc123".to_string(),
+            metadata: RunMetadata::default(),
             precision: 0.0,
             recall: 0.0,
             f1: 0.0,
@@ -759,6 +925,7 @@ mod tests {
             suite: "fixtures".to_string(),
             timestamp: "2026-01-01T00:00:01Z".to_string(),
             skwaq_commit: "abc123".to_string(),
+            metadata: RunMetadata::default(),
             precision: 0.0,
             recall: 0.0,
             f1: 0.0,
@@ -807,7 +974,19 @@ mod tests {
     #[test]
     fn test_render_eval_summary_markdown() {
         let markdown = render_eval_summary_markdown(
-            "pattern-only",
+            &EvalRunMetadata {
+                started_at: "2026-01-01T00:00:00Z".to_string(),
+                git_commit: "abc123def456".to_string(),
+                git_dirty: false,
+                mode: "pattern-only".to_string(),
+                suites: "fixtures".to_string(),
+                procs_per_suite: 1,
+                concurrency: 1,
+                llm_backend: "copilot".to_string(),
+                llm_model: "claude-opus-4.6".to_string(),
+                binary_mode: true,
+                skwaq_version: "0.1.0".to_string(),
+            },
             &[EvalSuiteSummary {
                 suite: "fixtures".to_string(),
                 skwaq_commit: "abc123".to_string(),
@@ -825,6 +1004,7 @@ mod tests {
 
         assert!(markdown.contains("# Skwaq Gym Evaluation Summary"));
         assert!(markdown.contains("pattern-only"));
+        assert!(markdown.contains("claude-opus-4.6"));
         assert!(markdown.contains("| fixtures | 60.0% | 75.0% | 50.0% | 3 | 1 | 3 | 7 | 2 | 7 |"));
     }
 }
