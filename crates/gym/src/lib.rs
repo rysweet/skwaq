@@ -47,6 +47,15 @@ impl Gym {
                 skwaq_root.join("tests/fixtures"),
             ))];
 
+        // Add realworld adapter if its manifest exists.
+        let realworld_manifest = gt_dir.join("realworld.toml");
+        if realworld_manifest.exists() {
+            adapter_list.push(Box::new(adapters::realworld::RealWorldAdapter::new(
+                realworld_manifest,
+                skwaq_root.join("data/gym/realworld"),
+            )));
+        }
+
         // Add industry benchmark adapters if their manifests exist
         for (name, constructor) in [
             (
@@ -416,6 +425,33 @@ impl Gym {
                 true_negatives: score.true_negatives,
             };
             self.history_db.finish_run(&run)?;
+
+            // Store per-case results for regression tracking.
+            for outcome in &outcomes {
+                let classification = if outcome.expected_cwes.is_empty() {
+                    if outcome.detected_cwes.is_empty() {
+                        "TN"
+                    } else {
+                        "FP"
+                    }
+                } else if outcome.cwe_hits.values().all(|&hit| hit) {
+                    "TP"
+                } else if outcome.cwe_hits.values().any(|&hit| hit) {
+                    "PARTIAL"
+                } else {
+                    "FN"
+                };
+                let _ = self.history_db.insert_case_result(&history::CaseResult {
+                    run_id: run_id.clone(),
+                    suite: suite_name.clone(),
+                    case_id: outcome.case_id.clone(),
+                    expected_cwes: outcome.expected_cwes.clone(),
+                    detected_cwes: outcome.detected_cwes.clone(),
+                    matched_finding_ids: outcome.matched_finding_ids.clone(),
+                    unmatched_finding_ids: outcome.unmatched_finding_ids.clone(),
+                    classification: classification.to_string(),
+                });
+            }
 
             for cwe_score in score.per_cwe.values() {
                 self.history_db.insert_cwe_result(&history::CweResult {
