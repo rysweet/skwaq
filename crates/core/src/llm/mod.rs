@@ -172,7 +172,10 @@ mod tests {
 
     #[test]
     fn test_validate_benchmark_copilot_config_requires_opus_model() {
-        let mut config = LlmConfig::default();
+        let mut config = LlmConfig {
+            reasoning: "copilot".into(),
+            ..Default::default()
+        };
         config.copilot.model = "gpt-4o".into();
 
         let err = validate_benchmark_copilot_config(&config).unwrap_err();
