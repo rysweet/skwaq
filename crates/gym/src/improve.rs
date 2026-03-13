@@ -226,7 +226,7 @@ async fn analyze_false_negatives(
     }
 
     // Always run heuristic analysis as a baseline
-    let heuristic_proposals = heuristic_failure_analysis(false_negatives, suite);
+    let heuristic_proposals = heuristic_failure_analysis(false_negatives);
     tracing::info!(
         "Heuristic analysis produced {} proposal(s) for {}",
         heuristic_proposals.len(),
@@ -317,7 +317,7 @@ async fn run_failure_analyst_agent(
         {
             Ok(result) => {
                 // Parse proposals from the agent's output
-                proposals.extend(parse_analyst_proposals(&result.output, fn_case, suite));
+                proposals.extend(parse_analyst_proposals(&result.output, fn_case));
             }
             Err(e) => {
                 tracing::warn!("Failure analyst failed on case {}: {}", fn_case.case_id, e);
@@ -329,11 +329,7 @@ async fn run_failure_analyst_agent(
 }
 
 /// Parse structured improvement proposals from the failure-analyst's output.
-fn parse_analyst_proposals(
-    output: &str,
-    fn_case: &FalseNegativeCase,
-    _suite: &str,
-) -> Vec<Improvement> {
+fn parse_analyst_proposals(output: &str, fn_case: &FalseNegativeCase) -> Vec<Improvement> {
     if let Some(proposals) = try_parse_json_proposals(output, fn_case) {
         if !proposals.is_empty() {
             return proposals;
@@ -801,10 +797,7 @@ async fn run_overfitting_review(
 
 /// Heuristic analysis of false negatives (no LLM needed).
 /// Identifies common patterns we're missing based on source code content.
-fn heuristic_failure_analysis(
-    false_negatives: &[FalseNegativeCase],
-    _suite: &str,
-) -> Vec<Improvement> {
+fn heuristic_failure_analysis(false_negatives: &[FalseNegativeCase]) -> Vec<Improvement> {
     let mut proposals = Vec::new();
 
     // Known dangerous APIs that we might not have patterns for
@@ -1025,7 +1018,7 @@ mod tests {
                 .to_string(),
         }];
 
-        let proposals = heuristic_failure_analysis(&fn_cases, "juliet");
+        let proposals = heuristic_failure_analysis(&fn_cases);
         assert!(!proposals.is_empty(), "Should propose adding execl pattern");
         assert!(proposals[0].description.contains("execl"));
     }
@@ -1050,7 +1043,7 @@ analysis
 ```
 "#;
 
-        let proposals = parse_analyst_proposals(output, &fn_case, "cyberseceval");
+        let proposals = parse_analyst_proposals(output, &fn_case);
         assert_eq!(proposals.len(), 1);
         assert!(matches!(proposals[0].kind, ImprovementKind::NewPattern));
         assert_eq!(proposals[0].patch.replace, r"\bsprintf\s*\(");
@@ -1079,7 +1072,7 @@ Regex: \bscanf\s*\(
 ---PROPOSAL_END---
 "#;
 
-        let proposals = parse_analyst_proposals(output, &fn_case, "cyberseceval");
+        let proposals = parse_analyst_proposals(output, &fn_case);
         assert_eq!(proposals.len(), 1);
         assert!(matches!(proposals[0].kind, ImprovementKind::NewPattern));
         assert_eq!(proposals[0].patch.replace, r"\bscanf\s*\(");
@@ -1096,7 +1089,7 @@ Regex: \bscanf\s*\(
             source_content: "password = \"hunter2\"".to_string(),
         }];
 
-        let proposals = heuristic_failure_analysis(&fn_cases, "cyberseceval");
+        let proposals = heuristic_failure_analysis(&fn_cases);
         assert!(
             !proposals.is_empty(),
             "Should propose hardcoded credential detection"

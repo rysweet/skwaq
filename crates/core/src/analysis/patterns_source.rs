@@ -1333,9 +1333,9 @@ void *vuln(ctx_t *ctx, size_t count, size_t threads, dma_addr_t *dma) {
     fn test_detect_stack_buffer_shape_with_length_context() {
         let detector = DangerousApiDetector::new();
         let src = r#"
-void handle_input(char *input, int argc, char **argv, int xInputLength) {
+void process_input(char *input, int argc, char **argv, int input_length) {
     char buffer[1024];
-    int local = xInputLength;
+    int local = input_length;
     if (argc > 1) {
         local -= 1;
     }
@@ -1356,7 +1356,7 @@ void handle_input(char *input, int argc, char **argv, int xInputLength) {
         let detector = DangerousApiDetector::new();
         let src = r#"
 int getline_like(char *line, int max) {
-    static char prevline[1024];
+    static char scratch[1024];
     line[0] = 0;
     return max;
 }
@@ -1372,13 +1372,37 @@ int getline_like(char *line, int max) {
     }
 
     #[test]
+    fn test_detect_stack_buffer_shape_with_protocol_length_fields() {
+        let detector = DangerousApiDetector::new();
+        let src = r#"
+void process_packet(struct packet *pkt) {
+    char buffer[1024];
+    int hlen = pkt->header_length;
+    int totlen = pkt->total_length;
+    int optlen = pkt->option_length;
+    if (totlen > hlen) {
+        memcpy(buffer, pkt->payload, optlen);
+    }
+}
+"#;
+        let hits = detector
+            .detect_in_source_content(src, "c", "stack-protocol-lengths.c")
+            .unwrap();
+        assert!(
+            hits.iter()
+                .any(|h| h.danger_category == DangerCategory::Memory),
+            "Expected stack-buffer/protocol-length heuristic to trigger"
+        );
+    }
+
+    #[test]
     fn test_detect_multiple_stack_buffers_in_same_scope() {
         let detector = DangerousApiDetector::new();
         let src = r#"
 void transform(const unsigned char *message) {
-    uint8_t block_a[8];
-    uint8_t block_b[8];
-    uint8_t block_c[8];
+    uint8_t first_block[8];
+    uint8_t second_block[8];
+    uint8_t third_block[8];
 }
 "#;
         let hits = detector
@@ -1431,7 +1455,7 @@ void handle_input(char *dst, const char *src, char *user_fmt, size_t len) {
 
     #[test]
     fn test_source_patterns_remain_benchmark_agnostic() {
-        let disallowed_tokens = ["cgc", "juliet"];
+        let disallowed_tokens = ["cgc", "juliet", "cyberseceval"];
         let pattern_sets = [
             ("python", python_patterns()),
             ("javascript", javascript_patterns()),
