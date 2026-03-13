@@ -1,0 +1,40 @@
+name: "Gym History Migrates Missing Metadata Column"
+description: |
+  Verifies that `skwaq gym history` succeeds when opening a legacy results
+  database that predates the `run_metadata_json` column entirely.
+version: "1.0.0"
+
+config:
+  timeout: 30000
+  retries: 1
+  parallel: false
+
+agents:
+  - name: "cli-agent"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "."
+      timeout: 30000
+      capture_output: true
+
+steps:
+  - name: "Render history from a pre-column legacy database"
+    agent: "cli-agent"
+    action: "execute_command"
+    params:
+      command: >
+        tmpdir="$(mktemp -d)" &&
+        python3 tests/gadugi/create_legacy_history_db.py --omit-metadata-column "$tmpdir" &&
+        cargo build -q -p skwaq &&
+        XDG_DATA_HOME="$tmpdir" ./target/debug/skwaq gym history --limit 1
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "fixtures"
+        - "abc123"
+    timeout: 30000
+
+metadata:
+  tags: ["cli", "smoke", "regression", "gym-history", "migration"]
+  priority: "high"

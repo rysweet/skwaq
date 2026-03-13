@@ -26,15 +26,18 @@ steps:
       command: >
         tmpdir="$(mktemp -d)" &&
         python3 tests/gadugi/create_legacy_history_db.py "$tmpdir" &&
-        XDG_DATA_HOME="$tmpdir" ./target/debug/skwaq gym history --limit 2
+        cargo build -q -p skwaq &&
+        XDG_DATA_HOME="$tmpdir" ./target/debug/skwaq gym history --limit 3
     expect:
       exit_code: 0
       stdout_contains:
+        - "juliet"
         - "cyberseceval"
         - "fixtures"
+        - "feedfa"
         - "cafeba"
         - "deadbe"
-    timeout: 10000
+    timeout: 30000
 
 metadata:
   tags: ["cli", "smoke", "regression", "gym-history"]

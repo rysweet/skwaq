@@ -260,7 +260,9 @@ impl HistoryDb {
               FROM runs ORDER BY started_at DESC LIMIT ?1",
         )?;
         let rows = stmt.query_map(rusqlite::params![limit], |row| {
-            let metadata_json: String = row.get(5)?;
+            let metadata_json = row
+                .get::<_, Option<String>>(5)?
+                .unwrap_or_else(|| "{}".to_string());
             Ok(BenchmarkRun {
                 id: row.get(0)?,
                 started_at: row.get::<_, String>(1)?.parse().unwrap_or_default(),
@@ -506,6 +508,48 @@ mod tests {
         assert_eq!(runs[0].metadata.concurrency, 4);
         assert_eq!(runs[0].metadata.skip, 0);
         assert_eq!(runs[0].metadata.max_cases, None);
+    }
+
+    #[test]
+    fn test_recent_runs_loads_null_metadata() {
+        let db = HistoryDb::in_memory().unwrap();
+        db.conn.execute("DROP TABLE runs", []).unwrap();
+        db.conn
+            .execute_batch(
+                "
+                CREATE TABLE runs (
+                    id TEXT PRIMARY KEY,
+                    started_at TEXT NOT NULL,
+                    finished_at TEXT,
+                    suite TEXT NOT NULL,
+                    skwaq_commit TEXT NOT NULL,
+                    run_metadata_json TEXT DEFAULT '{}',
+                    precision REAL DEFAULT 0.0,
+                    recall REAL DEFAULT 0.0,
+                    f1 REAL DEFAULT 0.0,
+                    true_positives INTEGER DEFAULT 0,
+                    false_positives INTEGER DEFAULT 0,
+                    false_negatives INTEGER DEFAULT 0,
+                    true_negatives INTEGER DEFAULT 0
+                );
+                ",
+            )
+            .unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO runs (
+                    id, started_at, suite, skwaq_commit, run_metadata_json,
+                    precision, recall, f1, true_positives, false_positives,
+                    false_negatives, true_negatives
+                ) VALUES (?1, ?2, ?3, ?4, NULL, 0.5, 0.4, 0.444, 2, 1, 3, 0)",
+                rusqlite::params!["null-run", "2026-03-13T00:00:00Z", "fixtures", "deadbeef"],
+            )
+            .unwrap();
+
+        let runs = db.recent_runs(1).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].id, "null-run");
+        assert_eq!(runs[0].metadata, RunMetadata::default());
     }
 
     #[test]

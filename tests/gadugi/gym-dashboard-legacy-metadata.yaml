@@ -27,14 +27,16 @@ steps:
       command: >
         tmpdir="$(mktemp -d)" &&
         python3 tests/gadugi/create_legacy_history_db.py "$tmpdir" &&
+        cargo build -q -p skwaq &&
         XDG_DATA_HOME="$tmpdir" ./target/debug/skwaq gym dashboard
     expect:
       exit_code: 0
       stdout_contains:
         - "### Score Trajectory Charts"
-        - "\"Fixtures\", \"CyberSecEval\""
+        - "\"Fixtures\", \"Juliet\", \"CyberSecEval\""
+        - "| **Juliet** | 74.7% | 80.0% | 70.0% |"
         - "| **CyberSecEval** | 44.4% | 50.0% | 40.0% |"
-    timeout: 10000
+    timeout: 30000
 
 metadata:
   tags: ["cli", "smoke", "regression", "gym-dashboard"]
