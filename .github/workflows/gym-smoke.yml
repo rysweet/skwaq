@@ -1,6 +1,11 @@
 name: Gym Smoke
 on: [pull_request]
 
+env:
+  # Minimum F1 score (0.0-1.0) required to pass the benchmark gate.
+  # Adjust as detection improves. Current baseline: 0.10 (10%).
+  GYM_F1_THRESHOLD: "0.10"
+
 jobs:
   gym-smoke:
     runs-on: ubuntu-latest
@@ -26,3 +31,59 @@ jobs:
         with:
           name: gym-smoke-results
           path: gym-smoke-results.json
+
+  ci-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build
+
+      - name: Run fixtures benchmark (pattern mode)
+        run: |
+          ./target/debug/skwaq gym run fixtures --quick
+          echo "Fixtures benchmark completed"
+
+      - name: Run juliet subset benchmark (20 cases, pattern mode)
+        run: |
+          ./target/debug/skwaq gym run juliet --max-cases 20 --quick || true
+          echo "Juliet subset benchmark completed (may skip if data not available)"
+
+      - name: Generate benchmark report
+        run: |
+          ./target/debug/skwaq gym report --format json > ci-benchmark-results.json
+          cat ci-benchmark-results.json
+
+      - name: Check F1 threshold
+        run: |
+          F1=$(python3 -c "
+          import json, sys
+          try:
+              data = json.load(open('ci-benchmark-results.json'))
+              f1 = float(data.get('f1', data.get('F1', 0)))
+              print(f'{f1:.4f}')
+          except Exception as e:
+              print(f'Warning: could not parse results: {e}', file=sys.stderr)
+              print('0.0')
+          ")
+          echo "F1 score: $F1"
+          echo "Threshold: $GYM_F1_THRESHOLD"
+          python3 -c "
+          import sys
+          f1 = float('$F1')
+          threshold = float('$GYM_F1_THRESHOLD')
+          if f1 < threshold:
+              print(f'FAIL: F1 {f1:.4f} is below threshold {threshold:.4f}')
+              sys.exit(1)
+          else:
+              print(f'PASS: F1 {f1:.4f} >= threshold {threshold:.4f}')
+          "
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-benchmark-results
+          path: ci-benchmark-results.json

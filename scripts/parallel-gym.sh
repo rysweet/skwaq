@@ -41,7 +41,11 @@ validate_suite_case_count "$TOTAL" "total_cases" || exit 1
 validate_suite_case_count "$NPROCS" "num_procs" || exit 1
 EXTRA_ARGS=("$@")
 
-CASES_PER_PROC=$(( (TOTAL + NPROCS - 1) / NPROCS ))  # ceiling division
+# Compute strictly non-overlapping, gap-free shard ranges.
+# Uses floor division with remainder distributed to the first N shards.
+BASE_PER_PROC=$(( TOTAL / NPROCS ))
+REMAINDER=$(( TOTAL % NPROCS ))
+
 SKWAQ="${SKWAQ:-./target/release/skwaq}"
 OUTDIR=$(mktemp -d /tmp/gym-parallel-${SUITE}-XXXXXX)
 
@@ -49,7 +53,7 @@ echo "=== Parallel Gym Run ==="
 echo "Suite:      $SUITE"
 echo "Total:      $TOTAL cases"
 echo "Processes:  $NPROCS"
-echo "Per proc:   $CASES_PER_PROC cases (last shard may be smaller)"
+echo "Base/proc:  $BASE_PER_PROC cases (+1 for first $REMAINDER procs)"
 echo "Binary:     $SKWAQ"
 echo "Output:     $OUTDIR"
 echo "Extra args: ${EXTRA_ARGS[*]}"
@@ -61,30 +65,53 @@ if [ ! -f "$SKWAQ" ]; then
     cargo build --release
 fi
 
-# Launch N processes with non-overlapping shard ranges.
-# Each shard gets exactly [SKIP, SKIP+COUNT) where COUNT is capped so the
-# last shard never extends beyond TOTAL, preventing double-counting.
-PIDS=()
-ASSIGNED=0
+# Compute and validate all shard ranges before launching
+declare -a SHARD_SKIPS
+declare -a SHARD_COUNTS
+OFFSET=0
 for i in $(seq 0 $((NPROCS - 1))); do
-    SKIP=$ASSIGNED
-    REMAINING=$((TOTAL - ASSIGNED))
-
-    # Cap this shard's size so it never exceeds the remaining cases
-    if [ "$REMAINING" -le 0 ]; then
-        echo "  Process $i: skipped (no remaining cases)"
-        continue
+    # First REMAINDER shards get (BASE_PER_PROC + 1) cases, rest get BASE_PER_PROC
+    if [ "$i" -lt "$REMAINDER" ]; then
+        COUNT=$((BASE_PER_PROC + 1))
+    else
+        COUNT=$BASE_PER_PROC
     fi
-    COUNT=$CASES_PER_PROC
-    if [ "$COUNT" -gt "$REMAINING" ]; then
-        COUNT=$REMAINING
-    fi
-    ASSIGNED=$((ASSIGNED + COUNT))
+    SHARD_SKIPS[$i]=$OFFSET
+    SHARD_COUNTS[$i]=$COUNT
+    OFFSET=$((OFFSET + COUNT))
+done
 
+# Assert: total assigned must equal TOTAL (gap-free)
+if [ "$OFFSET" -ne "$TOTAL" ]; then
+    echo "ERROR: Shard ranges do not sum to total! Assigned=$OFFSET Expected=$TOTAL" >&2
+    exit 1
+fi
+
+# Assert: ranges are non-overlapping (each starts where the previous ended)
+PREV_END=0
+for i in $(seq 0 $((NPROCS - 1))); do
+    if [ "${SHARD_SKIPS[$i]}" -ne "$PREV_END" ]; then
+        echo "ERROR: Shard $i starts at ${SHARD_SKIPS[$i]} but previous ended at $PREV_END (overlap or gap!)" >&2
+        exit 1
+    fi
+    PREV_END=$((SHARD_SKIPS[$i] + SHARD_COUNTS[$i]))
+done
+
+# Launch N processes
+PIDS=()
+for i in $(seq 0 $((NPROCS - 1))); do
+    SKIP=${SHARD_SKIPS[$i]}
+    COUNT=${SHARD_COUNTS[$i]}
     LOG="$OUTDIR/proc-${i}.log"
     JSON="$OUTDIR/proc-${i}.json"
 
-    echo "  Process $i: skip=$SKIP count=$COUNT -> $LOG"
+    echo "  Process $i: skip=$SKIP max=$COUNT -> $LOG"
+
+    # Skip empty shards (can happen if NPROCS > TOTAL)
+    if [ "$COUNT" -eq 0 ]; then
+        echo "  Process $i: 0 cases, skipping"
+        continue
+    fi
 
     "$SKWAQ" gym run "$SUITE" \
         --skip "$SKIP" \
@@ -97,7 +124,7 @@ for i in $(seq 0 $((NPROCS - 1))); do
 done
 
 echo ""
-echo "Waiting for $NPROCS processes..."
+echo "Waiting for ${#PIDS[@]} processes..."
 
 # Wait and collect exit codes
 FAILURES=0
@@ -116,8 +143,10 @@ echo "=== Results ==="
 # Show individual results
 for i in $(seq 0 $((NPROCS - 1))); do
     LOG="$OUTDIR/proc-${i}.log"
-    echo "--- Process $i ---"
-    grep -E "F1|Precision|Recall|TP:|FP:|FN:" "$LOG" 2>/dev/null || echo "  (no results)"
+    if [ -f "$LOG" ]; then
+        echo "--- Process $i ---"
+        grep -E "F1|Precision|Recall|TP:|FP:|FN:" "$LOG" 2>/dev/null || echo "  (no results)"
+    fi
 done
 
 # Merge JSON results if jq is available
