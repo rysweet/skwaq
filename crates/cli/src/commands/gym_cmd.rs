@@ -45,6 +45,11 @@ pub enum GymSub {
         #[arg(long)]
         source_only: bool,
 
+        /// Enable adaptive rate throttling (AIMD congestion control for API calls).
+        /// Automatically scales concurrency up/down based on rate-limit responses.
+        #[arg(long)]
+        adaptive: bool,
+
         /// Output JSON report to file
         #[arg(long)]
         json: Option<PathBuf>,
@@ -93,6 +98,10 @@ pub enum GymSub {
         /// Use LLM-only mode (no pattern detection, agents only)
         #[arg(long, conflicts_with = "quick")]
         llm_only: bool,
+
+        /// Enable adaptive rate throttling (AIMD congestion control for API calls)
+        #[arg(long)]
+        adaptive: bool,
 
         /// Output directory for results
         #[arg(long)]
@@ -161,6 +170,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             skip,
             concurrency,
             source_only,
+            adaptive,
             json,
             markdown,
         } => {
@@ -183,6 +193,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 binary_mode,
                 *skip,
                 conc,
+                *adaptive,
             )
             .await?;
 
@@ -218,6 +229,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             concurrency,
             quick,
             llm_only,
+            adaptive,
             output,
         } => {
             let eval_dir = output.clone().unwrap_or_else(|| {
@@ -244,6 +256,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             println!("  Suites:      {suites}");
             println!("  Procs/suite: {procs}");
             println!("  Concurrency: {concurrency}");
+            println!("  Adaptive:    {adaptive}");
             println!("  Output:      {}", eval_dir.display());
             println!();
 
@@ -301,6 +314,9 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                         cmd.arg("--quick");
                     } else if *llm_only {
                         cmd.arg("--llm-only");
+                    }
+                    if *adaptive {
+                        cmd.arg("--adaptive");
                     }
 
                     children.push(cmd.spawn()?);

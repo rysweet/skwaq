@@ -12,6 +12,7 @@ pub mod history;
 pub mod improve;
 pub mod reporting;
 pub mod scoring;
+pub mod throttle;
 
 use futures::stream::{FuturesUnordered, StreamExt};
 use std::pin::Pin;
@@ -145,6 +146,7 @@ impl Gym {
         binary_mode: bool,
         skip: usize,
         concurrency: usize,
+        adaptive: bool,
     ) -> anyhow::Result<()> {
         let commit = get_git_commit(&self.skwaq_root)?;
 
@@ -205,12 +207,19 @@ impl Gym {
             let total = cases.len();
             let concurrency = config.concurrency;
 
+            let rate_controller = if adaptive {
+                Some(throttle::RateController::with_defaults(concurrency as u32))
+            } else {
+                None
+            };
+
             tracing::info!(
-                "{}: {} cases (skip={}, concurrency={})",
+                "{}: {} cases (skip={}, concurrency={}, adaptive={})",
                 suite_name,
                 total,
                 config.skip,
-                concurrency
+                concurrency,
+                adaptive
             );
 
             // Skip empty shards (can happen when skip >= total cases in multi-process mode)
@@ -306,6 +315,28 @@ impl Gym {
                         tracing::info!("[{}/{}] Completed {}", completed, total, case.id);
                     }
 
+                    // Determine call outcome for adaptive throttling.
+                    let call_outcome = match &result {
+                        Ok(Ok(_)) => throttle::CallOutcome::Success,
+                        Ok(Err(e)) => {
+                            let msg = e.to_string();
+                            if msg.contains("429")
+                                || msg.contains("rate")
+                                || msg.contains("Rate")
+                                || msg.contains("throttl")
+                            {
+                                throttle::CallOutcome::RateLimited
+                            } else {
+                                throttle::CallOutcome::OtherError
+                            }
+                        }
+                        Err(_) => throttle::CallOutcome::OtherError,
+                    };
+
+                    if let Some(ref rc) = rate_controller {
+                        rc.record(call_outcome);
+                    }
+
                     match result {
                         Ok(Ok(findings)) => {
                             let mut outcome = scoring::score_case(case, &findings, &|f| {
@@ -328,18 +359,39 @@ impl Gym {
                         }
                     }
 
-                    // Feed next case into the pool
-                    if let Some((next_i, &next_case)) = case_iter.next() {
-                        let suite = suite_name.clone();
-                        pending.push(Box::pin(async move {
-                            let result = tokio::time::timeout(
-                                std::time::Duration::from_secs(timeout_secs),
-                                adapter.run_case(next_case, data_dir, config),
-                            )
-                            .await;
-                            (next_i, next_case, suite, result)
-                        }));
+                    // Feed new cases into the pool.
+                    // In adaptive mode, respect the rate controller's current concurrency.
+                    let target = if let Some(ref rc) = rate_controller {
+                        rc.concurrency() as usize
+                    } else {
+                        concurrency
+                    };
+                    while pending.len() < target {
+                        if let Some((next_i, &next_case)) = case_iter.next() {
+                            let suite = suite_name.clone();
+                            pending.push(Box::pin(async move {
+                                let result = tokio::time::timeout(
+                                    std::time::Duration::from_secs(timeout_secs),
+                                    adapter.run_case(next_case, data_dir, config),
+                                )
+                                .await;
+                                (next_i, next_case, suite, result)
+                            }));
+                        } else {
+                            break;
+                        }
                     }
+                }
+
+                // Log final adaptive throttle stats
+                if let Some(ref rc) = rate_controller {
+                    let stats = rc.stats();
+                    tracing::info!(
+                        "Adaptive throttle final: {} concurrent, {:.1} cases/min, {} completed",
+                        stats.concurrency,
+                        stats.throughput_per_min,
+                        stats.total_completed,
+                    );
                 }
             }
 
