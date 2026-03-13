@@ -22,7 +22,7 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-/// Tracks how many cases used LLM synthesis vs. deterministic fallback.
+/// Tracks how many cases used LLM synthesis vs. encountered errors.
 ///
 /// Thread-safe counters for use across concurrent gym case execution.
 /// Call [`SynthesisStats::report`] at end of a gym run to log the summary.
@@ -595,36 +595,6 @@ fn apply_synthesis_decisions(
     synthesized
 }
 
-#[cfg(test)]
-/// Deterministic merge helper retained for unit-test coverage.
-fn merge_findings_deterministic(all_findings: Vec<DetectedFinding>) -> Vec<DetectedFinding> {
-    let mut synthesized = Vec::new();
-    let mut seen_ids: HashSet<String> = HashSet::new();
-
-    // First pass: add all LLM findings
-    for f in &all_findings {
-        if !f.title.starts_with("Dangerous pattern:")
-            && !f.title.starts_with("Binary import:")
-            && seen_ids.insert(f.id.clone())
-        {
-            synthesized.push(f.clone());
-        }
-    }
-
-    // Second pass: add pattern findings for uncovered categories
-    let llm_categories: HashSet<String> = synthesized.iter().map(|f| f.category.clone()).collect();
-    for f in &all_findings {
-        if (f.title.starts_with("Dangerous pattern:") || f.title.starts_with("Binary import:"))
-            && !llm_categories.contains(&f.category)
-            && seen_ids.insert(f.id.clone())
-        {
-            synthesized.push(f.clone());
-        }
-    }
-
-    synthesized
-}
-
 /// Run the LLM agent pipeline and fail explicitly if the client is unavailable.
 async fn run_llm_pipeline(
     db: &GraphDb,
@@ -843,99 +813,7 @@ mod tests {
         assert_eq!(deduped.len(), 1);
     }
 
-    #[test]
-    fn test_merge_findings_pattern_only() {
-        let findings = vec![DetectedFinding {
-            id: "p1".into(),
-            category: "memory".into(),
-            severity: "high".into(),
-            cwes: vec![],
-            file: "test.c".into(),
-            function: "strcpy".into(),
-            line: Some(10),
-            title: "Dangerous pattern: strcpy".into(),
-        }];
-        let result = merge_findings_deterministic(findings);
-        assert_eq!(result.len(), 1, "Pattern-only: should keep all");
-    }
-
-    #[test]
-    fn test_merge_findings_llm_only() {
-        let findings = vec![DetectedFinding {
-            id: "l1".into(),
-            category: "memory".into(),
-            severity: "critical".into(),
-            cwes: vec![],
-            file: "test.c".into(),
-            function: "strcpy".into(),
-            line: Some(10),
-            title: "LLM: buffer overflow in strcpy".into(),
-        }];
-        let result = merge_findings_deterministic(findings);
-        assert_eq!(result.len(), 1, "LLM-only: should keep all");
-    }
-
-    #[test]
-    fn test_merge_findings_overlapping_categories() {
-        // Both sources find "memory" — should deduplicate to 1 finding (LLM preferred)
-        let findings = vec![
-            DetectedFinding {
-                id: "p1".into(),
-                category: "memory".into(),
-                severity: "high".into(),
-                cwes: vec![],
-                file: "test.c".into(),
-                function: "strcpy".into(),
-                line: Some(10),
-                title: "Dangerous pattern: strcpy".into(),
-            },
-            DetectedFinding {
-                id: "l1".into(),
-                category: "memory".into(),
-                severity: "critical".into(),
-                cwes: vec![],
-                file: "test.c".into(),
-                function: "strcpy".into(),
-                line: Some(10),
-                title: "LLM: buffer overflow with taint path".into(),
-            },
-        ];
-        let result = merge_findings_deterministic(findings);
-        assert_eq!(result.len(), 1, "Overlapping: should deduplicate");
-        assert!(
-            result[0].title.starts_with("LLM:"),
-            "LLM finding should be preferred"
-        );
-    }
-
-    #[test]
-    fn test_merge_findings_disjoint_categories() {
-        // Pattern finds "memory", LLM finds "injection" — keep both
-        let findings = vec![
-            DetectedFinding {
-                id: "p1".into(),
-                category: "memory".into(),
-                severity: "high".into(),
-                cwes: vec![],
-                file: "test.c".into(),
-                function: "strcpy".into(),
-                line: Some(10),
-                title: "Dangerous pattern: strcpy".into(),
-            },
-            DetectedFinding {
-                id: "l1".into(),
-                category: "injection".into(),
-                severity: "critical".into(),
-                cwes: vec![],
-                file: "test.c".into(),
-                function: "system".into(),
-                line: Some(20),
-                title: "LLM: command injection via user input".into(),
-            },
-        ];
-        let result = merge_findings_deterministic(findings);
-        assert_eq!(result.len(), 2, "Disjoint: should keep both");
-    }
+    // merge_findings_deterministic tests removed — function deleted (no fallback paths)
 
     #[tokio::test]
     async fn test_synthesize_findings_empty() {
