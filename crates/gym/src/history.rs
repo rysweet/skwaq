@@ -24,13 +24,21 @@ pub struct BenchmarkRun {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RunMetadata {
+    #[serde(default)]
     pub llm_backend: String,
+    #[serde(default)]
     pub llm_model: String,
+    #[serde(default)]
     pub run_mode: String,
+    #[serde(default)]
     pub binary_mode: bool,
+    #[serde(default)]
     pub git_dirty: bool,
+    #[serde(default)]
     pub concurrency: usize,
+    #[serde(default)]
     pub skip: usize,
+    #[serde(default)]
     pub max_cases: Option<usize>,
 }
 
@@ -388,6 +396,25 @@ impl HistoryDb {
 mod tests {
     use super::*;
 
+    fn insert_run_with_metadata_json(db: &HistoryDb, id: &str, metadata_json: &str) {
+        db.conn
+            .execute(
+                "INSERT INTO runs (
+                    id, started_at, suite, skwaq_commit, run_metadata_json,
+                    precision, recall, f1, true_positives, false_positives,
+                    false_negatives, true_negatives
+                ) VALUES (?1, ?2, ?3, ?4, ?5, 0.0, 0.0, 0.0, 0, 0, 0, 0)",
+                rusqlite::params![
+                    id,
+                    Utc::now().to_rfc3339(),
+                    "fixtures",
+                    "abc123",
+                    metadata_json,
+                ],
+            )
+            .unwrap();
+    }
+
     #[test]
     fn test_history_db_lifecycle() {
         let db = HistoryDb::in_memory().unwrap();
@@ -450,24 +477,41 @@ mod tests {
     }
 
     #[test]
+    fn test_recent_runs_loads_legacy_empty_metadata() {
+        let db = HistoryDb::in_memory().unwrap();
+        insert_run_with_metadata_json(&db, "legacy-run", "{}");
+
+        let runs = db.recent_runs(1).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].id, "legacy-run");
+        assert_eq!(runs[0].metadata, RunMetadata::default());
+    }
+
+    #[test]
+    fn test_recent_runs_loads_partial_metadata() {
+        let db = HistoryDb::in_memory().unwrap();
+        insert_run_with_metadata_json(
+            &db,
+            "partial-run",
+            r#"{"llm_backend":"copilot","binary_mode":true,"concurrency":4}"#,
+        );
+
+        let runs = db.recent_runs(1).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].id, "partial-run");
+        assert_eq!(runs[0].metadata.llm_backend, "copilot");
+        assert_eq!(runs[0].metadata.llm_model, "");
+        assert_eq!(runs[0].metadata.run_mode, "");
+        assert!(runs[0].metadata.binary_mode);
+        assert_eq!(runs[0].metadata.concurrency, 4);
+        assert_eq!(runs[0].metadata.skip, 0);
+        assert_eq!(runs[0].metadata.max_cases, None);
+    }
+
+    #[test]
     fn test_recent_runs_rejects_invalid_metadata_json() {
         let db = HistoryDb::in_memory().unwrap();
-        db.conn
-            .execute(
-                "INSERT INTO runs (
-                    id, started_at, suite, skwaq_commit, run_metadata_json,
-                    precision, recall, f1, true_positives, false_positives,
-                    false_negatives, true_negatives
-                ) VALUES (?1, ?2, ?3, ?4, ?5, 0.0, 0.0, 0.0, 0, 0, 0, 0)",
-                rusqlite::params![
-                    "bad-run",
-                    Utc::now().to_rfc3339(),
-                    "fixtures",
-                    "abc123",
-                    "{not-json",
-                ],
-            )
-            .unwrap();
+        insert_run_with_metadata_json(&db, "bad-run", "{not-json");
 
         assert!(db.recent_runs(1).is_err());
     }
