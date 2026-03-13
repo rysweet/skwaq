@@ -172,11 +172,23 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
 }
 
 /// Compute aggregate scores from a list of case outcomes.
+///
+/// Deduplicates outcomes by `case_id` so that overlapping parallel shards
+/// do not double-count the same test case. When duplicates exist, the first
+/// occurrence is kept (arbitrary but deterministic for a given input order).
 pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
     let mut score = AggregateScore::default();
     let mut per_cwe: HashMap<u32, CweScore> = HashMap::new();
+    let mut seen_case_ids: HashSet<String> = HashSet::new();
 
     for outcome in outcomes {
+        if !seen_case_ids.insert(outcome.case_id.clone()) {
+            tracing::debug!(
+                "Dedup: skipping duplicate case_id={} (already aggregated)",
+                outcome.case_id
+            );
+            continue;
+        }
         if outcome.expected_cwes.is_empty() {
             // Negative test case.
             if outcome.detected_cwes.is_empty() {
@@ -420,6 +432,47 @@ mod tests {
         assert_eq!(cwe_family(242), 676);
         // Type confusion → memory safety
         assert_eq!(cwe_family(843), 119);
+    }
+
+    #[test]
+    fn test_aggregate_dedup_by_case_id() {
+        // Simulate overlapping shards: same case_id appears twice
+        let outcomes = vec![
+            CaseOutcome {
+                case_id: "case1".to_string(),
+                suite: "test".to_string(),
+                expected_cwes: vec![121],
+                detected_cwes: vec![119],
+                matched_finding_ids: vec!["f1".to_string()],
+                unmatched_finding_ids: vec![],
+                cwe_hits: [(121, true)].into_iter().collect(),
+            },
+            CaseOutcome {
+                case_id: "case1".to_string(), // duplicate
+                suite: "test".to_string(),
+                expected_cwes: vec![121],
+                detected_cwes: vec![119],
+                matched_finding_ids: vec!["f1".to_string()],
+                unmatched_finding_ids: vec![],
+                cwe_hits: [(121, true)].into_iter().collect(),
+            },
+            CaseOutcome {
+                case_id: "case2".to_string(),
+                suite: "test".to_string(),
+                expected_cwes: vec![134],
+                detected_cwes: vec![],
+                matched_finding_ids: vec![],
+                unmatched_finding_ids: vec![],
+                cwe_hits: [(134, false)].into_iter().collect(),
+            },
+        ];
+
+        let score = aggregate(&outcomes);
+        // Without dedup this would be TP=2, FN=1. With dedup: TP=1, FN=1.
+        assert_eq!(score.true_positives, 1);
+        assert_eq!(score.false_negatives, 1);
+        assert_eq!(score.precision, 1.0);
+        assert_eq!(score.recall, 0.5);
     }
 
     #[test]
