@@ -3,6 +3,9 @@
 //! A pipeline runs a sequence of agents, passing context forward.
 //! Each stage can build its input from the graph database and previous results.
 //! Relevant skill content is automatically injected into agent system prompts.
+//!
+//! The deep pipeline runs exploit-analyst and defense-analyst in parallel,
+//! then feeds both perspectives into a debate stage before final synthesis.
 
 use crate::graph::GraphDb;
 use crate::llm::{Client, TokenBudget};
@@ -34,6 +37,19 @@ pub enum ContextMode {
     FromGraph,
     /// Use the output of previous stages as context, plus a preamble.
     FromPreviousResults { preamble: String },
+}
+
+/// A parallel debate group: two agents run on the same context, then
+/// their outputs are compared and fed into the next stage.
+pub struct DebateGroup {
+    /// First agent in the debate (e.g., exploit-analyst).
+    pub agent_a: String,
+    /// Preamble for agent A's context.
+    pub preamble_a: String,
+    /// Second agent in the debate (e.g., defense-analyst).
+    pub agent_b: String,
+    /// Preamble for agent B's context.
+    pub preamble_b: String,
 }
 
 impl AnalysisPipeline {
@@ -70,24 +86,7 @@ impl AnalysisPipeline {
             let context = match &stage.context_mode {
                 ContextMode::FromGraph => build_analysis_context(target, investigation_id, db),
                 ContextMode::FromPreviousResults { preamble } => {
-                    let mut ctx = preamble.clone();
-                    for prev in &results {
-                        ctx.push_str(&format!(
-                            "\n\n--- Output from {} ---\n{}",
-                            prev.agent_name, prev.output
-                        ));
-                    }
-                    // Truncate accumulated context to stay within LLM limits.
-                    if ctx.len() > MAX_PIPELINE_CONTEXT_CHARS {
-                        // Find nearest char boundary at or before the limit.
-                        let mut boundary = MAX_PIPELINE_CONTEXT_CHARS;
-                        while boundary > 0 && !ctx.is_char_boundary(boundary) {
-                            boundary -= 1;
-                        }
-                        ctx.truncate(boundary);
-                        ctx.push_str("\n...[truncated]");
-                    }
-                    ctx
+                    build_previous_results_context(preamble, &results)
                 }
             };
 
@@ -107,6 +106,245 @@ impl AnalysisPipeline {
 
         Ok(results)
     }
+
+    /// Run the pipeline with a debate group that executes two agents independently.
+    ///
+    /// Stages before the debate run sequentially. Then both debate agents run
+    /// on the same accumulated context. Their outputs are compared in a debate
+    /// summary, and subsequent stages receive all results including the debate.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn run_with_debate(
+        &self,
+        target: &str,
+        investigation_id: &str,
+        db: &GraphDb,
+        llm: Client,
+        budget: &mut TokenBudget,
+        debate: &DebateGroup,
+        debate_after_stage: usize,
+    ) -> anyhow::Result<Vec<AgentResult>> {
+        let runner = AgentRunner::new(llm);
+        let mut results: Vec<AgentResult> = Vec::new();
+
+        // Run stages before the debate point.
+        for (i, stage) in self.stages.iter().enumerate() {
+            if i >= debate_after_stage {
+                break;
+            }
+            if budget.exhausted() {
+                tracing::warn!(
+                    "Token budget exhausted before stage '{}', stopping pipeline",
+                    stage.agent_name
+                );
+                return Ok(results);
+            }
+
+            let mut agent = load_agent(&stage.agent_name)?;
+            inject_skill_context(&mut agent);
+
+            let context = match &stage.context_mode {
+                ContextMode::FromGraph => build_analysis_context(target, investigation_id, db),
+                ContextMode::FromPreviousResults { preamble } => {
+                    build_previous_results_context(preamble, &results)
+                }
+            };
+
+            eprintln!("  Running agent: {} ({})", agent.name, agent.description);
+            let result = runner
+                .run_agent_with_db(&agent, investigation_id, &context, db, budget)
+                .await?;
+            eprintln!(
+                "  Agent {} completed ({} tokens used)",
+                result.agent_name, result.tokens_used
+            );
+            results.push(result);
+        }
+
+        // Run the debate: both agents get the same context, execute sequentially
+        // (since GraphDb is not Send, true parallel with tokio::spawn is not possible,
+        // but they independently analyze the same findings without seeing each other).
+        if !budget.exhausted() {
+            let debate_context_a = build_previous_results_context(&debate.preamble_a, &results);
+            let debate_context_b = build_previous_results_context(&debate.preamble_b, &results);
+
+            // Agent A
+            let mut agent_a = load_agent(&debate.agent_a)?;
+            inject_skill_context(&mut agent_a);
+            eprintln!(
+                "  Running debate agent A: {} ({})",
+                agent_a.name, agent_a.description
+            );
+            let result_a = runner
+                .run_agent_with_db(&agent_a, investigation_id, &debate_context_a, db, budget)
+                .await?;
+            eprintln!(
+                "  Debate agent {} completed ({} tokens used)",
+                result_a.agent_name, result_a.tokens_used
+            );
+
+            // Agent B (independent — does NOT see Agent A's output)
+            let mut agent_b = load_agent(&debate.agent_b)?;
+            inject_skill_context(&mut agent_b);
+            eprintln!(
+                "  Running debate agent B: {} ({})",
+                agent_b.name, agent_b.description
+            );
+            let result_b = runner
+                .run_agent_with_db(&agent_b, investigation_id, &debate_context_b, db, budget)
+                .await?;
+            eprintln!(
+                "  Debate agent {} completed ({} tokens used)",
+                result_b.agent_name, result_b.tokens_used
+            );
+
+            // Create a debate summary that highlights agreements and disagreements.
+            let debate_summary = build_debate_summary(&result_a, &result_b);
+            results.push(result_a);
+            results.push(result_b);
+            results.push(AgentResult {
+                agent_name: "debate-summary".into(),
+                output: debate_summary,
+                tokens_used: 0,
+            });
+        }
+
+        // Run remaining stages (e.g., verdict-synthesizer) with debate results.
+        for stage in self.stages.iter().skip(debate_after_stage) {
+            if budget.exhausted() {
+                tracing::warn!(
+                    "Token budget exhausted before stage '{}', stopping pipeline",
+                    stage.agent_name
+                );
+                break;
+            }
+
+            let mut agent = load_agent(&stage.agent_name)?;
+            inject_skill_context(&mut agent);
+
+            let context = match &stage.context_mode {
+                ContextMode::FromGraph => build_analysis_context(target, investigation_id, db),
+                ContextMode::FromPreviousResults { preamble } => {
+                    build_previous_results_context(preamble, &results)
+                }
+            };
+
+            eprintln!("  Running agent: {} ({})", agent.name, agent.description);
+            let result = runner
+                .run_agent_with_db(&agent, investigation_id, &context, db, budget)
+                .await?;
+            eprintln!(
+                "  Agent {} completed ({} tokens used)",
+                result.agent_name, result.tokens_used
+            );
+            results.push(result);
+        }
+
+        Ok(results)
+    }
+}
+
+/// Build context from previous agent results, with truncation.
+fn build_previous_results_context(preamble: &str, results: &[AgentResult]) -> String {
+    let mut ctx = preamble.to_string();
+    for prev in results {
+        ctx.push_str(&format!(
+            "\n\n--- Output from {} ---\n{}",
+            prev.agent_name, prev.output
+        ));
+    }
+    // Truncate accumulated context to stay within LLM limits.
+    if ctx.len() > MAX_PIPELINE_CONTEXT_CHARS {
+        // Find nearest char boundary at or before the limit.
+        let mut boundary = MAX_PIPELINE_CONTEXT_CHARS;
+        while boundary > 0 && !ctx.is_char_boundary(boundary) {
+            boundary -= 1;
+        }
+        ctx.truncate(boundary);
+        ctx.push_str("\n...[truncated]");
+    }
+    ctx
+}
+
+/// Build a debate summary comparing two agent outputs.
+///
+/// Extracts per-finding verdicts from both agents and identifies:
+/// - Agreements (both say exploitable or both say safe)
+/// - Disagreements (one says exploitable, other says safe)
+fn build_debate_summary(agent_a: &AgentResult, agent_b: &AgentResult) -> String {
+    let mut summary = String::from("=== DEBATE SUMMARY ===\n\n");
+    summary.push_str(&format!(
+        "Two independent analysts reviewed the findings:\n\
+         - {} (offense perspective): evaluated exploitability\n\
+         - {} (defense perspective): evaluated mitigations\n\n",
+        agent_a.agent_name, agent_b.agent_name
+    ));
+
+    // Extract verdicts from agent A (CONFIRMED/DOWNGRADED/REJECTED)
+    let a_verdicts: Vec<&str> = agent_a
+        .output
+        .lines()
+        .filter(|line| {
+            let upper = line.to_uppercase();
+            upper.contains("CONFIRMED")
+                || upper.contains("REJECTED")
+                || upper.contains("DOWNGRADED")
+        })
+        .collect();
+
+    // Extract verdicts from agent B (VULNERABLE/MITIGATED/SAFE)
+    let b_verdicts: Vec<&str> = agent_b
+        .output
+        .lines()
+        .filter(|line| {
+            let upper = line.to_uppercase();
+            upper.contains("VULNERABLE") || upper.contains("MITIGATED") || upper.contains("SAFE")
+        })
+        .collect();
+
+    summary.push_str("Offense analyst verdicts:\n");
+    for v in &a_verdicts {
+        summary.push_str(&format!("  {}\n", v.trim()));
+    }
+
+    summary.push_str("\nDefense analyst verdicts:\n");
+    for v in &b_verdicts {
+        summary.push_str(&format!("  {}\n", v.trim()));
+    }
+
+    // Identify agreements and disagreements.
+    let a_confirms = a_verdicts
+        .iter()
+        .filter(|l| l.to_uppercase().contains("CONFIRMED"))
+        .count();
+    let a_rejects = a_verdicts
+        .iter()
+        .filter(|l| l.to_uppercase().contains("REJECTED"))
+        .count();
+    let b_vulnerable = b_verdicts
+        .iter()
+        .filter(|l| l.to_uppercase().contains("VULNERABLE"))
+        .count();
+    let b_safe = b_verdicts
+        .iter()
+        .filter(|l| l.to_uppercase().contains("SAFE"))
+        .count();
+
+    summary.push_str(&format!(
+        "\nSummary statistics:\n\
+         - Offense: {} confirmed, {} rejected\n\
+         - Defense: {} vulnerable, {} safe\n",
+        a_confirms, a_rejects, b_vulnerable, b_safe
+    ));
+
+    if a_confirms > 0 && b_safe > 0 {
+        summary.push_str(
+            "\nDISAGREEMENTS DETECTED: Offense confirmed findings that Defense considers safe.\n\
+             The verdict-synthesizer should carefully examine these conflicts and read the code \
+             before making a final decision.\n",
+        );
+    }
+
+    summary
 }
 
 /// Build the default analysis pipeline: decompile-renamer -> attack-surface -> vuln-hunter -> critic.
@@ -144,13 +382,16 @@ pub fn default_pipeline() -> AnalysisPipeline {
     }
 }
 
-/// Build a deep analysis pipeline with multi-agent validation panel.
+/// Build a deep analysis pipeline with parallel debate between exploit-analyst
+/// and defense-analyst.
 ///
-/// Discovery: attack-surface → vuln-hunter (find everything)
-/// Validation: exploit-analyst + defense-analyst + cwe-classifier (validate, reduce FPs)
+/// Discovery: attack-surface -> vuln-hunter (find everything)
+/// Debate: exploit-analyst + defense-analyst run independently on the same findings,
+///         then their perspectives are compared in a debate summary.
+/// Synthesis: verdict-synthesizer weighs all perspectives including the debate.
 ///
-/// This pipeline trades speed for precision. Each finding is validated by
-/// three specialist agents, and only findings confirmed by 2/3 survive.
+/// This pipeline trades speed for precision. The debate step surfaces
+/// disagreements between offense and defense perspectives before final synthesis.
 pub fn deep_pipeline() -> AnalysisPipeline {
     AnalysisPipeline {
         stages: vec![
@@ -174,34 +415,135 @@ pub fn deep_pipeline() -> AnalysisPipeline {
                         .into(),
                 },
             },
-            // Validation phase - multi-agent panel
-            PipelineStage {
-                agent_name: "exploit-analyst".into(),
-                context_mode: ContextMode::FromPreviousResults {
-                    preamble: "Review each vulnerability finding below. For each one, evaluate \
-                               whether it can actually be triggered by an attacker. Check reachability \
-                               from external inputs, controllability of parameters, and real impact. \
-                               Respond with CONFIRMED, DOWNGRADED, or REJECTED for each finding."
-                        .into(),
-                },
-            },
-            PipelineStage {
-                agent_name: "defense-analyst".into(),
-                context_mode: ContextMode::FromPreviousResults {
-                    preamble: "Review each vulnerability finding below. For each one, check whether \
-                               defensive controls (input validation, sanitization, safe wrappers, \
-                               architectural mitigations) make it non-exploitable. \
-                               Respond with VULNERABLE, MITIGATED, or SAFE for each finding."
-                        .into(),
-                },
-            },
+            // NOTE: exploit-analyst and defense-analyst are NOT listed here.
+            // They run via the debate group in deep_pipeline_with_debate().
             // Synthesis: final verdict based on all validation perspectives
             PipelineStage {
                 agent_name: "verdict-synthesizer".into(),
                 context_mode: ContextMode::FromPreviousResults {
                     preamble: "You have received the complete output from all agents in the pipeline: \
                                attack-surface mapping, vulnerability hunting, exploit analysis, and \
-                               defense analysis. Synthesize ALL perspectives into final verdicts. \
+                               defense analysis. A DEBATE SUMMARY highlights agreements and \
+                               disagreements between the offense and defense analysts. \
+                               Pay special attention to DISAGREEMENTS — read the code yourself to \
+                               break ties. \
+                               For each finding that is genuinely exploitable (confirmed by exploit-analyst \
+                               AND not fully mitigated per defense-analyst), use create_finding to record \
+                               the confirmed vulnerability. Reject false positives and explain why. \
+                               Be decisive — false positives damage credibility more than false negatives."
+                        .into(),
+                },
+            },
+        ],
+    }
+}
+
+/// Build the debate group for the deep pipeline.
+///
+/// Both agents independently review the same vuln-hunter findings.
+pub fn deep_pipeline_debate() -> DebateGroup {
+    DebateGroup {
+        agent_a: "exploit-analyst".into(),
+        preamble_a: "Review each vulnerability finding below. For each one, evaluate \
+                      whether it can actually be triggered by an attacker. Check reachability \
+                      from external inputs, controllability of parameters, and real impact. \
+                      Respond with CONFIRMED, DOWNGRADED, or REJECTED for each finding."
+            .into(),
+        agent_b: "defense-analyst".into(),
+        preamble_b: "Review each vulnerability finding below. For each one, check whether \
+                      defensive controls (input validation, sanitization, safe wrappers, \
+                      architectural mitigations) make it non-exploitable. \
+                      Respond with VULNERABLE, MITIGATED, or SAFE for each finding."
+            .into(),
+    }
+}
+
+/// Convenience: run the deep pipeline with the debate stage.
+///
+/// This is the recommended entry point for deep analysis. It runs:
+/// 1. decompile-renamer, attack-surface, vuln-hunter (sequentially)
+/// 2. exploit-analyst + defense-analyst (debate — independent parallel analysis)
+/// 3. verdict-synthesizer (with debate summary)
+pub async fn run_deep_pipeline_with_debate(
+    target: &str,
+    investigation_id: &str,
+    db: &GraphDb,
+    llm: Client,
+    budget: &mut TokenBudget,
+) -> anyhow::Result<Vec<AgentResult>> {
+    let pipeline = deep_pipeline();
+    let debate = deep_pipeline_debate();
+    // Debate runs after stage index 3 (after vuln-hunter, which is stages[2]),
+    // before verdict-synthesizer (stages[3]).
+    pipeline
+        .run_with_debate(target, investigation_id, db, llm, budget, &debate, 3)
+        .await
+}
+
+/// Select the best vuln-hunter agent for the given target file.
+///
+/// Returns a language-specialized agent name if one exists for the file's
+/// language, otherwise falls back to the generic `vuln-hunter`.
+pub fn select_vuln_hunter(target: &str) -> String {
+    let ext = target.rsplit('.').next().unwrap_or("").to_lowercase();
+
+    let agent_name = match ext.as_str() {
+        "py" | "pyw" => "vuln-hunter-python",
+        "java" | "kt" | "scala" => "vuln-hunter-java",
+        _ => "vuln-hunter",
+    };
+
+    // Verify the specialized agent actually exists; fall back to generic if not.
+    match load_agent(agent_name) {
+        Ok(_) => agent_name.to_string(),
+        Err(_) => {
+            if agent_name != "vuln-hunter" {
+                tracing::debug!(
+                    "Specialized agent '{}' not found for {}, using generic vuln-hunter",
+                    agent_name,
+                    target
+                );
+            }
+            "vuln-hunter".to_string()
+        }
+    }
+}
+
+/// Build a deep pipeline with language-aware vuln-hunter selection.
+///
+/// Uses the file extension of `target` to pick a specialized vuln-hunter
+/// (e.g., vuln-hunter-python for .py files) and runs the debate flow.
+pub fn deep_pipeline_for_target(target: &str) -> AnalysisPipeline {
+    let hunter = select_vuln_hunter(target);
+    AnalysisPipeline {
+        stages: vec![
+            PipelineStage {
+                agent_name: "decompile-renamer".into(),
+                context_mode: ContextMode::FromGraph,
+            },
+            PipelineStage {
+                agent_name: "attack-surface".into(),
+                context_mode: ContextMode::FromGraph,
+            },
+            PipelineStage {
+                agent_name: hunter,
+                context_mode: ContextMode::FromPreviousResults {
+                    preamble: "The attack surface analysis is complete. Now perform deep \
+                               vulnerability analysis based on the attack surface findings below. \
+                               Focus on the highest-risk areas identified. \
+                               For each vulnerability found, use create_finding to record it."
+                        .into(),
+                },
+            },
+            PipelineStage {
+                agent_name: "verdict-synthesizer".into(),
+                context_mode: ContextMode::FromPreviousResults {
+                    preamble: "You have received the complete output from all agents in the pipeline: \
+                               attack-surface mapping, vulnerability hunting, exploit analysis, and \
+                               defense analysis. A DEBATE SUMMARY highlights agreements and \
+                               disagreements between the offense and defense analysts. \
+                               Pay special attention to DISAGREEMENTS — read the code yourself to \
+                               break ties. \
                                For each finding that is genuinely exploitable (confirmed by exploit-analyst \
                                AND not fully mitigated per defense-analyst), use create_finding to record \
                                the confirmed vulnerability. Reject false positives and explain why. \
@@ -254,6 +596,8 @@ fn ordinal(n: usize) -> String {
 /// Mapping from agent names to skills that enhance their analysis.
 const AGENT_SKILL_MAP: &[(&str, &str)] = &[
     ("vuln-hunter", "llm-binary-vuln-guide"),
+    ("vuln-hunter-python", "llm-binary-vuln-guide"),
+    ("vuln-hunter-java", "llm-binary-vuln-guide"),
     ("decompile-analyst", "llm-binary-vuln-guide"),
     ("decompile-renamer", "llm-binary-vuln-guide"),
     ("taint-tracer", "llm-binary-vuln-guide"),
@@ -285,5 +629,125 @@ fn inject_skill_context(agent: &mut super::definition::AgentDefinition) {
                 tracing::debug!("Skill '{}' not available for injection", skill_name);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_select_vuln_hunter_python() {
+        let agent = select_vuln_hunter("app.py");
+        // Will be "vuln-hunter-python" if agent file exists, "vuln-hunter" otherwise.
+        assert!(
+            agent == "vuln-hunter-python" || agent == "vuln-hunter",
+            "Expected vuln-hunter-python or vuln-hunter, got: {}",
+            agent
+        );
+    }
+
+    #[test]
+    fn test_select_vuln_hunter_java() {
+        let agent = select_vuln_hunter("Main.java");
+        assert!(
+            agent == "vuln-hunter-java" || agent == "vuln-hunter",
+            "Expected vuln-hunter-java or vuln-hunter, got: {}",
+            agent
+        );
+    }
+
+    #[test]
+    fn test_select_vuln_hunter_c_falls_back() {
+        let agent = select_vuln_hunter("buffer_overflow.c");
+        assert_eq!(agent, "vuln-hunter");
+    }
+
+    #[test]
+    fn test_select_vuln_hunter_no_extension() {
+        let agent = select_vuln_hunter("binary_with_no_ext");
+        assert_eq!(agent, "vuln-hunter");
+    }
+
+    #[test]
+    fn test_build_debate_summary_structure() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "Finding 1: **CONFIRMED [high]**: Buffer overflow is exploitable.\n\
+                     Finding 2: **REJECTED**: Dead code, never called."
+                .into(),
+            tokens_used: 100,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "Finding 1: **VULNERABLE**: No bounds checking found.\n\
+                     Finding 2: **SAFE**: Function is never reachable."
+                .into(),
+            tokens_used: 100,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("DEBATE SUMMARY"));
+        assert!(summary.contains("exploit-analyst"));
+        assert!(summary.contains("defense-analyst"));
+        assert!(summary.contains("Offense analyst verdicts"));
+        assert!(summary.contains("Defense analyst verdicts"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_disagreement() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "**CONFIRMED [critical]**: RCE via command injection".into(),
+            tokens_used: 50,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "**SAFE**: Input is validated by allowlist".into(),
+            tokens_used: 50,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(
+            summary.contains("DISAGREEMENTS DETECTED"),
+            "Should flag disagreement when offense confirms but defense says safe"
+        );
+    }
+
+    #[test]
+    fn test_build_previous_results_context_truncation() {
+        let results = vec![AgentResult {
+            agent_name: "test".into(),
+            output: "x".repeat(MAX_PIPELINE_CONTEXT_CHARS + 1000),
+            tokens_used: 0,
+        }];
+        let ctx = build_previous_results_context("preamble", &results);
+        assert!(ctx.len() <= MAX_PIPELINE_CONTEXT_CHARS + 20); // +20 for truncation marker
+        assert!(ctx.contains("[truncated]"));
+    }
+
+    #[test]
+    fn test_deep_pipeline_has_verdict_synthesizer() {
+        let pipeline = deep_pipeline();
+        assert!(
+            pipeline
+                .stages
+                .iter()
+                .any(|s| s.agent_name == "verdict-synthesizer"),
+            "Deep pipeline must include verdict-synthesizer"
+        );
+    }
+
+    #[test]
+    fn test_deep_pipeline_for_target_python() {
+        let pipeline = deep_pipeline_for_target("app.py");
+        let hunter_stage = pipeline
+            .stages
+            .iter()
+            .find(|s| s.agent_name.starts_with("vuln-hunter"));
+        assert!(
+            hunter_stage.is_some(),
+            "Pipeline must include a vuln-hunter variant"
+        );
     }
 }

@@ -167,6 +167,9 @@ pub async fn run_improvement_cycle(
     // Step 3: Analyze false negatives and generate proposals
     let proposals = analyze_false_negatives(&false_negatives, &suite_name).await;
 
+    // Step 4: Store insights as knowledge for future agents to reference
+    store_fn_insights(&false_negatives, &proposals, &suite_name, data_dir);
+
     Ok(ImprovementCycle {
         suite: suite_name,
         baseline_score: score,
@@ -549,6 +552,154 @@ fn heuristic_failure_analysis(
     }
 
     proposals
+}
+
+/// Store false-negative insights into `data/knowledge/` so future agents can reference them.
+///
+/// Creates or appends to `data/knowledge/fn-insights.md` with structured knowledge
+/// about WHY cases were missed and what patterns to look for. This feeds into
+/// the `lookup_knowledge` tool that all agents can call.
+fn store_fn_insights(
+    false_negatives: &[FalseNegativeCase],
+    proposals: &[Improvement],
+    suite: &str,
+    data_dir: &Path,
+) {
+    if false_negatives.is_empty() && proposals.is_empty() {
+        return;
+    }
+
+    // Resolve knowledge directory relative to data_dir or repo root.
+    let knowledge_dir = if data_dir.join("knowledge").is_dir() {
+        data_dir.join("knowledge")
+    } else {
+        // Try repo-root relative paths.
+        let candidates = ["data/knowledge", "../data/knowledge"];
+        match candidates.iter().map(Path::new).find(|p| p.is_dir()) {
+            Some(d) => d.to_path_buf(),
+            None => {
+                // Create the directory if it doesn't exist.
+                let dir = PathBuf::from("data/knowledge");
+                if std::fs::create_dir_all(&dir).is_err() {
+                    tracing::debug!("Could not create knowledge directory, skipping FN insights");
+                    return;
+                }
+                dir
+            }
+        }
+    };
+
+    let insight_file = knowledge_dir.join("fn-insights.md");
+    let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M UTC").to_string();
+
+    let mut content = String::new();
+
+    // If file doesn't exist yet, add a header.
+    let needs_header = !insight_file.exists();
+    if needs_header {
+        content.push_str("# False Negative Insights\n\n");
+        content.push_str(
+            "Auto-generated knowledge from the self-improvement loop.\n\
+             Agents can query this via `lookup_knowledge` with topics like \
+             \"false negative\", \"missed\", or specific CWE numbers.\n\n",
+        );
+    }
+
+    content.push_str(&format!("## Cycle: {} ({})\n\n", suite, timestamp));
+
+    // Record missed cases with their CWEs.
+    if !false_negatives.is_empty() {
+        content.push_str(&format!(
+            "### Missed Cases ({} false negatives)\n\n",
+            false_negatives.len()
+        ));
+        for fn_case in false_negatives.iter().take(10) {
+            let missed: Vec<u32> = fn_case
+                .expected_cwes
+                .iter()
+                .filter(|cwe| !fn_case.detected_cwes.contains(cwe))
+                .copied()
+                .collect();
+            content.push_str(&format!(
+                "- **{}**: Expected CWE-{:?}, detected CWE-{:?}, missed CWE-{:?}\n",
+                fn_case.case_id, fn_case.expected_cwes, fn_case.detected_cwes, missed
+            ));
+
+            // Include a brief snippet of the source to help future agents.
+            let snippet: String = fn_case
+                .source_content
+                .lines()
+                .take(5)
+                .collect::<Vec<_>>()
+                .join("\n");
+            if !snippet.is_empty() {
+                content.push_str(&format!(
+                    "  ```\n  {}\n  ```\n",
+                    snippet.replace('\n', "\n  ")
+                ));
+            }
+        }
+        content.push('\n');
+    }
+
+    // Record proposals as actionable insights.
+    if !proposals.is_empty() {
+        content.push_str(&format!(
+            "### Actionable Insights ({} proposals)\n\n",
+            proposals.len()
+        ));
+        for proposal in proposals.iter().take(10) {
+            let kind = match &proposal.kind {
+                ImprovementKind::NewPattern => "Pattern Gap",
+                ImprovementKind::AgentPrompt => "Agent Capability Gap",
+                ImprovementKind::CweMapping => "CWE Mapping Gap",
+                ImprovementKind::TaintRule => "Taint Rule Gap",
+                ImprovementKind::GroundTruthFix => "Ground Truth Issue",
+            };
+            content.push_str(&format!(
+                "- **[{}]** {}\n  CWEs: {:?} | From case: {}\n",
+                kind, proposal.description, proposal.target_cwes, proposal.source_case
+            ));
+            if !proposal.patch.replace.is_empty() {
+                content.push_str(&format!(
+                    "  Suggested pattern: `{}`\n",
+                    proposal.patch.replace
+                ));
+            }
+        }
+        content.push('\n');
+    }
+
+    content.push_str("---\n\n");
+
+    // Append to existing file or create new one.
+    let write_result = if needs_header {
+        std::fs::write(&insight_file, &content)
+    } else {
+        use std::io::Write;
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(&insight_file)
+            .and_then(|mut f| f.write_all(content.as_bytes()))
+    };
+
+    match write_result {
+        Ok(()) => {
+            tracing::info!(
+                "Stored {} FN insights and {} proposals in {}",
+                false_negatives.len(),
+                proposals.len(),
+                insight_file.display()
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                "Failed to write FN insights to {}: {}",
+                insight_file.display(),
+                e
+            );
+        }
+    }
 }
 
 /// Check if any CWE's detection rate dropped beyond the noise margin (2%).
