@@ -598,6 +598,12 @@ fn apply_synthesis_decisions(
     synthesized
 }
 
+/// Cached LLM client for the process. Avoids redundant Copilot token
+/// negotiation when many cases run concurrently. The `Client` is `Clone`,
+/// so each pipeline stage gets a cheap clone.
+static LLM_CLIENT: tokio::sync::OnceCell<skwaq_core::llm::Client> =
+    tokio::sync::OnceCell::const_new();
+
 /// Run the LLM agent pipeline and fail explicitly if the client is unavailable.
 async fn run_llm_pipeline(
     db: &GraphDb,
@@ -607,23 +613,24 @@ async fn run_llm_pipeline(
 ) -> anyhow::Result<()> {
     let config = Config::load()
         .context("Failed to load skwaq configuration for hybrid benchmark analysis")?;
-    skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm)
-        .await
-        .with_context(|| {
-            format!(
-                "Hybrid benchmark analysis requires explicit Copilot benchmark readiness for {}",
-                file_str
-            )
-        })?;
 
-    let llm_client = skwaq_core::llm::create_client(&config.llm)
+    // Create or reuse the cached LLM client. The first call validates
+    // Copilot readiness and negotiates a token; subsequent calls reuse it.
+    // This eliminates cold-start rate-limit failures when many cases start
+    // concurrently.
+    let llm_client = LLM_CLIENT
+        .get_or_try_init(|| async {
+            skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm).await?;
+            skwaq_core::llm::create_client(&config.llm).await
+        })
         .await
         .with_context(|| {
             format!(
                 "Hybrid benchmark analysis requires a working LLM client for {}",
                 file_str
             )
-        })?;
+        })?
+        .clone();
 
     let pipeline = skwaq_core::agents::deep_pipeline();
     let budget_amount = config.analysis.default_token_budget.min(100_000);
