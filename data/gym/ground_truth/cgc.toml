@@ -1430,3 +1430,6 @@ path = "challenges/yolodex/src/yolodex.c"
 expected_cwes = [787]
 is_negative = false
 language = "c"
+
+# === Negative test cases (patched code paths, should have NO findings) ===
+

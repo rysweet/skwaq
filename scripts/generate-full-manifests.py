@@ -71,9 +71,25 @@ def generate_cgc_manifest():
             "language": "c",
         })
 
+    # Add negative (patched) entries: ~25% of positives.
+    # CGC challenges use #ifdef PATCHED_1 code paths for fixed versions.
+    # The patched version of the same source file has no vulnerabilities.
+    positive_cases = [c for c in cases if not c["is_negative"]]
+    step = max(1, len(positive_cases) // 50)
+    for c in positive_cases[::step][:51]:
+        cases.append({
+            "id": c["id"] + "_patched",
+            "path": c["path"],
+            "expected_cwes": [],
+            "is_negative": True,
+            "language": "c",
+        })
+
+    negatives = sum(1 for c in cases if c["is_negative"])
+    positives = len(cases) - negatives
     # Write manifest
     write_toml(GT_DIR / "cgc.toml", "cgc", "cb-multios", cases)
-    print(f"  CGC: {len(cases)} cases")
+    print(f"  CGC: {len(cases)} cases ({positives} positive, {negatives} negative)")
 
 
 def generate_juliet_manifest():
@@ -129,8 +145,24 @@ def generate_juliet_manifest():
                     "language": "c",
                 })
 
+    # Also add testcasesupport/ files as negatives (safe helper code)
+    support_dir = juliet_c_dir / "testcasesupport"
+    if support_dir.is_dir():
+        for fname in sorted(support_dir.iterdir()):
+            if fname.suffix in (".c", ".h"):
+                rel_path = fname.relative_to(juliet_c_dir)
+                cases.append({
+                    "id": f"juliet_support_{fname.stem}",
+                    "path": str(rel_path),
+                    "expected_cwes": [],
+                    "is_negative": True,
+                    "language": "c",
+                })
+
+    negatives = sum(1 for c in cases if c["is_negative"])
+    positives = len(cases) - negatives
     write_toml(GT_DIR / "juliet.toml", "juliet", "1.3", cases)
-    print(f"  Juliet: {len(cases)} cases")
+    print(f"  Juliet: {len(cases)} cases ({positives} positive, {negatives} negative)")
 
 
 def generate_owasp_manifest():
@@ -242,8 +274,40 @@ def generate_cyberseceval_manifest():
             "language": lang,
         })
 
+    # Add entries without CWE identifiers as negatives (safe code)
+    neg_idx = len(cases)
+    for i, entry in enumerate(data):
+        lang = entry.get("language", "").lower()
+        if lang not in ("c", "python"):
+            continue
+
+        cwe_str = entry.get("cwe_identifier", "") or entry.get("cwe", "")
+        cwe_matches = cwe_pattern.findall(str(cwe_str))
+        if cwe_matches:
+            continue  # Has CWEs, already handled above
+
+        code = entry.get("origin_code", "")
+        if not code.strip():
+            continue
+
+        ext = ".c" if lang == "c" else ".py"
+        case_id = f"cyberseceval_{neg_idx}_{lang}_safe"
+        filename = f"{case_id}{ext}"
+        (case_dir / filename).write_text(code)
+        neg_idx += 1
+
+        cases.append({
+            "id": case_id,
+            "path": f"cases/{filename}",
+            "expected_cwes": [],
+            "is_negative": True,
+            "language": lang,
+        })
+
+    negatives = sum(1 for c in cases if c["is_negative"])
+    positives = len(cases) - negatives
     write_toml(GT_DIR / "cyberseceval.toml", "cyberseceval", "1.0", cases)
-    print(f"  CyberSecEval: {len(cases)} cases")
+    print(f"  CyberSecEval: {len(cases)} cases ({positives} positive, {negatives} negative)")
 
 
 def write_toml(path: Path, suite: str, version: str, cases: list):
@@ -277,11 +341,14 @@ def main():
     generate_owasp_manifest()
     generate_cyberseceval_manifest()
 
-    # Show before/after
+    # Show before/after with positive/negative breakdown
     print("\nManifest case counts:")
     for toml_file in sorted(GT_DIR.glob("*.toml")):
-        count = sum(1 for line in toml_file.read_text().splitlines() if line == "[[cases]]")
-        print(f"  {toml_file.name}: {count} cases")
+        lines = toml_file.read_text().splitlines()
+        total = sum(1 for line in lines if line == "[[cases]]")
+        negatives = sum(1 for line in lines if line == "is_negative = true")
+        positives = total - negatives
+        print(f"  {toml_file.name}: {total} cases ({positives} positive, {negatives} negative)")
 
 
 if __name__ == "__main__":

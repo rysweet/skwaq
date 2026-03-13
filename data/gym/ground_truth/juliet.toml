@@ -381390,3 +381390,34 @@ path = "testcases/CWE90_LDAP_Injection/CWE90_LDAP_Injection__w32_wchar_t_listen_
 expected_cwes = [90]
 is_negative = false
 language = "c"
+
+# === Negative test cases (safe support/utility code, should have NO findings) ===
+
+[[cases]]
+id = "juliet_safe_io_c"
+path = "testcasesupport/io.c"
+expected_cwes = []
+is_negative = true
+language = "c"
+
+[[cases]]
+id = "juliet_safe_std_thread_c"
+path = "testcasesupport/std_thread.c"
+expected_cwes = []
+is_negative = true
+language = "c"
+
+[[cases]]
+id = "juliet_safe_std_thread_h"
+path = "testcasesupport/std_thread.h"
+expected_cwes = []
+is_negative = true
+language = "c"
+
+[[cases]]
+id = "juliet_safe_safe_char_to_int_helpers"
+path = "testcasesupport/std_testcase.h"
+expected_cwes = []
+is_negative = true
+language = "c"
+
