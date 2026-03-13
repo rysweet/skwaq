@@ -99,7 +99,11 @@ fn default_log_level() -> String {
     "info".into()
 }
 fn default_llm_backend() -> String {
-    "copilot".into()
+    if std::env::var("ANTHROPIC_API_KEY").is_ok() {
+        "anthropic".into()
+    } else {
+        "copilot".into()
+    }
 }
 fn default_ollama() -> String {
     "ollama".into()
