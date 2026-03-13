@@ -60,6 +60,16 @@ pub struct CaseResult {
     pub classification: String,
 }
 
+/// A regression where a case went from detected (TP) to missed (FN).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CaseRegression {
+    pub case_id: String,
+    pub suite: String,
+    pub expected_cwes: Vec<u32>,
+    pub baseline_detected: Vec<u32>,
+    pub new_detected: Vec<u32>,
+}
+
 /// SQLite-backed history database.
 pub struct HistoryDb {
     conn: rusqlite::Connection,
@@ -289,6 +299,68 @@ impl HistoryDb {
         Ok(())
     }
 
+    /// Load per-case results for a run.
+    pub fn case_results_for_run(&self, run_id: &str) -> anyhow::Result<Vec<CaseResult>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT run_id, suite, case_id, expected_cwes, detected_cwes,
+                    matched_finding_ids, unmatched_finding_ids, classification
+             FROM case_results WHERE run_id = ?1 ORDER BY case_id",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![run_id], |row| {
+            let expected_json: String = row.get(3)?;
+            let detected_json: String = row.get(4)?;
+            let matched_json: String = row.get(5)?;
+            let unmatched_json: String = row.get(6)?;
+            Ok(CaseResult {
+                run_id: row.get(0)?,
+                suite: row.get(1)?,
+                case_id: row.get(2)?,
+                expected_cwes: serde_json::from_str(&expected_json).unwrap_or_default(),
+                detected_cwes: serde_json::from_str(&detected_json).unwrap_or_default(),
+                matched_finding_ids: serde_json::from_str(&matched_json).unwrap_or_default(),
+                unmatched_finding_ids: serde_json::from_str(&unmatched_json).unwrap_or_default(),
+                classification: row.get(7)?,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
+    /// Find per-case regressions between two runs.
+    ///
+    /// Returns cases that were detected (TP) in the baseline run but missed (FN)
+    /// in the new run. This identifies specific cases that got worse.
+    pub fn case_regressions(
+        &self,
+        baseline_run_id: &str,
+        new_run_id: &str,
+    ) -> anyhow::Result<Vec<CaseRegression>> {
+        let baseline_cases = self.case_results_for_run(baseline_run_id)?;
+        let new_cases = self.case_results_for_run(new_run_id)?;
+
+        let new_by_id: std::collections::HashMap<&str, &CaseResult> =
+            new_cases.iter().map(|c| (c.case_id.as_str(), c)).collect();
+
+        let mut regressions = Vec::new();
+        for baseline in &baseline_cases {
+            if baseline.classification != "TP" {
+                continue;
+            }
+            if let Some(new) = new_by_id.get(baseline.case_id.as_str()) {
+                if new.classification == "FN" {
+                    regressions.push(CaseRegression {
+                        case_id: baseline.case_id.clone(),
+                        suite: baseline.suite.clone(),
+                        expected_cwes: baseline.expected_cwes.clone(),
+                        baseline_detected: baseline.detected_cwes.clone(),
+                        new_detected: new.detected_cwes.clone(),
+                    });
+                }
+            }
+        }
+
+        Ok(regressions)
+    }
+
     /// Load per-CWE results for a run.
     pub fn cwe_results_for_run(&self, run_id: &str) -> anyhow::Result<Vec<CweResult>> {
         let mut stmt = self.conn.prepare(
@@ -398,5 +470,72 @@ mod tests {
             .unwrap();
 
         assert!(db.recent_runs(1).is_err());
+    }
+
+    #[test]
+    fn test_case_results_roundtrip() {
+        let db = HistoryDb::in_memory().unwrap();
+        let run_id = db
+            .start_run("fixtures", "abc123", &RunMetadata::default())
+            .unwrap();
+
+        let case = CaseResult {
+            run_id: run_id.clone(),
+            suite: "fixtures".to_string(),
+            case_id: "buffer_overflow".to_string(),
+            expected_cwes: vec![121, 134],
+            detected_cwes: vec![119],
+            matched_finding_ids: vec!["f1".to_string()],
+            unmatched_finding_ids: vec![],
+            classification: "TP".to_string(),
+        };
+        db.insert_case_result(&case).unwrap();
+
+        let results = db.case_results_for_run(&run_id).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].case_id, "buffer_overflow");
+        assert_eq!(results[0].expected_cwes, vec![121, 134]);
+        assert_eq!(results[0].detected_cwes, vec![119]);
+        assert_eq!(results[0].classification, "TP");
+    }
+
+    #[test]
+    fn test_case_regressions() {
+        let db = HistoryDb::in_memory().unwrap();
+        let meta = RunMetadata::default();
+
+        // Baseline run: case detected (TP).
+        let run1 = db.start_run("fixtures", "aaa111", &meta).unwrap();
+        db.insert_case_result(&CaseResult {
+            run_id: run1.clone(),
+            suite: "fixtures".to_string(),
+            case_id: "overflow".to_string(),
+            expected_cwes: vec![121],
+            detected_cwes: vec![119],
+            matched_finding_ids: vec!["f1".to_string()],
+            unmatched_finding_ids: vec![],
+            classification: "TP".to_string(),
+        })
+        .unwrap();
+
+        // New run: same case missed (FN).
+        let run2 = db.start_run("fixtures", "bbb222", &meta).unwrap();
+        db.insert_case_result(&CaseResult {
+            run_id: run2.clone(),
+            suite: "fixtures".to_string(),
+            case_id: "overflow".to_string(),
+            expected_cwes: vec![121],
+            detected_cwes: vec![],
+            matched_finding_ids: vec![],
+            unmatched_finding_ids: vec![],
+            classification: "FN".to_string(),
+        })
+        .unwrap();
+
+        let regressions = db.case_regressions(&run1, &run2).unwrap();
+        assert_eq!(regressions.len(), 1);
+        assert_eq!(regressions[0].case_id, "overflow");
+        assert_eq!(regressions[0].baseline_detected, vec![119]);
+        assert!(regressions[0].new_detected.is_empty());
     }
 }

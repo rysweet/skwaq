@@ -1,0 +1,53 @@
+suite = "realworld"
+version = "1.0"
+download_url = ""
+download_sha256 = ""
+
+# Real-world vulnerable files from curl CVE history.
+# These are reproductions of actual vulnerability patterns, not synthetic tests.
+
+# === Vulnerable cases (from curl CVEs) ===
+
+[[cases]]
+id = "curl-CVE-2023-38545-socks5"
+path = "curl/CVE-2023-38545-socks5.c"
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "curl-CVE-2023-27536-gss-auth"
+path = "curl/CVE-2023-27536-gss-auth.c"
+expected_cwes = [416]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "curl-CVE-2023-27533-telnet"
+path = "curl/CVE-2023-27533-telnet.c"
+expected_cwes = [78]
+is_negative = false
+language = "c"
+
+# === Safe cases (no known vulnerabilities) ===
+
+[[cases]]
+id = "curl-safe-url-parser"
+path = "curl/safe-url-parser.c"
+expected_cwes = []
+is_negative = true
+language = "c"
+
+[[cases]]
+id = "curl-safe-cookie-parse"
+path = "curl/safe-cookie-parse.c"
+expected_cwes = []
+is_negative = true
+language = "c"
+
+[[cases]]
+id = "curl-safe-base64"
+path = "curl/safe-base64.c"
+expected_cwes = []
+is_negative = true
+language = "c"

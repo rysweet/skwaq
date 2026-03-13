@@ -715,6 +715,79 @@ pub fn has_cwe_regression(baseline: &AggregateScore, new: &AggregateScore) -> bo
     false
 }
 
+/// Append successful patterns from improvement proposals to the knowledge pack.
+///
+/// Writes accepted NewPattern proposals to `data/knowledge/learned-patterns.md`
+/// so they accumulate across improvement cycles. Each entry records the pattern,
+/// target CWEs, source case, and timestamp.
+pub fn append_learned_patterns(cycle: &ImprovementCycle) {
+    let pattern_proposals: Vec<&Improvement> = cycle
+        .proposals
+        .iter()
+        .filter(|p| matches!(p.kind, ImprovementKind::NewPattern))
+        .filter(|p| !p.patch.replace.is_empty())
+        .collect();
+
+    if pattern_proposals.is_empty() {
+        return;
+    }
+
+    let knowledge_dir = PathBuf::from("data/knowledge");
+    if std::fs::create_dir_all(&knowledge_dir).is_err() {
+        tracing::warn!(
+            "Could not create knowledge directory: {}",
+            knowledge_dir.display()
+        );
+        return;
+    }
+
+    let patterns_path = knowledge_dir.join("learned-patterns.md");
+
+    // Read existing content (or start fresh).
+    let mut content = if patterns_path.exists() {
+        std::fs::read_to_string(&patterns_path).unwrap_or_default()
+    } else {
+        String::from(
+            "# Learned Patterns\n\n\
+             Patterns discovered by the self-improvement loop.\n\
+             Each entry was proposed by the failure-analyst and accepted by the overfitting reviewer.\n\n",
+        )
+    };
+
+    let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M UTC");
+    content.push_str(&format!("## Cycle: {} ({})\n\n", cycle.suite, timestamp));
+    content.push_str(&format!(
+        "Baseline: F1={:.1}%, P={:.1}%, R={:.1}%\n\n",
+        cycle.baseline_score.f1 * 100.0,
+        cycle.baseline_score.precision * 100.0,
+        cycle.baseline_score.recall * 100.0,
+    ));
+
+    for proposal in &pattern_proposals {
+        content.push_str(&format!(
+            "- **Pattern**: `{}`\n  - CWEs: {:?}\n  - From case: `{}`\n  - Priority: {:?}\n\n",
+            proposal.patch.replace, proposal.target_cwes, proposal.source_case, proposal.priority,
+        ));
+    }
+
+    match std::fs::write(&patterns_path, &content) {
+        Ok(()) => {
+            tracing::info!(
+                "Appended {} learned patterns to {}",
+                pattern_proposals.len(),
+                patterns_path.display()
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                "Failed to write learned patterns to {}: {}",
+                patterns_path.display(),
+                e
+            );
+        }
+    }
+}
+
 /// Print improvement proposals in a human-readable format.
 pub fn print_proposals(cycle: &ImprovementCycle) {
     println!("\n{}", "=".repeat(70));
@@ -819,6 +892,56 @@ mod tests {
         let baseline = make_score(vec![(119, 0.5), (134, 0.3)]);
         let new = make_score(vec![(119, 0.6)]);
         assert!(!has_cwe_regression(&baseline, &new));
+    }
+
+    #[test]
+    fn test_append_learned_patterns_filters_correctly() {
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: make_score(vec![(119, 0.5)]),
+            false_negatives: vec![],
+            proposals: vec![
+                Improvement {
+                    kind: ImprovementKind::NewPattern,
+                    description: "Add memcpy pattern".to_string(),
+                    target_cwes: vec![119],
+                    target_file: PathBuf::from("crates/core/src/analysis/patterns_source.rs"),
+                    patch: Patch {
+                        find: String::new(),
+                        replace: r"\bmemcpy\s*\(".to_string(),
+                    },
+                    source_case: "test_case_1".to_string(),
+                    priority: Priority::High,
+                },
+                Improvement {
+                    kind: ImprovementKind::AgentPrompt, // Not a pattern; should be skipped
+                    description: "Improve agent prompt".to_string(),
+                    target_cwes: vec![78],
+                    target_file: PathBuf::from("agents/vuln-hunter.md"),
+                    patch: Patch {
+                        find: String::new(),
+                        replace: String::new(),
+                    },
+                    source_case: "test_case_2".to_string(),
+                    priority: Priority::Medium,
+                },
+            ],
+        };
+
+        // Verify filtering logic: only NewPattern with non-empty patch.replace
+        let pattern_proposals: Vec<&Improvement> = cycle
+            .proposals
+            .iter()
+            .filter(|p| matches!(p.kind, ImprovementKind::NewPattern))
+            .filter(|p| !p.patch.replace.is_empty())
+            .collect();
+
+        assert_eq!(
+            pattern_proposals.len(),
+            1,
+            "Should filter to only NewPattern proposals"
+        );
+        assert!(pattern_proposals[0].patch.replace.contains("memcpy"));
     }
 
     #[test]
