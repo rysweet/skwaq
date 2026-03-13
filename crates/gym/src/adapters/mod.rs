@@ -184,7 +184,7 @@ pub fn run_binary_pattern_detection(path: &Path) -> anyhow::Result<Vec<DetectedF
 /// Run skwaq's source analysis on a file and collect findings.
 /// Uses DangerousApiDetector::detect_in_source_content() (the correct API).
 pub fn run_source_pattern_detection(path: &Path) -> anyhow::Result<Vec<DetectedFinding>> {
-    use skwaq_core::analysis::patterns_binary::DangerousApiDetector;
+    use skwaq_core::analysis::DangerousApiDetector;
 
     let content = std::fs::read_to_string(path)?;
     let file_str = path.to_string_lossy().to_string();
@@ -222,4 +222,42 @@ pub fn run_source_pattern_detection(path: &Path) -> anyhow::Result<Vec<DetectedF
         .collect();
 
     Ok(findings)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::run_source_pattern_detection;
+
+    #[test]
+    fn test_run_source_pattern_detection_uses_source_detector() {
+        let temp_path =
+            std::env::temp_dir().join(format!("skwaq-source-detector-{}.c", uuid::Uuid::new_v4()));
+        std::fs::write(
+            &temp_path,
+            r#"
+void vuln(char *buf, size_t count) {
+    gets(buf);
+    malloc(sizeof(int) * count);
+}
+"#,
+        )
+        .expect("write temp source file");
+
+        let findings = run_source_pattern_detection(&temp_path).expect("run source detector");
+        let functions = findings
+            .iter()
+            .map(|finding| finding.function.as_str())
+            .collect::<Vec<_>>();
+
+        std::fs::remove_file(&temp_path).ok();
+
+        assert!(
+            functions.iter().any(|name| name.contains("gets")),
+            "Expected source detector to flag gets(), got {functions:?}"
+        );
+        assert!(
+            functions.iter().any(|name| name.contains("malloc")),
+            "Expected source detector to flag malloc overflow pattern, got {functions:?}"
+        );
+    }
 }

@@ -629,15 +629,15 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
         },
         SourcePattern {
             regex: r"\bsprintf\s*\(",
-            category: DangerCategory::FormatString,
+            category: DangerCategory::Memory,
             severity: Severity::High,
-            reason: "sprintf has no bounds checking; use snprintf",
+            reason: "sprintf writes without bounds checking; use snprintf with an explicit buffer size",
         },
         SourcePattern {
             regex: r"\bgets\s*\(",
-            category: DangerCategory::Memory,
+            category: DangerCategory::UnsafeCode,
             severity: Severity::Critical,
-            reason: "gets has no bounds checking; use fgets",
+            reason: "gets is inherently unsafe and removed from modern C; use fgets with explicit bounds",
         },
         SourcePattern {
             regex: r"\bsystem\s*\(",
@@ -653,9 +653,9 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
         },
         SourcePattern {
             regex: r"\bscanf\s*\(",
-            category: DangerCategory::FormatString,
+            category: DangerCategory::Memory,
             severity: Severity::High,
-            reason: "scanf with %s has no bounds; use width specifiers",
+            reason: "scanf can overflow destination buffers when width limits are missing; validate widths explicitly",
         },
         SourcePattern {
             regex: r"\bpopen\s*\(",
@@ -733,15 +733,15 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
         },
         SourcePattern {
             regex: r"\bsscanf\s*\(",
-            category: DangerCategory::FormatString,
+            category: DangerCategory::Memory,
             severity: Severity::High,
-            reason: "sscanf with %s has no bounds; use width specifiers",
+            reason: "sscanf can overflow destination buffers when width limits are missing; validate widths explicitly",
         },
         SourcePattern {
             regex: r"\bfscanf\s*\(",
-            category: DangerCategory::FormatString,
+            category: DangerCategory::Memory,
             severity: Severity::High,
-            reason: "fscanf with %s has no bounds; use width specifiers",
+            reason: "fscanf can overflow destination buffers when width limits are missing; validate widths explicitly",
         },
         // Weak PRNG (CWE-338) — from self-improvement iteration 5
         SourcePattern {
@@ -756,9 +756,39 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::Medium,
             reason: "srand/rand are not cryptographically secure; use a CSPRNG",
         },
+        SourcePattern {
+            regex: r"\bEVP_md5\s*\(",
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "MD5 is cryptographically broken; use a modern hash such as SHA-256 or SHA-3",
+        },
+        SourcePattern {
+            regex: r"\bEVP_sha1\s*\(",
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "SHA-1 is deprecated for security-sensitive use; use SHA-256 or better",
+        },
+        SourcePattern {
+            regex: r"(?i)\b(?:MD4_Init|MD4_Update|MD4_Final|md4_init|md4_update|md4_digest)\s*\(",
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "MD4 is cryptographically broken; use a modern password hashing or digest primitive",
+        },
+        SourcePattern {
+            regex: r"\bEVP_enc_null\s*\(",
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "Null encryption provides no confidentiality; use an authenticated encryption mode",
+        },
+        SourcePattern {
+            regex: r"\bEVP_des(?:_ede3)?_[a-z0-9_]*\s*\(",
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "DES and 3DES are weak ciphers for new designs; prefer AEAD modes with modern ciphers",
+        },
         // Integer overflow in allocation (CWE-680) — from self-improvement iteration 5
         SourcePattern {
-            regex: r"\brealloc\s*\([^,]+,\s*[^)]*\*[^)]*\)",
+            regex: r"\brealloc\s*\([^,]+,\s*[^;]*\*[^;]*\)",
             category: DangerCategory::Memory,
             severity: Severity::High,
             reason: "realloc with multiplication may overflow; check for integer overflow before reallocation",
@@ -776,6 +806,18 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::Memory,
             severity: Severity::High,
             reason: "alloca allocates on the stack; large or unchecked sizes cause stack overflow",
+        },
+        SourcePattern {
+            regex: r"(?is)\b(?:char|u?int8_t|unsigned char)\s+\w+\s*\[\s*(?:\d+|[A-Z_][A-Z0-9_]*)\s*\][\s\S]{0,200}\b(?:len|length|count|size|max|argc|argv|hlen|totlen|optlen|strlen)\b|\b(?:len|length|count|size|max|argc|argv|hlen|totlen|optlen|strlen)\b[\s\S]{0,200}\b(?:char|u?int8_t|unsigned char)\s+\w+\s*\[\s*(?:\d+|[A-Z_][A-Z0-9_]*)\s*\]",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "Fixed-size stack buffer used alongside externally influenced size or length state; verify every write is bounded",
+        },
+        SourcePattern {
+            regex: r"(?s)\b(?:char|u?int8_t|unsigned char)\s+\w+\s*\[\s*(?:\d+|[A-Z_][A-Z0-9_]*)\s*\][\s\S]{0,160}\b(?:char|u?int8_t|unsigned char)\s+\w+\s*\[\s*(?:\d+|[A-Z_][A-Z0-9_]*)\s*\]",
+            category: DangerCategory::Memory,
+            severity: Severity::Low,
+            reason: "Multiple fixed-size stack buffers in one scope increase overflow risk; verify all copies and indices are bounded",
         },
         // LDAP injection (CWE-90) — from self-improvement iteration 5
         SourcePattern {
@@ -885,10 +927,16 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             reason: "Signed-to-unsigned cast before arithmetic may wrap; validate sign first",
         },
         SourcePattern {
-            regex: r"\bmalloc\s*\([^)]*\*[^)]*\)",
+            regex: r"\bmalloc\s*\([^;]*\*[^;]*\)",
             category: DangerCategory::Memory,
             severity: Severity::High,
             reason: "malloc with multiplication may cause integer overflow in size calculation; use safe multiply",
+        },
+        SourcePattern {
+            regex: r"(?i)\b\w*(?:alloc|malloc|calloc)\w*\s*\([^;]*\*[^;]*\)",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Custom allocation helper with multiplicative size expression may overflow; validate size arithmetic before allocation",
         },
         SourcePattern {
             regex: r"\bcalloc\s*\(",
@@ -919,9 +967,9 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
         },
         SourcePattern {
             regex: r"\b\w+_sprintf\s*\(",
-            category: DangerCategory::FormatString,
+            category: DangerCategory::Memory,
             severity: Severity::High,
-            reason: "Wrapper around sprintf likely has no bounds checking; use snprintf variant",
+            reason: "Wrapper around sprintf likely writes without bounds checking; use a size-bounded variant",
         },
         SourcePattern {
             regex: r"\b\w+_printf\s*\(\s*[a-zA-Z_]\w*\s*\)",
@@ -955,7 +1003,7 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
         },
         // Hard-coded credentials (CWE-798)
         SourcePattern {
-            regex: r#"(?i)(?:password|passwd|pwd)\s*=\s*"[^"]+""#,
+            regex: r#"(?i)(?:password|passwd|pwd)\s*=\s*"[^"]*""#,
             category: DangerCategory::Crypto,
             severity: Severity::Critical,
             reason: "Hard-coded password in C code; use configuration or environment variables",
@@ -1186,6 +1234,164 @@ void vuln(char *msg, char *num_str) {
     }
 
     #[test]
+    fn test_detect_c_unbounded_formatted_io_as_memory() {
+        let detector = DangerousApiDetector::new();
+        let src = r#"
+void vuln(FILE *fp, char *dst, char *src) {
+    sprintf(dst, "%s", src);
+    fscanf(fp, "%s", dst);
+    sscanf(src, "%s", dst);
+}
+"#;
+        let hits = detector
+            .detect_in_source_content(src, "c", "formatted-io.c")
+            .unwrap();
+        let memory_hits: Vec<_> = hits
+            .iter()
+            .filter(|h| h.danger_category == DangerCategory::Memory)
+            .collect();
+        assert!(
+            memory_hits
+                .iter()
+                .any(|h| h.function_name.contains("sprintf")),
+            "Expected sprintf to be treated as memory-safety relevant"
+        );
+        assert!(
+            memory_hits
+                .iter()
+                .any(|h| h.function_name.contains("fscanf")),
+            "Expected fscanf to be treated as memory-safety relevant"
+        );
+        assert!(
+            memory_hits
+                .iter()
+                .any(|h| h.function_name.contains("sscanf")),
+            "Expected sscanf to be treated as memory-safety relevant"
+        );
+    }
+
+    #[test]
+    fn test_detect_gets_as_unsafe_code() {
+        let detector = DangerousApiDetector::new();
+        let src = r#"
+void vuln(char *buf) {
+    gets(buf);
+}
+"#;
+        let hits = detector
+            .detect_in_source_content(src, "c", "gets.c")
+            .unwrap();
+        assert!(
+            hits.iter().any(|h| {
+                h.function_name.contains("gets") && h.danger_category == DangerCategory::UnsafeCode
+            }),
+            "Expected gets to be classified as inherently unsafe code"
+        );
+    }
+
+    #[test]
+    fn test_detect_allocation_helpers_with_multiplied_sizes() {
+        let detector = DangerousApiDetector::new();
+        let src = r#"
+void *vuln(ctx_t *ctx, size_t count, size_t threads, dma_addr_t *dma) {
+    void *a = malloc(
+        sizeof(struct item) * count * threads);
+    void *b = plat_alloc_consistent_dmaable_memory(
+        ctx, sizeof(struct desc) * count, dma);
+    void *c = mxMalloc(sizeof(double) * count);
+    return a ? a : (b ? b : c);
+}
+"#;
+        let hits = detector
+            .detect_in_source_content(src, "c", "alloc.c")
+            .unwrap();
+        let memory_hits: Vec<_> = hits
+            .iter()
+            .filter(|h| h.danger_category == DangerCategory::Memory)
+            .collect();
+        assert!(
+            memory_hits
+                .iter()
+                .any(|h| h.function_name.contains("malloc")),
+            "Expected malloc multiplication overflow detection"
+        );
+        assert!(
+            memory_hits.iter().any(|h| h
+                .function_name
+                .contains("plat_alloc_consistent_dmaable_memory")),
+            "Expected custom alloc helper overflow detection"
+        );
+        assert!(
+            memory_hits
+                .iter()
+                .any(|h| h.function_name.contains("mxMalloc")),
+            "Expected camel-case allocation helper overflow detection"
+        );
+    }
+
+    #[test]
+    fn test_detect_stack_buffer_shape_with_length_context() {
+        let detector = DangerousApiDetector::new();
+        let src = r#"
+void handle_input(char *input, int argc, char **argv, int xInputLength) {
+    char buffer[1024];
+    int local = xInputLength;
+    if (argc > 1) {
+        local -= 1;
+    }
+}
+"#;
+        let hits = detector
+            .detect_in_source_content(src, "c", "stack-shape.c")
+            .unwrap();
+        assert!(
+            hits.iter()
+                .any(|h| h.danger_category == DangerCategory::Memory),
+            "Expected stack-buffer/length heuristic to trigger"
+        );
+    }
+
+    #[test]
+    fn test_detect_stack_buffer_shape_with_max_parameter() {
+        let detector = DangerousApiDetector::new();
+        let src = r#"
+int getline_like(char *line, int max) {
+    static char prevline[1024];
+    line[0] = 0;
+    return max;
+}
+"#;
+        let hits = detector
+            .detect_in_source_content(src, "c", "stack-max.c")
+            .unwrap();
+        assert!(
+            hits.iter()
+                .any(|h| h.danger_category == DangerCategory::Memory),
+            "Expected stack-buffer/max heuristic to trigger"
+        );
+    }
+
+    #[test]
+    fn test_detect_multiple_stack_buffers_in_same_scope() {
+        let detector = DangerousApiDetector::new();
+        let src = r#"
+void transform(const unsigned char *message) {
+    uint8_t block_a[8];
+    uint8_t block_b[8];
+    uint8_t block_c[8];
+}
+"#;
+        let hits = detector
+            .detect_in_source_content(src, "c", "stack-buffers.c")
+            .unwrap();
+        assert!(
+            hits.iter()
+                .any(|h| h.danger_category == DangerCategory::Memory),
+            "Expected multiple stack-buffer heuristic to trigger"
+        );
+    }
+
+    #[test]
     fn test_detect_custom_wrapper_apis() {
         let detector = DangerousApiDetector::new();
         let src = r#"
@@ -1304,6 +1510,56 @@ cipher = DES.new(key, DES.MODE_ECB)
     }
 
     #[test]
+    fn test_detect_c_weak_crypto_with_evp_primitives() {
+        let detector = DangerousApiDetector::new();
+        let src = r#"
+void init_crypto(void) {
+    EVP_add_digest(EVP_md5());
+    EVP_add_digest(EVP_sha1());
+    EVP_CIPHER *cipher = (EVP_CIPHER *)EVP_des_ede3_cbc();
+}
+"#;
+        let hits = detector
+            .detect_in_source_content(src, "c", "crypto.c")
+            .unwrap();
+        let crypto_hits: Vec<_> = hits
+            .iter()
+            .filter(|h| h.danger_category == DangerCategory::Crypto)
+            .collect();
+        assert!(
+            crypto_hits.len() >= 3,
+            "Should detect EVP_md5, EVP_sha1, and EVP_des_ede3_cbc; found {}",
+            crypto_hits.len()
+        );
+    }
+
+    #[test]
+    fn test_detect_c_weak_crypto_md4_and_null_cipher() {
+        let detector = DangerousApiDetector::new();
+        let src = r#"
+void legacy_crypto(const unsigned char *pw, size_t len, unsigned char *out) {
+    MD4_CTX ctx;
+    MD4_Init(&ctx);
+    MD4_Update(&ctx, pw, len);
+    MD4_Final(out, &ctx);
+    const EVP_CIPHER *cipher = EVP_enc_null();
+}
+"#;
+        let hits = detector
+            .detect_in_source_content(src, "c", "legacy-crypto.c")
+            .unwrap();
+        let crypto_hits: Vec<_> = hits
+            .iter()
+            .filter(|h| h.danger_category == DangerCategory::Crypto)
+            .collect();
+        assert!(
+            crypto_hits.len() >= 2,
+            "Should detect MD4 and EVP_enc_null; found {}",
+            crypto_hits.len()
+        );
+    }
+
+    #[test]
     fn test_detect_python_hardcoded_credentials() {
         let src = r#"
 password = "super_secret_123"
@@ -1327,6 +1583,21 @@ const char* password = "admin123";
             hits.iter()
                 .any(|h| h.danger_category == DangerCategory::Crypto),
             "Should detect hard-coded credentials in C"
+        );
+    }
+
+    #[test]
+    fn test_detect_empty_c_password_assignment() {
+        let src = r#"
+void use_password(const char *input) {
+    const char *password = "";
+}
+"#;
+        let hits = detect_in_source_content(src, "c", "empty-password.c").unwrap();
+        assert!(
+            hits.iter()
+                .any(|h| h.danger_category == DangerCategory::Crypto),
+            "Should detect empty hard-coded password in C"
         );
     }
 }
