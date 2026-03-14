@@ -230,18 +230,23 @@ mod tests {
             child_pid_file.display()
         ));
 
-        let err = run_tool(&mut cmd, "timeout-test", Duration::from_millis(100), None)
+        let err = run_tool(&mut cmd, "timeout-test", Duration::from_millis(500), None)
             .await
             .unwrap_err()
             .to_string();
         assert!(err.contains("timed out"));
 
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let child_pid: i32 = std::fs::read_to_string(&child_pid_file)
-            .unwrap()
-            .trim()
-            .parse()
-            .unwrap();
+        let child_pid_contents = (0..20)
+            .find_map(|_| {
+                let result = std::fs::read_to_string(&child_pid_file).ok();
+                if result.is_none() {
+                    std::thread::sleep(Duration::from_millis(25));
+                }
+                result
+            })
+            .expect("timed-out helper should record its child pid before cleanup");
+        let child_pid: i32 = child_pid_contents.trim().parse().unwrap();
 
         // SAFETY: `kill(pid, 0)` probes whether the process still exists.
         let status = unsafe { libc::kill(child_pid, 0) };
