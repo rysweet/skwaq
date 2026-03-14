@@ -33,6 +33,8 @@ steps:
         - "=== command.log ==="
         - "Using cached Ghidra analysis for"
         - "Stored Ghidra graph enrichment for"
+        - "=== report-check ==="
+        - "validated cwe_family=119 true_positives=1"
         - "=== report.json ==="
         - "\"binary_mode\": true"
         - "\"run_mode\": \"hybrid\""

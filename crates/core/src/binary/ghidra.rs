@@ -537,4 +537,35 @@ mod tests {
             other => panic!("expected cached analysis, got {other:?}"),
         }
     }
+
+    #[tokio::test]
+    async fn test_load_cached_or_analyze_misses_cache_after_binary_change() {
+        let temp = tempdir().unwrap();
+        let binary_path = temp.path().join("sample.bin");
+        std::fs::write(&binary_path, b"version-1").unwrap();
+
+        let cache = AnalysisCache::new(temp.path().join("cache"));
+        let analysis = GhidraAnalysis {
+            functions: vec![GhidraFunction {
+                name: "main".into(),
+                address: "00401000".into(),
+                size: 16,
+                decompiled: Some("int main(void) { return 0; }".into()),
+                calls: vec![],
+                called_by: vec![],
+                parameter_count: 0,
+            }],
+            strings: vec![],
+            imports: vec![],
+        };
+        cache.put(&binary_path, &analysis).unwrap();
+
+        std::fs::write(&binary_path, b"version-2").unwrap();
+
+        let outcome = load_cached_or_analyze_with_cache(&binary_path, &cache, 1).await;
+        assert!(
+            !matches!(outcome, GhidraLoadOutcome::Cached(_)),
+            "binary content changed, so the content-addressed cache should miss"
+        );
+    }
 }

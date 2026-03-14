@@ -3,16 +3,16 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 run_dir="$(mktemp -d)"
+chmod 700 "$run_dir"
+home_dir="$run_dir/home"
+out_dir="$run_dir/out"
 
 cleanup() {
-  rm -rf "$home_dir/.config/gh"
   rm -rf "$run_dir"
 }
 
 trap cleanup EXIT HUP INT TERM
 
-home_dir="$run_dir/home"
-out_dir="$run_dir/out"
 mkdir -p "$home_dir/.skwaq" "$home_dir/.local/share" "$home_dir/.config" "$out_dir"
 
 cat >"$home_dir/.skwaq/config.toml" <<'EOF'
@@ -47,11 +47,28 @@ python3 \
     --json "$out_dir/report.json"
 ) >"$run_dir/command.log" 2>&1
 
+python3 - "$out_dir/report.json" >"$run_dir/report-check.txt" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+report = json.loads(Path(sys.argv[1]).read_text())
+for result in report.get("per_cwe", []):
+    if result.get("cwe_id") == 119 and result.get("true_positives", 0) >= 1:
+        print(f'validated cwe_family=119 true_positives={result["true_positives"]}')
+        raise SystemExit(0)
+
+raise SystemExit("expected cached Ghidra run to produce a CWE-119-family true positive")
+PY
+
 echo "=== cache-path ==="
 cat "$run_dir/cache-path.txt"
 echo
 echo "=== command.log ==="
 cat "$run_dir/command.log"
+echo
+echo "=== report-check ==="
+cat "$run_dir/report-check.txt"
 echo
 echo "=== report.json ==="
 cat "$out_dir/report.json"
