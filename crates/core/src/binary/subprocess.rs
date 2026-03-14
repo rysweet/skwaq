@@ -2,6 +2,8 @@
 //! health checks, timeouts, and cleanup.
 
 use async_trait::async_trait;
+#[cfg(target_os = "linux")]
+use std::collections::{HashSet, VecDeque};
 #[cfg(not(unix))]
 use std::io;
 #[cfg(unix)]
@@ -118,11 +120,23 @@ where
 
 #[cfg(unix)]
 async fn kill_process(pid: u32, child: &mut tokio::process::Child) {
-    let pgid = -(pid as i32);
+    let pid = pid as i32;
+    #[cfg(target_os = "linux")]
+    let descendants = descendant_pids(pid);
+    let pgid = -pid;
     // SAFETY: `kill` is called with a PID/PGID from a child process we spawned.
     unsafe {
         libc::kill(pgid, libc::SIGKILL);
     }
+    #[cfg(target_os = "linux")]
+    for descendant in descendants {
+        // SAFETY: descendants are discovered from the spawned child's `/proc`
+        // process tree immediately before termination.
+        unsafe {
+            libc::kill(descendant, libc::SIGKILL);
+        }
+    }
+    let _ = child.start_kill();
     let _ = child.wait().await;
 }
 
@@ -173,6 +187,31 @@ pub async fn get_version(cmd: &str, args: &[&str]) -> Option<String> {
     } else {
         None
     }
+}
+
+#[cfg(target_os = "linux")]
+fn descendant_pids(root_pid: i32) -> Vec<i32> {
+    let mut seen = HashSet::new();
+    let mut queue = VecDeque::from([root_pid]);
+    let mut descendants = Vec::new();
+
+    while let Some(pid) = queue.pop_front() {
+        let children_path = format!("/proc/{pid}/task/{pid}/children");
+        let Ok(children) = std::fs::read_to_string(children_path) else {
+            continue;
+        };
+        for child_pid in children
+            .split_whitespace()
+            .filter_map(|entry| entry.parse::<i32>().ok())
+        {
+            if seen.insert(child_pid) {
+                descendants.push(child_pid);
+                queue.push_back(child_pid);
+            }
+        }
+    }
+
+    descendants
 }
 
 #[cfg(all(test, unix))]
