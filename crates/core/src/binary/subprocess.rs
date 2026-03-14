@@ -222,12 +222,12 @@ mod tests {
     #[tokio::test]
     async fn test_run_tool_timeout_kills_process_group() {
         let temp = tempdir().unwrap();
-        let child_pid_file = temp.path().join("child.pid");
+        let child_survived_file = temp.path().join("child-survived");
 
         let mut cmd = Command::new("bash");
         cmd.arg("-lc").arg(format!(
-            "sleep 5 & echo $! > '{}' && wait",
-            child_pid_file.display()
+            "(sleep 1; echo survived > '{}') & wait",
+            child_survived_file.display()
         ));
 
         let err = run_tool(&mut cmd, "timeout-test", Duration::from_millis(500), None)
@@ -236,23 +236,10 @@ mod tests {
             .to_string();
         assert!(err.contains("timed out"));
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let child_pid_contents = (0..20)
-            .find_map(|_| {
-                let result = std::fs::read_to_string(&child_pid_file).ok();
-                if result.is_none() {
-                    std::thread::sleep(Duration::from_millis(25));
-                }
-                result
-            })
-            .expect("timed-out helper should record its child pid before cleanup");
-        let child_pid: i32 = child_pid_contents.trim().parse().unwrap();
-
-        // SAFETY: `kill(pid, 0)` probes whether the process still exists.
-        let status = unsafe { libc::kill(child_pid, 0) };
-        assert_eq!(
-            status, -1,
-            "timed-out child process should not still be running"
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+        assert!(
+            !child_survived_file.exists(),
+            "timed-out child process should not still be running long enough to write output"
         );
     }
 }
