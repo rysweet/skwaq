@@ -2,8 +2,16 @@
 //! health checks, timeouts, and cleanup.
 
 use async_trait::async_trait;
+#[cfg(target_os = "linux")]
+use std::collections::{HashSet, VecDeque};
+#[cfg(not(unix))]
+use std::io;
+#[cfg(unix)]
+use std::io;
 use std::path::Path;
+use std::process::Stdio;
 use std::time::Duration;
+use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 use tokio::time::timeout;
 
@@ -42,30 +50,100 @@ pub async fn run_tool(
     timeout_duration: Duration,
     temp_dir: Option<&Path>,
 ) -> anyhow::Result<ToolOutput> {
-    let result = timeout(timeout_duration, cmd.output()).await;
+    #[cfg(unix)]
+    cmd.process_group(0);
+    cmd.kill_on_drop(true);
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
 
-    match result {
-        Ok(Ok(output)) => {
-            if output.status.success() {
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| anyhow::anyhow!("{tool_name} not found or failed to start: {e}"))?;
+    let child_pid = child.id();
+
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("{tool_name} stdout was not captured"))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("{tool_name} stderr was not captured"))?;
+
+    let stdout_task = tokio::spawn(read_stream(stdout));
+    let stderr_task = tokio::spawn(read_stream(stderr));
+
+    match timeout(timeout_duration, child.wait()).await {
+        Ok(Ok(status)) => {
+            let stdout = stdout_task.await??;
+            let stderr = stderr_task.await??;
+            if status.success() {
                 Ok(ToolOutput {
-                    stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-                    stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+                    stdout: String::from_utf8_lossy(&stdout).to_string(),
+                    stderr: String::from_utf8_lossy(&stderr).to_string(),
                 })
             } else {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                anyhow::bail!("{tool_name} failed (exit {}): {stderr}", output.status)
+                let stderr = String::from_utf8_lossy(&stderr);
+                anyhow::bail!("{tool_name} failed (exit {status}): {stderr}")
             }
         }
         Ok(Err(e)) => {
-            anyhow::bail!("{tool_name} not found or failed to start: {e}")
+            let _ = stdout_task.await;
+            let _ = stderr_task.await;
+            anyhow::bail!("{tool_name} execution failed: {e}")
         }
         Err(_) => {
+            if let Some(pid) = child_pid {
+                kill_process(pid, &mut child).await;
+            } else {
+                let _ = child.start_kill();
+                let _ = child.wait().await;
+            }
+            let _ = stdout_task.await;
+            let _ = stderr_task.await;
             if let Some(dir) = temp_dir {
                 let _ = tokio::fs::remove_dir_all(dir).await;
             }
             anyhow::bail!("{tool_name} timed out after {timeout_duration:?}")
         }
     }
+}
+
+async fn read_stream<R>(mut reader: R) -> io::Result<Vec<u8>>
+where
+    R: tokio::io::AsyncRead + Unpin + Send + 'static,
+{
+    let mut buf = Vec::new();
+    reader.read_to_end(&mut buf).await?;
+    Ok(buf)
+}
+
+#[cfg(unix)]
+async fn kill_process(pid: u32, child: &mut tokio::process::Child) {
+    let pid = pid as i32;
+    #[cfg(target_os = "linux")]
+    let descendants = descendant_pids(pid);
+    let pgid = -pid;
+    // SAFETY: `kill` is called with a PID/PGID from a child process we spawned.
+    unsafe {
+        libc::kill(pgid, libc::SIGKILL);
+    }
+    #[cfg(target_os = "linux")]
+    for descendant in descendants {
+        // SAFETY: descendants are discovered from the spawned child's `/proc`
+        // process tree immediately before termination.
+        unsafe {
+            libc::kill(descendant, libc::SIGKILL);
+        }
+    }
+    let _ = child.start_kill();
+    let _ = child.wait().await;
+}
+
+#[cfg(not(unix))]
+async fn kill_process(_pid: u32, child: &mut tokio::process::Child) {
+    let _ = child.start_kill();
+    let _ = child.wait().await;
 }
 
 /// Check if a command exists on PATH.
@@ -108,5 +186,60 @@ pub async fn get_version(cmd: &str, args: &[&str]) -> Option<String> {
         Some(output.lines().next().unwrap_or("").trim().to_string())
     } else {
         None
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn descendant_pids(root_pid: i32) -> Vec<i32> {
+    let mut seen = HashSet::new();
+    let mut queue = VecDeque::from([root_pid]);
+    let mut descendants = Vec::new();
+
+    while let Some(pid) = queue.pop_front() {
+        let children_path = format!("/proc/{pid}/task/{pid}/children");
+        let Ok(children) = std::fs::read_to_string(children_path) else {
+            continue;
+        };
+        for child_pid in children
+            .split_whitespace()
+            .filter_map(|entry| entry.parse::<i32>().ok())
+        {
+            if seen.insert(child_pid) {
+                descendants.push(child_pid);
+                queue.push_back(child_pid);
+            }
+        }
+    }
+
+    descendants
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn test_run_tool_timeout_kills_process_group() {
+        let temp = tempdir().unwrap();
+        let child_survived_file = temp.path().join("child-survived");
+
+        let mut cmd = Command::new("bash");
+        cmd.arg("-lc").arg(format!(
+            "(sleep 1; echo survived > '{}') & wait",
+            child_survived_file.display()
+        ));
+
+        let err = run_tool(&mut cmd, "timeout-test", Duration::from_millis(500), None)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("timed out"));
+
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+        assert!(
+            !child_survived_file.exists(),
+            "timed-out child process should not still be running long enough to write output"
+        );
     }
 }

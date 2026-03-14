@@ -15,10 +15,20 @@ impl AnalysisCache {
         Self { cache_dir }
     }
 
-    pub fn get(&self, binary_path: &Path) -> Option<GhidraAnalysis> {
-        let hash = self.hash_file(binary_path)?;
+    pub fn get_json(&self, binary_path: &Path, max_bytes: u64) -> Option<serde_json::Value> {
+        let hash = self.cache_key(binary_path)?;
         let cache_path = self.cache_dir.join(&hash).join("analysis.json");
         if cache_path.exists() {
+            let metadata = std::fs::metadata(&cache_path).ok()?;
+            if metadata.len() > max_bytes {
+                tracing::warn!(
+                    "Ignoring oversized cached Ghidra analysis at {} ({} bytes > {} bytes)",
+                    cache_path.display(),
+                    metadata.len(),
+                    max_bytes,
+                );
+                return None;
+            }
             let data = std::fs::read_to_string(&cache_path).ok()?;
             serde_json::from_str(&data).ok()
         } else {
@@ -28,7 +38,7 @@ impl AnalysisCache {
 
     pub fn put(&self, binary_path: &Path, analysis: &GhidraAnalysis) -> anyhow::Result<()> {
         let hash = self
-            .hash_file(binary_path)
+            .cache_key(binary_path)
             .ok_or_else(|| anyhow::anyhow!("Cannot hash binary"))?;
         let dir = self.cache_dir.join(&hash);
         std::fs::create_dir_all(&dir)?;
@@ -38,12 +48,12 @@ impl AnalysisCache {
     }
 
     pub fn has(&self, binary_path: &Path) -> bool {
-        self.hash_file(binary_path)
+        self.cache_key(binary_path)
             .map(|hash| self.cache_dir.join(hash).join("analysis.json").exists())
             .unwrap_or(false)
     }
 
-    fn hash_file(&self, path: &Path) -> Option<String> {
+    pub fn cache_key(&self, path: &Path) -> Option<String> {
         let data = std::fs::read(path).ok()?;
         let hash = Sha256::digest(&data);
         Some(format!("{:x}", hash))

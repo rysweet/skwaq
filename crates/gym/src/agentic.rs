@@ -14,6 +14,7 @@ use crate::adapters::DetectedFinding;
 use crate::scoring;
 use anyhow::Context;
 use skwaq_core::analysis::DangerousApiDetector;
+use skwaq_core::binary::ghidra::{load_cached_or_analyze, GhidraLoadOutcome};
 use skwaq_core::config::Config;
 use skwaq_core::graph::builder::GraphBuilder;
 use skwaq_core::graph::GraphDb;
@@ -87,6 +88,8 @@ impl SynthesisStats {
 /// Global synthesis stats for the current gym run.
 static SYNTHESIS_STATS: std::sync::LazyLock<SynthesisStats> =
     std::sync::LazyLock::new(SynthesisStats::new);
+
+const GHIDRA_ANALYSIS_TIMEOUT_SECS: u64 = 300;
 
 /// Get the global synthesis stats. Call [`SynthesisStats::report`] at end of run.
 pub fn synthesis_stats() -> &'static SynthesisStats {
@@ -234,6 +237,7 @@ pub async fn run_agentic_binary_analysis(
     // Ingest binary into graph
     let builder = GraphBuilder::new(&db);
     builder.build_from_binary_info(&binary_info, &inv_id)?;
+    enrich_binary_graph_with_ghidra(path, &builder, &inv_id).await?;
 
     // Pattern detection on imports
     let mut pattern_categories: HashSet<String> = HashSet::new();
@@ -374,6 +378,7 @@ pub async fn run_llm_only_binary_analysis(
 
     let builder = GraphBuilder::new(&db);
     builder.build_from_binary_info(&binary_info, &inv_id)?;
+    enrich_binary_graph_with_ghidra(path, &builder, &inv_id).await?;
 
     // Skip pattern detection — go straight to LLM pipeline
     run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
@@ -387,6 +392,73 @@ pub async fn run_llm_only_binary_analysis(
         .collect();
 
     Ok(deduped)
+}
+
+async fn enrich_binary_graph_with_ghidra(
+    path: &Path,
+    builder: &GraphBuilder<'_>,
+    investigation_id: &str,
+) -> anyhow::Result<()> {
+    match load_cached_or_analyze(path, GHIDRA_ANALYSIS_TIMEOUT_SECS).await {
+        GhidraLoadOutcome::NotAvailable => {
+            anyhow::bail!(
+                "Ghidra enrichment unavailable for {}: no cached analysis found and live Ghidra is not available",
+                path.display()
+            );
+        }
+        GhidraLoadOutcome::Cached(analysis) => {
+            tracing::info!(
+                "Using cached Ghidra analysis for {} ({} functions)",
+                path.display(),
+                analysis.functions.len(),
+            );
+            store_ghidra_results(builder, &analysis, investigation_id);
+            Ok(())
+        }
+        GhidraLoadOutcome::Fresh(analysis) => {
+            let decompiled_count = analysis
+                .functions
+                .iter()
+                .filter(|f| f.decompiled.is_some())
+                .count();
+            tracing::info!(
+                "Loaded fresh Ghidra analysis for {} ({} functions, {} with decompiled source)",
+                path.display(),
+                analysis.functions.len(),
+                decompiled_count,
+            );
+            store_ghidra_results(builder, &analysis, investigation_id);
+            Ok(())
+        }
+        GhidraLoadOutcome::Failed(error) => {
+            anyhow::bail!("Ghidra enrichment failed for {}: {}", path.display(), error,)
+        }
+    }
+}
+
+fn store_ghidra_results(
+    builder: &GraphBuilder<'_>,
+    analysis: &skwaq_core::binary::types::GhidraAnalysis,
+    investigation_id: &str,
+) {
+    match builder.build_from_ghidra_analysis(analysis, investigation_id) {
+        Ok(counts) => {
+            tracing::info!(
+                "Stored Ghidra graph enrichment for {}: {} functions updated, {} new functions, {} call edges",
+                investigation_id,
+                counts.functions_updated,
+                counts.functions_added,
+                counts.calls_added,
+            );
+        }
+        Err(error) => {
+            tracing::warn!(
+                "Failed to store Ghidra analysis in benchmark graph for {}: {}",
+                investigation_id,
+                error,
+            );
+        }
+    }
 }
 
 /// Synthesize findings from both pattern detection and LLM agents.
@@ -782,6 +854,9 @@ fn extract_function_from_title(title: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use skwaq_core::binary::types::{
+        BinaryFormat, BinaryInfo, GhidraAnalysis, GhidraFunction, HardeningInfo, SymbolInfo,
+    };
     use skwaq_core::config::Config;
 
     fn fixtures_dir() -> std::path::PathBuf {
@@ -858,6 +933,81 @@ mod tests {
             .filter(|f| seen.insert(f.category.clone()))
             .collect();
         assert_eq!(deduped.len(), 1);
+    }
+
+    #[test]
+    fn test_store_ghidra_results_enriches_binary_graph() {
+        let db = GraphDb::in_memory().unwrap();
+        let builder = GraphBuilder::new(&db);
+        let inv_id = "test-bin-ghidra";
+
+        let info = BinaryInfo {
+            format: BinaryFormat::Elf,
+            architecture: "x86_64".into(),
+            bits: 64,
+            endianness: "little".into(),
+            is_stripped: false,
+            entry_point: 0x401000,
+            sections: vec![],
+            symbols: vec![SymbolInfo {
+                name: "main".into(),
+                address: 0x401000,
+                size: 64,
+                symbol_type: "2".into(),
+                binding: "Global".into(),
+            }],
+            imports: vec![],
+            strings: vec![],
+            hardening: HardeningInfo::default(),
+        };
+        builder.build_from_binary_info(&info, inv_id).unwrap();
+
+        let analysis = GhidraAnalysis {
+            functions: vec![
+                GhidraFunction {
+                    name: "main".into(),
+                    address: "401000".into(),
+                    size: 64,
+                    decompiled: Some("int main(int argc, char **argv) { return argc; }".into()),
+                    calls: vec!["401020".into()],
+                    called_by: vec![],
+                    parameter_count: 2,
+                },
+                GhidraFunction {
+                    name: "helper".into(),
+                    address: "401020".into(),
+                    size: 32,
+                    decompiled: Some("void helper(void) { return; }".into()),
+                    calls: vec![],
+                    called_by: vec!["401000".into()],
+                    parameter_count: 0,
+                },
+            ],
+            strings: vec![],
+            imports: vec![],
+        };
+
+        store_ghidra_results(&builder, &analysis, inv_id);
+
+        let decompiled: String = db
+            .conn()
+            .query_row(
+                "SELECT decompiled FROM functions WHERE name = 'main' AND investigation_id = ?1",
+                [inv_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(decompiled.contains("return argc;"));
+
+        let helper_count: i64 = db
+            .conn()
+            .query_row(
+                "SELECT count(*) FROM functions WHERE name = 'helper' AND investigation_id = ?1",
+                [inv_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(helper_count, 1);
     }
 
     // merge_findings_deterministic tests removed — function deleted (no fallback paths)

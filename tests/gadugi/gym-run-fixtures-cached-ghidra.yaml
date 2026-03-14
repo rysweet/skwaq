@@ -1,0 +1,46 @@
+name: "Gym Run Fixtures Uses Cached Ghidra Analysis"
+description: |
+  Verifies that `skwaq gym run fixtures` can use cached Ghidra analysis in the
+  binary benchmark path even when live Ghidra is unavailable.
+version: "1.0.0"
+
+config:
+  timeout: 300000
+  retries: 0
+  parallel: false
+
+agents:
+  - name: "cli-agent"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "."
+      timeout: 300000
+      capture_output: true
+
+steps:
+  - name: "Run fixtures benchmark with seeded cached Ghidra analysis"
+    agent: "cli-agent"
+    action: "execute_command"
+    params:
+      command: >
+        cargo build -q -p skwaq &&
+        ./tests/qa/bin/gym-run-cached-ghidra.sh
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "=== cache-path ==="
+        - "=== command.log ==="
+        - "Using cached Ghidra analysis for"
+        - "Stored Ghidra graph enrichment for"
+        - "=== report-check ==="
+        - "validated cwe_family=119 true_positives=1"
+        - "=== report.json ==="
+        - "\"binary_mode\": true"
+        - "\"run_mode\": \"hybrid\""
+        - "\"suite\": \"fixtures\""
+    timeout: 300000
+
+metadata:
+  tags: ["cli", "smoke", "regression", "gym-run", "ghidra-cache"]
+  priority: "high"
