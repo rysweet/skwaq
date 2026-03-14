@@ -1,4 +1,5 @@
 use crate::graph::GraphDb;
+use anyhow::Context;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
@@ -98,6 +99,14 @@ pub struct InitSummary {
 }
 
 pub fn initialize_cwe_catalog(db: &GraphDb) -> anyhow::Result<InitSummary> {
+    let knowledge_dir = resolve_knowledge_dir()?;
+    initialize_cwe_catalog_with_dir(db, &knowledge_dir)
+}
+
+pub(crate) fn initialize_cwe_catalog_with_dir(
+    db: &GraphDb,
+    knowledge_dir: &Path,
+) -> anyhow::Result<InitSummary> {
     let mut inserted = 0usize;
     for (cwe_id, name, description) in SEEDED_CWES {
         let id = cwe_id.to_lowercase().replace('-', "_");
@@ -110,15 +119,7 @@ pub fn initialize_cwe_catalog(db: &GraphDb) -> anyhow::Result<InitSummary> {
         }
     }
 
-    let knowledge_packs_found = find_knowledge_dir()
-        .and_then(|dir| std::fs::read_dir(dir).ok())
-        .map(|entries| {
-            entries
-                .flatten()
-                .filter(|entry| entry.path().extension().and_then(|e| e.to_str()) == Some("md"))
-                .count()
-        })
-        .unwrap_or(0);
+    let knowledge_packs_found = count_knowledge_packs(knowledge_dir)?;
 
     Ok(InitSummary {
         inserted_cwes: inserted,
@@ -128,20 +129,53 @@ pub fn initialize_cwe_catalog(db: &GraphDb) -> anyhow::Result<InitSummary> {
 }
 
 pub fn search_knowledge(db: Option<&GraphDb>, query: &str) -> anyhow::Result<Vec<KnowledgeHit>> {
-    search_knowledge_with_dir(db, query, find_knowledge_dir().as_deref())
+    let knowledge_dir = resolve_knowledge_dir()?;
+    search_knowledge_with_dir(db, query, &knowledge_dir)
 }
 
 pub fn find_knowledge_dir() -> Option<PathBuf> {
-    ["data/knowledge", "../data/knowledge"]
-        .iter()
-        .map(PathBuf::from)
-        .find(|p| p.is_dir())
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    [
+        PathBuf::from("data/knowledge"),
+        PathBuf::from("../data/knowledge"),
+        manifest_dir.join("../../data/knowledge"),
+    ]
+    .into_iter()
+    .find(|path| path.is_dir())
 }
 
-fn search_knowledge_with_dir(
+fn resolve_knowledge_dir() -> anyhow::Result<PathBuf> {
+    find_knowledge_dir().context(
+        "Knowledge pack directory not found. Expected one of: data/knowledge, ../data/knowledge, or crates/core/../../data/knowledge.",
+    )
+}
+
+fn count_knowledge_packs(dir: &Path) -> anyhow::Result<usize> {
+    let mut count = 0usize;
+    let entries = std::fs::read_dir(dir)
+        .with_context(|| format!("Failed to read knowledge directory: {}", dir.display()))?;
+    for entry in entries {
+        let entry = entry.with_context(|| {
+            format!(
+                "Failed to read knowledge directory entry: {}",
+                dir.display()
+            )
+        })?;
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("md") {
+            continue;
+        }
+        std::fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read knowledge pack: {}", path.display()))?;
+        count += 1;
+    }
+    Ok(count)
+}
+
+pub(crate) fn search_knowledge_with_dir(
     db: Option<&GraphDb>,
     query: &str,
-    knowledge_dir: Option<&Path>,
+    knowledge_dir: &Path,
 ) -> anyhow::Result<Vec<KnowledgeHit>> {
     let normalized = query.trim().to_lowercase();
     if normalized.is_empty() {
@@ -152,9 +186,7 @@ fn search_knowledge_with_dir(
     if let Some(db) = db {
         scored.extend(search_cwes(db, &normalized)?);
     }
-    if let Some(dir) = knowledge_dir {
-        scored.extend(search_markdown(dir, &normalized)?);
-    }
+    scored.extend(search_markdown(knowledge_dir, &normalized)?);
 
     scored.sort_by(|a, b| {
         b.0.cmp(&a.0)
@@ -215,20 +247,22 @@ fn search_cwes(db: &GraphDb, query: &str) -> anyhow::Result<Vec<(usize, Knowledg
 
 fn search_markdown(dir: &Path, query: &str) -> anyhow::Result<Vec<(usize, KnowledgeHit)>> {
     let mut hits = Vec::new();
-    for entry in std::fs::read_dir(dir)? {
-        let entry = match entry {
-            Ok(value) => value,
-            Err(_) => continue,
-        };
+    let entries = std::fs::read_dir(dir)
+        .with_context(|| format!("Failed to read knowledge directory: {}", dir.display()))?;
+    for entry in entries {
+        let entry = entry.with_context(|| {
+            format!(
+                "Failed to read knowledge directory entry: {}",
+                dir.display()
+            )
+        })?;
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) != Some("md") {
             continue;
         }
 
-        let content = match std::fs::read_to_string(&path) {
-            Ok(value) => value,
-            Err(_) => continue,
-        };
+        let content = std::fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read knowledge pack: {}", path.display()))?;
         let topic = path
             .file_stem()
             .and_then(|s| s.to_str())
@@ -343,8 +377,6 @@ mod tests {
     #[test]
     fn test_search_knowledge_with_cwe_and_pack_results() {
         let db = crate::graph::GraphDb::in_memory().unwrap();
-        initialize_cwe_catalog(&db).unwrap();
-
         let temp = tempfile::tempdir().unwrap();
         let knowledge_dir = temp.path().join("knowledge");
         std::fs::create_dir_all(&knowledge_dir).unwrap();
@@ -353,9 +385,10 @@ mod tests {
             "# Memory\n\nUse durable memory to store generalized lessons about buffer overflows.",
         )
         .unwrap();
+        initialize_cwe_catalog_with_dir(&db, &knowledge_dir).unwrap();
 
         let results =
-            search_knowledge_with_dir(Some(&db), "cwe-119 buffer overflow", Some(&knowledge_dir))
+            search_knowledge_with_dir(Some(&db), "cwe-119 buffer overflow", &knowledge_dir)
                 .unwrap();
 
         assert!(
@@ -368,5 +401,31 @@ mod tests {
                 .any(|result| result.source == "knowledge-pack"),
             "expected knowledge-pack result"
         );
+    }
+
+    #[test]
+    fn test_initialize_cwe_catalog_requires_readable_knowledge_dir() {
+        let db = crate::graph::GraphDb::in_memory().unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let missing_dir = temp.path().join("missing");
+
+        let error = initialize_cwe_catalog_with_dir(&db, &missing_dir).unwrap_err();
+
+        assert!(error
+            .to_string()
+            .contains("Failed to read knowledge directory"));
+    }
+
+    #[test]
+    fn test_search_knowledge_surfaces_pack_read_errors() {
+        let db = crate::graph::GraphDb::in_memory().unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let knowledge_dir = temp.path().join("knowledge");
+        std::fs::create_dir_all(&knowledge_dir).unwrap();
+        std::fs::create_dir_all(knowledge_dir.join("broken.md")).unwrap();
+
+        let error = search_knowledge_with_dir(Some(&db), "memory", &knowledge_dir).unwrap_err();
+
+        assert!(error.to_string().contains("Failed to read knowledge pack"));
     }
 }

@@ -87,9 +87,14 @@ skwaq viz callgraph            # Call graph tree
 
 ### Knowledge Base
 ```bash
-skwaq kb init                  # Load CWE database
-skwaq kb search "buffer"       # Search CWEs
+skwaq kb init                  # Seed the CWE catalog and validate knowledge packs
+skwaq kb search "buffer"       # Search initialized CWE + knowledge-pack entries
+skwaq kb search "cwe-119 buffer overflow" --json
 ```
+
+Run `skwaq kb init` once per workspace before searching. `kb search` uses the same
+shared backend as agent knowledge lookup and can return mixed CWE and knowledge-pack
+results; use `--json` for automation.
 
 ### System
 ```bash

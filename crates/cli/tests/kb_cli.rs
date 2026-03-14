@@ -78,6 +78,16 @@ fn test_kb_search_json_returns_cwe_and_pack_results() {
 }
 
 #[test]
+fn test_kb_search_requires_kb_init() {
+    let workspace = create_temp_workspace();
+    let output = run_cli(workspace.path(), &["kb", "search", "memory", "--json"]);
+    assert!(!output.status.success(), "{output:?}");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Run `skwaq kb init` first."), "{stderr}");
+}
+
+#[test]
 fn test_kb_search_surfaces_invalid_database_error() {
     let workspace = create_temp_workspace();
     std::fs::create_dir_all(workspace.path().join(".skwaq").join("graph")).unwrap();

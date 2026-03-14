@@ -1,0 +1,61 @@
+name: "skwaq kb CLI - unified init and search"
+description: "Verifies kb init seeds the catalog and kb search --json returns both CWE and knowledge-pack results from the user-facing CLI."
+version: "1.0.0"
+
+config:
+  timeout: 240000
+  retries: 0
+  parallel: false
+
+agents:
+  - name: "skwaq-cli"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "/home/azureuser/src/skwaq/worktrees/feat/issue-153-kb-cli-integration"
+      timeout: 240000
+      capture_output: true
+
+steps:
+  - name: "Run kb init and kb search smoke flow"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "./tests/qa/bin/kb-cli-integration.sh"
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "=== kb init ==="
+        - "Knowledge base initialized:"
+        - "knowledge pack files available"
+        - "=== kb search json ==="
+        - "\"status\": \"ok\""
+        - "\"source\": \"cwe\""
+        - "\"source\": \"knowledge-pack\""
+        - "\"query\": \"cwe-119 buffer overflow\""
+    timeout: 240000
+
+assertions:
+  - name: "KB CLI smoke flow succeeds"
+    type: "command_success"
+    agent: "skwaq-cli"
+    params:
+      step: "Run kb init and kb search smoke flow"
+
+  - name: "KB CLI smoke output includes both result sources"
+    type: "output_contains_all"
+    agent: "skwaq-cli"
+    params:
+      step: "Run kb init and kb search smoke flow"
+      required_strings:
+        - "\"source\": \"cwe\""
+        - "\"source\": \"knowledge-pack\""
+
+metadata:
+  tags:
+    - "cli"
+    - "knowledge-base"
+    - "regression"
+    - "outside-in"
+  priority: "high"
+  author: "copilot-cli"

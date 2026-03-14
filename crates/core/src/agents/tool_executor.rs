@@ -4,6 +4,7 @@
 
 use super::tool_translate::{execute_read_query, translate_to_sql};
 use crate::graph::GraphDb;
+use crate::knowledge::search::search_knowledge_with_dir;
 use crate::memory::{ExperienceType, MemoryStore};
 
 /// Execute a single tool call against the real graph database.
@@ -318,13 +319,35 @@ fn execute_lookup_knowledge(
     db: &GraphDb,
     args: &serde_json::Value,
 ) -> anyhow::Result<serde_json::Value> {
+    let knowledge_dir = crate::knowledge::find_knowledge_dir().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Knowledge pack directory not found. Expected one of: data/knowledge, ../data/knowledge, or crates/core/../../data/knowledge."
+        )
+    })?;
+    execute_lookup_knowledge_with_dir(db, args, &knowledge_dir)
+}
+
+fn execute_lookup_knowledge_with_dir(
+    db: &GraphDb,
+    args: &serde_json::Value,
+    knowledge_dir: &std::path::Path,
+) -> anyhow::Result<serde_json::Value> {
     let query = args
         .get("query")
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_lowercase();
     tracing::info!("Tool lookup_knowledge: {query}");
-    let results = crate::knowledge::search_knowledge(Some(db), &query)?;
+    let results = match search_knowledge_with_dir(Some(db), &query, knowledge_dir) {
+        Ok(results) => results,
+        Err(error) => {
+            return Ok(serde_json::json!({
+                "status": "error",
+                "query": query,
+                "error": error.to_string(),
+            }));
+        }
+    };
 
     if results.is_empty() {
         Ok(serde_json::json!({
@@ -540,6 +563,7 @@ fn execute_recall_memory(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::knowledge::search::initialize_cwe_catalog_with_dir;
 
     #[test]
     fn test_execute_tool_read_function() {
@@ -847,41 +871,65 @@ mod tests {
 
     #[test]
     fn test_lookup_knowledge_returns_results() {
-        // This test requires data/knowledge/ to exist with .md files
         let db = GraphDb::in_memory().unwrap();
-        crate::knowledge::initialize_cwe_catalog(&db).unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let knowledge_dir = temp.path().join("knowledge");
+        std::fs::create_dir_all(&knowledge_dir).unwrap();
+        std::fs::write(
+            knowledge_dir.join("memory.md"),
+            "# Memory\n\nUse durable memory to store generalized lessons about buffer overflows.",
+        )
+        .unwrap();
+        initialize_cwe_catalog_with_dir(&db, &knowledge_dir).unwrap();
         let args = serde_json::json!({"query": "memory"});
-        let result = execute_lookup_knowledge(&db, &args).unwrap();
-        // May return results or no_results depending on working directory
-        let status = result["status"].as_str().unwrap();
-        assert!(
-            status == "ok" || status == "no_results" || status == "error",
-            "Expected valid status, got: {}",
-            status
-        );
+        let result = execute_lookup_knowledge_with_dir(&db, &args, &knowledge_dir).unwrap();
+        assert_eq!(result["status"], "ok");
+        assert!(result["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| { entry["source"] == "knowledge-pack" && entry["topic"] == "memory" }));
     }
 
     #[test]
     fn test_lookup_knowledge_with_cwe_query() {
         let db = GraphDb::in_memory().unwrap();
-        crate::knowledge::initialize_cwe_catalog(&db).unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let knowledge_dir = temp.path().join("knowledge");
+        std::fs::create_dir_all(&knowledge_dir).unwrap();
+        std::fs::write(
+            knowledge_dir.join("memory.md"),
+            "# Memory\n\nUse durable memory to store generalized lessons about buffer overflows.",
+        )
+        .unwrap();
+        initialize_cwe_catalog_with_dir(&db, &knowledge_dir).unwrap();
         let args = serde_json::json!({"query": "cwe-119 buffer overflow"});
-        let result = execute_lookup_knowledge(&db, &args).unwrap();
-        let status = result["status"].as_str().unwrap();
+        let result = execute_lookup_knowledge_with_dir(&db, &args, &knowledge_dir).unwrap();
+        assert_eq!(result["status"], "ok");
         assert!(
-            status == "ok" || status == "no_results" || status == "error",
-            "Expected valid status, got: {}",
-            status
+            result["results"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|entry| entry["source"] == "cwe"),
+            "expected at least one cwe result"
         );
-        if status == "ok" {
-            assert!(
-                result["results"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|entry| entry["source"] == "cwe"),
-                "expected at least one cwe result"
-            );
-        }
+    }
+
+    #[test]
+    fn test_lookup_knowledge_surfaces_pack_errors() {
+        let db = GraphDb::in_memory().unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let knowledge_dir = temp.path().join("knowledge");
+        std::fs::create_dir_all(&knowledge_dir).unwrap();
+        std::fs::create_dir_all(knowledge_dir.join("broken.md")).unwrap();
+
+        let args = serde_json::json!({"query": "memory"});
+        let result = execute_lookup_knowledge_with_dir(&db, &args, &knowledge_dir).unwrap();
+        assert_eq!(result["status"], "error");
+        assert!(result["error"]
+            .as_str()
+            .unwrap()
+            .contains("Failed to read knowledge pack"));
     }
 }

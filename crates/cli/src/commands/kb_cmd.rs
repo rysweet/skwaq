@@ -1,6 +1,7 @@
 //! `skwaq kb` - knowledge base operations.
 
 use super::common::open_db;
+use anyhow::bail;
 use skwaq_core::{config::Config, graph::GraphDb};
 
 pub fn run_init() -> anyhow::Result<()> {
@@ -13,7 +14,7 @@ pub fn run_init() -> anyhow::Result<()> {
     let summary = skwaq_core::knowledge::initialize_cwe_catalog(&db)?;
 
     println!(
-        "Knowledge base initialized: {} CWE entries added ({} total in catalog, {} knowledge pack files available).",
+        "Knowledge base initialized: {} CWE entries added ({} seed CWE entries in the catalog, {} knowledge pack files available).",
         summary.inserted_cwes,
         summary.total_seed_cwes,
         summary.knowledge_packs_found
@@ -23,7 +24,7 @@ pub fn run_init() -> anyhow::Result<()> {
 
 pub fn run_search(query: &str, json: bool) -> anyhow::Result<()> {
     let db = open_search_db()?;
-    let results = skwaq_core::knowledge::search_knowledge(db.as_ref(), query)?;
+    let results = skwaq_core::knowledge::search_knowledge(Some(&db), query)?;
 
     if results.is_empty() {
         if json {
@@ -32,13 +33,13 @@ pub fn run_search(query: &str, json: bool) -> anyhow::Result<()> {
                 serde_json::json!({
                     "status": "no_results",
                     "query": query,
-                    "hint": "Try `skwaq kb init` to populate CWE entries, or search for methodology / memory / cwe-* topics."
+                    "hint": "Try a different query such as methodology, memory, injection, or a cwe-* topic."
                 })
             );
             return Ok(());
         }
         println!("No KB entries matching '{query}'.");
-        println!("Try `skwaq kb init` to populate CWE entries.");
+        println!("Try a different query such as methodology, memory, injection, or a cwe-* topic.");
         return Ok(());
     }
 
@@ -57,7 +58,9 @@ pub fn run_search(query: &str, json: bool) -> anyhow::Result<()> {
     println!("KB entries matching '{query}':\n");
     for result in &results {
         println!("  [{}] {}", result.source, result.title);
-        println!("        topic: {}", result.topic);
+        if !result.title.eq_ignore_ascii_case(&result.topic) {
+            println!("        topic: {}", result.topic);
+        }
         println!("        {}\n", result.content);
     }
 
@@ -65,11 +68,11 @@ pub fn run_search(query: &str, json: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn open_search_db() -> anyhow::Result<Option<GraphDb>> {
+fn open_search_db() -> anyhow::Result<GraphDb> {
     let db_dir = Config::load()?.database_path();
     let db_file = db_dir.join("skwaq.db");
     if !db_file.exists() {
-        return Ok(None);
+        bail!("Knowledge base not initialized. Run `skwaq kb init` first.");
     }
-    Ok(Some(GraphDb::open(&db_dir)?))
+    GraphDb::open(&db_dir)
 }

@@ -150,8 +150,9 @@ pub fn agent_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::new(
             "lookup_knowledge",
-            "Search the vulnerability analysis knowledge pack for expert guidance on \
+            "Search the seeded CWE catalog and markdown knowledge packs for expert guidance on \
              CWE families, detection methodology, taint analysis patterns, or research approaches. \
+             Returns up to 5 mixed-source results across CWE entries and knowledge packs. \
              Topics: methodology, cwe-families, codeql, research, memory, injection, crypto, \
              or any CWE number.",
             serde_json::json!({
