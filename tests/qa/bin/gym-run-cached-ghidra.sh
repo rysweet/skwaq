@@ -2,13 +2,14 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-run_dir="$(mktemp -d "$repo_root/.tmp-gym-ghidra-XXXXXX")"
+run_dir="$(mktemp -d)"
 
 cleanup() {
+  rm -rf "$home_dir/.config/gh"
   rm -rf "$run_dir"
 }
 
-trap cleanup EXIT
+trap cleanup EXIT HUP INT TERM
 
 home_dir="$run_dir/home"
 out_dir="$run_dir/out"
