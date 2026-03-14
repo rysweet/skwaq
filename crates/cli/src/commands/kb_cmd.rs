@@ -1,6 +1,7 @@
 //! `skwaq kb` - knowledge base operations.
 
 use super::common::open_db;
+use skwaq_core::{config::Config, graph::GraphDb};
 
 pub fn run_init() -> anyhow::Result<()> {
     let db = open_db().or_else(|_| {
@@ -21,7 +22,7 @@ pub fn run_init() -> anyhow::Result<()> {
 }
 
 pub fn run_search(query: &str, json: bool) -> anyhow::Result<()> {
-    let db = open_db().ok();
+    let db = open_search_db()?;
     let results = skwaq_core::knowledge::search_knowledge(db.as_ref(), query)?;
 
     if results.is_empty() {
@@ -62,4 +63,13 @@ pub fn run_search(query: &str, json: bool) -> anyhow::Result<()> {
 
     println!("{} result(s).", results.len());
     Ok(())
+}
+
+fn open_search_db() -> anyhow::Result<Option<GraphDb>> {
+    let db_dir = Config::load()?.database_path();
+    let db_file = db_dir.join("skwaq.db");
+    if !db_file.exists() {
+        return Ok(None);
+    }
+    Ok(Some(GraphDb::open(&db_dir)?))
 }

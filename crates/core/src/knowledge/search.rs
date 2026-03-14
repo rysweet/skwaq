@@ -167,11 +167,25 @@ fn search_knowledge_with_dir(
 }
 
 fn search_cwes(db: &GraphDb, query: &str) -> anyhow::Result<Vec<(usize, KnowledgeHit)>> {
-    let mut stmt = db.conn().prepare(
+    let terms = search_terms(query);
+    let mut where_parts = Vec::new();
+    let mut params = Vec::new();
+    for term in &terms {
+        let pattern = format!("%{term}%");
+        for column in ["lower(cwe_id)", "lower(name)", "lower(description)"] {
+            where_parts.push(format!("{column} LIKE ?{}", params.len() + 1));
+            params.push(pattern.clone());
+        }
+    }
+
+    let sql = format!(
         "SELECT cwe_id, name, description FROM cwes
+         WHERE {}
          ORDER BY cwe_id",
-    )?;
-    let rows = stmt.query_map([], |row| {
+        where_parts.join(" OR ")
+    );
+    let mut stmt = db.conn().prepare(&sql)?;
+    let rows = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
         Ok((
             row.get::<_, String>(0)?,
             row.get::<_, String>(1)?,
@@ -299,6 +313,16 @@ fn relevant_excerpt(query: &str, content: &str) -> String {
 
 fn query_terms(query: &str) -> impl Iterator<Item = &str> {
     query.split_whitespace().filter(|word| word.len() > 2)
+}
+
+fn search_terms(query: &str) -> Vec<&str> {
+    let mut terms = vec![query];
+    for term in query_terms(query) {
+        if !terms.contains(&term) {
+            terms.push(term);
+        }
+    }
+    terms
 }
 
 #[cfg(test)]

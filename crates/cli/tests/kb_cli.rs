@@ -76,3 +76,27 @@ fn test_kb_search_json_returns_cwe_and_pack_results() {
         .iter()
         .any(|entry| entry["source"] == "knowledge-pack"));
 }
+
+#[test]
+fn test_kb_search_surfaces_invalid_database_error() {
+    let workspace = create_temp_workspace();
+    std::fs::create_dir_all(workspace.path().join(".skwaq").join("graph")).unwrap();
+    std::fs::write(
+        workspace
+            .path()
+            .join(".skwaq")
+            .join("graph")
+            .join("skwaq.db"),
+        "not-a-sqlite-database",
+    )
+    .unwrap();
+
+    let output = run_cli(workspace.path(), &["kb", "search", "memory", "--json"]);
+    assert!(!output.status.success(), "{output:?}");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("database") || stderr.contains("sqlite"),
+        "{stderr}"
+    );
+}
