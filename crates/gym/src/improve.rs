@@ -758,16 +758,12 @@ async fn run_overfitting_review(
     {
         Ok(result) => {
             let output = &result.output;
+            let total_count = proposals.len();
             let mut accepted = Vec::new();
 
             for (i, proposal) in proposals.into_iter().enumerate() {
-                // Look for verdict for this proposal number
-                let marker = format!("{}.", i + 1);
-                let is_rejected = output.lines().any(|line| {
-                    let l = line.to_uppercase();
-                    (l.contains(&marker) || l.contains(&format!("Proposal {}", i + 1)))
-                        && l.contains("REJECT")
-                });
+                let is_rejected =
+                    proposal_is_rejected(output, i + 1, proposal.description.as_str());
 
                 if is_rejected {
                     tracing::info!(
@@ -779,11 +775,6 @@ async fn run_overfitting_review(
                 }
             }
 
-            let total_count = accepted.len()
-                + output
-                    .lines()
-                    .filter(|l| l.to_uppercase().contains("REJECT"))
-                    .count();
             tracing::info!(
                 "Overfitting review: {}/{} proposals accepted",
                 accepted.len(),
@@ -793,6 +784,53 @@ async fn run_overfitting_review(
         }
         Err(e) => Err(anyhow::anyhow!("overfitting reviewer failed: {e}")),
     }
+}
+
+fn proposal_is_rejected(output: &str, proposal_number: usize, description: &str) -> bool {
+    let review_blocks = parse_review_blocks(output);
+    if let Some(block) = review_blocks
+        .iter()
+        .find(|block| block.heading.trim() == description)
+    {
+        return block.rejected;
+    }
+    if let Some(block) = review_blocks.get(proposal_number.saturating_sub(1)) {
+        return block.rejected;
+    }
+
+    let numeric_prefixes = [
+        format!("{proposal_number}."),
+        format!("PROPOSAL {proposal_number}"),
+    ];
+    output.lines().any(|line| {
+        let trimmed = line.trim();
+        let upper = trimmed.to_uppercase();
+        numeric_prefixes
+            .iter()
+            .any(|prefix| upper.starts_with(&prefix.to_uppercase()))
+            && upper.contains("REJECT")
+    })
+}
+
+struct ReviewBlock {
+    heading: String,
+    rejected: bool,
+}
+
+fn parse_review_blocks(output: &str) -> Vec<ReviewBlock> {
+    output
+        .split("## Proposal:")
+        .skip(1)
+        .filter_map(|block| {
+            let mut lines = block.lines();
+            let heading = lines.next()?.trim().to_string();
+            let rejected = lines.any(|line| {
+                let trimmed = line.trim().to_uppercase();
+                trimmed.starts_with("VERDICT:") && trimmed.contains("REJECT")
+            });
+            Some(ReviewBlock { heading, rejected })
+        })
+        .collect()
 }
 
 /// Heuristic analysis of false negatives (no LLM needed).
@@ -1033,6 +1071,21 @@ mod tests {
         }
     }
 
+    fn sample_improvement(description: &str) -> Improvement {
+        Improvement {
+            kind: ImprovementKind::NewPattern,
+            description: description.to_string(),
+            target_cwes: vec![119],
+            target_file: PathBuf::from("crates/core/src/analysis/patterns_source.rs"),
+            patch: Patch {
+                find: String::new(),
+                replace: r"\bsprintf\s*\(".to_string(),
+            },
+            source_case: "sample_case".to_string(),
+            priority: Priority::High,
+        }
+    }
+
     #[test]
     fn test_parse_json_proposals() {
         let fn_case = sample_false_negative_case();
@@ -1095,5 +1148,46 @@ Regex: \bscanf\s*\(
             "Should propose hardcoded credential detection"
         );
         assert!(proposals[0].description.contains("password"));
+    }
+
+    #[test]
+    fn test_proposal_is_rejected_uses_matching_verdict_block() {
+        let accepted = sample_improvement("Detect sprintf-based overflow");
+        let rejected = sample_improvement("Detect unsafe scanf widthless reads");
+        let output = r#"
+## Proposal: Detect sprintf-based overflow
+Verdict: ACCEPT
+Reason: This covers CWE-121. REJECT proposal 2 because it is benchmark-specific.
+
+## Proposal: Detect unsafe scanf widthless reads
+Verdict: REJECT
+Reason: benchmark-specific naming.
+"#;
+
+        assert!(!proposal_is_rejected(
+            output,
+            1,
+            accepted.description.as_str()
+        ));
+        assert!(proposal_is_rejected(
+            output,
+            2,
+            rejected.description.as_str()
+        ));
+    }
+
+    #[test]
+    fn test_proposal_is_rejected_falls_back_to_block_order_when_heading_differs() {
+        let output = r#"
+## Proposal: Detect sprintf-based overflow with broader wording
+Verdict: REJECT
+Reason: too broad for real-world code.
+"#;
+
+        assert!(proposal_is_rejected(
+            output,
+            1,
+            "Detect sprintf-based overflow"
+        ));
     }
 }
