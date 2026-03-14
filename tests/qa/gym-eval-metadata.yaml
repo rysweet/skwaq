@@ -12,7 +12,7 @@ agents:
     type: "system"
     config:
       shell: "bash"
-      cwd: "/home/azureuser/src/skwaq-worktrees/copilot-benchmark-followups"
+      cwd: "."
       timeout: 240000
       capture_output: true
 

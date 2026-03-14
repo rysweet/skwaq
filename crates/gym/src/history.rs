@@ -24,13 +24,21 @@ pub struct BenchmarkRun {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RunMetadata {
+    #[serde(default)]
     pub llm_backend: String,
+    #[serde(default)]
     pub llm_model: String,
+    #[serde(default)]
     pub run_mode: String,
+    #[serde(default)]
     pub binary_mode: bool,
+    #[serde(default)]
     pub git_dirty: bool,
+    #[serde(default)]
     pub concurrency: usize,
+    #[serde(default)]
     pub skip: usize,
+    #[serde(default)]
     pub max_cases: Option<usize>,
 }
 
@@ -252,7 +260,9 @@ impl HistoryDb {
               FROM runs ORDER BY started_at DESC LIMIT ?1",
         )?;
         let rows = stmt.query_map(rusqlite::params![limit], |row| {
-            let metadata_json: String = row.get(5)?;
+            let metadata_json = row
+                .get::<_, Option<String>>(5)?
+                .unwrap_or_else(|| "{}".to_string());
             Ok(BenchmarkRun {
                 id: row.get(0)?,
                 started_at: row.get::<_, String>(1)?.parse().unwrap_or_default(),
@@ -291,12 +301,24 @@ impl HistoryDb {
             }
         }
         if !has_metadata {
-            self.conn.execute(
-                "ALTER TABLE runs ADD COLUMN run_metadata_json TEXT NOT NULL DEFAULT '{}'",
-                [],
-            )?;
+            self.add_run_metadata_column()?;
         }
         Ok(())
+    }
+
+    fn add_run_metadata_column(&self) -> anyhow::Result<()> {
+        match self.conn.execute(
+            "ALTER TABLE runs ADD COLUMN run_metadata_json TEXT NOT NULL DEFAULT '{}'",
+            [],
+        ) {
+            Ok(_) => Ok(()),
+            Err(rusqlite::Error::SqliteFailure(_, Some(message)))
+                if message.contains("duplicate column name: run_metadata_json") =>
+            {
+                Ok(())
+            }
+            Err(err) => Err(err.into()),
+        }
     }
 
     /// Load per-case results for a run.
@@ -388,6 +410,25 @@ impl HistoryDb {
 mod tests {
     use super::*;
 
+    fn insert_run_with_metadata_json(db: &HistoryDb, id: &str, metadata_json: &str) {
+        db.conn
+            .execute(
+                "INSERT INTO runs (
+                    id, started_at, suite, skwaq_commit, run_metadata_json,
+                    precision, recall, f1, true_positives, false_positives,
+                    false_negatives, true_negatives
+                ) VALUES (?1, ?2, ?3, ?4, ?5, 0.0, 0.0, 0.0, 0, 0, 0, 0)",
+                rusqlite::params![
+                    id,
+                    Utc::now().to_rfc3339(),
+                    "fixtures",
+                    "abc123",
+                    metadata_json,
+                ],
+            )
+            .unwrap();
+    }
+
     #[test]
     fn test_history_db_lifecycle() {
         let db = HistoryDb::in_memory().unwrap();
@@ -450,24 +491,83 @@ mod tests {
     }
 
     #[test]
-    fn test_recent_runs_rejects_invalid_metadata_json() {
+    fn test_recent_runs_loads_legacy_empty_metadata() {
         let db = HistoryDb::in_memory().unwrap();
+        insert_run_with_metadata_json(&db, "legacy-run", "{}");
+
+        let runs = db.recent_runs(1).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].id, "legacy-run");
+        assert_eq!(runs[0].metadata, RunMetadata::default());
+    }
+
+    #[test]
+    fn test_recent_runs_loads_partial_metadata() {
+        let db = HistoryDb::in_memory().unwrap();
+        insert_run_with_metadata_json(
+            &db,
+            "partial-run",
+            r#"{"llm_backend":"copilot","binary_mode":true,"concurrency":4}"#,
+        );
+
+        let runs = db.recent_runs(1).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].id, "partial-run");
+        assert_eq!(runs[0].metadata.llm_backend, "copilot");
+        assert_eq!(runs[0].metadata.llm_model, "");
+        assert_eq!(runs[0].metadata.run_mode, "");
+        assert!(runs[0].metadata.binary_mode);
+        assert_eq!(runs[0].metadata.concurrency, 4);
+        assert_eq!(runs[0].metadata.skip, 0);
+        assert_eq!(runs[0].metadata.max_cases, None);
+    }
+
+    #[test]
+    fn test_recent_runs_loads_null_metadata() {
+        let db = HistoryDb::in_memory().unwrap();
+        db.conn.execute("DROP TABLE runs", []).unwrap();
+        db.conn
+            .execute_batch(
+                "
+                CREATE TABLE runs (
+                    id TEXT PRIMARY KEY,
+                    started_at TEXT NOT NULL,
+                    finished_at TEXT,
+                    suite TEXT NOT NULL,
+                    skwaq_commit TEXT NOT NULL,
+                    run_metadata_json TEXT DEFAULT '{}',
+                    precision REAL DEFAULT 0.0,
+                    recall REAL DEFAULT 0.0,
+                    f1 REAL DEFAULT 0.0,
+                    true_positives INTEGER DEFAULT 0,
+                    false_positives INTEGER DEFAULT 0,
+                    false_negatives INTEGER DEFAULT 0,
+                    true_negatives INTEGER DEFAULT 0
+                );
+                ",
+            )
+            .unwrap();
         db.conn
             .execute(
                 "INSERT INTO runs (
                     id, started_at, suite, skwaq_commit, run_metadata_json,
                     precision, recall, f1, true_positives, false_positives,
                     false_negatives, true_negatives
-                ) VALUES (?1, ?2, ?3, ?4, ?5, 0.0, 0.0, 0.0, 0, 0, 0, 0)",
-                rusqlite::params![
-                    "bad-run",
-                    Utc::now().to_rfc3339(),
-                    "fixtures",
-                    "abc123",
-                    "{not-json",
-                ],
+                ) VALUES (?1, ?2, ?3, ?4, NULL, 0.5, 0.4, 0.444, 2, 1, 3, 0)",
+                rusqlite::params!["null-run", "2026-03-13T00:00:00Z", "fixtures", "deadbeef"],
             )
             .unwrap();
+
+        let runs = db.recent_runs(1).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].id, "null-run");
+        assert_eq!(runs[0].metadata, RunMetadata::default());
+    }
+
+    #[test]
+    fn test_recent_runs_rejects_invalid_metadata_json() {
+        let db = HistoryDb::in_memory().unwrap();
+        insert_run_with_metadata_json(&db, "bad-run", "{not-json");
 
         assert!(db.recent_runs(1).is_err());
     }
@@ -537,5 +637,43 @@ mod tests {
         assert_eq!(regressions[0].case_id, "overflow");
         assert_eq!(regressions[0].baseline_detected, vec![119]);
         assert!(regressions[0].new_detected.is_empty());
+    }
+
+    #[test]
+    fn test_add_run_metadata_column_tolerates_duplicate_column_race() {
+        let db = HistoryDb::in_memory().unwrap();
+        db.conn.execute("DROP TABLE runs", []).unwrap();
+        db.conn
+            .execute_batch(
+                "
+                CREATE TABLE runs (
+                    id TEXT PRIMARY KEY,
+                    started_at TEXT NOT NULL,
+                    finished_at TEXT,
+                    suite TEXT NOT NULL,
+                    skwaq_commit TEXT NOT NULL,
+                    precision REAL DEFAULT 0.0,
+                    recall REAL DEFAULT 0.0,
+                    f1 REAL DEFAULT 0.0,
+                    true_positives INTEGER DEFAULT 0,
+                    false_positives INTEGER DEFAULT 0,
+                    false_negatives INTEGER DEFAULT 0,
+                    true_negatives INTEGER DEFAULT 0
+                );
+                ",
+            )
+            .unwrap();
+
+        db.add_run_metadata_column().unwrap();
+        db.add_run_metadata_column().unwrap();
+
+        let mut stmt = db.conn.prepare("PRAGMA table_info(runs)").unwrap();
+        let columns = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+
+        assert!(columns.iter().any(|column| column == "run_metadata_json"));
     }
 }
