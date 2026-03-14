@@ -26,6 +26,9 @@ async fn main() -> anyhow::Result<()> {
         Commands::Gym { sub } => {
             skwaq::commands::gym_cmd::run(sub).await?;
         }
+        Commands::Memory { sub } => {
+            skwaq::commands::memory_cmd::run(sub)?;
+        }
         Commands::Version => {
             skwaq::commands::version_cmd::run();
         }

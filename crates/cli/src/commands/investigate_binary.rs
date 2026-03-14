@@ -83,8 +83,11 @@ pub async fn run(binary: &Path) -> anyhow::Result<()> {
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| target.clone());
 
+    // Open durable memory for cross-run learning
+    let memory = skwaq_core::memory::MemoryStore::open_default()?;
+
     let results = pipeline
-        .run(&file_name, &inv_id, &db, llm_client, &mut budget)
+        .run_with_memory(&file_name, &inv_id, &db, llm_client, &mut budget, &memory)
         .await?;
 
     let total_tokens: u64 = results.iter().map(|r| r.tokens_used).sum();

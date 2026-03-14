@@ -11,6 +11,7 @@ pub mod graph;
 pub mod investigation;
 pub mod knowledge;
 pub mod llm;
+pub mod memory;
 pub mod reporting;
 pub mod skills;
 pub mod source;
