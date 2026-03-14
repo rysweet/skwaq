@@ -3,8 +3,7 @@
 use super::IngestSub;
 use skwaq_core::analysis::surface::identify_attack_surface;
 use skwaq_core::analysis::DangerousApiDetector;
-use skwaq_core::binary::cache::AnalysisCache;
-use skwaq_core::binary::ghidra::GhidraRunner;
+use skwaq_core::binary::ghidra::{load_cached_or_analyze, GhidraLoadOutcome};
 use skwaq_core::binary::native::parse_binary;
 use skwaq_core::config::Config;
 use skwaq_core::graph::builder::GraphBuilder;
@@ -106,43 +105,20 @@ async fn run_ghidra_enrichment(
     investigation_id: &str,
     builder: &GraphBuilder<'_>,
 ) {
-    // Check if Ghidra is available
-    let ghidra_path = match GhidraRunner::find_ghidra() {
-        Some(path) => path,
-        None => {
+    match load_cached_or_analyze(binary_path, 300).await {
+        GhidraLoadOutcome::NotAvailable => {
             println!(
                 "[ghidra]  Not found (optional). Install Ghidra and set GHIDRA_INSTALL_DIR for decompiled source."
             );
-            return;
         }
-    };
-
-    // Set up cache in the .skwaq directory
-    let cache_dir = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".skwaq")
-        .join("cache")
-        .join("ghidra");
-    let cache = AnalysisCache::new(cache_dir);
-
-    // Check cache first
-    if let Some(cached) = cache.get(binary_path) {
-        println!(
-            "[ghidra]  Using cached analysis ({} functions)",
-            cached.functions.len(),
-        );
-        store_ghidra_results(builder, &cached, investigation_id);
-        return;
-    }
-
-    // Run Ghidra analysis
-    println!("[ghidra]  Decompiling with Ghidra (this may take a minute)...");
-
-    let runner = GhidraRunner::new(Some(ghidra_path));
-    let timeout_secs = 300; // 5 minute analysis timeout
-
-    match runner.analyze(binary_path, timeout_secs).await {
-        Ok(analysis) => {
+        GhidraLoadOutcome::Cached(analysis) => {
+            println!(
+                "[ghidra]  Using cached analysis ({} functions)",
+                analysis.functions.len(),
+            );
+            store_ghidra_results(builder, &analysis, investigation_id);
+        }
+        GhidraLoadOutcome::Fresh(analysis) => {
             let decompiled_count = analysis
                 .functions
                 .iter()
@@ -153,16 +129,9 @@ async fn run_ghidra_enrichment(
                 analysis.functions.len(),
                 decompiled_count,
             );
-
-            // Cache the results
-            if let Err(e) = cache.put(binary_path, &analysis) {
-                tracing::warn!("Failed to cache Ghidra results: {}", e);
-            }
-
-            // Store in graph
             store_ghidra_results(builder, &analysis, investigation_id);
         }
-        Err(e) => {
+        GhidraLoadOutcome::Failed(e) => {
             println!(
                 "[ghidra]  Analysis failed: {}. Continuing without decompilation.",
                 e

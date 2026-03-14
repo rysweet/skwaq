@@ -4,11 +4,20 @@ use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::binary::cache::AnalysisCache;
 use crate::binary::subprocess::*;
 use crate::binary::types::*;
 
 pub struct GhidraRunner {
     ghidra_path: Option<PathBuf>,
+}
+
+#[derive(Debug)]
+pub enum GhidraLoadOutcome {
+    NotAvailable,
+    Cached(GhidraAnalysis),
+    Fresh(GhidraAnalysis),
+    Failed(String),
 }
 
 impl GhidraRunner {
@@ -174,6 +183,44 @@ impl GhidraRunner {
                  Check that extract_analysis.py ran correctly."
             )
         }
+    }
+}
+
+fn default_cache_dir() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".skwaq")
+        .join("cache")
+        .join("ghidra")
+}
+
+pub async fn load_cached_or_analyze(binary_path: &Path, timeout_secs: u64) -> GhidraLoadOutcome {
+    let cache = AnalysisCache::new(default_cache_dir());
+    load_cached_or_analyze_with_cache(binary_path, &cache, timeout_secs).await
+}
+
+async fn load_cached_or_analyze_with_cache(
+    binary_path: &Path,
+    cache: &AnalysisCache,
+    timeout_secs: u64,
+) -> GhidraLoadOutcome {
+    if let Some(cached) = cache.get(binary_path) {
+        return GhidraLoadOutcome::Cached(cached);
+    }
+
+    let Some(ghidra_path) = GhidraRunner::find_ghidra() else {
+        return GhidraLoadOutcome::NotAvailable;
+    };
+
+    let runner = GhidraRunner::new(Some(ghidra_path));
+    match runner.analyze(binary_path, timeout_secs).await {
+        Ok(analysis) => {
+            if let Err(e) = cache.put(binary_path, &analysis) {
+                tracing::warn!("Failed to cache Ghidra results: {}", e);
+            }
+            GhidraLoadOutcome::Fresh(analysis)
+        }
+        Err(e) => GhidraLoadOutcome::Failed(e.to_string()),
     }
 }
 
@@ -347,6 +394,7 @@ impl SubprocessTool for GhidraRunner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn test_find_ghidra_respects_env() {
@@ -456,5 +504,37 @@ mod tests {
             err_msg.contains("exceeding"),
             "Error should mention exceeding limit: {err_msg}"
         );
+    }
+
+    #[tokio::test]
+    async fn test_load_cached_or_analyze_prefers_cache() {
+        let temp = tempdir().unwrap();
+        let binary_path = temp.path().join("sample.bin");
+        std::fs::write(&binary_path, b"not-a-real-binary").unwrap();
+
+        let cache = AnalysisCache::new(temp.path().join("cache"));
+        let analysis = GhidraAnalysis {
+            functions: vec![GhidraFunction {
+                name: "main".into(),
+                address: "00401000".into(),
+                size: 16,
+                decompiled: Some("int main(void) { return 0; }".into()),
+                calls: vec![],
+                called_by: vec![],
+                parameter_count: 0,
+            }],
+            strings: vec![],
+            imports: vec![],
+        };
+        cache.put(&binary_path, &analysis).unwrap();
+
+        let outcome = load_cached_or_analyze_with_cache(&binary_path, &cache, 1).await;
+        match outcome {
+            GhidraLoadOutcome::Cached(cached) => {
+                assert_eq!(cached.functions.len(), 1);
+                assert_eq!(cached.functions[0].name, "main");
+            }
+            other => panic!("expected cached analysis, got {other:?}"),
+        }
     }
 }
