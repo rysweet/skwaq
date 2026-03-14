@@ -161,6 +161,11 @@ decompilation = "copilot"
 model = "claude-opus-4.6"
 ```
 
+Binary benchmark paths now require Ghidra enrichment to come from either a live
+Ghidra installation or a seeded cache entry. Cached analyses are reused by
+binary content hash. If neither is available, `skwaq gym run` fails loudly
+instead of silently falling back to a symbol-only binary graph.
+
 `skwaq gym preflight` verifies:
 
 - `[llm] reasoning = "copilot"` for benchmark runs
