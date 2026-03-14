@@ -301,12 +301,24 @@ impl HistoryDb {
             }
         }
         if !has_metadata {
-            self.conn.execute(
-                "ALTER TABLE runs ADD COLUMN run_metadata_json TEXT NOT NULL DEFAULT '{}'",
-                [],
-            )?;
+            self.add_run_metadata_column()?;
         }
         Ok(())
+    }
+
+    fn add_run_metadata_column(&self) -> anyhow::Result<()> {
+        match self.conn.execute(
+            "ALTER TABLE runs ADD COLUMN run_metadata_json TEXT NOT NULL DEFAULT '{}'",
+            [],
+        ) {
+            Ok(_) => Ok(()),
+            Err(rusqlite::Error::SqliteFailure(_, Some(message)))
+                if message.contains("duplicate column name: run_metadata_json") =>
+            {
+                Ok(())
+            }
+            Err(err) => Err(err.into()),
+        }
     }
 
     /// Load per-case results for a run.
@@ -625,5 +637,43 @@ mod tests {
         assert_eq!(regressions[0].case_id, "overflow");
         assert_eq!(regressions[0].baseline_detected, vec![119]);
         assert!(regressions[0].new_detected.is_empty());
+    }
+
+    #[test]
+    fn test_add_run_metadata_column_tolerates_duplicate_column_race() {
+        let db = HistoryDb::in_memory().unwrap();
+        db.conn.execute("DROP TABLE runs", []).unwrap();
+        db.conn
+            .execute_batch(
+                "
+                CREATE TABLE runs (
+                    id TEXT PRIMARY KEY,
+                    started_at TEXT NOT NULL,
+                    finished_at TEXT,
+                    suite TEXT NOT NULL,
+                    skwaq_commit TEXT NOT NULL,
+                    precision REAL DEFAULT 0.0,
+                    recall REAL DEFAULT 0.0,
+                    f1 REAL DEFAULT 0.0,
+                    true_positives INTEGER DEFAULT 0,
+                    false_positives INTEGER DEFAULT 0,
+                    false_negatives INTEGER DEFAULT 0,
+                    true_negatives INTEGER DEFAULT 0
+                );
+                ",
+            )
+            .unwrap();
+
+        db.add_run_metadata_column().unwrap();
+        db.add_run_metadata_column().unwrap();
+
+        let mut stmt = db.conn.prepare("PRAGMA table_info(runs)").unwrap();
+        let columns = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+
+        assert!(columns.iter().any(|column| column == "run_metadata_json"));
     }
 }
