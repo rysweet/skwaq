@@ -1,7 +1,9 @@
 //! Ghidra headless analyzer integration via subprocess.
 
 use async_trait::async_trait;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use crate::binary::cache::AnalysisCache;
@@ -194,6 +196,21 @@ fn default_cache_dir() -> PathBuf {
         .join("ghidra")
 }
 
+fn ghidra_cache_locks() -> &'static Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>> {
+    static LOCKS: OnceLock<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>> = OnceLock::new();
+    LOCKS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn lock_for_cache_key(cache_key: &str) -> Arc<tokio::sync::Mutex<()>> {
+    let mut locks = ghidra_cache_locks()
+        .lock()
+        .expect("ghidra cache lock registry poisoned");
+    locks
+        .entry(cache_key.to_string())
+        .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+        .clone()
+}
+
 pub async fn load_cached_or_analyze(binary_path: &Path, timeout_secs: u64) -> GhidraLoadOutcome {
     let cache = AnalysisCache::new(default_cache_dir());
     load_cached_or_analyze_with_cache(binary_path, &cache, timeout_secs).await
@@ -204,6 +221,16 @@ async fn load_cached_or_analyze_with_cache(
     cache: &AnalysisCache,
     timeout_secs: u64,
 ) -> GhidraLoadOutcome {
+    if let Some(cached) = cache.get(binary_path) {
+        return GhidraLoadOutcome::Cached(cached);
+    }
+
+    let Some(cache_key) = cache.cache_key(binary_path) else {
+        return GhidraLoadOutcome::Failed("Cannot hash binary".to_string());
+    };
+    let cache_lock = lock_for_cache_key(&cache_key);
+    let _guard = cache_lock.lock().await;
+
     if let Some(cached) = cache.get(binary_path) {
         return GhidraLoadOutcome::Cached(cached);
     }
@@ -394,6 +421,7 @@ impl SubprocessTool for GhidraRunner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use tempfile::tempdir;
 
     #[test]
@@ -567,5 +595,31 @@ mod tests {
             !matches!(outcome, GhidraLoadOutcome::Cached(_)),
             "binary content changed, so the content-addressed cache should miss"
         );
+    }
+
+    #[tokio::test]
+    async fn test_cache_lock_serializes_same_binary_work() {
+        let temp = tempdir().unwrap();
+        let binary_path = temp.path().join("sample.bin");
+        std::fs::write(&binary_path, b"binary").unwrap();
+        let cache = AnalysisCache::new(temp.path().join("cache"));
+
+        let cache_key = cache.cache_key(&binary_path).unwrap();
+        let lock = lock_for_cache_key(&cache_key);
+        let guard = lock.lock().await;
+
+        let acquired = Arc::new(AtomicUsize::new(0));
+        let acquired_clone = Arc::clone(&acquired);
+        let lock_clone = Arc::clone(&lock);
+        let waiter = tokio::spawn(async move {
+            let _guard = lock_clone.lock().await;
+            acquired_clone.fetch_add(1, Ordering::SeqCst);
+        });
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(acquired.load(Ordering::SeqCst), 0);
+        drop(guard);
+        waiter.await.unwrap();
+        assert_eq!(acquired.load(Ordering::SeqCst), 1);
     }
 }
