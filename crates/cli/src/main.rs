@@ -187,8 +187,8 @@ async fn main() -> anyhow::Result<()> {
                 KbSub::Init => {
                     skwaq::commands::kb_cmd::run_init()?;
                 }
-                KbSub::Search { query } => {
-                    skwaq::commands::kb_cmd::run_search(query)?;
+                KbSub::Search { query, json } => {
+                    skwaq::commands::kb_cmd::run_search(query, *json)?;
                 }
             }
         }
