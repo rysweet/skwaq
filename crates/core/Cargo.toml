@@ -22,6 +22,7 @@ uuid = { workspace = true }
 sha2 = { workspace = true }
 tempfile = { workspace = true }
 dirs = { workspace = true }
+libc = { workspace = true }
 regex = "1"
 serde_yaml_ng = "0.10"
 

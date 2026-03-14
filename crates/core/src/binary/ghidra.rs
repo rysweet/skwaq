@@ -14,6 +14,10 @@ pub struct GhidraRunner {
     ghidra_path: Option<PathBuf>,
 }
 
+/// Result of attempting to load Ghidra analysis for a binary.
+///
+/// The loader prefers a validated cached analysis when available, otherwise it
+/// falls back to a fresh Ghidra run if Ghidra is installed.
 #[derive(Debug)]
 pub enum GhidraLoadOutcome {
     NotAvailable,
@@ -211,6 +215,11 @@ fn lock_for_cache_key(cache_key: &str) -> Arc<tokio::sync::Mutex<()>> {
         .clone()
 }
 
+/// Load validated Ghidra analysis for a binary, preferring cached results.
+///
+/// Returns a cached analysis when a bounded, validated cache entry exists for
+/// the current binary contents. Otherwise, if Ghidra is installed, runs a fresh
+/// Ghidra analysis with the provided timeout and caches the result.
 pub async fn load_cached_or_analyze(binary_path: &Path, timeout_secs: u64) -> GhidraLoadOutcome {
     let cache = AnalysisCache::new(default_cache_dir());
     load_cached_or_analyze_with_cache(binary_path, &cache, timeout_secs).await
@@ -221,8 +230,17 @@ async fn load_cached_or_analyze_with_cache(
     cache: &AnalysisCache,
     timeout_secs: u64,
 ) -> GhidraLoadOutcome {
-    if let Some(cached) = cache.get(binary_path) {
-        return GhidraLoadOutcome::Cached(cached);
+    if let Some(cached_json) = cache.get_json(binary_path, MAX_GHIDRA_CACHE_BYTES) {
+        match parse_ghidra_json(&cached_json) {
+            Ok(cached) => return GhidraLoadOutcome::Cached(cached),
+            Err(e) => {
+                tracing::warn!(
+                    "Ignoring invalid cached Ghidra analysis for {}: {}",
+                    binary_path.display(),
+                    e
+                );
+            }
+        }
     }
 
     let Some(cache_key) = cache.cache_key(binary_path) else {
@@ -231,8 +249,17 @@ async fn load_cached_or_analyze_with_cache(
     let cache_lock = lock_for_cache_key(&cache_key);
     let _guard = cache_lock.lock().await;
 
-    if let Some(cached) = cache.get(binary_path) {
-        return GhidraLoadOutcome::Cached(cached);
+    if let Some(cached_json) = cache.get_json(binary_path, MAX_GHIDRA_CACHE_BYTES) {
+        match parse_ghidra_json(&cached_json) {
+            Ok(cached) => return GhidraLoadOutcome::Cached(cached),
+            Err(e) => {
+                tracing::warn!(
+                    "Ignoring invalid cached Ghidra analysis for {} after lock acquisition: {}",
+                    binary_path.display(),
+                    e
+                );
+            }
+        }
     }
 
     let Some(ghidra_path) = GhidraRunner::find_ghidra() else {
@@ -254,6 +281,9 @@ async fn load_cached_or_analyze_with_cache(
 /// Maximum number of functions to parse from Ghidra output to prevent
 /// resource exhaustion from maliciously crafted binaries.
 const MAX_GHIDRA_FUNCTIONS: usize = 50_000;
+const MAX_GHIDRA_STRINGS: usize = 200_000;
+const MAX_GHIDRA_IMPORTS: usize = 50_000;
+const MAX_GHIDRA_CACHE_BYTES: u64 = 128 * 1024 * 1024;
 
 /// Parse raw Ghidra JSON output into typed GhidraAnalysis.
 ///
@@ -270,6 +300,26 @@ fn parse_ghidra_json(raw: &serde_json::Value) -> anyhow::Result<GhidraAnalysis> 
                  This may indicate a maliciously crafted binary.",
                 arr.len(),
                 MAX_GHIDRA_FUNCTIONS,
+            );
+        }
+    }
+    if let Some(arr) = raw.get("strings").and_then(|v| v.as_array()) {
+        if arr.len() > MAX_GHIDRA_STRINGS {
+            anyhow::bail!(
+                "Ghidra output contains {} strings, exceeding the {} limit. \
+                 This may indicate a maliciously crafted binary.",
+                arr.len(),
+                MAX_GHIDRA_STRINGS,
+            );
+        }
+    }
+    if let Some(arr) = raw.get("imports").and_then(|v| v.as_array()) {
+        if arr.len() > MAX_GHIDRA_IMPORTS {
+            anyhow::bail!(
+                "Ghidra output contains {} imports, exceeding the {} limit. \
+                 This may indicate a maliciously crafted binary.",
+                arr.len(),
+                MAX_GHIDRA_IMPORTS,
             );
         }
     }
@@ -375,11 +425,41 @@ fn parse_ghidra_json(raw: &serde_json::Value) -> anyhow::Result<GhidraAnalysis> 
         })
         .unwrap_or_default();
 
-    Ok(GhidraAnalysis {
+    let analysis = GhidraAnalysis {
         functions,
         strings,
         imports,
-    })
+    };
+    validate_ghidra_analysis(&analysis)?;
+    Ok(analysis)
+}
+
+fn validate_ghidra_analysis(analysis: &GhidraAnalysis) -> anyhow::Result<()> {
+    if analysis.functions.len() > MAX_GHIDRA_FUNCTIONS {
+        anyhow::bail!(
+            "Ghidra analysis contains {} functions, exceeding the {} limit. \
+             This may indicate a malicious or corrupted analysis payload.",
+            analysis.functions.len(),
+            MAX_GHIDRA_FUNCTIONS,
+        );
+    }
+    if analysis.strings.len() > MAX_GHIDRA_STRINGS {
+        anyhow::bail!(
+            "Ghidra analysis contains {} strings, exceeding the {} limit. \
+             This may indicate a malicious or corrupted analysis payload.",
+            analysis.strings.len(),
+            MAX_GHIDRA_STRINGS,
+        );
+    }
+    if analysis.imports.len() > MAX_GHIDRA_IMPORTS {
+        anyhow::bail!(
+            "Ghidra analysis contains {} imports, exceeding the {} limit. \
+             This may indicate a malicious or corrupted analysis payload.",
+            analysis.imports.len(),
+            MAX_GHIDRA_IMPORTS,
+        );
+    }
+    Ok(())
 }
 
 #[async_trait]
@@ -422,6 +502,7 @@ impl SubprocessTool for GhidraRunner {
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use sha2::{Digest, Sha256};
     use tempfile::tempdir;
 
     #[test]
@@ -534,6 +615,31 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_validate_ghidra_analysis_rejects_excessive_cached_functions() {
+        let analysis = GhidraAnalysis {
+            functions: (0..=MAX_GHIDRA_FUNCTIONS)
+                .map(|i| GhidraFunction {
+                    name: format!("func_{i}"),
+                    address: format!("{i:08x}"),
+                    size: 1,
+                    decompiled: None,
+                    calls: vec![],
+                    called_by: vec![],
+                    parameter_count: 0,
+                })
+                .collect(),
+            strings: vec![],
+            imports: vec![],
+        };
+
+        let err = validate_ghidra_analysis(&analysis).unwrap_err().to_string();
+        assert!(
+            err.contains("exceeding"),
+            "Error should mention exceeding limit: {err}"
+        );
+    }
+
     #[tokio::test]
     async fn test_load_cached_or_analyze_prefers_cache() {
         let temp = tempdir().unwrap();
@@ -621,5 +727,48 @@ mod tests {
         drop(guard);
         waiter.await.unwrap();
         assert_eq!(acquired.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_load_cached_or_analyze_ignores_invalid_cache_payload() {
+        let temp = tempdir().unwrap();
+        let binary_path = temp.path().join("sample.bin");
+        std::fs::write(&binary_path, b"version-1").unwrap();
+
+        let cache = AnalysisCache::new(temp.path().join("cache"));
+        let data = std::fs::read(&binary_path).unwrap();
+        let hash = format!("{:x}", Sha256::digest(&data));
+        let dir = temp.path().join("cache").join(hash);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let functions: Vec<serde_json::Value> = (0..=MAX_GHIDRA_FUNCTIONS)
+            .map(|i| {
+                serde_json::json!({
+                    "name": format!("func_{}", i),
+                    "address": format!("{:08x}", i),
+                    "size": 1,
+                    "decompiled": null,
+                    "calls": [],
+                    "called_by": [],
+                    "parameter_count": 0
+                })
+            })
+            .collect();
+        std::fs::write(
+            dir.join("analysis.json"),
+            serde_json::json!({
+                "functions": functions,
+                "strings": [],
+                "imports": []
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let outcome = load_cached_or_analyze_with_cache(&binary_path, &cache, 1).await;
+        assert!(
+            !matches!(outcome, GhidraLoadOutcome::Cached(_)),
+            "invalid cached analysis should not be trusted"
+        );
     }
 }

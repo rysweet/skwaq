@@ -15,10 +15,20 @@ impl AnalysisCache {
         Self { cache_dir }
     }
 
-    pub fn get(&self, binary_path: &Path) -> Option<GhidraAnalysis> {
+    pub fn get_json(&self, binary_path: &Path, max_bytes: u64) -> Option<serde_json::Value> {
         let hash = self.cache_key(binary_path)?;
         let cache_path = self.cache_dir.join(&hash).join("analysis.json");
         if cache_path.exists() {
+            let metadata = std::fs::metadata(&cache_path).ok()?;
+            if metadata.len() > max_bytes {
+                tracing::warn!(
+                    "Ignoring oversized cached Ghidra analysis at {} ({} bytes > {} bytes)",
+                    cache_path.display(),
+                    metadata.len(),
+                    max_bytes,
+                );
+                return None;
+            }
             let data = std::fs::read_to_string(&cache_path).ok()?;
             serde_json::from_str(&data).ok()
         } else {
