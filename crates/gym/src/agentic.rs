@@ -237,7 +237,7 @@ pub async fn run_agentic_binary_analysis(
     // Ingest binary into graph
     let builder = GraphBuilder::new(&db);
     builder.build_from_binary_info(&binary_info, &inv_id)?;
-    enrich_binary_graph_with_ghidra(path, &builder, &inv_id).await;
+    enrich_binary_graph_with_ghidra(path, &builder, &inv_id).await?;
 
     // Pattern detection on imports
     let mut pattern_categories: HashSet<String> = HashSet::new();
@@ -378,7 +378,7 @@ pub async fn run_llm_only_binary_analysis(
 
     let builder = GraphBuilder::new(&db);
     builder.build_from_binary_info(&binary_info, &inv_id)?;
-    enrich_binary_graph_with_ghidra(path, &builder, &inv_id).await;
+    enrich_binary_graph_with_ghidra(path, &builder, &inv_id).await?;
 
     // Skip pattern detection — go straight to LLM pipeline
     run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
@@ -398,11 +398,11 @@ async fn enrich_binary_graph_with_ghidra(
     path: &Path,
     builder: &GraphBuilder<'_>,
     investigation_id: &str,
-) {
+) -> anyhow::Result<()> {
     match load_cached_or_analyze(path, GHIDRA_ANALYSIS_TIMEOUT_SECS).await {
         GhidraLoadOutcome::NotAvailable => {
-            tracing::info!(
-                "Ghidra not available for {}; continuing with symbol-only binary graph",
+            anyhow::bail!(
+                "Ghidra enrichment unavailable for {}: no cached analysis found and live Ghidra is not available",
                 path.display()
             );
         }
@@ -413,6 +413,7 @@ async fn enrich_binary_graph_with_ghidra(
                 analysis.functions.len(),
             );
             store_ghidra_results(builder, &analysis, investigation_id);
+            Ok(())
         }
         GhidraLoadOutcome::Fresh(analysis) => {
             let decompiled_count = analysis
@@ -427,13 +428,10 @@ async fn enrich_binary_graph_with_ghidra(
                 decompiled_count,
             );
             store_ghidra_results(builder, &analysis, investigation_id);
+            Ok(())
         }
         GhidraLoadOutcome::Failed(error) => {
-            tracing::warn!(
-                "Ghidra analysis failed for {}: {}. Continuing with symbol-only binary graph",
-                path.display(),
-                error,
-            );
+            anyhow::bail!("Ghidra enrichment failed for {}: {}", path.display(), error,)
         }
     }
 }
