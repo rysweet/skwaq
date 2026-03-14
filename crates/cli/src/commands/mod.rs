@@ -15,6 +15,7 @@ pub mod ingest;
 pub mod investigate;
 pub mod investigate_binary;
 pub mod kb_cmd;
+pub mod memory_cmd;
 pub mod report;
 pub mod selftest_cmd;
 pub mod skills_cmd;
@@ -214,6 +215,12 @@ pub enum Commands {
     Gym {
         #[command(subcommand)]
         sub: gym_cmd::GymSub,
+    },
+
+    /// Manage durable agent memory (cross-run learning)
+    Memory {
+        #[command(subcommand)]
+        sub: memory_cmd::MemorySub,
     },
 
     /// Investigate a binary with full AI agent pipeline (native + optional Ghidra)

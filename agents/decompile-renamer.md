@@ -6,6 +6,8 @@ tools:
   - query_graph
   - read_function
   - rename_function
+  - store_memory
+  - recall_memory
 max_turns: 15
 ---
 

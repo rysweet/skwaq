@@ -27,4 +27,4 @@ pub use pipeline::{
 };
 pub use runner::{AgentResult, AgentRunner};
 pub use tool_definitions::{agent_tools, filter_tools};
-pub use tool_executor::execute_tool;
+pub use tool_executor::{execute_tool, execute_tool_with_memory};

@@ -165,6 +165,63 @@ pub fn agent_tools() -> Vec<ToolDefinition> {
                 "required": ["query"]
             }),
         ),
+        ToolDefinition::new(
+            "store_memory",
+            "Store a learning experience in durable agent memory. Use this to record \
+             successes (true positive findings), failures (false positives), patterns \
+             (recurring vulnerability types), and insights (generalized lessons). \
+             Keep context generalized — avoid specific addresses or file paths.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "experience_type": {
+                        "type": "string",
+                        "enum": ["success", "failure", "pattern", "insight"],
+                        "description": "Type of experience: success, failure, pattern, or insight"
+                    },
+                    "context": {
+                        "type": "string",
+                        "description": "The generalized situation (avoid target-specific details like addresses)"
+                    },
+                    "outcome": {
+                        "type": "string",
+                        "description": "What was learned or observed"
+                    },
+                    "confidence": {
+                        "type": "number",
+                        "description": "Confidence in this learning (0.0 to 1.0)",
+                        "default": 0.8
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Categorization tags (e.g., buffer-overflow, cwe-120)"
+                    }
+                },
+                "required": ["experience_type", "context", "outcome"]
+            }),
+        ),
+        ToolDefinition::new(
+            "recall_memory",
+            "Recall relevant experiences from durable agent memory. Use this to check \
+             if similar vulnerabilities or patterns have been seen before, and to learn \
+             from past successes and failures.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "What to search for in memory (e.g., 'buffer overflow strcpy')"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of memories to return",
+                        "default": 5
+                    }
+                },
+                "required": ["query"]
+            }),
+        ),
     ]
 }
 

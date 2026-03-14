@@ -9,6 +9,7 @@
 
 use crate::graph::GraphDb;
 use crate::llm::{Client, TokenBudget};
+use crate::memory::MemoryStore;
 use crate::skills::discovery::load_skill;
 
 use super::definition::load_agent;
@@ -102,6 +103,84 @@ impl AnalysisPipeline {
             );
 
             results.push(result);
+        }
+
+        Ok(results)
+    }
+
+    /// Run the pipeline with durable agent memory enabled.
+    ///
+    /// Same as `run()` but agents can use `store_memory` and `recall_memory`
+    /// tools to persist and recall experiences across runs.
+    pub async fn run_with_memory(
+        &self,
+        target: &str,
+        investigation_id: &str,
+        db: &GraphDb,
+        llm: Client,
+        budget: &mut TokenBudget,
+        memory: &MemoryStore,
+    ) -> anyhow::Result<Vec<AgentResult>> {
+        let runner = AgentRunner::new(llm);
+        let mut results: Vec<AgentResult> = Vec::new();
+
+        // Apply confidence decay at the start of each pipeline run
+        if let Err(e) = memory.apply_decay() {
+            tracing::warn!("Failed to apply memory decay: {e}");
+        }
+
+        for stage in &self.stages {
+            if budget.exhausted() {
+                tracing::warn!(
+                    "Token budget exhausted before stage '{}', stopping pipeline",
+                    stage.agent_name
+                );
+                break;
+            }
+
+            let mut agent = load_agent(&stage.agent_name)?;
+            inject_skill_context(&mut agent);
+
+            let context = match &stage.context_mode {
+                ContextMode::FromGraph => build_analysis_context(target, investigation_id, db),
+                ContextMode::FromPreviousResults { preamble } => {
+                    build_previous_results_context(preamble, &results)
+                }
+            };
+
+            eprintln!("  Running agent: {} ({})", agent.name, agent.description);
+
+            let result = runner
+                .run_agent_with_db_and_memory(
+                    &agent,
+                    investigation_id,
+                    &context,
+                    db,
+                    memory,
+                    budget,
+                )
+                .await?;
+
+            eprintln!(
+                "  Agent {} completed ({} tokens used)",
+                result.agent_name, result.tokens_used
+            );
+
+            results.push(result);
+        }
+
+        // Detect patterns after the pipeline completes
+        let detector = crate::memory::PatternDetector::new(memory);
+        for stage in &self.stages {
+            if let Ok(new_patterns) = detector.detect_patterns(&stage.agent_name) {
+                if new_patterns > 0 {
+                    tracing::info!(
+                        "Detected {} new patterns for agent '{}'",
+                        new_patterns,
+                        stage.agent_name
+                    );
+                }
+            }
         }
 
         Ok(results)
@@ -749,5 +828,39 @@ mod tests {
             hunter_stage.is_some(),
             "Pipeline must include a vuln-hunter variant"
         );
+    }
+
+    #[test]
+    fn test_memory_enabled_agents_expose_memory_tools() {
+        let agents = [
+            "decompile-renamer",
+            "attack-surface",
+            "vuln-hunter",
+            "vuln-hunter-python",
+            "vuln-hunter-java",
+            "critic",
+            "exploit-analyst",
+            "defense-analyst",
+            "verdict-synthesizer",
+            "failure-analyst",
+        ];
+
+        let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..");
+
+        for name in agents {
+            let path = repo_root.join("agents").join(format!("{name}.md"));
+            let content = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));
+            assert!(
+                content.contains("\n  - store_memory\n"),
+                "{name} should expose store_memory"
+            );
+            assert!(
+                content.contains("\n  - recall_memory\n"),
+                "{name} should expose recall_memory"
+            );
+        }
     }
 }

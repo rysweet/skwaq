@@ -210,6 +210,7 @@ async fn run_failure_analyst_agent(
 ) -> anyhow::Result<Vec<Improvement>> {
     let config = skwaq_core::config::Config::load()?;
     let llm_client = skwaq_core::llm::create_client(&config.llm).await?;
+    let memory = skwaq_core::memory::MemoryStore::open_default().ok();
 
     let agent = skwaq_core::agents::definition::load_agent("failure-analyst")?;
     let runner = skwaq_core::agents::runner::AgentRunner::new(llm_client);
@@ -229,7 +230,10 @@ async fn run_failure_analyst_agent(
              Detected CWEs: {:?}\n\
              File: {}\n\n\
              Source code:\n```\n{}\n```\n\n\
-             The vulnerability was NOT detected. Explain why and propose a fix.",
+             The vulnerability was NOT detected. Explain why and propose a fix.\n\n\
+             If durable memory tools are available, use recall_memory to check for \
+             prior generalized lessons before proposing changes. Only store or reuse \
+             lessons that generalize beyond this specific benchmark case.",
             suite,
             fn_case.case_id,
             fn_case.expected_cwes,
@@ -261,10 +265,17 @@ async fn run_failure_analyst_agent(
             false_negatives.len().min(5)
         );
 
-        match runner
-            .run_agent_with_db(&agent, &inv_id, &context, &db, &mut budget)
-            .await
-        {
+        let result = if let Some(ref memory) = memory {
+            runner
+                .run_agent_with_db_and_memory(&agent, &inv_id, &context, &db, memory, &mut budget)
+                .await
+        } else {
+            runner
+                .run_agent_with_db(&agent, &inv_id, &context, &db, &mut budget)
+                .await
+        };
+
+        match result {
             Ok(result) => {
                 // Parse proposals from the agent's output
                 proposals.extend(parse_analyst_proposals(&result.output, fn_case, suite));
@@ -785,6 +796,139 @@ pub fn append_learned_patterns(cycle: &ImprovementCycle) {
                 e
             );
         }
+    }
+}
+
+/// Store generalized lessons from an improvement cycle into durable agent memory.
+///
+/// Converts improvement proposals and false-negative insights into generalized
+/// experiences that agents can recall in future runs. The overfitting guard
+/// strips benchmark-specific details (file paths, case IDs, addresses) before
+/// storage.
+pub fn store_improvement_lessons(cycle: &ImprovementCycle) {
+    let memory = match skwaq_core::memory::MemoryStore::open_default() {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::warn!("Cannot open durable memory for lesson storage: {e}");
+            return;
+        }
+    };
+
+    let detector = skwaq_core::memory::PatternDetector::new(&memory);
+    let mut stored = 0u32;
+
+    // Store generalized lessons from accepted proposals
+    for proposal in &cycle.proposals {
+        let (exp_type, agent) = match &proposal.kind {
+            ImprovementKind::NewPattern => {
+                (skwaq_core::memory::ExperienceType::Pattern, "vuln-hunter")
+            }
+            ImprovementKind::AgentPrompt => {
+                (skwaq_core::memory::ExperienceType::Insight, "vuln-hunter")
+            }
+            ImprovementKind::CweMapping => (skwaq_core::memory::ExperienceType::Insight, "scoring"),
+            ImprovementKind::TaintRule => {
+                (skwaq_core::memory::ExperienceType::Pattern, "orchestrator")
+            }
+            ImprovementKind::GroundTruthFix => continue, // Not a generalizable lesson
+        };
+
+        // Generalize: strip benchmark-specific details from the description
+        let context = skwaq_core::memory::pattern::strip_benchmark_specifics(&proposal.description);
+
+        // Check overfitting guard before storing
+        let tags: Vec<String> = proposal
+            .target_cwes
+            .iter()
+            .map(|cwe| format!("cwe-{cwe}"))
+            .collect();
+        let tag_refs: Vec<&str> = tags.iter().map(|s| s.as_str()).collect();
+
+        if detector
+            .is_likely_overfit(agent, &context, &tag_refs)
+            .unwrap_or(false)
+        {
+            tracing::debug!(
+                "Skipping overfit lesson: {}",
+                context.chars().take(80).collect::<String>()
+            );
+            continue;
+        }
+
+        let outcome = format!(
+            "Improvement proposal ({:?} priority): {}",
+            proposal.priority,
+            if proposal.patch.replace.is_empty() {
+                "requires deeper analysis".to_string()
+            } else {
+                format!("pattern: {}", proposal.patch.replace)
+            }
+        );
+
+        if memory
+            .store(agent, exp_type, &context, &outcome, 0.7, &tag_refs)
+            .is_ok()
+        {
+            stored += 1;
+        }
+    }
+
+    // Store generalized lessons from false negatives (what was missed and why)
+    for fn_case in cycle.false_negatives.iter().take(5) {
+        let missed_cwes: Vec<u32> = fn_case
+            .expected_cwes
+            .iter()
+            .filter(|cwe| !fn_case.detected_cwes.contains(cwe))
+            .copied()
+            .collect();
+
+        if missed_cwes.is_empty() {
+            continue;
+        }
+
+        // Generalize: describe what was missed without benchmark-specific details
+        let context = format!(
+            "Missed CWE-{:?} vulnerability in code with characteristics similar to the target",
+            missed_cwes
+        );
+        let outcome = format!(
+            "Detection gap: expected CWE-{:?} but only found CWE-{:?}. \
+             Agents should pay extra attention to this vulnerability family.",
+            fn_case.expected_cwes, fn_case.detected_cwes
+        );
+
+        let tags: Vec<String> = missed_cwes.iter().map(|cwe| format!("cwe-{cwe}")).collect();
+        let tag_refs: Vec<&str> = tags.iter().map(|s| s.as_str()).collect();
+
+        if memory
+            .store(
+                "failure-analyst",
+                skwaq_core::memory::ExperienceType::Failure,
+                &context,
+                &outcome,
+                0.6,
+                &tag_refs,
+            )
+            .is_ok()
+        {
+            stored += 1;
+        }
+    }
+
+    // Run pattern detection to promote recurring lessons
+    for agent in &["vuln-hunter", "failure-analyst", "orchestrator"] {
+        if let Ok(new) = detector.detect_patterns(agent) {
+            if new > 0 {
+                tracing::info!("Detected {new} new patterns for agent '{agent}'");
+            }
+        }
+    }
+
+    if stored > 0 {
+        tracing::info!(
+            "Stored {stored} generalized lessons in durable memory from {} cycle",
+            cycle.suite
+        );
     }
 }
 

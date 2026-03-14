@@ -5,10 +5,11 @@
 
 use crate::graph::GraphDb;
 use crate::llm::{execute_with_tools, Client, TokenBudget};
+use crate::memory::MemoryStore;
 
 use super::definition::AgentDefinition;
 use super::tool_definitions::{agent_tools, filter_tools};
-use super::tool_executor::execute_tool;
+use super::tool_executor::{execute_tool, execute_tool_with_memory};
 
 /// Result from running an agent.
 #[derive(Debug, Clone)]
@@ -61,6 +62,60 @@ impl AgentRunner {
             |tool_name, args| {
                 let inv = inv_id.clone();
                 let result = execute_tool(db, &inv, &tool_name, &args);
+                async move { result }
+            },
+            budget,
+        )
+        .await?;
+
+        let tokens_used = budget.used - tokens_before;
+
+        Ok(AgentResult {
+            agent_name: agent.name.clone(),
+            output,
+            tokens_used,
+        })
+    }
+
+    /// Run an agent with access to both the graph database and durable memory.
+    ///
+    /// Agents can use `store_memory` and `recall_memory` tools to persist
+    /// and recall experiences across runs.
+    pub async fn run_agent_with_db_and_memory(
+        &self,
+        agent: &AgentDefinition,
+        investigation_id: &str,
+        context: &str,
+        db: &GraphDb,
+        memory: &MemoryStore,
+        budget: &mut TokenBudget,
+    ) -> anyhow::Result<AgentResult> {
+        let all_tools = agent_tools();
+        let tools = filter_tools(&all_tools, &agent.tools);
+        let model = &agent.model;
+        let system_prompt = &agent.system_prompt;
+
+        let tokens_before = budget.used;
+        let inv_id = investigation_id.to_string();
+        let agent_name_str = agent.name.clone();
+
+        let output = execute_with_tools(
+            &self.client,
+            model,
+            system_prompt,
+            context,
+            &tools,
+            |tool_name, args| {
+                let inv = inv_id.clone();
+                let name = agent_name_str.clone();
+                let result = execute_tool_with_memory(
+                    db,
+                    &inv,
+                    &tool_name,
+                    &args,
+                    Some(memory),
+                    Some(&name),
+                );
                 async move { result }
             },
             budget,
@@ -206,7 +261,11 @@ pub fn build_analysis_context_with_limit(
     }
 
     parts.push(
-        "\n\nStart your analysis. Use the tools to dig deeper, then create findings for \
+        "\n\nYou have access to durable memory (store_memory/recall_memory tools). \
+         Use recall_memory to check for relevant past experiences before starting your analysis. \
+         Use store_memory to record significant findings and lessons learned. \
+         Keep stored memories generalized — avoid target-specific addresses or paths.\n\n\
+         Start your analysis. Use the tools to dig deeper, then create findings for \
          each confirmed vulnerability."
             .into(),
     );

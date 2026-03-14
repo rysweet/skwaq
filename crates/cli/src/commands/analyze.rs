@@ -10,6 +10,7 @@ use skwaq_core::agents::{default_pipeline, pipeline_from_names};
 use skwaq_core::analysis::{AnalysisOrchestrator, FindingStatus};
 use skwaq_core::config::Config;
 use skwaq_core::graph::GraphDb;
+use skwaq_core::memory::MemoryStore;
 
 /// Entry point for the analyze command. Delegates to the appropriate
 /// analysis mode based on the `quick` flag.
@@ -109,8 +110,18 @@ async fn run_combined_analysis(
     let llm_client = skwaq_core::llm::create_client(&config.llm).await?;
     let mut token_budget = skwaq_core::llm::TokenBudget::new(budget_amount);
 
+    // Open durable memory for cross-run learning
+    let memory = MemoryStore::open_default()?;
+
     let results = pipeline
-        .run(&target, &inv_id, &db, llm_client, &mut token_budget)
+        .run_with_memory(
+            &target,
+            &inv_id,
+            &db,
+            llm_client,
+            &mut token_budget,
+            &memory,
+        )
         .await?;
 
     for result in &results {

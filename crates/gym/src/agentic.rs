@@ -598,6 +598,29 @@ fn apply_synthesis_decisions(
     synthesized
 }
 
+/// Cached LLM client for the process. Avoids redundant Copilot token
+/// negotiation when many cases run concurrently. The `Client` is `Clone`,
+/// so each pipeline stage gets a cheap clone.
+static LLM_CLIENT: tokio::sync::OnceCell<skwaq_core::llm::Client> =
+    tokio::sync::OnceCell::const_new();
+
+/// Open the default durable memory store for agents.
+///
+/// Returns `None` if memory cannot be initialized (non-fatal — agents
+/// simply run without cross-run learning).
+fn open_memory_store() -> Option<skwaq_core::memory::MemoryStore> {
+    match skwaq_core::memory::MemoryStore::open_default() {
+        Ok(store) => {
+            tracing::info!("Durable agent memory enabled");
+            Some(store)
+        }
+        Err(e) => {
+            tracing::warn!("Could not open durable memory store: {e}. Running without memory.");
+            None
+        }
+    }
+}
+
 /// Run the LLM agent pipeline and fail explicitly if the client is unavailable.
 async fn run_llm_pipeline(
     db: &GraphDb,
@@ -607,23 +630,24 @@ async fn run_llm_pipeline(
 ) -> anyhow::Result<()> {
     let config = Config::load()
         .context("Failed to load skwaq configuration for hybrid benchmark analysis")?;
-    skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm)
-        .await
-        .with_context(|| {
-            format!(
-                "Hybrid benchmark analysis requires explicit Copilot benchmark readiness for {}",
-                file_str
-            )
-        })?;
 
-    let llm_client = skwaq_core::llm::create_client(&config.llm)
+    // Create or reuse the cached LLM client. The first call validates
+    // Copilot readiness and negotiates a token; subsequent calls reuse it.
+    // This eliminates cold-start rate-limit failures when many cases start
+    // concurrently.
+    let llm_client = LLM_CLIENT
+        .get_or_try_init(|| async {
+            skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm).await?;
+            skwaq_core::llm::create_client(&config.llm).await
+        })
         .await
         .with_context(|| {
             format!(
                 "Hybrid benchmark analysis requires a working LLM client for {}",
                 file_str
             )
-        })?;
+        })?
+        .clone();
 
     let pipeline = skwaq_core::agents::deep_pipeline();
     let budget_amount = config.analysis.default_token_budget.min(100_000);
@@ -636,12 +660,24 @@ async fn run_llm_pipeline(
 
     tracing::info!("Running LLM agent pipeline on {}", target);
 
-    match tokio::time::timeout(
-        std::time::Duration::from_secs(timeout_secs),
-        pipeline.run(&target, inv_id, db, llm_client, &mut budget),
-    )
-    .await
-    {
+    // Use durable memory if available so agents learn across benchmark runs.
+    let memory = open_memory_store();
+
+    let pipeline_result = if let Some(ref mem) = memory {
+        tokio::time::timeout(
+            std::time::Duration::from_secs(timeout_secs),
+            pipeline.run_with_memory(&target, inv_id, db, llm_client, &mut budget, mem),
+        )
+        .await
+    } else {
+        tokio::time::timeout(
+            std::time::Duration::from_secs(timeout_secs),
+            pipeline.run(&target, inv_id, db, llm_client, &mut budget),
+        )
+        .await
+    };
+
+    match pipeline_result {
         Ok(Ok(results)) => {
             let total_tokens: u64 = results.iter().map(|r| r.tokens_used).sum();
             tracing::info!(

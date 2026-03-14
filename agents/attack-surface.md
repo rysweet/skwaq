@@ -7,6 +7,8 @@ tools:
   - query_graph
   - read_function
   - get_callees
+  - store_memory
+  - recall_memory
 max_turns: 20
 ---
 

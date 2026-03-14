@@ -8,6 +8,8 @@ tools:
   - get_callers
   - get_callees
   - lookup_cwe
+  - store_memory
+  - recall_memory
 max_turns: 20
 ---
 

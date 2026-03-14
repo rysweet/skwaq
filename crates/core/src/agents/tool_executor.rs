@@ -4,6 +4,7 @@
 
 use super::tool_translate::{execute_read_query, translate_to_sql};
 use crate::graph::GraphDb;
+use crate::memory::{ExperienceType, MemoryStore};
 
 /// Execute a single tool call against the real graph database.
 ///
@@ -14,6 +15,21 @@ pub fn execute_tool(
     investigation_id: &str,
     name: &str,
     args: &serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
+    execute_tool_with_memory(db, investigation_id, name, args, None, None)
+}
+
+/// Execute a tool call with optional memory store access.
+///
+/// When `memory` is provided, agents can use `store_memory` and `recall_memory`
+/// tools to persist and recall experiences across runs.
+pub fn execute_tool_with_memory(
+    db: &GraphDb,
+    investigation_id: &str,
+    name: &str,
+    args: &serde_json::Value,
+    memory: Option<&MemoryStore>,
+    agent_name: Option<&str>,
 ) -> anyhow::Result<serde_json::Value> {
     match name {
         "query_graph" => execute_query_graph(db, investigation_id, args),
@@ -29,6 +45,8 @@ pub fn execute_tool(
             super::tool_translate::execute_search_similar(db, investigation_id, args)
         }
         "lookup_knowledge" => execute_lookup_knowledge(args),
+        "store_memory" => execute_store_memory(memory, agent_name, args),
+        "recall_memory" => execute_recall_memory(memory, agent_name, args),
         _ => {
             tracing::warn!("Unknown tool: {name}");
             Ok(serde_json::json!({
@@ -476,6 +494,119 @@ fn execute_rename_function(
         "status": "ok",
         "function": func_name,
         "message": format!("Updated decompiled code for '{}'", func_name)
+    }))
+}
+
+/// Store an experience in durable agent memory.
+fn execute_store_memory(
+    memory: Option<&MemoryStore>,
+    agent_name: Option<&str>,
+    args: &serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
+    let memory = match memory {
+        Some(m) => m,
+        None => {
+            return Ok(serde_json::json!({
+                "status": "unavailable",
+                "error": "Memory store not configured"
+            }));
+        }
+    };
+
+    let agent = agent_name.unwrap_or("unknown");
+    let type_str = args
+        .get("experience_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("insight");
+    let context = args.get("context").and_then(|v| v.as_str()).unwrap_or("");
+    let outcome = args.get("outcome").and_then(|v| v.as_str()).unwrap_or("");
+    let confidence = args
+        .get("confidence")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.8);
+    let tags: Vec<&str> = args
+        .get("tags")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
+        .unwrap_or_default();
+
+    let experience_type = ExperienceType::from_str(type_str).unwrap_or(ExperienceType::Insight);
+
+    tracing::info!(
+        "Tool store_memory: agent={}, type={}, tags={:?}",
+        agent,
+        type_str,
+        tags
+    );
+
+    // Anti-overfitting: check if this experience is too target-specific
+    let detector = crate::memory::PatternDetector::new(memory);
+    let is_overfit = detector.is_likely_overfit(agent, context, &tags)?;
+
+    let adjusted_confidence = if is_overfit {
+        tracing::debug!("Memory flagged as potentially overfit, reducing confidence");
+        (confidence * 0.5).min(0.3)
+    } else {
+        confidence
+    };
+
+    let id = memory.store(
+        agent,
+        experience_type,
+        context,
+        outcome,
+        adjusted_confidence,
+        &tags,
+    )?;
+
+    Ok(serde_json::json!({
+        "status": "ok",
+        "id": id,
+        "overfit_warning": is_overfit
+    }))
+}
+
+/// Recall relevant experiences from durable agent memory.
+fn execute_recall_memory(
+    memory: Option<&MemoryStore>,
+    agent_name: Option<&str>,
+    args: &serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
+    let memory = match memory {
+        Some(m) => m,
+        None => {
+            return Ok(serde_json::json!({
+                "status": "unavailable",
+                "error": "Memory store not configured"
+            }));
+        }
+    };
+
+    let agent = agent_name.unwrap_or("unknown");
+    let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
+    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
+
+    tracing::info!("Tool recall_memory: agent={}, query={}", agent, query);
+
+    let experiences = memory.recall(agent, query, limit, 0.1)?;
+
+    let results: Vec<serde_json::Value> = experiences
+        .iter()
+        .map(|e| {
+            serde_json::json!({
+                "type": e.experience_type.as_str(),
+                "context": e.context,
+                "outcome": e.outcome,
+                "confidence": e.confidence,
+                "tags": e.tags,
+            })
+        })
+        .collect();
+
+    Ok(serde_json::json!({
+        "status": "ok",
+        "memories": results,
+        "count": results.len()
     }))
 }
 
