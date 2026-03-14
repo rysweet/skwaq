@@ -210,6 +210,7 @@ async fn run_failure_analyst_agent(
 ) -> anyhow::Result<Vec<Improvement>> {
     let config = skwaq_core::config::Config::load()?;
     let llm_client = skwaq_core::llm::create_client(&config.llm).await?;
+    let memory = skwaq_core::memory::MemoryStore::open_default().ok();
 
     let agent = skwaq_core::agents::definition::load_agent("failure-analyst")?;
     let runner = skwaq_core::agents::runner::AgentRunner::new(llm_client);
@@ -229,7 +230,10 @@ async fn run_failure_analyst_agent(
              Detected CWEs: {:?}\n\
              File: {}\n\n\
              Source code:\n```\n{}\n```\n\n\
-             The vulnerability was NOT detected. Explain why and propose a fix.",
+             The vulnerability was NOT detected. Explain why and propose a fix.\n\n\
+             If durable memory tools are available, use recall_memory to check for \
+             prior generalized lessons before proposing changes. Only store or reuse \
+             lessons that generalize beyond this specific benchmark case.",
             suite,
             fn_case.case_id,
             fn_case.expected_cwes,
@@ -261,10 +265,17 @@ async fn run_failure_analyst_agent(
             false_negatives.len().min(5)
         );
 
-        match runner
-            .run_agent_with_db(&agent, &inv_id, &context, &db, &mut budget)
-            .await
-        {
+        let result = if let Some(ref memory) = memory {
+            runner
+                .run_agent_with_db_and_memory(&agent, &inv_id, &context, &db, memory, &mut budget)
+                .await
+        } else {
+            runner
+                .run_agent_with_db(&agent, &inv_id, &context, &db, &mut budget)
+                .await
+        };
+
+        match result {
             Ok(result) => {
                 // Parse proposals from the agent's output
                 proposals.extend(parse_analyst_proposals(&result.output, fn_case, suite));

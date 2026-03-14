@@ -10,6 +10,8 @@ tools:
   - lookup_cwe
   - lookup_knowledge
   - search_similar
+  - store_memory
+  - recall_memory
 max_turns: 25
 ---
 

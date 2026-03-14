@@ -8,6 +8,8 @@ tools:
   - read_function
   - get_callers
   - get_callees
+  - store_memory
+  - recall_memory
 max_turns: 15
 ---
 

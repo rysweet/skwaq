@@ -829,4 +829,38 @@ mod tests {
             "Pipeline must include a vuln-hunter variant"
         );
     }
+
+    #[test]
+    fn test_memory_enabled_agents_expose_memory_tools() {
+        let agents = [
+            "decompile-renamer",
+            "attack-surface",
+            "vuln-hunter",
+            "vuln-hunter-python",
+            "vuln-hunter-java",
+            "critic",
+            "exploit-analyst",
+            "defense-analyst",
+            "verdict-synthesizer",
+            "failure-analyst",
+        ];
+
+        let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..");
+
+        for name in agents {
+            let path = repo_root.join("agents").join(format!("{name}.md"));
+            let content = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));
+            assert!(
+                content.contains("\n  - store_memory\n"),
+                "{name} should expose store_memory"
+            );
+            assert!(
+                content.contains("\n  - recall_memory\n"),
+                "{name} should expose recall_memory"
+            );
+        }
+    }
 }
