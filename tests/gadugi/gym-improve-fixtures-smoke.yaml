@@ -1,0 +1,39 @@
+name: "Gym Improve Fixtures Smoke"
+description: |
+  Verifies that `skwaq gym improve fixtures --max-cases 1` still produces a
+  self-improvement proposal report from a user's perspective.
+version: "1.0.0"
+
+config:
+  timeout: 120000
+  retries: 1
+  parallel: false
+
+agents:
+  - name: "cli-agent"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "."
+      timeout: 30000
+      capture_output: true
+
+steps:
+  - name: "Run fixture improvement smoke command"
+    agent: "cli-agent"
+    action: "execute_command"
+    params:
+      command: >
+        bash -lc 'CARGO_TARGET_DIR=/tmp/skwaq-pr149-target CARGO_INCREMENTAL=0 cargo build -q -p skwaq &&
+        /tmp/skwaq-pr149-target/debug/skwaq gym improve fixtures --max-cases 1'
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "SELF-IMPROVEMENT PROPOSALS: FIXTURES"
+        - "False negatives analyzed: 0"
+        - "Proposals generated: 0"
+    timeout: 120000
+
+metadata:
+  tags: ["cli", "smoke", "regression", "gym-improve"]
+  priority: "high"

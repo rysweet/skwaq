@@ -758,7 +758,7 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
         },
         // Integer overflow in allocation (CWE-680) — from self-improvement iteration 5
         SourcePattern {
-            regex: r"\brealloc\s*\([^,]+,\s*[^)]*\*[^)]*\)",
+            regex: r"\brealloc\s*\([^,]+,\s*[^;]*\*[^;]*\)",
             category: DangerCategory::Memory,
             severity: Severity::High,
             reason: "realloc with multiplication may overflow; check for integer overflow before reallocation",
@@ -885,7 +885,7 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             reason: "Signed-to-unsigned cast before arithmetic may wrap; validate sign first",
         },
         SourcePattern {
-            regex: r"\bmalloc\s*\([^)]*\*[^)]*\)",
+            regex: r"\bmalloc\s*\([^;]*\*[^;]*\)",
             category: DangerCategory::Memory,
             severity: Severity::High,
             reason: "malloc with multiplication may cause integer overflow in size calculation; use safe multiply",
@@ -1225,7 +1225,7 @@ void handle_input(char *dst, const char *src, char *user_fmt, size_t len) {
 
     #[test]
     fn test_source_patterns_remain_benchmark_agnostic() {
-        let disallowed_tokens = ["cgc", "juliet"];
+        let disallowed_tokens = ["cgc", "juliet", "cyberseceval"];
         let pattern_sets = [
             ("python", python_patterns()),
             ("javascript", javascript_patterns()),
