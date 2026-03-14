@@ -336,6 +336,9 @@ pub enum KbSub {
     Search {
         /// Search query
         query: String,
+        /// Emit structured JSON output for automation/tests
+        #[arg(long)]
+        json: bool,
     },
 }
 
