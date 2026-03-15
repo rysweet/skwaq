@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt;
 
 pub const VULN_HUNTER_V1_SCHEMA: &str = "vuln-hunter-v1";
@@ -84,7 +84,7 @@ pub struct ExploitAnalystAssessment {
     pub finding_title: String,
     pub verdict: ExploitAnalystVerdict,
     pub confidence_percent: u8,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_as_empty_vec")]
     pub evidence: Vec<String>,
 }
 
@@ -102,7 +102,7 @@ pub struct DefenseAnalystAssessment {
     pub finding_title: String,
     pub verdict: DefenseAnalystVerdict,
     pub confidence_percent: u8,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_as_empty_vec")]
     pub evidence: Vec<String>,
 }
 
@@ -366,6 +366,13 @@ fn format_evidence_list(evidence: &[String]) -> String {
     }
 }
 
+fn deserialize_null_as_empty_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Option::<Vec<String>>::deserialize(deserializer)?.unwrap_or_default())
+}
+
 fn is_valid_cwe_id(value: &str) -> bool {
     let Some(rest) = value.strip_prefix("CWE-") else {
         return false;
@@ -586,6 +593,26 @@ mod tests {
 ```"#;
 
         let error = parse_structured_output(DEFENSE_ANALYST_V1_SCHEMA, output).unwrap_err();
+        assert!(error.to_string().contains("at least one evidence item"));
+    }
+
+    #[test]
+    fn rejects_null_exploit_assessment_evidence_via_validation() {
+        let output = r#"```json
+{
+  "summary": "null exploit evidence",
+  "assessments": [
+    {
+      "finding_title": "Buffer overflow in parse_header",
+      "verdict": "CONFIRMED",
+      "confidence_percent": 80,
+      "evidence": null
+    }
+  ]
+}
+```"#;
+
+        let error = parse_structured_output(EXPLOIT_ANALYST_V1_SCHEMA, output).unwrap_err();
         assert!(error.to_string().contains("at least one evidence item"));
     }
 }

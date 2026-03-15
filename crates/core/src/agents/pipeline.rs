@@ -1320,6 +1320,64 @@ mod tests {
     }
 
     #[test]
+    fn test_build_debate_summary_flags_downgraded_vs_safe_disagreement() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![super::super::output_schema::ExploitAnalystAssessment {
+                            finding_title: "Buffer overflow in parse_header".into(),
+                            verdict: super::super::output_schema::ExploitAnalystVerdict::Downgraded,
+                            confidence_percent: 60,
+                            evidence: vec!["Attacker controls packet length".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![super::super::output_schema::DefenseAnalystAssessment {
+                            finding_title: "Buffer overflow in parse_header".into(),
+                            verdict: super::super::output_schema::DefenseAnalystVerdict::Safe,
+                            confidence_percent: 90,
+                            evidence: vec!["Runtime guard makes path unreachable".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("WEIGHTED DISAGREEMENTS DETECTED"));
+        assert!(summary.contains("net_weight=-30"));
+    }
+
+    #[test]
     fn test_build_debate_summary_normalizes_titles_and_reports_missing_branches() {
         let result_a = AgentResult {
             agent_name: "exploit-analyst".into(),
