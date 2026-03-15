@@ -1,0 +1,63 @@
+name: "skwaq gym binpool - suite registration and setup guidance"
+description: "Verifies BinPool is listed as a registered suite and that missing dataset guidance tells the user exactly how to stage the manual artifact."
+version: "1.0.0"
+
+config:
+  timeout: 300000
+  retries: 0
+  parallel: false
+
+agents:
+  - name: "skwaq-cli"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "."
+      timeout: 300000
+      capture_output: true
+
+steps:
+  - name: "Run BinPool readiness smoke"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "./tests/qa/bin/gym-binpool-readiness.sh"
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "=== unknown-suite ==="
+        - "Unknown suite. Available:"
+        - "binpool"
+        - "=== binpool-missing-data ==="
+        - "BinPool data is not auto-downloaded by skwaq."
+        - "binpool_artifact/"
+        - "skwaq gym setup"
+    timeout: 300000
+
+assertions:
+  - name: "BinPool readiness smoke succeeds"
+    type: "command_success"
+    agent: "skwaq-cli"
+    params:
+      step: "Run BinPool readiness smoke"
+
+  - name: "Outside-in output shows registered suite and setup guidance"
+    type: "output_contains_all"
+    agent: "skwaq-cli"
+    params:
+      step: "Run BinPool readiness smoke"
+      required_strings:
+        - "Unknown suite. Available:"
+        - "binpool"
+        - "BinPool data is not auto-downloaded by skwaq."
+        - "binpool_artifact/"
+        - "skwaq gym setup"
+
+metadata:
+  tags:
+    - "cli"
+    - "benchmark"
+    - "binpool"
+    - "regression"
+  priority: "high"
+  author: "copilot-cli"
