@@ -1,0 +1,24 @@
+[package]
+name = "cybergym-adapter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+skwaq-core = { path = "../core" }
+skwaq-gym = { path = "../gym" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+tempfile = { workspace = true }

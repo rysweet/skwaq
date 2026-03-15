@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/cli", "crates/gym"]
+members = ["crates/core", "crates/cli", "crates/gym", "crates/cybergym-adapter"]
 
 [workspace.package]
 version = "0.2.0"
