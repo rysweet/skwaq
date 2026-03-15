@@ -12,7 +12,7 @@ agents:
     type: "system"
     config:
       shell: "bash"
-      cwd: "/home/azureuser/src/skwaq-worktrees/issue-155-kb-improve-context"
+      cwd: "."
       timeout: 240000
       capture_output: true
 
@@ -25,11 +25,9 @@ steps:
     expect:
       exit_code: 0
       stdout_contains:
-        - "SELF-IMPROVEMENT PROPOSALS: CYBERSECEVAL"
-        - "Building KB guidance for false negative case"
-        - "KB query 'methodology' returned"
-        - "KB query 'cwe-families' returned"
-        - "Prepared"
+        - "QA CHECK: methodology KB query returned positive hits"
+        - "QA CHECK: cwe-families KB query returned positive hits"
+        - "QA CHECK: improve cycle prepared non-empty KB guidance snippets"
     timeout: 240000
 
 assertions:
@@ -45,9 +43,9 @@ assertions:
     params:
       step: "Run KB-informed gym improve sample"
       required_strings:
-        - "Building KB guidance for false negative case"
-        - "KB query 'methodology' returned"
-        - "KB query 'cwe-families' returned"
+        - "QA CHECK: methodology KB query returned positive hits"
+        - "QA CHECK: cwe-families KB query returned positive hits"
+        - "QA CHECK: improve cycle prepared non-empty KB guidance snippets"
 
 metadata:
   tags:

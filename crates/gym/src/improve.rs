@@ -16,9 +16,10 @@ use serde::Deserialize;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-const IMPROVE_KB_QUERY_LIMIT: usize = 6;
+const IMPROVE_KB_MAX_CWE_QUERIES: usize = 6;
 const IMPROVE_KB_HITS_PER_QUERY: usize = 2;
 const IMPROVE_KB_SNIPPET_CHAR_LIMIT: usize = 700;
+const IMPROVE_KB_FIXED_QUERIES: [&str; 2] = ["methodology", "cwe-families"];
 
 /// A proposed improvement from the failure-analyst agent.
 #[derive(Debug, Clone)]
@@ -300,21 +301,8 @@ async fn run_failure_analyst_agent(
             kb_context,
         );
 
-        // Create an in-memory DB for the agent to use
-        let db = skwaq_core::graph::GraphDb::in_memory()?;
         let inv_id = format!("improve-{}", i);
-        let now = chrono::Utc::now().to_rfc3339();
-        db.execute(
-            "INSERT INTO investigations (id, name, target, status, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
-            &[
-                &inv_id.as_str(),
-                &fn_case.case_id.as_str(),
-                &fn_case.source_path.display().to_string().as_str(),
-                &now.as_str(),
-                &now.as_str(),
-            ],
-        )?;
+        let db = prepare_improvement_agent_db(&inv_id, &fn_case.case_id, &fn_case.source_path)?;
 
         tracing::info!(
             "Running failure-analyst on case {} ({}/{})",
@@ -810,8 +798,7 @@ fn build_false_negative_knowledge_context(
     knowledge_db: &skwaq_core::graph::GraphDb,
     fn_case: &FalseNegativeCase,
 ) -> anyhow::Result<String> {
-    let mut queries = vec!["methodology".to_string(), "cwe-families".to_string()];
-    queries.extend(fn_case.expected_cwes.iter().map(|cwe| format!("cwe-{cwe}")));
+    let queries = build_improvement_knowledge_queries(fn_case.expected_cwes.iter().copied());
     tracing::info!(
         "Building KB guidance for false negative case {} with queries {:?}",
         fn_case.case_id,
@@ -824,12 +811,11 @@ fn build_overfitting_knowledge_context(
     knowledge_db: &skwaq_core::graph::GraphDb,
     proposals: &[Improvement],
 ) -> anyhow::Result<String> {
-    let mut queries = vec!["methodology".to_string(), "cwe-families".to_string()];
-    let target_cwes: BTreeSet<u32> = proposals
+    let target_cwes = proposals
         .iter()
         .flat_map(|proposal| proposal.target_cwes.iter().copied())
-        .collect();
-    queries.extend(target_cwes.into_iter().map(|cwe| format!("cwe-{cwe}")));
+        .collect::<BTreeSet<_>>();
+    let queries = build_improvement_knowledge_queries(target_cwes);
     tracing::info!(
         "Building KB guidance for overfitting review with queries {:?}",
         queries
@@ -844,11 +830,7 @@ fn render_knowledge_context(
     let mut sections = Vec::new();
     let mut seen_hits = std::collections::HashSet::new();
 
-    for query in queries
-        .iter()
-        .filter(|query| !query.trim().is_empty())
-        .take(IMPROVE_KB_QUERY_LIMIT)
-    {
+    for query in queries.iter().filter(|query| !query.trim().is_empty()) {
         let hits = skwaq_core::knowledge::search::search_knowledge(Some(knowledge_db), query)?;
         tracing::info!(
             "KB query '{}' returned {} hit(s) for improve cycle context",
@@ -874,10 +856,10 @@ fn render_knowledge_context(
     }
 
     if sections.is_empty() {
-        return Ok(
-            "No matching KB guidance was found for the requested methodology/CWE queries."
-                .to_string(),
-        );
+        return Err(anyhow::anyhow!(
+            "KB returned no hits for improve-cycle queries {:?}",
+            queries
+        ));
     }
 
     tracing::info!(
@@ -885,6 +867,62 @@ fn render_knowledge_context(
         sections.len()
     );
     Ok(sections.join("\n"))
+}
+
+fn build_improvement_knowledge_queries<I>(cwes: I) -> Vec<String>
+where
+    I: IntoIterator<Item = u32>,
+{
+    let unique_cwes = cwes.into_iter().collect::<BTreeSet<_>>();
+    let mut queries = IMPROVE_KB_FIXED_QUERIES
+        .iter()
+        .map(|query| query.to_string())
+        .collect::<Vec<_>>();
+
+    if unique_cwes.len() > IMPROVE_KB_MAX_CWE_QUERIES {
+        let dropped = unique_cwes
+            .iter()
+            .copied()
+            .skip(IMPROVE_KB_MAX_CWE_QUERIES)
+            .collect::<Vec<_>>();
+        tracing::warn!(
+            "Truncating improve-cycle CWE KB queries from {} to {}; dropped {:?}",
+            unique_cwes.len(),
+            IMPROVE_KB_MAX_CWE_QUERIES,
+            dropped
+        );
+    }
+
+    queries.extend(
+        unique_cwes
+            .into_iter()
+            .take(IMPROVE_KB_MAX_CWE_QUERIES)
+            .map(|cwe| format!("cwe-{cwe}")),
+    );
+    queries
+}
+
+fn prepare_improvement_agent_db(
+    investigation_id: &str,
+    investigation_name: &str,
+    target_path: &Path,
+) -> anyhow::Result<skwaq_core::graph::GraphDb> {
+    let db = skwaq_core::graph::GraphDb::in_memory()?;
+    skwaq_core::knowledge::search::initialize_cwe_catalog(&db)?;
+    let now = chrono::Utc::now().to_rfc3339();
+    let target = target_path.display().to_string();
+    db.execute(
+        "INSERT INTO investigations (id, name, target, status, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
+        &[
+            &investigation_id,
+            &investigation_name,
+            &target.as_str(),
+            &now.as_str(),
+            &now.as_str(),
+        ],
+    )?;
+    Ok(db)
 }
 
 fn proposal_is_rejected(output: &str, proposal_number: usize, description: &str) -> bool {
@@ -1267,14 +1305,8 @@ pub fn append_learned_patterns(cycle: &ImprovementCycle) {
 /// experiences that agents can recall in future runs. The overfitting guard
 /// strips benchmark-specific details (file paths, case IDs, addresses) before
 /// storage.
-pub fn store_improvement_lessons(cycle: &ImprovementCycle) {
-    let memory = match skwaq_core::memory::MemoryStore::open_default() {
-        Ok(m) => m,
-        Err(e) => {
-            tracing::warn!("Cannot open durable memory for lesson storage: {e}");
-            return;
-        }
-    };
+pub fn store_improvement_lessons(cycle: &ImprovementCycle) -> anyhow::Result<()> {
+    let memory = skwaq_core::memory::MemoryStore::open_default()?;
 
     let detector = skwaq_core::memory::PatternDetector::new(&memory);
     let mut stored = 0u32;
@@ -1327,12 +1359,16 @@ pub fn store_improvement_lessons(cycle: &ImprovementCycle) {
             }
         );
 
-        if memory
+        memory
             .store(agent, exp_type, &context, &outcome, 0.7, &tag_refs)
-            .is_ok()
-        {
-            stored += 1;
-        }
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "failed to store generalized lesson for {} from case {}: {e}",
+                    agent,
+                    proposal.source_case
+                )
+            })?;
+        stored += 1;
     }
 
     // Store generalized lessons from false negatives (what was missed and why)
@@ -1362,7 +1398,7 @@ pub fn store_improvement_lessons(cycle: &ImprovementCycle) {
         let tags: Vec<String> = missed_cwes.iter().map(|cwe| format!("cwe-{cwe}")).collect();
         let tag_refs: Vec<&str> = tags.iter().map(|s| s.as_str()).collect();
 
-        if memory
+        memory
             .store(
                 "failure-analyst",
                 skwaq_core::memory::ExperienceType::Failure,
@@ -1371,18 +1407,22 @@ pub fn store_improvement_lessons(cycle: &ImprovementCycle) {
                 0.6,
                 &tag_refs,
             )
-            .is_ok()
-        {
-            stored += 1;
-        }
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "failed to store missed-CWE lesson for {}: {e}",
+                    fn_case.case_id
+                )
+            })?;
+        stored += 1;
     }
 
     // Run pattern detection to promote recurring lessons
     for agent in &["vuln-hunter", "failure-analyst", "orchestrator"] {
-        if let Ok(new) = detector.detect_patterns(agent) {
-            if new > 0 {
-                tracing::info!("Detected {new} new patterns for agent '{agent}'");
-            }
+        let new = detector.detect_patterns(agent).map_err(|e| {
+            anyhow::anyhow!("failed to detect durable-memory patterns for {agent}: {e}")
+        })?;
+        if new > 0 {
+            tracing::info!("Detected {new} new patterns for agent '{agent}'");
         }
     }
 
@@ -1392,6 +1432,7 @@ pub fn store_improvement_lessons(cycle: &ImprovementCycle) {
             cycle.suite
         );
     }
+    Ok(())
 }
 
 /// Print improvement proposals in a human-readable format.
@@ -1673,6 +1714,22 @@ Regex: \bscanf\s*\(
     }
 
     #[test]
+    fn test_improvement_knowledge_queries_deduplicate_and_preserve_fixed_queries() {
+        let queries = build_improvement_knowledge_queries(vec![121, 120, 121, 122]);
+
+        assert_eq!(
+            queries,
+            vec![
+                "methodology".to_string(),
+                "cwe-families".to_string(),
+                "cwe-120".to_string(),
+                "cwe-121".to_string(),
+                "cwe-122".to_string(),
+            ]
+        );
+    }
+
+    #[test]
     fn test_overfitting_knowledge_context_deduplicates_repeated_cwes() {
         let knowledge_db = prepare_improvement_knowledge_db().unwrap();
         let proposals = vec![
@@ -1695,6 +1752,30 @@ Regex: \bscanf\s*\(
 
         assert_eq!(context.matches("### Query: cwe-119").count(), 1);
         assert_eq!(context.matches("### Query: cwe-120").count(), 1);
+    }
+
+    #[test]
+    fn test_prepare_improvement_agent_db_seeds_cwe_catalog() {
+        let db = prepare_improvement_agent_db("inv-1", "case-1", Path::new("sample.c")).unwrap();
+        let cwe_119 = db
+            .conn()
+            .query_row(
+                "SELECT cwe_id FROM cwes WHERE cwe_id = 'CWE-119' LIMIT 1",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .unwrap();
+
+        assert_eq!(cwe_119, "CWE-119");
+    }
+
+    #[test]
+    fn test_render_knowledge_context_errors_when_queries_have_no_hits() {
+        let knowledge_db = prepare_improvement_knowledge_db().unwrap();
+        let error = render_knowledge_context(&knowledge_db, &["cwe-999999".to_string()])
+            .expect_err("missing KB hits should fail closed");
+
+        assert!(error.to_string().contains("KB returned no hits"));
     }
 
     #[test]
