@@ -14,6 +14,7 @@ tools:
   - store_memory
   - recall_memory
 max_turns: 30
+output_schema: vuln-hunter-v1
 role:
   title: Primary discovery specialist
   expertise:

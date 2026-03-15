@@ -1,5 +1,5 @@
-name: "skwaq agents list - surfaces structured role cards"
-description: "Verifies the CLI exposes agent role metadata through the agents list command."
+name: "skwaq agents list - surfaces structured role cards and schemas"
+description: "Verifies the CLI exposes agent role metadata and declared output schemas through the agents list command."
 version: "1.0.0"
 
 config:
@@ -26,14 +26,16 @@ steps:
       exit_code: 0
       stdout_contains:
         - "=== agents-list-command ==="
+        - "SCHEMA"
         - "ROLE"
         - "vuln-hunter"
         - "Primary discovery specialist"
+        - "vuln-hunter-v1"
         - "exploit-analyst"
         - "Exploitability specialist"
         - "verdict-synthesizer"
         - "Final evidence-weighting synthesizer"
-        - "validated role titles in agents list output"
+        - "validated role titles and schema metadata in agents list output"
     timeout: 300000
 
 assertions:
@@ -43,22 +45,24 @@ assertions:
     params:
       step: "Run agents list role-card smoke"
 
-  - name: "Agents list output includes structured role titles"
+  - name: "Agents list output includes structured role titles and schema metadata"
     type: "output_contains_all"
     agent: "skwaq-cli"
     params:
       step: "Run agents list role-card smoke"
       required_strings:
+        - "SCHEMA"
         - "ROLE"
         - "vuln-hunter"
         - "Primary discovery specialist"
+        - "vuln-hunter-v1"
         - "exploit-analyst"
         - "Exploitability specialist"
         - "defense-analyst"
         - "Defensive controls specialist"
         - "verdict-synthesizer"
         - "Final evidence-weighting synthesizer"
-        - "validated role titles in agents list output"
+        - "validated role titles and schema metadata in agents list output"
 
 metadata:
   tags:

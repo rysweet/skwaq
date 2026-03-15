@@ -71,9 +71,9 @@ findings. This surfaces stable vulnerability classes such as
 `buffer_overflow`, `format_string`, and `command_injection`, even when later
 cycles challenge the initial coarse finding.
 
-`skwaq agents list` now includes each agent's structured role title, which is
-useful for verifying which specialization cards are active in the current
-checkout.
+`skwaq agents list` now includes each agent's structured role title and any
+declared output schema, which is useful for verifying which specialization
+cards and schema-backed contracts are active in the current checkout.
 
 ### Investigation
 ```bash

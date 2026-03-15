@@ -8,6 +8,7 @@ use crate::llm::{execute_with_tools, Client, TokenBudget};
 use crate::memory::MemoryStore;
 
 use super::definition::{AgentDefinition, AgentRoleMetadata};
+use super::output_schema::{output_schema_contract, parse_structured_output, ParsedAgentOutput};
 use super::tool_definitions::{agent_tools, filter_tools};
 use super::tool_executor::{execute_tool, execute_tool_with_memory};
 
@@ -22,16 +23,34 @@ pub struct AgentContextFrame {
     pub role: Option<AgentRoleMetadata>,
     /// High-signal observations extracted from the final output.
     pub key_points: Vec<String>,
+    /// Optional schema name advertised by the producing agent.
+    pub output_schema: Option<String>,
+    /// Structured summary derived from parsed agent output.
+    pub structured_summary: Option<String>,
+    /// Explicit parse failure message when a schema-backed output could not be parsed.
+    pub structured_output_error: Option<String>,
 }
 
 impl AgentContextFrame {
-    pub fn from_agent(agent: &AgentDefinition, output: &str) -> Self {
-        Self::synthetic(
-            agent.name.clone(),
-            agent.description.clone(),
-            agent.role.clone(),
-            output,
-        )
+    pub fn from_agent(
+        agent: &AgentDefinition,
+        output: &str,
+        parsed_output: Option<&ParsedAgentOutput>,
+        parsed_output_error: Option<&str>,
+    ) -> Self {
+        let key_points = parsed_output
+            .map(ParsedAgentOutput::key_points)
+            .unwrap_or_else(|| extract_key_points(output));
+
+        Self {
+            agent_name: agent.name.clone(),
+            description: agent.description.clone(),
+            role: agent.role.clone(),
+            key_points,
+            output_schema: agent.output_schema.clone(),
+            structured_summary: parsed_output.map(ParsedAgentOutput::context_summary),
+            structured_output_error: parsed_output_error.map(ToOwned::to_owned),
+        }
     }
 
     pub fn synthetic(
@@ -45,6 +64,9 @@ impl AgentContextFrame {
             description: description.into(),
             role,
             key_points: extract_key_points(output),
+            output_schema: None,
+            structured_summary: None,
+            structured_output_error: None,
         }
     }
 }
@@ -60,6 +82,10 @@ pub struct AgentResult {
     pub tokens_used: u64,
     /// Structured summary of the agent output for downstream stages.
     pub context_frame: AgentContextFrame,
+    /// Parsed structured output when the agent advertises an output schema.
+    pub parsed_output: Option<ParsedAgentOutput>,
+    /// Explicit parse failure when a schema-backed output could not be parsed.
+    pub parsed_output_error: Option<String>,
 }
 
 /// Runs any agent definition against the graph database.
@@ -88,7 +114,7 @@ impl AgentRunner {
         let all_tools = agent_tools();
         let tools = filter_tools(&all_tools, &agent.tools);
         let model = &agent.model;
-        let system_prompt = &agent.system_prompt;
+        let system_prompt = build_system_prompt(agent);
 
         let tokens_before = budget.used;
         let inv_id = investigation_id.to_string();
@@ -96,7 +122,7 @@ impl AgentRunner {
         let output = execute_with_tools(
             &self.client,
             model,
-            system_prompt,
+            &system_prompt,
             context,
             &tools,
             |tool_name, args| {
@@ -109,13 +135,22 @@ impl AgentRunner {
         .await?;
 
         let tokens_used = budget.used - tokens_before;
-        let context_frame = AgentContextFrame::from_agent(agent, &output);
+        let (parsed_output, parsed_output_error) =
+            parse_structured_output_for_agent(agent, &output);
+        let context_frame = AgentContextFrame::from_agent(
+            agent,
+            &output,
+            parsed_output.as_ref(),
+            parsed_output_error.as_deref(),
+        );
 
         Ok(AgentResult {
             agent_name: agent.name.clone(),
             output,
             tokens_used,
             context_frame,
+            parsed_output,
+            parsed_output_error,
         })
     }
 
@@ -135,7 +170,7 @@ impl AgentRunner {
         let all_tools = agent_tools();
         let tools = filter_tools(&all_tools, &agent.tools);
         let model = &agent.model;
-        let system_prompt = &agent.system_prompt;
+        let system_prompt = build_system_prompt(agent);
 
         let tokens_before = budget.used;
         let inv_id = investigation_id.to_string();
@@ -144,7 +179,7 @@ impl AgentRunner {
         let output = execute_with_tools(
             &self.client,
             model,
-            system_prompt,
+            &system_prompt,
             context,
             &tools,
             |tool_name, args| {
@@ -165,14 +200,56 @@ impl AgentRunner {
         .await?;
 
         let tokens_used = budget.used - tokens_before;
-        let context_frame = AgentContextFrame::from_agent(agent, &output);
+        let (parsed_output, parsed_output_error) =
+            parse_structured_output_for_agent(agent, &output);
+        let context_frame = AgentContextFrame::from_agent(
+            agent,
+            &output,
+            parsed_output.as_ref(),
+            parsed_output_error.as_deref(),
+        );
 
         Ok(AgentResult {
             agent_name: agent.name.clone(),
             output,
             tokens_used,
             context_frame,
+            parsed_output,
+            parsed_output_error,
         })
+    }
+}
+
+fn build_system_prompt(agent: &AgentDefinition) -> String {
+    let mut system_prompt = agent.system_prompt.clone();
+    if let Some(schema_name) = &agent.output_schema {
+        if let Some(contract) = output_schema_contract(schema_name) {
+            system_prompt.push_str(contract);
+        }
+    }
+    system_prompt
+}
+
+fn parse_structured_output_for_agent(
+    agent: &AgentDefinition,
+    output: &str,
+) -> (Option<ParsedAgentOutput>, Option<String>) {
+    let Some(schema_name) = &agent.output_schema else {
+        return (None, None);
+    };
+
+    match parse_structured_output(schema_name, output) {
+        Ok(parsed) => (Some(parsed), None),
+        Err(error) => {
+            let message = error.to_string();
+            tracing::warn!(
+                "Failed to parse structured output for agent '{}' with schema '{}': {}",
+                agent.name,
+                schema_name,
+                message
+            );
+            (None, Some(message))
+        }
     }
 }
 
@@ -376,5 +453,63 @@ pub fn build_analysis_context_with_limit(
         truncated
     } else {
         full
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_agent(output_schema: Option<&str>) -> AgentDefinition {
+        AgentDefinition {
+            name: "vuln-hunter".into(),
+            description: "Primary vulnerability discovery agent".into(),
+            model: "claude-opus-4.6".into(),
+            tools: vec!["create_finding".into()],
+            max_turns: 5,
+            role: None,
+            output_schema: output_schema.map(str::to_string),
+            system_prompt: "Base prompt".into(),
+            source_path: None,
+        }
+    }
+
+    #[test]
+    fn build_system_prompt_includes_schema_contract() {
+        let prompt = build_system_prompt(&test_agent(Some("vuln-hunter-v1")));
+        assert!(prompt.contains("Structured Output Contract"));
+        assert!(prompt.contains("\"summary\""));
+    }
+
+    #[test]
+    fn parse_structured_output_for_agent_preserves_error() {
+        let (_parsed, error) =
+            parse_structured_output_for_agent(&test_agent(Some("vuln-hunter-v1")), "plain text");
+        assert!(error.is_some());
+        assert!(error.unwrap().contains("Missing fenced JSON block"));
+    }
+
+    #[test]
+    fn context_frame_uses_structured_output_when_available() {
+        let parsed = parse_structured_output(
+            "vuln-hunter-v1",
+            r#"Some prose
+```json
+{"summary":"Confirmed one exploitable issue","findings":[{"title":"Overflow","severity":"high","cwe_id":"CWE-121","function":"parse_header"}]}
+```"#,
+        )
+        .unwrap();
+        let agent = test_agent(Some("vuln-hunter-v1"));
+        let frame = AgentContextFrame::from_agent(&agent, "ignored", Some(&parsed), None);
+        assert_eq!(frame.output_schema.as_deref(), Some("vuln-hunter-v1"));
+        assert!(frame
+            .structured_summary
+            .as_deref()
+            .unwrap()
+            .contains("Overflow"));
+        assert!(frame
+            .key_points
+            .iter()
+            .any(|point| point.contains("Overflow")));
     }
 }

@@ -24,9 +24,11 @@ import os
 
 output = os.environ["AGENTS_OUTPUT"]
 required = [
+    "SCHEMA",
     "ROLE",
     "vuln-hunter",
     "Primary discovery specialist",
+    "vuln-hunter-v1",
     "exploit-analyst",
     "Exploitability specialist",
     "defense-analyst",
@@ -39,7 +41,7 @@ missing = [item for item in required if item not in output]
 if missing:
     raise SystemExit(f"missing expected agents/roles: {missing}")
 
-print("validated role titles in agents list output")
+print("validated role titles and schema metadata in agents list output")
 PY
 
 echo

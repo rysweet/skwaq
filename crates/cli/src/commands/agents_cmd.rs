@@ -22,10 +22,10 @@ fn render_agents_list(agents: &[AgentDefinition]) -> String {
     }
 
     out.push_str(&format!(
-        "{:<18} {:<40} {:<24} {:<38} {:>5}\n",
-        "NAME", "DESCRIPTION", "MODEL", "ROLE", "TOOLS"
+        "{:<18} {:<34} {:<24} {:<32} {:<18} {:>5}\n",
+        "NAME", "DESCRIPTION", "MODEL", "ROLE", "SCHEMA", "TOOLS"
     ));
-    out.push_str(&format!("{}\n", "-".repeat(129)));
+    out.push_str(&format!("{}\n", "-".repeat(135)));
 
     for agent in agents {
         let desc = truncate(&agent.description, 38);
@@ -34,12 +34,14 @@ fn render_agents_list(agents: &[AgentDefinition]) -> String {
             .as_ref()
             .map(|role| role.title.clone())
             .unwrap_or_else(|| "-".into());
+        let schema = agent.output_schema.clone().unwrap_or_else(|| "-".into());
         out.push_str(&format!(
-            "{:<18} {:<40} {:<24} {:<38} {:>5}\n",
+            "{:<18} {:<34} {:<24} {:<32} {:<18} {:>5}\n",
             agent.name,
             desc,
             agent.model,
             role,
+            schema,
             agent.tools.len(),
         ));
     }
@@ -62,7 +64,12 @@ mod tests {
     use super::*;
     use skwaq_core::agents::AgentRoleMetadata;
 
-    fn test_agent(name: &str, description: &str, role_title: Option<&str>) -> AgentDefinition {
+    fn test_agent(
+        name: &str,
+        description: &str,
+        role_title: Option<&str>,
+        output_schema: Option<&str>,
+    ) -> AgentDefinition {
         AgentDefinition {
             name: name.into(),
             description: description.into(),
@@ -76,6 +83,7 @@ mod tests {
                 skepticism: vec![],
                 evidence_preferences: vec![],
             }),
+            output_schema: output_schema.map(str::to_string),
             system_prompt: "Prompt".into(),
             source_path: None,
         }
@@ -95,12 +103,15 @@ mod tests {
                 "vuln-hunter",
                 "Primary vulnerability discovery agent",
                 Some("Primary discovery specialist"),
+                Some("vuln-hunter-v1"),
             ),
-            test_agent("minimal", "No special role metadata", None),
+            test_agent("minimal", "No special role metadata", None, None),
         ]);
 
         assert!(rendered.contains("ROLE"));
+        assert!(rendered.contains("SCHEMA"));
         assert!(rendered.contains("Primary discovery specialist"));
+        assert!(rendered.contains("vuln-hunter-v1"));
         assert!(rendered.contains("minimal"));
         assert!(rendered.contains(" - ") || rendered.contains("minimal"));
     }
@@ -111,6 +122,7 @@ mod tests {
             "role-heavy",
             "A role-heavy agent",
             Some("This role title is intentionally much too long to fit cleanly"),
+            None,
         )]);
 
         assert!(rendered.contains("This role title is intentionally much too long to fit cleanly"));

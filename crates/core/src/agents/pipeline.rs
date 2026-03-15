@@ -296,6 +296,8 @@ impl AnalysisPipeline {
                 output: debate_summary,
                 tokens_used: 0,
                 context_frame: debate_frame,
+                parsed_output: None,
+                parsed_output_error: None,
             });
         }
 
@@ -381,6 +383,18 @@ fn format_context_frame(frame: &AgentContextFrame) -> String {
             "evidence_preferences",
             &role.evidence_preferences,
         );
+    }
+
+    if let Some(schema_name) = &frame.output_schema {
+        rendered.push_str(&format!("\noutput_schema: {}", schema_name));
+    }
+
+    if let Some(summary) = &frame.structured_summary {
+        rendered.push_str(&format!("\nstructured_summary:\n{}", summary));
+    }
+
+    if let Some(parse_error) = &frame.structured_output_error {
+        rendered.push_str(&format!("\nstructured_output_error: {}", parse_error));
     }
 
     if !frame.key_points.is_empty() {
@@ -893,6 +907,8 @@ mod tests {
                 "Finding 1: **CONFIRMED [high]**: Buffer overflow is exploitable.\n\
                  Finding 2: **REJECTED**: Dead code, never called.",
             ),
+            parsed_output: None,
+            parsed_output_error: None,
         };
         let result_b = AgentResult {
             agent_name: "defense-analyst".into(),
@@ -907,6 +923,8 @@ mod tests {
                 "Finding 1: **VULNERABLE**: No bounds checking found.\n\
                  Finding 2: **SAFE**: Function is never reachable.",
             ),
+            parsed_output: None,
+            parsed_output_error: None,
         };
 
         let summary = build_debate_summary(&result_a, &result_b);
@@ -929,6 +947,8 @@ mod tests {
                 None,
                 "**CONFIRMED [critical]**: RCE via command injection",
             ),
+            parsed_output: None,
+            parsed_output_error: None,
         };
         let result_b = AgentResult {
             agent_name: "defense-analyst".into(),
@@ -940,6 +960,8 @@ mod tests {
                 None,
                 "**SAFE**: Input is validated by allowlist",
             ),
+            parsed_output: None,
+            parsed_output_error: None,
         };
 
         let summary = build_debate_summary(&result_a, &result_b);
@@ -956,6 +978,8 @@ mod tests {
             output: "x".repeat(MAX_PIPELINE_CONTEXT_CHARS + 1000),
             tokens_used: 0,
             context_frame: AgentContextFrame::synthetic("test", "Test agent", None, "x"),
+            parsed_output: None,
+            parsed_output_error: None,
         }];
         let ctx = build_previous_results_context(
             &"p".repeat(MAX_PIPELINE_CONTEXT_CHARS + 1000),
@@ -983,6 +1007,8 @@ mod tests {
                 }),
                 "**CONFIRMED [high]**: Concrete attack path",
             ),
+            parsed_output: None,
+            parsed_output_error: None,
         }];
 
         let ctx = build_previous_results_context("preamble", &results);
@@ -991,6 +1017,20 @@ mod tests {
         assert!(ctx.contains("key_points:"));
         assert!(ctx.contains("Concrete attack path"));
         assert!(ctx.contains("Condensed output from exploit-analyst"));
+    }
+
+    #[test]
+    fn format_context_frame_includes_structured_summary() {
+        let mut frame =
+            AgentContextFrame::synthetic("vuln-hunter", "Primary discovery agent", None, "raw");
+        frame.output_schema = Some("vuln-hunter-v1".into());
+        frame.structured_summary =
+            Some("summary: Confirmed one issue\nfinding: [high] Overflow".into());
+
+        let rendered = format_context_frame(&frame);
+        assert!(rendered.contains("output_schema: vuln-hunter-v1"));
+        assert!(rendered.contains("structured_summary:"));
+        assert!(rendered.contains("Overflow"));
     }
 
     #[test]
@@ -1021,6 +1061,7 @@ mod tests {
                 skepticism: vec!["reject dead code".into()],
                 evidence_preferences: vec!["line-level citations".into()],
             }),
+            output_schema: None,
             system_prompt: "Base prompt".into(),
             source_path: None,
         };
