@@ -124,6 +124,13 @@ impl Gym {
         })
     }
 
+    /// Return the currently registered suite names in deterministic order.
+    pub fn available_suite_names(&self) -> Vec<String> {
+        let mut suites: Vec<String> = self.adapters.iter().map(|a| a.name().to_string()).collect();
+        suites.sort();
+        suites
+    }
+
     /// Setup all benchmark data.
     pub async fn setup(&self) -> anyhow::Result<()> {
         for adapter in &self.adapters {
@@ -157,16 +164,19 @@ impl Gym {
         concurrency: usize,
         adaptive: bool,
     ) -> anyhow::Result<()> {
-        let commit = get_git_commit(&self.skwaq_root)?;
-
         let adapters: Vec<&Box<dyn BenchmarkAdapter>> = match suite {
             Some(name) => self.adapters.iter().filter(|a| a.name() == name).collect(),
             None => self.adapters.iter().collect(),
         };
 
         if adapters.is_empty() {
-            anyhow::bail!("Unknown suite. Available: fixtures");
+            anyhow::bail!(
+                "Unknown suite. Available: {}",
+                self.available_suite_names().join(", ")
+            );
         }
+
+        let commit = get_git_commit(&self.skwaq_root)?;
 
         let mut config = self.config.clone();
         config.cwe_filter = cwe_filter;
@@ -197,9 +207,7 @@ impl Gym {
             tracing::info!("Running {} benchmark...", suite_name);
 
             let run_metadata = build_run_metadata(&self.skwaq_root, &config);
-            let run_id = self
-                .history_db
-                .start_run(&suite_name, &commit, &run_metadata)?;
+            adapter.validate_config(&config)?;
             let gt = adapter.ground_truth()?;
             let data_dir = adapter.setup(&config).await?;
 
@@ -247,6 +255,10 @@ impl Gym {
                 );
                 continue;
             }
+
+            let run_id = self
+                .history_db
+                .start_run(&suite_name, &commit, &run_metadata)?;
 
             // Run cases with in-process async concurrency.
             // Each case creates its own in-memory GraphDb, so no shared state.
@@ -407,24 +419,15 @@ impl Gym {
                 }
             }
 
-            let score = scoring::aggregate(&outcomes);
+            if total > 0 && outcomes.is_empty() {
+                self.history_db.abandon_run(&run_id)?;
+                anyhow::bail!(
+                    "{} benchmark produced no scored cases. Check dataset setup and per-case errors above.",
+                    suite_name
+                );
+            }
 
-            let run = history::BenchmarkRun {
-                id: run_id.clone(),
-                started_at: chrono::Utc::now(),
-                finished_at: Some(chrono::Utc::now()),
-                suite: suite_name.clone(),
-                skwaq_commit: commit.clone(),
-                metadata: run_metadata.clone(),
-                precision: score.precision,
-                recall: score.recall,
-                f1: score.f1,
-                true_positives: score.true_positives,
-                false_positives: score.false_positives,
-                false_negatives: score.false_negatives,
-                true_negatives: score.true_negatives,
-            };
-            self.history_db.finish_run(&run)?;
+            let score = scoring::aggregate(&outcomes);
 
             // Store per-case results for regression tracking.
             for outcome in &outcomes {
@@ -454,7 +457,7 @@ impl Gym {
             }
 
             for cwe_score in score.per_cwe.values() {
-                self.history_db.insert_cwe_result(&history::CweResult {
+                if let Err(err) = self.history_db.insert_cwe_result(&history::CweResult {
                     run_id: run_id.clone(),
                     cwe_id: cwe_score.cwe_id,
                     total_cases: cwe_score.total_cases,
@@ -463,8 +466,33 @@ impl Gym {
                     false_negatives: cwe_score.false_negatives,
                     detection_rate: cwe_score.detection_rate,
                     precision: cwe_score.precision,
-                })?;
+                }) {
+                    if let Err(cleanup_err) = self.history_db.abandon_run(&run_id) {
+                        return Err(err.context(format!(
+                            "failed to store per-CWE results and failed to clean up unfinished run {}: {}",
+                            run_id, cleanup_err
+                        )));
+                    }
+                    return Err(err);
+                }
             }
+
+            let run = history::BenchmarkRun {
+                id: run_id.clone(),
+                started_at: chrono::Utc::now(),
+                finished_at: Some(chrono::Utc::now()),
+                suite: suite_name.clone(),
+                skwaq_commit: commit.clone(),
+                metadata: run_metadata.clone(),
+                precision: score.precision,
+                recall: score.recall,
+                f1: score.f1,
+                true_positives: score.true_positives,
+                false_positives: score.false_positives,
+                false_negatives: score.false_negatives,
+                true_negatives: score.true_negatives,
+            };
+            self.history_db.finish_run(&run)?;
 
             reporting::terminal::print_summary(&score, &suite_name);
         }
@@ -477,7 +505,7 @@ impl Gym {
 
     /// Show the most recent report.
     pub fn report(&self, format: ReportFormat) -> anyhow::Result<String> {
-        let runs = self.history_db.recent_runs(1)?;
+        let runs = self.history_db.recent_finished_runs(1)?;
         let run = runs
             .first()
             .ok_or_else(|| anyhow::anyhow!("No runs yet. Run `skwaq gym run` first."))?;
@@ -506,7 +534,7 @@ impl Gym {
 
     /// Compare the two most recent runs.
     pub fn compare(&self) -> anyhow::Result<()> {
-        let runs = self.history_db.recent_runs(2)?;
+        let runs = self.history_db.recent_finished_runs(2)?;
         if runs.len() < 2 {
             anyhow::bail!("Need at least 2 runs to compare. Run `skwaq gym run` twice.");
         }
@@ -516,7 +544,7 @@ impl Gym {
 
     /// Show run history.
     pub fn history(&self, limit: u32) -> anyhow::Result<()> {
-        let runs = self.history_db.recent_runs(limit)?;
+        let runs = self.history_db.recent_finished_runs(limit)?;
         println!(
             "\n{:>4} {:>19} {:>8} {:>8} {:>8} {:>8} {:>6}",
             "#", "Date", "Suite", "Prec%", "Rec%", "F1%", "Commit"
@@ -615,5 +643,77 @@ fn reconstruct_score(
         recall: run.recall,
         f1: run.f1,
         per_cwe,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Gym;
+
+    fn write_manifest(path: &std::path::Path, suite: &str) {
+        std::fs::write(
+            path,
+            format!(
+                r#"suite = "{suite}"
+version = "test"
+download_url = ""
+download_sha256 = ""
+
+[[cases]]
+id = "{suite}_case"
+path = "cases/{suite}.txt"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+"#
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_available_suite_names_includes_optional_manifests() {
+        let temp = tempfile::tempdir().unwrap();
+        let gt_dir = temp.path().join("data/gym/ground_truth");
+        std::fs::create_dir_all(&gt_dir).unwrap();
+        std::fs::create_dir_all(temp.path().join("tests/fixtures")).unwrap();
+
+        write_manifest(&gt_dir.join("fixtures.toml"), "fixtures");
+        write_manifest(&gt_dir.join("binpool.toml"), "binpool");
+
+        let gym = Gym::new(temp.path().to_path_buf()).unwrap();
+        assert_eq!(gym.available_suite_names(), vec!["binpool", "fixtures"]);
+    }
+
+    #[tokio::test]
+    async fn test_unknown_suite_lists_registered_suites() {
+        let temp = tempfile::tempdir().unwrap();
+        let gt_dir = temp.path().join("data/gym/ground_truth");
+        std::fs::create_dir_all(&gt_dir).unwrap();
+        std::fs::create_dir_all(temp.path().join("tests/fixtures")).unwrap();
+
+        write_manifest(&gt_dir.join("fixtures.toml"), "fixtures");
+        write_manifest(&gt_dir.join("binpool.toml"), "binpool");
+
+        let mut gym = Gym::new(temp.path().to_path_buf()).unwrap();
+        let err = gym
+            .run(
+                Some("does-not-exist"),
+                None,
+                Some(1),
+                true,
+                false,
+                true,
+                0,
+                1,
+                false,
+            )
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "Unknown suite. Available: binpool, fixtures"
+        );
     }
 }

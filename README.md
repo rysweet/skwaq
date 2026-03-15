@@ -187,6 +187,36 @@ For full eval runs, `skwaq gym eval` now writes reproducibility metadata alongsi
 
 The manual GitHub workflows under `.github/workflows/gym-eval.yml` and `.github/workflows/gym-full.yml` call the same preflight step before hybrid runs.
 
+### BinPool benchmark setup
+
+The repository now includes a generated `data/gym/ground_truth/binpool.toml` manifest, so `binpool` shows up as a first-class gym suite instead of staying hidden behind a missing manifest.
+
+The manifest is generated from the upstream public metadata index:
+
+```bash
+python3 scripts/generate_binpool_manifest.py
+```
+
+It currently selects one representative vulnerable binary per CVE for every upstream `binpool_info.json` entry that publishes both:
+
+- at least one vulnerable binary path
+- at least one usable CWE
+
+`skwaq` does **not** auto-download BinPool. Upstream distributes the dataset via the Zenodo link referenced from <https://github.com/SimaArasteh/binpool>. After downloading it, extract the artifact so this directory exists:
+
+```text
+~/.local/share/skwaq/gym/cache/binpool/binpool_artifact/
+```
+
+Then run:
+
+```bash
+skwaq gym setup
+skwaq gym run binpool --quick --max-cases 5
+```
+
+If you request an unknown suite, the CLI now lists the actually registered suites instead of a stale hardcoded `fixtures` fallback.
+
 ## License
 
 MIT OR Apache-2.0
