@@ -52,30 +52,13 @@ pub fn validate_target(target: &str) -> Result<std::path::PathBuf, AdapterError>
 
     let path = Path::new(target);
 
-    // Existence check
-    if !path.exists() {
-        return Err(AdapterError::InputValidation {
-            message: "target does not exist".to_string(),
-        });
-    }
-
-    // Canonicalize to resolve symlinks and relative components
-    let canonical = path
-        .canonicalize()
-        .map_err(|_| AdapterError::InputValidation {
-            message: "unable to resolve target path".to_string(),
-        })?;
-
-    // Check symlink metadata on the *canonical* path to narrow the TOCTOU window.
-    // Verifying the canonical path (not the original) ensures we check the resolved target.
-    let metadata =
-        std::fs::symlink_metadata(&canonical).map_err(|_| AdapterError::InputValidation {
-            message: "unable to read target metadata".to_string(),
-        })?;
+    let metadata = std::fs::symlink_metadata(path).map_err(|_| AdapterError::InputValidation {
+        message: "target does not exist".to_string(),
+    })?;
 
     if metadata.file_type().is_symlink() {
         return Err(AdapterError::InputValidation {
-            message: "resolved path is a symlink".to_string(),
+            message: "target path must not be a symlink".to_string(),
         });
     }
 
@@ -85,6 +68,13 @@ pub fn validate_target(target: &str) -> Result<std::path::PathBuf, AdapterError>
             message: "target is not a file or directory".to_string(),
         });
     }
+
+    // Canonicalize only after rejecting symlinks on the original user input.
+    let canonical = path
+        .canonicalize()
+        .map_err(|_| AdapterError::InputValidation {
+            message: "unable to resolve target path".to_string(),
+        })?;
 
     Ok(canonical)
 }
@@ -147,6 +137,23 @@ mod tests {
         let result = validate_target("/nonexistent/path/to/file.c");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("does not exist"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlink_target() {
+        let temp = tempfile::tempdir().unwrap();
+        let target = temp.path().join("real.c");
+        let link = temp.path().join("link.c");
+        std::fs::write(&target, "int main(void) { return 0; }\n").unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        let result = validate_target(link.to_str().unwrap());
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("must not be a symlink"));
     }
 
     #[test]

@@ -5,6 +5,8 @@
 
 use serde::{Deserialize, Serialize};
 
+const ADAPTER_SOURCE: &str = "cybergym-adapter";
+
 /// Status of a completed scan.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -38,6 +40,7 @@ pub struct Finding {
     pub category: String,
     /// Source of this finding — always "cybergym-adapter".
     /// Private field; set at construction only.
+    #[serde(default = "default_source", deserialize_with = "deserialize_source")]
     source: String,
 }
 
@@ -63,13 +66,29 @@ impl Finding {
             function,
             line,
             category,
-            source: "cybergym-adapter".to_string(),
+            source: default_source(),
         }
     }
 
     /// Returns the source tag (always "cybergym-adapter").
     pub fn source(&self) -> &str {
         &self.source
+    }
+}
+
+fn default_source() -> String {
+    ADAPTER_SOURCE.to_string()
+}
+
+fn deserialize_source<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let source = Option::<String>::deserialize(deserializer)?.unwrap_or_else(default_source);
+    if source == ADAPTER_SOURCE {
+        Ok(source)
+    } else {
+        Err(serde::de::Error::custom("invalid source tag"))
     }
 }
 
@@ -168,6 +187,23 @@ mod tests {
         assert!(json.contains("\"source\":\"cybergym-adapter\""));
         let deserialized: Finding = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.source(), "cybergym-adapter");
+    }
+
+    #[test]
+    fn finding_source_rejects_non_adapter_value() {
+        let json = r#"{
+            "id":"f1",
+            "cwes":[79],
+            "severity":"high",
+            "title":"test",
+            "file":"main.c",
+            "function":"foo",
+            "line":10,
+            "category":"injection",
+            "source":"other-adapter"
+        }"#;
+        let result: Result<Finding, _> = serde_json::from_str(json);
+        assert!(result.is_err());
     }
 
     #[test]

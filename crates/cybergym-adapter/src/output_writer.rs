@@ -22,43 +22,11 @@ pub fn create_run_dir(base_dir: &Path, run_id: &str) -> Result<PathBuf, AdapterE
         });
     }
 
-    let run_dir = base_dir.join("cybergym-runs").join(run_id);
+    let run_root = base_dir.join("cybergym-runs");
+    ensure_directory(&run_root)?;
 
-    // Reject if path already exists as a symlink
-    if run_dir.symlink_metadata().is_ok() {
-        let meta = std::fs::symlink_metadata(&run_dir).map_err(|e| AdapterError::OutputFailed {
-            message: format!("failed to read metadata: {}", e),
-        })?;
-        if meta.file_type().is_symlink() {
-            return Err(AdapterError::OutputFailed {
-                message: "output path is a symlink".to_string(),
-            });
-        }
-    }
-
-    std::fs::create_dir_all(&run_dir).map_err(|e| {
-        tracing::debug!(
-            "failed to create run directory {}: {}",
-            run_dir.display(),
-            e
-        );
-        AdapterError::OutputFailed {
-            message: "failed to create output directory".to_string(),
-        }
-    })?;
-
-    // Set directory permissions on Unix
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let perms = std::fs::Permissions::from_mode(0o750);
-        std::fs::set_permissions(&run_dir, perms).map_err(|e| {
-            tracing::debug!("failed to set directory permissions: {}", e);
-            AdapterError::OutputFailed {
-                message: "failed to set directory permissions".to_string(),
-            }
-        })?;
-    }
+    let run_dir = run_root.join(run_id);
+    create_secure_directory(&run_dir)?;
 
     Ok(run_dir)
 }
@@ -107,14 +75,17 @@ fn write_with_permissions(path: &Path, data: &[u8]) -> Result<(), AdapterError> 
 
         let mut file = std::fs::OpenOptions::new()
             .write(true)
-            .create(true)
-            .truncate(true)
+            .create_new(true)
             .mode(0o640)
             .open(path)
             .map_err(|e| {
                 tracing::debug!("failed to create file {}: {}", path.display(), e);
                 AdapterError::OutputFailed {
-                    message: "failed to create output file".to_string(),
+                    message: if e.kind() == std::io::ErrorKind::AlreadyExists {
+                        "output file already exists".to_string()
+                    } else {
+                        "failed to create output file".to_string()
+                    },
                 }
             })?;
         file.write_all(data).map_err(|e| {
@@ -127,12 +98,84 @@ fn write_with_permissions(path: &Path, data: &[u8]) -> Result<(), AdapterError> 
 
     #[cfg(not(unix))]
     {
+        if path.exists() {
+            return Err(AdapterError::OutputFailed {
+                message: "output file already exists".to_string(),
+            });
+        }
         std::fs::write(path, data).map_err(|e| {
             tracing::debug!("failed to write to {}: {}", path.display(), e);
             AdapterError::OutputFailed {
                 message: "failed to write output file".to_string(),
             }
         })?;
+    }
+
+    Ok(())
+}
+
+fn ensure_directory(path: &Path) -> Result<(), AdapterError> {
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            if metadata.file_type().is_symlink() {
+                return Err(AdapterError::OutputFailed {
+                    message: "output path is a symlink".to_string(),
+                });
+            }
+            if !metadata.is_dir() {
+                return Err(AdapterError::OutputFailed {
+                    message: "output path is not a directory".to_string(),
+                });
+            }
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            create_secure_directory(path)?;
+        }
+        Err(e) => {
+            tracing::debug!("failed to inspect {}: {}", path.display(), e);
+            return Err(AdapterError::OutputFailed {
+                message: "failed to inspect output directory".to_string(),
+            });
+        }
+    }
+
+    Ok(())
+}
+
+fn create_secure_directory(path: &Path) -> Result<(), AdapterError> {
+    std::fs::create_dir(path).map_err(|e| {
+        tracing::debug!("failed to create directory {}: {}", path.display(), e);
+        AdapterError::OutputFailed {
+            message: if e.kind() == std::io::ErrorKind::AlreadyExists {
+                "output directory already exists".to_string()
+            } else {
+                "failed to create output directory".to_string()
+            },
+        }
+    })?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o750);
+        std::fs::set_permissions(path, perms).map_err(|e| {
+            tracing::debug!("failed to set directory permissions: {}", e);
+            AdapterError::OutputFailed {
+                message: "failed to set directory permissions".to_string(),
+            }
+        })?;
+    }
+
+    let metadata = std::fs::symlink_metadata(path).map_err(|e| {
+        tracing::debug!("failed to re-read metadata {}: {}", path.display(), e);
+        AdapterError::OutputFailed {
+            message: "failed to inspect output directory".to_string(),
+        }
+    })?;
+    if metadata.file_type().is_symlink() {
+        return Err(AdapterError::OutputFailed {
+            message: "output path is a symlink".to_string(),
+        });
     }
 
     Ok(())
@@ -207,6 +250,31 @@ mod tests {
         assert!(content.contains("cybergym-adapter"));
     }
 
+    #[test]
+    fn create_run_dir_rejects_existing_directory() {
+        let temp = tempfile::tempdir().unwrap();
+        let existing = temp.path().join("cybergym-runs");
+        std::fs::create_dir(&existing).unwrap();
+        std::fs::create_dir(existing.join("existing-run")).unwrap();
+
+        let result = create_run_dir(temp.path(), "existing-run");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("already exists"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn create_run_dir_rejects_symlinked_root() {
+        let temp = tempfile::tempdir().unwrap();
+        let outside = temp.path().join("outside");
+        std::fs::create_dir(&outside).unwrap();
+        std::os::unix::fs::symlink(&outside, temp.path().join("cybergym-runs")).unwrap();
+
+        let result = create_run_dir(temp.path(), "symlink-root");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("symlink"));
+    }
+
     #[cfg(unix)]
     #[test]
     fn write_results_sets_file_permissions() {
@@ -225,5 +293,26 @@ mod tests {
         let path = write_results(&run_dir, &result).unwrap();
         let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o640);
+    }
+
+    #[test]
+    fn write_results_rejects_existing_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let run_dir = create_run_dir(temp.path(), "duplicate-write-test").unwrap();
+        let result = ScanResult {
+            run_id: "duplicate-write-test".to_string(),
+            target: "/tmp/test.c".to_string(),
+            status: ScanStatus::Complete,
+            findings: vec![],
+            started_at: chrono::Utc::now(),
+            finished_at: chrono::Utc::now(),
+            truncated_count: 0,
+        };
+
+        let first_path = write_results(&run_dir, &result).unwrap();
+        assert!(first_path.exists());
+        let second = write_results(&run_dir, &result);
+        assert!(second.is_err());
+        assert!(second.unwrap_err().to_string().contains("already exists"));
     }
 }

@@ -119,9 +119,22 @@ fn scan_directory(dir: &Path, findings: &mut Vec<Finding>) -> anyhow::Result<()>
     let entries = std::fs::read_dir(dir)?;
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_dir() {
+        let file_type = match entry.file_type() {
+            Ok(file_type) => file_type,
+            Err(e) => {
+                tracing::debug!("skipping {}: {}", path.display(), e);
+                continue;
+            }
+        };
+
+        if file_type.is_symlink() {
+            tracing::debug!("skipping symlink entry {}", path.display());
+            continue;
+        }
+
+        if file_type.is_dir() {
             scan_directory(&path, findings)?;
-        } else if is_supported_source(&path) {
+        } else if file_type.is_file() && is_supported_source(&path) {
             match adapters::run_source_pattern_detection(&path) {
                 Ok(raw) => findings.extend(convert_findings(&raw)),
                 Err(e) => {
@@ -150,8 +163,20 @@ async fn run_agentic_analysis(target: &Path) -> anyhow::Result<Vec<Finding>> {
         let mut source_file = None;
         if let Ok(entries) = std::fs::read_dir(target) {
             for entry in entries.flatten() {
-                if is_supported_source(&entry.path()) {
-                    source_file = Some(entry.path());
+                let path = entry.path();
+                let file_type = match entry.file_type() {
+                    Ok(file_type) => file_type,
+                    Err(e) => {
+                        tracing::debug!("skipping {}: {}", path.display(), e);
+                        continue;
+                    }
+                };
+                if file_type.is_symlink() {
+                    tracing::debug!("skipping symlink entry {}", path.display());
+                    continue;
+                }
+                if file_type.is_file() && is_supported_source(&path) {
+                    source_file = Some(path);
                     break;
                 }
             }
@@ -267,5 +292,27 @@ mod tests {
         assert_eq!(converted.len(), 1);
         assert_eq!(converted[0].source(), "cybergym-adapter");
         assert_eq!(converted[0].cwes, vec![119]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn scan_directory_skips_symlinked_subdirectories() {
+        let temp = tempfile::tempdir().unwrap();
+        let real_dir = temp.path().join("real");
+        let nested_dir = real_dir.join("nested");
+        std::fs::create_dir_all(&nested_dir).unwrap();
+        std::fs::write(
+            nested_dir.join("danger.c"),
+            "void vulnerable(char *x) { char buf[8]; gets(buf); }",
+        )
+        .unwrap();
+
+        let scan_root = temp.path().join("scan-root");
+        std::fs::create_dir_all(&scan_root).unwrap();
+        std::os::unix::fs::symlink(&real_dir, scan_root.join("linked-dir")).unwrap();
+
+        let mut findings = Vec::new();
+        scan_directory(&scan_root, &mut findings).unwrap();
+        assert!(findings.is_empty(), "symlinked directories must be skipped");
     }
 }
