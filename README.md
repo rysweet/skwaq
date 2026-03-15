@@ -76,6 +76,10 @@ declared output schema, which is useful for verifying which specialization
 cards and schema-backed contracts are active in the current checkout, including
 debate-stage schemas such as `exploit-analyst-v1` and `defense-analyst-v1`.
 
+The deep debate pipeline also emits confidence-threshold hints in its weighted
+summary so the final synthesizer can bias ambiguous findings toward rejection
+unless direct code evidence is strong.
+
 ### Investigation
 ```bash
 skwaq investigate list         # List investigations

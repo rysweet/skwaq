@@ -1,0 +1,57 @@
+name: "weighted debate confidence thresholds"
+description: "Verifies the weighted debate summary exposes deterministic confidence-threshold hints for confirm, reject, and review-required cases."
+version: "1.0.0"
+
+config:
+  timeout: 300000
+  retries: 0
+  parallel: false
+
+agents:
+  - name: "skwaq-cli"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "."
+      timeout: 300000
+      capture_output: true
+
+steps:
+  - name: "Run weighted debate threshold smoke"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "./tests/qa/bin/debate-thresholds.sh"
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "=== threshold-tests ==="
+        - "test result: ok. 1 passed; 0 failed;"
+        - "validated confidence threshold hints in weighted debate summaries"
+    timeout: 300000
+
+assertions:
+  - name: "Weighted debate threshold smoke succeeds"
+    type: "command_success"
+    agent: "skwaq-cli"
+    params:
+      step: "Run weighted debate threshold smoke"
+
+  - name: "Weighted debate threshold script reports successful threshold validation"
+    type: "output_contains_all"
+    agent: "skwaq-cli"
+    params:
+      step: "Run weighted debate threshold smoke"
+      required_strings:
+        - "=== threshold-tests ==="
+        - "test result: ok. 1 passed; 0 failed;"
+        - "validated confidence threshold hints in weighted debate summaries"
+
+metadata:
+  tags:
+    - "cli"
+    - "agents"
+    - "thresholds"
+    - "regression"
+  priority: "high"
+  author: "copilot-cli"
