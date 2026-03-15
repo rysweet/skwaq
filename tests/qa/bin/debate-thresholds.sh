@@ -24,11 +24,26 @@ CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
   test_build_debate_summary_marks_high_confidence_confirm -- --nocapture \
   | tee "$run_dir/high-confirm.txt"
 CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
+  test_build_debate_summary_marks_high_confidence_confirm_for_mitigated_consensus -- --nocapture \
+  | tee "$run_dir/mitigated-confirm.txt"
+CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
   test_build_debate_summary_marks_high_confidence_reject -- --nocapture \
   | tee "$run_dir/high-reject.txt"
 CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
+  test_build_debate_summary_requires_review_for_offense_only_signal -- --nocapture \
+  | tee "$run_dir/offense-only-review.txt"
+CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
+  test_build_debate_summary_requires_review_for_defense_only_signal -- --nocapture \
+  | tee "$run_dir/defense-only-review.txt"
+CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
+  test_build_debate_summary_requires_review_for_weak_consensus -- --nocapture \
+  | tee "$run_dir/weak-consensus-review.txt"
+CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
+  test_build_debate_context_summary_preserves_threshold_hints -- --nocapture \
+  | tee "$run_dir/context-summary.txt"
+CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
   test_build_debate_summary_prefers_weighted_structured_outputs -- --nocapture \
-  | tee "$run_dir/review-required.txt"
+  | tee "$run_dir/weighted-structured.txt"
 
 echo
 echo "validated confidence threshold hints in weighted debate summaries"

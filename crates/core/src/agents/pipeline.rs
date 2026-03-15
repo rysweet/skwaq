@@ -292,12 +292,15 @@ impl AnalysisPipeline {
 
             // Create a debate summary that highlights agreements and disagreements.
             let debate_summary = build_debate_summary(&result_a, &result_b);
-            let debate_frame = AgentContextFrame::synthetic(
+            let mut debate_frame = AgentContextFrame::synthetic(
                 "debate-summary",
                 "Pipeline-generated summary of offense/defense agreements and disagreements",
                 None,
                 &debate_summary,
             );
+            let debate_context_summary = build_debate_context_summary(&debate_summary);
+            debate_frame.structured_summary = Some(debate_context_summary.clone());
+            debate_frame.key_points = extract_debate_context_key_points(&debate_context_summary);
             results.push(result_a);
             results.push(result_b);
             results.push(AgentResult {
@@ -374,6 +377,74 @@ fn build_previous_results_context(preamble: &str, results: &[AgentResult]) -> St
         ctx.push_str("\n...[truncated]");
     }
     ctx
+}
+
+fn build_debate_context_summary(summary: &str) -> String {
+    let mut compact = String::from("Weighted debate threshold summary:\n");
+    let mut current_finding: Option<String> = None;
+    let mut in_summary_statistics = false;
+
+    for line in summary.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed == "Weighted finding comparisons:" {
+            continue;
+        }
+
+        if trimmed == "Summary statistics:" {
+            in_summary_statistics = true;
+            compact.push_str("\nSummary statistics:\n");
+            continue;
+        }
+
+        if in_summary_statistics {
+            if trimmed.starts_with("- ")
+                || trimmed.starts_with("WEIGHTED DISAGREEMENTS DETECTED:")
+                || trimmed.starts_with("CONFIDENCE THRESHOLD NOTE:")
+            {
+                compact.push_str(trimmed);
+                compact.push('\n');
+            }
+            continue;
+        }
+
+        if trimmed.starts_with("- ") {
+            current_finding = Some(trimmed.to_string());
+            continue;
+        }
+
+        if trimmed.starts_with("threshold_hint:") {
+            if let Some(finding) = current_finding.take() {
+                compact.push_str(&finding);
+                compact.push('\n');
+            }
+            compact.push_str("  ");
+            compact.push_str(trimmed);
+            compact.push('\n');
+        }
+    }
+
+    if compact.trim() == "Weighted debate threshold summary:" {
+        summary.to_string()
+    } else {
+        compact.trim_end().to_string()
+    }
+}
+
+fn extract_debate_context_key_points(summary: &str) -> Vec<String> {
+    const MAX_KEY_POINTS: usize = 10;
+
+    summary
+        .lines()
+        .map(str::trim)
+        .filter(|line| {
+            line.starts_with("- ")
+                || line.starts_with("threshold_hint:")
+                || line.starts_with("CONFIDENCE THRESHOLD NOTE:")
+                || line.starts_with("WEIGHTED DISAGREEMENTS DETECTED:")
+        })
+        .take(MAX_KEY_POINTS)
+        .map(ToOwned::to_owned)
+        .collect()
 }
 
 fn format_context_frame(frame: &AgentContextFrame) -> String {
@@ -740,7 +811,7 @@ fn exploit_verdict_score(verdict: &ExploitAnalystVerdict) -> i32 {
 fn defense_verdict_score(verdict: &DefenseAnalystVerdict) -> i32 {
     match verdict {
         DefenseAnalystVerdict::Vulnerable => 1,
-        DefenseAnalystVerdict::Mitigated => 0,
+        DefenseAnalystVerdict::Mitigated => 1,
         DefenseAnalystVerdict::Safe => -1,
     }
 }
@@ -1593,6 +1664,66 @@ mod tests {
     }
 
     #[test]
+    fn test_build_debate_summary_marks_high_confidence_confirm_for_mitigated_consensus() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![super::super::output_schema::ExploitAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::ExploitAnalystVerdict::Confirmed,
+                            confidence_percent: 95,
+                            evidence: vec!["Attacker fully controls copy length".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![super::super::output_schema::DefenseAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::DefenseAnalystVerdict::Mitigated,
+                            confidence_percent: 90,
+                            evidence: vec!["Exploit path is partially constrained".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("defense=MITIGATED @ 90%"));
+        assert!(summary.contains("net_weight=185"));
+        assert!(summary.contains("threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)"));
+        assert!(summary.contains("high_confidence_confirm: 1"));
+    }
+
+    #[test]
     fn test_build_debate_summary_requires_review_for_offense_only_signal() {
         let result_a = AgentResult {
             agent_name: "exploit-analyst".into(),
@@ -1905,6 +2036,27 @@ mod tests {
         let ctx = build_previous_results_context("preamble", &results);
         assert!(ctx.contains("structured_summary:"));
         assert!(!ctx.contains("Condensed output from vuln-hunter"));
+    }
+
+    #[test]
+    fn test_build_debate_context_summary_preserves_threshold_hints() {
+        let summary = "Weighted finding comparisons:\n- Finding A: offense=CONFIRMED @ 95%, defense=VULNERABLE @ 90%, net_weight=185\n    threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)\n    offense_evidence: attacker controls length\n- Finding B: offense=CONFIRMED @ 60%, defense=MITIGATED @ 55%, net_weight=115\n    threshold_hint: REVIEW_REQUIRED (insufficient_consensus)\n    defense_evidence: partial bounds check\n\nSummary statistics:\n- offense_assessments: 2\n- defense_assessments: 2\n- weighted_disagreements: 0\n- high_confidence_confirm: 1\n- high_confidence_reject: 0\n- review_required: 1\nCONFIDENCE THRESHOLD NOTE: Only auto-confirm findings labelled HIGH_CONFIDENCE_CONFIRM. For REVIEW_REQUIRED findings, verify with direct code evidence before confirming.\n";
+
+        let compact = build_debate_context_summary(summary);
+        assert!(compact.contains("Weighted debate threshold summary:"));
+        assert!(compact.contains(
+            "- Finding A: offense=CONFIRMED @ 95%, defense=VULNERABLE @ 90%, net_weight=185"
+        ));
+        assert!(compact.contains("threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)"));
+        assert!(compact.contains(
+            "- Finding B: offense=CONFIRMED @ 60%, defense=MITIGATED @ 55%, net_weight=115"
+        ));
+        assert!(compact.contains("threshold_hint: REVIEW_REQUIRED (insufficient_consensus)"));
+        assert!(compact.contains("Summary statistics:"));
+        assert!(compact.contains("- review_required: 1"));
+        assert!(compact.contains("CONFIDENCE THRESHOLD NOTE:"));
+        assert!(!compact.contains("offense_evidence:"));
+        assert!(!compact.contains("defense_evidence:"));
     }
 
     #[test]
