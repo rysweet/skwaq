@@ -298,16 +298,21 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             println!("  Output:      {}", eval_dir.display());
             println!();
 
-            let valid_suites: std::collections::HashSet<&str> =
-                suite_cases.keys().map(String::as_str).collect();
+            let valid_suites = gym.available_suite_names();
+            let valid_suite_set: std::collections::HashSet<&str> =
+                valid_suites.iter().map(String::as_str).collect();
             let suite_list: Vec<&str> = suites
                 .split(',')
                 .map(|s| s.trim())
                 .filter(|s| !s.is_empty())
                 .collect();
             for s in &suite_list {
-                if !valid_suites.contains(s) {
-                    anyhow::bail!("Unknown suite '{}'. Valid: {:?}", s, valid_suites);
+                if !valid_suite_set.contains(s) {
+                    anyhow::bail!(
+                        "Unknown suite '{}'. Available: {}",
+                        s,
+                        valid_suites.join(", ")
+                    );
                 }
             }
             let mut all_children: Vec<(String, Vec<std::process::Child>)> = Vec::new();
@@ -510,7 +515,13 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             let adapter = adapters
                 .iter()
                 .find(|a| a.name() == suite.as_str())
-                .ok_or_else(|| anyhow::anyhow!("Unknown suite: {}", suite))?;
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Unknown suite '{}'. Available: {}",
+                        suite,
+                        gym.available_suite_names().join(", ")
+                    )
+                })?;
 
             let data_dir = adapter.setup(&config).await?;
             let cycle =

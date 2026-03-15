@@ -2,7 +2,8 @@
 //!
 //! BinPool (FSE 2025) contains 603 CVEs across 89 CWE classes from 162
 //! Debian packages, with vulnerable AND patched versions at 4 optimization
-//! levels. This is the gold standard for binary vulnerability detection.
+//! levels. skwaq tracks the subset of upstream entries that currently publish
+//! at least one vulnerable binary and at least one CWE in `binpool_info.json`.
 //!
 //! Dataset: https://github.com/SimaArasteh/binpool
 //! Paper: "BinPool: A Dataset of Vulnerabilities for Binary Security Analysis"
@@ -37,12 +38,19 @@ impl BenchmarkAdapter for BinPoolAdapter {
             return Ok(dest);
         }
 
+        if dest.join("binpool_artifact").exists() {
+            std::fs::create_dir_all(&dest)?;
+            std::fs::write(dest.join(".ready"), "")?;
+            return Ok(dest);
+        }
+
         let gt = self.ground_truth()?;
         if gt.download_url.is_empty() {
             anyhow::bail!(
-                "BinPool data must be cloned manually:\n  \
-                 git clone https://github.com/SimaArasteh/binpool.git {}\n  \
-                 Then run: skwaq gym setup",
+                "BinPool data is not auto-downloaded by skwaq.\n  \
+                 1. Download the upstream BinPool artifact from the Zenodo link in https://github.com/SimaArasteh/binpool\n  \
+                 2. Extract it so this path exists:\n     {}/binpool_artifact/\n  \
+                 3. Re-run: skwaq gym setup",
                 dest.display()
             );
         }
@@ -101,10 +109,124 @@ impl BenchmarkAdapter for BinPoolAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ground_truth::TestCase;
+
+    fn write_manifest(path: &Path) {
+        std::fs::write(
+            path,
+            r#"suite = "binpool"
+version = "test"
+download_url = ""
+download_sha256 = ""
+
+[[cases]]
+id = "CVE-2023-0001"
+path = "src/example.c"
+binary_path = "binpool_artifact/CVE-2023-0001/vulnerable/opt0/example.bin"
+expected_cwes = [121]
+is_negative = false
+language = "binary"
+"#,
+        )
+        .unwrap();
+    }
+
+    fn test_config(cache_dir: PathBuf) -> BenchmarkConfig {
+        BenchmarkConfig {
+            cache_dir,
+            cwe_filter: None,
+            max_cases: None,
+            quick_mode: true,
+            llm_only: false,
+            binary_mode: true,
+            parallelism: 1,
+            skip: 0,
+            concurrency: 1,
+            timeout_secs: 30,
+        }
+    }
 
     #[test]
     fn test_adapter_name() {
         let adapter = BinPoolAdapter::new(PathBuf::from("/nonexistent"));
         assert_eq!(adapter.name(), "binpool");
+    }
+
+    #[tokio::test]
+    async fn test_setup_accepts_manually_extracted_dataset() {
+        let temp = tempfile::tempdir().unwrap();
+        let manifest = temp.path().join("binpool.toml");
+        write_manifest(&manifest);
+
+        let cache_dir = temp.path().join("cache");
+        let extracted = cache_dir.join("binpool/binpool_artifact");
+        std::fs::create_dir_all(&extracted).unwrap();
+
+        let adapter = BinPoolAdapter::new(manifest);
+        let dest = adapter
+            .setup(&test_config(cache_dir.clone()))
+            .await
+            .unwrap();
+
+        assert_eq!(dest, cache_dir.join("binpool"));
+        assert!(dest.join(".ready").exists());
+    }
+
+    #[tokio::test]
+    async fn test_setup_explains_manual_dataset_steps() {
+        let temp = tempfile::tempdir().unwrap();
+        let manifest = temp.path().join("binpool.toml");
+        write_manifest(&manifest);
+
+        let cache_dir = temp.path().join("cache");
+        let adapter = BinPoolAdapter::new(manifest);
+        let err = adapter
+            .setup(&test_config(cache_dir.clone()))
+            .await
+            .unwrap_err();
+
+        let message = err.to_string();
+        assert!(message.contains("Zenodo"));
+        assert!(message.contains("binpool_artifact"));
+        assert!(message.contains("skwaq gym setup"));
+    }
+
+    #[tokio::test]
+    async fn test_run_case_reports_missing_binary_path() {
+        let temp = tempfile::tempdir().unwrap();
+        let manifest = temp.path().join("binpool.toml");
+        write_manifest(&manifest);
+
+        let adapter = BinPoolAdapter::new(manifest);
+        let case = TestCase {
+            id: "CVE-2023-0001".to_string(),
+            path: "src/example.c".to_string(),
+            binary_path: Some("binpool_artifact/CVE-2023-0001/vulnerable/opt0/example.bin".into()),
+            expected_cwes: vec![121],
+            is_negative: false,
+            language: "binary".to_string(),
+        };
+
+        let err = adapter
+            .run_case(
+                &case,
+                temp.path(),
+                &BenchmarkConfig {
+                    cache_dir: temp.path().join("cache"),
+                    cwe_filter: None,
+                    max_cases: None,
+                    quick_mode: true,
+                    llm_only: false,
+                    binary_mode: true,
+                    parallelism: 1,
+                    skip: 0,
+                    concurrency: 1,
+                    timeout_secs: 30,
+                },
+            )
+            .await
+            .unwrap_err();
+
+        assert!(err.to_string().contains("Run `skwaq gym setup`"));
     }
 }

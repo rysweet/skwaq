@@ -124,6 +124,13 @@ impl Gym {
         })
     }
 
+    /// Return the currently registered suite names in deterministic order.
+    pub fn available_suite_names(&self) -> Vec<String> {
+        let mut suites: Vec<String> = self.adapters.iter().map(|a| a.name().to_string()).collect();
+        suites.sort();
+        suites
+    }
+
     /// Setup all benchmark data.
     pub async fn setup(&self) -> anyhow::Result<()> {
         for adapter in &self.adapters {
@@ -157,16 +164,19 @@ impl Gym {
         concurrency: usize,
         adaptive: bool,
     ) -> anyhow::Result<()> {
-        let commit = get_git_commit(&self.skwaq_root)?;
-
         let adapters: Vec<&Box<dyn BenchmarkAdapter>> = match suite {
             Some(name) => self.adapters.iter().filter(|a| a.name() == name).collect(),
             None => self.adapters.iter().collect(),
         };
 
         if adapters.is_empty() {
-            anyhow::bail!("Unknown suite. Available: fixtures");
+            anyhow::bail!(
+                "Unknown suite. Available: {}",
+                self.available_suite_names().join(", ")
+            );
         }
+
+        let commit = get_git_commit(&self.skwaq_root)?;
 
         let mut config = self.config.clone();
         config.cwe_filter = cwe_filter;
@@ -615,5 +625,77 @@ fn reconstruct_score(
         recall: run.recall,
         f1: run.f1,
         per_cwe,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Gym;
+
+    fn write_manifest(path: &std::path::Path, suite: &str) {
+        std::fs::write(
+            path,
+            format!(
+                r#"suite = "{suite}"
+version = "test"
+download_url = ""
+download_sha256 = ""
+
+[[cases]]
+id = "{suite}_case"
+path = "cases/{suite}.txt"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+"#
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_available_suite_names_includes_optional_manifests() {
+        let temp = tempfile::tempdir().unwrap();
+        let gt_dir = temp.path().join("data/gym/ground_truth");
+        std::fs::create_dir_all(&gt_dir).unwrap();
+        std::fs::create_dir_all(temp.path().join("tests/fixtures")).unwrap();
+
+        write_manifest(&gt_dir.join("fixtures.toml"), "fixtures");
+        write_manifest(&gt_dir.join("binpool.toml"), "binpool");
+
+        let gym = Gym::new(temp.path().to_path_buf()).unwrap();
+        assert_eq!(gym.available_suite_names(), vec!["binpool", "fixtures"]);
+    }
+
+    #[tokio::test]
+    async fn test_unknown_suite_lists_registered_suites() {
+        let temp = tempfile::tempdir().unwrap();
+        let gt_dir = temp.path().join("data/gym/ground_truth");
+        std::fs::create_dir_all(&gt_dir).unwrap();
+        std::fs::create_dir_all(temp.path().join("tests/fixtures")).unwrap();
+
+        write_manifest(&gt_dir.join("fixtures.toml"), "fixtures");
+        write_manifest(&gt_dir.join("binpool.toml"), "binpool");
+
+        let mut gym = Gym::new(temp.path().to_path_buf()).unwrap();
+        let err = gym
+            .run(
+                Some("does-not-exist"),
+                None,
+                Some(1),
+                true,
+                false,
+                true,
+                0,
+                1,
+                false,
+            )
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "Unknown suite. Available: binpool, fixtures"
+        );
     }
 }
