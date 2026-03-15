@@ -1,0 +1,57 @@
+name: "skwaq gym improve - KB guidance on false negatives"
+description: "Verifies the CLI improve flow emits KB guidance lookups when a false negative is analyzed."
+version: "1.0.0"
+
+config:
+  timeout: 240000
+  retries: 0
+  parallel: false
+
+agents:
+  - name: "skwaq-cli"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "."
+      timeout: 240000
+      capture_output: true
+
+steps:
+  - name: "Run KB-informed gym improve sample"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "RUST_LOG=info ./tests/qa/bin/gym-improve-kb-context.sh"
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "QA CHECK: methodology KB query returned positive hits"
+        - "QA CHECK: cwe-families KB query returned positive hits"
+        - "QA CHECK: improve cycle prepared non-empty KB guidance snippets"
+    timeout: 240000
+
+assertions:
+  - name: "Improve command succeeds"
+    type: "command_success"
+    agent: "skwaq-cli"
+    params:
+      step: "Run KB-informed gym improve sample"
+
+  - name: "Improve output includes KB guidance evidence"
+    type: "output_contains_all"
+    agent: "skwaq-cli"
+    params:
+      step: "Run KB-informed gym improve sample"
+      required_strings:
+        - "QA CHECK: methodology KB query returned positive hits"
+        - "QA CHECK: cwe-families KB query returned positive hits"
+        - "QA CHECK: improve cycle prepared non-empty KB guidance snippets"
+
+metadata:
+  tags:
+    - "cli"
+    - "improve"
+    - "knowledge-base"
+    - "regression"
+  priority: "high"
+  author: "copilot-cli"
