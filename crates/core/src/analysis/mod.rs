@@ -11,6 +11,7 @@ pub mod patterns_source;
 pub mod perspective_context;
 pub mod perspective_dataflow;
 pub mod perspective_pattern;
+pub mod semantic_classifier;
 pub mod semgrep;
 pub mod severity;
 pub mod surface;
@@ -27,6 +28,10 @@ pub use patterns_binary::DangerousApiDetector;
 pub use perspective_context::context_perspective;
 pub use perspective_dataflow::dataflow_perspective;
 pub use perspective_pattern::pattern_perspective;
+pub use semantic_classifier::{
+    extract_function_from_title, extract_line_from_title, SemanticPatternClass,
+    SemanticPatternClassifier,
+};
 pub use semgrep::SemgrepRunner;
 pub use severity::compute_severity;
 pub use surface::{

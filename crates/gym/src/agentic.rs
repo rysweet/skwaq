@@ -13,7 +13,10 @@
 use crate::adapters::DetectedFinding;
 use crate::scoring;
 use anyhow::Context;
-use skwaq_core::analysis::DangerousApiDetector;
+use skwaq_core::analysis::{
+    extract_function_from_title, extract_line_from_title, DangerousApiDetector,
+    SemanticPatternClass, SemanticPatternClassifier,
+};
 use skwaq_core::binary::ghidra::{load_cached_or_analyze, GhidraLoadOutcome};
 use skwaq_core::config::Config;
 use skwaq_core::graph::builder::GraphBuilder;
@@ -194,11 +197,10 @@ pub async fn run_agentic_source_analysis(
     let synthesized =
         synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await?;
 
-    // Deduplicate by category (keep one finding per category)
     let mut seen_categories: HashSet<String> = HashSet::new();
     let deduped: Vec<DetectedFinding> = synthesized
         .into_iter()
-        .filter(|f| seen_categories.insert(f.category.clone()))
+        .filter(|f| seen_categories.insert(dedup_key(f)))
         .collect();
 
     Ok(deduped)
@@ -297,7 +299,7 @@ pub async fn run_agentic_binary_analysis(
     let mut seen_categories: HashSet<String> = HashSet::new();
     let deduped: Vec<DetectedFinding> = synthesized
         .into_iter()
-        .filter(|f| seen_categories.insert(f.category.clone()))
+        .filter(|f| seen_categories.insert(dedup_key(f)))
         .collect();
 
     Ok(deduped)
@@ -344,7 +346,7 @@ pub async fn run_llm_only_source_analysis(
     let mut seen_categories: HashSet<String> = HashSet::new();
     let deduped: Vec<DetectedFinding> = all_findings
         .into_iter()
-        .filter(|f| seen_categories.insert(f.category.clone()))
+        .filter(|f| seen_categories.insert(dedup_key(f)))
         .collect();
 
     Ok(deduped)
@@ -388,7 +390,7 @@ pub async fn run_llm_only_binary_analysis(
     let mut seen_categories: HashSet<String> = HashSet::new();
     let deduped: Vec<DetectedFinding> = all_findings
         .into_iter()
-        .filter(|f| seen_categories.insert(f.category.clone()))
+        .filter(|f| seen_categories.insert(dedup_key(f)))
         .collect();
 
     Ok(deduped)
@@ -548,18 +550,20 @@ async fn llm_synthesize(
     for f in pattern_findings {
         // Sanitize titles to prevent prompt injection from finding content
         let safe_title = sanitize_for_prompt(&f.title);
+        let semantic = semantic_prompt_hint(f);
         prompt.push_str(&format!(
-            "ID: {} | Category: {} | Severity: {} | {}\n",
-            f.id, f.category, f.severity, safe_title
+            "ID: {} | Category: {} | Severity: {} | Semantic classes: {} | {}\n",
+            f.id, f.category, f.severity, semantic, safe_title
         ));
     }
 
     prompt.push_str("\n=== LLM AGENT FINDINGS ===\n");
     for f in llm_findings {
         let safe_title = sanitize_for_prompt(&f.title);
+        let semantic = semantic_prompt_hint(f);
         prompt.push_str(&format!(
-            "ID: {} | Category: {} | Severity: {} | {}\n",
-            f.id, f.category, f.severity, safe_title
+            "ID: {} | Category: {} | Severity: {} | Semantic classes: {} | {}\n",
+            f.id, f.category, f.severity, semantic, safe_title
         ));
     }
 
@@ -647,22 +651,19 @@ fn apply_synthesis_decisions(
         total
     );
 
-    // Keep all non-rejected findings, deduplicated by category
-    // LLM findings first (they represent deeper analysis)
+    // Keep all non-rejected findings, deduplicated by semantic class when
+    // available so coarse categories like "memory" do not collapse distinct
+    // vulnerability classes.
     let mut seen_categories: HashSet<String> = HashSet::new();
     let mut synthesized: Vec<DetectedFinding> = Vec::new();
 
     for f in llm_findings {
-        if !rejected_ids.contains(&f.id.to_lowercase())
-            && seen_categories.insert(f.category.clone())
-        {
+        if !rejected_ids.contains(&f.id.to_lowercase()) && seen_categories.insert(dedup_key(f)) {
             synthesized.push(f.clone());
         }
     }
     for f in pattern_findings {
-        if !rejected_ids.contains(&f.id.to_lowercase())
-            && seen_categories.insert(f.category.clone())
-        {
+        if !rejected_ids.contains(&f.id.to_lowercase()) && seen_categories.insert(dedup_key(f)) {
             synthesized.push(f.clone());
         }
     }
@@ -798,7 +799,7 @@ fn collect_findings_from_db(
                 cwes: vec![],
                 file: String::new(),
                 function: extract_function_from_title(&title),
-                line: None,
+                line: extract_line_from_title(&title),
                 title,
             })
         })?
@@ -831,7 +832,7 @@ fn collect_all_findings_from_db(
                 cwes: vec![],
                 file: String::new(),
                 function: extract_function_from_title(&title),
-                line: None,
+                line: extract_line_from_title(&title),
                 title,
             })
         })?
@@ -840,15 +841,84 @@ fn collect_all_findings_from_db(
     Ok(findings)
 }
 
-fn extract_function_from_title(title: &str) -> String {
-    if let Some(start) = title.find(": ") {
-        let rest = &title[start + 2..];
-        if let Some(end) = rest.find(' ') {
-            return rest[..end].to_string();
-        }
-        return rest.to_string();
+fn semantic_classes_for_finding(finding: &DetectedFinding) -> Vec<SemanticPatternClass> {
+    SemanticPatternClassifier::new()
+        .classify(&finding.category, &finding.title, &finding.function)
+        .into_iter()
+        .collect()
+}
+
+fn semantic_classes_for_prompt(finding: &DetectedFinding) -> Vec<SemanticPatternClass> {
+    SemanticPatternClassifier::new()
+        .classify(&finding.category, "", &finding.function)
+        .into_iter()
+        .collect()
+}
+
+fn normalize_function_key(function: &str) -> String {
+    function
+        .split('@')
+        .next()
+        .unwrap_or(function)
+        .trim()
+        .trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
+        .to_ascii_lowercase()
+}
+
+fn dedup_key(finding: &DetectedFinding) -> String {
+    let function = normalize_function_key(&finding.function);
+    let scope = if function.is_empty() {
+        "global".to_string()
+    } else {
+        function
+    };
+    let location = dedup_location_key(finding);
+
+    let classes = semantic_classes_for_finding(finding);
+    if classes.is_empty() {
+        return format!("category:{}:{}:{}", finding.category, scope, location);
     }
-    String::new()
+
+    let class_names = classes
+        .into_iter()
+        .map(|class| class.as_str())
+        .collect::<Vec<_>>()
+        .join("+");
+    format!("semantic:{}:{}:{}", class_names, scope, location)
+}
+
+fn dedup_location_key(finding: &DetectedFinding) -> String {
+    if let Some(line) = finding.line {
+        return format!("line:{line}");
+    }
+
+    let normalized_title = finding
+        .title
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch.to_ascii_lowercase()
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+    if normalized_title.is_empty() || normalized_title.bytes().all(|byte| byte == b'_') {
+        return format!("id:{}", finding.id);
+    }
+    format!("title:{normalized_title}")
+}
+
+fn semantic_prompt_hint(finding: &DetectedFinding) -> String {
+    let classes = semantic_classes_for_prompt(finding);
+    if classes.is_empty() {
+        return "none".to_string();
+    }
+    classes
+        .into_iter()
+        .map(|class| class.as_str())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 #[cfg(test)]
@@ -930,9 +1000,139 @@ mod tests {
         let mut seen = HashSet::new();
         let deduped: Vec<_> = findings
             .into_iter()
-            .filter(|f| seen.insert(f.category.clone()))
+            .filter(|f| seen.insert(dedup_key(f)))
             .collect();
         assert_eq!(deduped.len(), 1);
+    }
+
+    #[test]
+    fn test_semantic_dedup_preserves_distinct_memory_classes() {
+        let findings = vec![
+            DetectedFinding {
+                id: "1".into(),
+                category: "memory".into(),
+                severity: "high".into(),
+                cwes: vec![],
+                file: "test.c".into(),
+                function: "strcpy".into(),
+                line: Some(10),
+                title: "Pattern: strcpy".into(),
+            },
+            DetectedFinding {
+                id: "2".into(),
+                category: "memory".into(),
+                severity: "critical".into(),
+                cwes: vec![],
+                file: "test.c".into(),
+                function: "cleanup".into(),
+                line: Some(40),
+                title: "LLM: use-after-free in cleanup".into(),
+            },
+        ];
+
+        let mut seen = HashSet::new();
+        let deduped: Vec<_> = findings
+            .into_iter()
+            .filter(|f| seen.insert(dedup_key(f)))
+            .collect();
+        assert_eq!(deduped.len(), 2);
+    }
+
+    #[test]
+    fn test_semantic_dedup_preserves_same_class_on_different_lines() {
+        let findings = vec![
+            DetectedFinding {
+                id: "1".into(),
+                category: "tempfile".into(),
+                severity: "high".into(),
+                cwes: vec![],
+                file: "test.c".into(),
+                function: "create_temp".into(),
+                line: Some(10),
+                title: "Pattern: mktemp".into(),
+            },
+            DetectedFinding {
+                id: "2".into(),
+                category: "tempfile".into(),
+                severity: "high".into(),
+                cwes: vec![],
+                file: "test.c".into(),
+                function: "create_temp".into(),
+                line: Some(20),
+                title: "Pattern: mktemp".into(),
+            },
+        ];
+
+        let mut seen = HashSet::new();
+        let deduped: Vec<_> = findings
+            .into_iter()
+            .filter(|f| seen.insert(dedup_key(f)))
+            .collect();
+        assert_eq!(deduped.len(), 2);
+    }
+
+    #[test]
+    fn test_semantic_prompt_hint_lists_classes() {
+        let finding = DetectedFinding {
+            id: "1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "LLM: stack buffer overflow in strcpy".into(),
+        };
+
+        assert_eq!(semantic_prompt_hint(&finding), "buffer_overflow");
+    }
+
+    #[test]
+    fn test_semantic_prompt_hint_does_not_echo_llm_title() {
+        let finding = DetectedFinding {
+            id: "1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "cleanup".into(),
+            line: Some(10),
+            title: "LLM: use-after-free in cleanup".into(),
+        };
+
+        assert_eq!(semantic_prompt_hint(&finding), "none");
+    }
+
+    #[test]
+    fn test_dedup_location_key_falls_back_to_id_for_empty_title() {
+        let finding = DetectedFinding {
+            id: "finding-1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "parse".into(),
+            line: None,
+            title: String::new(),
+        };
+
+        assert_eq!(dedup_location_key(&finding), "id:finding-1");
+    }
+
+    #[test]
+    fn test_dedup_location_key_falls_back_to_id_for_symbol_only_title() {
+        let finding = DetectedFinding {
+            id: "finding-2".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "parse".into(),
+            line: None,
+            title: "!!!".into(),
+        };
+
+        assert_eq!(dedup_location_key(&finding), "id:finding-2");
     }
 
     #[test]

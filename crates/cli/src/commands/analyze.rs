@@ -7,7 +7,9 @@
 
 use super::common::resolve_investigation;
 use skwaq_core::agents::{default_pipeline, pipeline_from_names};
-use skwaq_core::analysis::{AnalysisOrchestrator, FindingStatus};
+use skwaq_core::analysis::{
+    extract_function_from_title, AnalysisOrchestrator, FindingStatus, SemanticPatternClassifier,
+};
 use skwaq_core::config::Config;
 use skwaq_core::graph::GraphDb;
 use skwaq_core::memory::MemoryStore;
@@ -160,21 +162,24 @@ async fn run_combined_analysis(
     } else {
         println!("{} finding(s) from combined analysis:\n", findings.len());
         println!(
-            "  {:<40} {:<10} {:<15} SOURCE",
-            "TITLE", "SEVERITY", "CATEGORY"
+            "  {:<36} {:<10} {:<15} {:<22} SOURCE",
+            "TITLE", "SEVERITY", "CATEGORY", "SEMANTIC"
         );
-        println!("  {}", "-".repeat(85));
+        println!("  {}", "-".repeat(110));
         for (title, severity, category, _evidence, agent) in &findings {
             let source = if agent.contains("pattern") || agent.contains("taint") {
                 "pattern"
             } else {
                 "AI agent"
             };
+            let semantic =
+                semantic_classes_text(category, title, extract_function_from_title(title));
             println!(
-                "  {:<40} {:<10} {:<15} {}",
-                truncate(title, 40),
+                "  {:<36} {:<10} {:<15} {:<22} {}",
+                truncate(title, 36),
                 severity,
                 category,
+                truncate(&semantic, 22),
                 source,
             );
         }
@@ -248,6 +253,35 @@ fn run_quick_analysis(investigation_id: Option<&str>) -> anyhow::Result<()> {
             }
             println!("  {}\n", parts.join(", "));
         }
+
+        let discovered_findings: Vec<_> = cycle
+            .findings
+            .iter()
+            .filter(|finding| finding.cycle_discovered == cycle.cycle_number)
+            .collect();
+        if !discovered_findings.is_empty() {
+            println!(
+                "  {:<30} {:<15} {:<10} {:<22} STATUS",
+                "FINDING", "CATEGORY", "SEVERITY", "SEMANTIC"
+            );
+            println!("  {}", "-".repeat(110));
+            for finding in discovered_findings {
+                let semantic = semantic_classes_text(
+                    &finding.category,
+                    &finding.title,
+                    finding.location.function.clone(),
+                );
+                println!(
+                    "  {:<30} {:<15} {:<10} {:<22} {}",
+                    truncate(&finding.title, 30),
+                    finding.category,
+                    finding.severity,
+                    truncate(&semantic, 22),
+                    finding.status,
+                );
+            }
+            println!();
+        }
     }
 
     // Summary
@@ -283,24 +317,32 @@ fn run_quick_analysis(investigation_id: Option<&str>) -> anyhow::Result<()> {
             .filter(|f| f.status != FindingStatus::Invalidated)
             .collect();
 
-        if !active_findings.is_empty() {
-            println!();
-            println!(
-                "  {:<35} {:<15} {:<10} STATUS",
-                "FINDING", "CATEGORY", "SEVERITY"
-            );
-            println!("  {}", "-".repeat(85));
+        println!();
+        println!(
+            "  {:<30} {:<15} {:<10} {:<22} STATUS",
+            "FINDING", "CATEGORY", "SEVERITY", "SEMANTIC"
+        );
+        println!("  {}", "-".repeat(110));
+        if active_findings.is_empty() {
+            println!("  (no active findings)");
+        } else {
             for finding in &active_findings {
+                let semantic = semantic_classes_text(
+                    &finding.category,
+                    &finding.title,
+                    finding.location.function.clone(),
+                );
                 println!(
-                    "  {:<35} {:<15} {:<10} {}",
-                    truncate(&finding.title, 35),
+                    "  {:<30} {:<15} {:<10} {:<22} {}",
+                    truncate(&finding.title, 30),
                     finding.category,
                     finding.severity,
+                    truncate(&semantic, 22),
                     finding.status,
                 );
             }
-            println!();
         }
+        println!();
     }
 
     println!("Investigation: {inv_id}");
@@ -317,5 +359,53 @@ fn truncate(s: &str, max: usize) -> String {
     } else {
         let truncated: String = chars[..max.saturating_sub(3)].iter().collect();
         format!("{truncated}...")
+    }
+}
+
+fn semantic_classes_text(category: &str, title: &str, function_name: String) -> String {
+    let classes = SemanticPatternClassifier::new()
+        .classify(category, title, &function_name)
+        .into_iter()
+        .map(|class| class.as_str())
+        .collect::<Vec<_>>();
+    if classes.is_empty() {
+        "-".to_string()
+    } else {
+        classes.join(",")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn semantic_classes_text_reports_buffer_overflow() {
+        let semantic = semantic_classes_text(
+            "memory",
+            "Dangerous pattern: strcpy (foo.c:10)",
+            "strcpy".into(),
+        );
+
+        assert_eq!(semantic, "buffer_overflow");
+    }
+
+    #[test]
+    fn semantic_classes_text_falls_back_to_dash() {
+        let semantic = semantic_classes_text(
+            "memory",
+            "Suspicious memory corruption risk",
+            "parse_packet".into(),
+        );
+
+        assert_eq!(semantic, "-");
+    }
+
+    #[test]
+    fn extract_function_from_title_handles_pattern_titles() {
+        assert_eq!(
+            extract_function_from_title("Dangerous pattern: strcpy (foo.c:10)"),
+            "strcpy"
+        );
     }
 }

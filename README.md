@@ -65,6 +65,11 @@ skwaq analyze --quick          # Pattern detection + taint analysis
 skwaq analyze --investigation <id>  # Analyze specific investigation
 ```
 
+`skwaq analyze --quick` now prints a `SEMANTIC` column for discovered and final
+findings. This surfaces stable vulnerability classes such as
+`buffer_overflow`, `format_string`, and `command_injection`, even when later
+cycles challenge the initial coarse finding.
+
 ### Investigation
 ```bash
 skwaq investigate list         # List investigations

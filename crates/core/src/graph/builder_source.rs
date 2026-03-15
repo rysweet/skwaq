@@ -39,7 +39,8 @@ impl<'a> GraphBuilder<'a> {
         for parsed in parsed_files {
             counts.files += 1;
             let file_prefix = format!(
-                "src-{}-{}",
+                "src-{}-{}-{}",
+                investigation_id,
                 parsed.language,
                 parsed.path.replace(['/', '\\', '.'], "_")
             );
@@ -177,5 +178,76 @@ impl<'a> GraphBuilder<'a> {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::graph::GraphDb;
+    use crate::source::parse_file;
+
+    fn fixtures_dir() -> std::path::PathBuf {
+        let mut dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        dir.pop();
+        dir.pop();
+        dir.join("tests/fixtures")
+    }
+
+    #[test]
+    fn build_from_source_keeps_nodes_per_investigation() {
+        let fixture = fixtures_dir().join("buffer_overflow.c");
+        if !fixture.exists() {
+            return;
+        }
+
+        let parsed = parse_file(&fixture).unwrap();
+        let db = GraphDb::in_memory().unwrap();
+        let builder = GraphBuilder::new(&db);
+
+        builder
+            .build_from_source(std::slice::from_ref(&parsed), "inv-a")
+            .unwrap();
+        builder
+            .build_from_source(std::slice::from_ref(&parsed), "inv-b")
+            .unwrap();
+
+        let inv_a_functions: i64 = db
+            .conn()
+            .query_row(
+                "SELECT count(*) FROM functions WHERE investigation_id = 'inv-a'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let inv_b_functions: i64 = db
+            .conn()
+            .query_row(
+                "SELECT count(*) FROM functions WHERE investigation_id = 'inv-b'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let inv_a_sinks: i64 = db
+            .conn()
+            .query_row(
+                "SELECT count(*) FROM data_sinks WHERE investigation_id = 'inv-a'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let inv_b_sinks: i64 = db
+            .conn()
+            .query_row(
+                "SELECT count(*) FROM data_sinks WHERE investigation_id = 'inv-b'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert!(inv_a_functions > 0);
+        assert_eq!(inv_a_functions, inv_b_functions);
+        assert!(inv_a_sinks > 0);
+        assert_eq!(inv_a_sinks, inv_b_sinks);
     }
 }
