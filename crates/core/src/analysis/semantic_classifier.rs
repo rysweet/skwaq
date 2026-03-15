@@ -81,6 +81,30 @@ impl SemanticPatternClassifier {
     }
 }
 
+/// Extract the best-effort function hint embedded in a finding title.
+pub fn extract_function_from_title(title: &str) -> String {
+    let Some((_, rest)) = title.split_once(": ") else {
+        return String::new();
+    };
+
+    let head = rest.split(" (").next().unwrap_or(rest).trim();
+    if let Some((_, sink)) = head.rsplit_once("->") {
+        return sink.trim().to_string();
+    }
+
+    head.split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .to_string()
+}
+
+/// Extract a best-effort source line hint from titles like `... (file.c:42)`.
+pub fn extract_line_from_title(title: &str) -> Option<u32> {
+    let (_, suffix) = title.rsplit_once(':')?;
+    let digits = suffix.strip_suffix(')')?.trim();
+    digits.parse().ok()
+}
+
 fn normalize_text(input: &str) -> String {
     input.trim().to_ascii_lowercase()
 }
@@ -238,5 +262,29 @@ mod tests {
 
         assert!(classes.contains(&SemanticPatternClass::RaceCondition));
         assert!(classes.contains(&SemanticPatternClass::InsecureTempFile));
+    }
+
+    #[test]
+    fn extracts_function_from_pattern_title() {
+        assert_eq!(
+            extract_function_from_title("Dangerous pattern: strcpy (foo.c:10)"),
+            "strcpy"
+        );
+    }
+
+    #[test]
+    fn extracts_sink_function_from_flow_title() {
+        assert_eq!(
+            extract_function_from_title("Unsanitized flow: recv -> strcpy"),
+            "strcpy"
+        );
+    }
+
+    #[test]
+    fn extracts_line_from_pattern_title() {
+        assert_eq!(
+            extract_line_from_title("Dangerous pattern: strcpy (foo.c:10)"),
+            Some(10)
+        );
     }
 }

@@ -1,0 +1,59 @@
+name: "skwaq analyze - semantic classes in quick output"
+description: "Verifies source ingest plus quick analysis surfaces semantic pattern classes for deterministic CLI users."
+version: "1.0.0"
+
+config:
+  timeout: 300000
+  retries: 0
+  parallel: false
+
+agents:
+  - name: "skwaq-cli"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "."
+      timeout: 300000
+      capture_output: true
+
+steps:
+  - name: "Run semantic quick-analysis smoke"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "./tests/qa/bin/analyze-semantic-classes.sh"
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "=== ingest-source ==="
+        - "Ready. Run: skwaq analyze --quick --investigation"
+        - "=== analyze-quick ==="
+        - "SEMANTIC"
+        - "buffer_overflow"
+    timeout: 300000
+
+assertions:
+  - name: "Semantic quick-analysis smoke succeeds"
+    type: "command_success"
+    agent: "skwaq-cli"
+    params:
+      step: "Run semantic quick-analysis smoke"
+
+  - name: "Quick analysis shows semantic class"
+    type: "output_contains_all"
+    agent: "skwaq-cli"
+    params:
+      step: "Run semantic quick-analysis smoke"
+      required_strings:
+        - "Ready. Run: skwaq analyze --quick --investigation"
+        - "SEMANTIC"
+        - "buffer_overflow"
+
+metadata:
+  tags:
+    - "cli"
+    - "semantic"
+    - "analysis"
+    - "regression"
+  priority: "high"
+  author: "copilot-cli"

@@ -13,7 +13,10 @@
 use crate::adapters::DetectedFinding;
 use crate::scoring;
 use anyhow::Context;
-use skwaq_core::analysis::{DangerousApiDetector, SemanticPatternClass, SemanticPatternClassifier};
+use skwaq_core::analysis::{
+    extract_function_from_title, extract_line_from_title, DangerousApiDetector,
+    SemanticPatternClass, SemanticPatternClassifier,
+};
 use skwaq_core::binary::ghidra::{load_cached_or_analyze, GhidraLoadOutcome};
 use skwaq_core::config::Config;
 use skwaq_core::graph::builder::GraphBuilder;
@@ -796,7 +799,7 @@ fn collect_findings_from_db(
                 cwes: vec![],
                 file: String::new(),
                 function: extract_function_from_title(&title),
-                line: None,
+                line: extract_line_from_title(&title),
                 title,
             })
         })?
@@ -829,7 +832,7 @@ fn collect_all_findings_from_db(
                 cwes: vec![],
                 file: String::new(),
                 function: extract_function_from_title(&title),
-                line: None,
+                line: extract_line_from_title(&title),
                 title,
             })
         })?
@@ -838,20 +841,16 @@ fn collect_all_findings_from_db(
     Ok(findings)
 }
 
-fn extract_function_from_title(title: &str) -> String {
-    if let Some(start) = title.find(": ") {
-        let rest = &title[start + 2..];
-        if let Some(end) = rest.find(' ') {
-            return rest[..end].to_string();
-        }
-        return rest.to_string();
-    }
-    String::new()
-}
-
 fn semantic_classes_for_finding(finding: &DetectedFinding) -> Vec<SemanticPatternClass> {
     SemanticPatternClassifier::new()
         .classify(&finding.category, &finding.title, &finding.function)
+        .into_iter()
+        .collect()
+}
+
+fn semantic_classes_for_prompt(finding: &DetectedFinding) -> Vec<SemanticPatternClass> {
+    SemanticPatternClassifier::new()
+        .classify(&finding.category, "", &finding.function)
         .into_iter()
         .collect()
 }
@@ -873,10 +872,11 @@ fn dedup_key(finding: &DetectedFinding) -> String {
     } else {
         function
     };
+    let location = dedup_location_key(finding);
 
     let classes = semantic_classes_for_finding(finding);
     if classes.is_empty() {
-        return format!("category:{}:{}", finding.category, scope);
+        return format!("category:{}:{}:{}", finding.category, scope, location);
     }
 
     let class_names = classes
@@ -884,11 +884,33 @@ fn dedup_key(finding: &DetectedFinding) -> String {
         .map(|class| class.as_str())
         .collect::<Vec<_>>()
         .join("+");
-    format!("semantic:{}:{}", class_names, scope)
+    format!("semantic:{}:{}:{}", class_names, scope, location)
+}
+
+fn dedup_location_key(finding: &DetectedFinding) -> String {
+    if let Some(line) = finding.line {
+        return format!("line:{line}");
+    }
+
+    let normalized_title = finding
+        .title
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch.to_ascii_lowercase()
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+    if normalized_title.is_empty() || normalized_title.bytes().all(|byte| byte == b'_') {
+        return format!("id:{}", finding.id);
+    }
+    format!("title:{normalized_title}")
 }
 
 fn semantic_prompt_hint(finding: &DetectedFinding) -> String {
-    let classes = semantic_classes_for_finding(finding);
+    let classes = semantic_classes_for_prompt(finding);
     if classes.is_empty() {
         return "none".to_string();
     }
@@ -1017,6 +1039,39 @@ mod tests {
     }
 
     #[test]
+    fn test_semantic_dedup_preserves_same_class_on_different_lines() {
+        let findings = vec![
+            DetectedFinding {
+                id: "1".into(),
+                category: "tempfile".into(),
+                severity: "high".into(),
+                cwes: vec![],
+                file: "test.c".into(),
+                function: "create_temp".into(),
+                line: Some(10),
+                title: "Pattern: mktemp".into(),
+            },
+            DetectedFinding {
+                id: "2".into(),
+                category: "tempfile".into(),
+                severity: "high".into(),
+                cwes: vec![],
+                file: "test.c".into(),
+                function: "create_temp".into(),
+                line: Some(20),
+                title: "Pattern: mktemp".into(),
+            },
+        ];
+
+        let mut seen = HashSet::new();
+        let deduped: Vec<_> = findings
+            .into_iter()
+            .filter(|f| seen.insert(dedup_key(f)))
+            .collect();
+        assert_eq!(deduped.len(), 2);
+    }
+
+    #[test]
     fn test_semantic_prompt_hint_lists_classes() {
         let finding = DetectedFinding {
             id: "1".into(),
@@ -1030,6 +1085,54 @@ mod tests {
         };
 
         assert_eq!(semantic_prompt_hint(&finding), "buffer_overflow");
+    }
+
+    #[test]
+    fn test_semantic_prompt_hint_does_not_echo_llm_title() {
+        let finding = DetectedFinding {
+            id: "1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "cleanup".into(),
+            line: Some(10),
+            title: "LLM: use-after-free in cleanup".into(),
+        };
+
+        assert_eq!(semantic_prompt_hint(&finding), "none");
+    }
+
+    #[test]
+    fn test_dedup_location_key_falls_back_to_id_for_empty_title() {
+        let finding = DetectedFinding {
+            id: "finding-1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "parse".into(),
+            line: None,
+            title: String::new(),
+        };
+
+        assert_eq!(dedup_location_key(&finding), "id:finding-1");
+    }
+
+    #[test]
+    fn test_dedup_location_key_falls_back_to_id_for_symbol_only_title() {
+        let finding = DetectedFinding {
+            id: "finding-2".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "parse".into(),
+            line: None,
+            title: "!!!".into(),
+        };
+
+        assert_eq!(dedup_location_key(&finding), "id:finding-2");
     }
 
     #[test]
