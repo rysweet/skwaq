@@ -541,8 +541,34 @@ fn build_debate_summary(agent_a: &AgentResult, agent_b: &AgentResult) -> String 
     summary
 }
 
+fn vuln_hunter_stage(agent_name: String, include_create_finding_preamble: bool) -> PipelineStage {
+    let preamble = if include_create_finding_preamble {
+        "The attack surface analysis is complete. Now perform deep \
+         vulnerability analysis based on the attack surface findings below. \
+         Focus on the highest-risk areas identified. \
+         For each vulnerability found, use create_finding to record it."
+    } else {
+        "The attack surface analysis is complete. Now perform deep \
+         vulnerability analysis based on the attack surface findings below. \
+         Focus on the highest-risk areas identified."
+    };
+
+    PipelineStage {
+        agent_name,
+        context_mode: ContextMode::FromPreviousResults {
+            preamble: preamble.into(),
+        },
+    }
+}
+
 /// Build the default analysis pipeline: decompile-renamer -> attack-surface -> vuln-hunter -> critic.
 pub fn default_pipeline() -> AnalysisPipeline {
+    default_pipeline_for_target("")
+}
+
+/// Build the default analysis pipeline with language-aware vuln-hunter selection.
+pub fn default_pipeline_for_target(target: &str) -> AnalysisPipeline {
+    let hunter = select_vuln_hunter(target);
     AnalysisPipeline {
         stages: vec![
             // Pre-processing: improve decompiled code readability
@@ -554,15 +580,7 @@ pub fn default_pipeline() -> AnalysisPipeline {
                 agent_name: "attack-surface".into(),
                 context_mode: ContextMode::FromGraph,
             },
-            PipelineStage {
-                agent_name: "vuln-hunter".into(),
-                context_mode: ContextMode::FromPreviousResults {
-                    preamble: "The attack surface analysis is complete. Now perform deep \
-                               vulnerability analysis based on the attack surface findings below. \
-                               Focus on the highest-risk areas identified."
-                        .into(),
-                },
-            },
+            vuln_hunter_stage(hunter, false),
             PipelineStage {
                 agent_name: "critic".into(),
                 context_mode: ContextMode::FromPreviousResults {
@@ -587,6 +605,12 @@ pub fn default_pipeline() -> AnalysisPipeline {
 /// This pipeline trades speed for precision. The debate step surfaces
 /// disagreements between offense and defense perspectives before final synthesis.
 pub fn deep_pipeline() -> AnalysisPipeline {
+    deep_pipeline_for_target("")
+}
+
+/// Build a deep analysis pipeline with language-aware vuln-hunter selection.
+pub fn deep_pipeline_for_target(target: &str) -> AnalysisPipeline {
+    let hunter = select_vuln_hunter(target);
     AnalysisPipeline {
         stages: vec![
             // Pre-processing: improve decompiled code readability
@@ -599,16 +623,7 @@ pub fn deep_pipeline() -> AnalysisPipeline {
                 agent_name: "attack-surface".into(),
                 context_mode: ContextMode::FromGraph,
             },
-            PipelineStage {
-                agent_name: "vuln-hunter".into(),
-                context_mode: ContextMode::FromPreviousResults {
-                    preamble: "The attack surface analysis is complete. Now perform deep \
-                               vulnerability analysis based on the attack surface findings below. \
-                               Focus on the highest-risk areas identified. \
-                               For each vulnerability found, use create_finding to record it."
-                        .into(),
-                },
-            },
+            vuln_hunter_stage(hunter, true),
             // NOTE: exploit-analyst and defense-analyst are NOT listed here.
             // They run via the debate group in deep_pipeline_with_debate().
             // Synthesis: final verdict based on all validation perspectives
@@ -665,7 +680,7 @@ pub async fn run_deep_pipeline_with_debate(
     llm: Client,
     budget: &mut TokenBudget,
 ) -> anyhow::Result<Vec<AgentResult>> {
-    let pipeline = deep_pipeline();
+    let pipeline = deep_pipeline_for_target(target);
     let debate = deep_pipeline_debate();
     // Debate runs after stage index 3 (after vuln-hunter, which is stages[2]),
     // before verdict-synthesizer (stages[3]).
@@ -700,52 +715,6 @@ pub fn select_vuln_hunter(target: &str) -> String {
             }
             "vuln-hunter".to_string()
         }
-    }
-}
-
-/// Build a deep pipeline with language-aware vuln-hunter selection.
-///
-/// Uses the file extension of `target` to pick a specialized vuln-hunter
-/// (e.g., vuln-hunter-python for .py files) and runs the debate flow.
-pub fn deep_pipeline_for_target(target: &str) -> AnalysisPipeline {
-    let hunter = select_vuln_hunter(target);
-    AnalysisPipeline {
-        stages: vec![
-            PipelineStage {
-                agent_name: "decompile-renamer".into(),
-                context_mode: ContextMode::FromGraph,
-            },
-            PipelineStage {
-                agent_name: "attack-surface".into(),
-                context_mode: ContextMode::FromGraph,
-            },
-            PipelineStage {
-                agent_name: hunter,
-                context_mode: ContextMode::FromPreviousResults {
-                    preamble: "The attack surface analysis is complete. Now perform deep \
-                               vulnerability analysis based on the attack surface findings below. \
-                               Focus on the highest-risk areas identified. \
-                               For each vulnerability found, use create_finding to record it."
-                        .into(),
-                },
-            },
-            PipelineStage {
-                agent_name: "verdict-synthesizer".into(),
-                context_mode: ContextMode::FromPreviousResults {
-                    preamble: "You have received the complete output from all agents in the pipeline: \
-                               attack-surface mapping, vulnerability hunting, exploit analysis, and \
-                               defense analysis. A DEBATE SUMMARY highlights agreements and \
-                               disagreements between the offense and defense analysts. \
-                               Pay special attention to DISAGREEMENTS — read the code yourself to \
-                               break ties. \
-                               For each finding that is genuinely exploitable (confirmed by exploit-analyst \
-                               AND not fully mitigated per defense-analyst), use create_finding to record \
-                               the confirmed vulnerability. Reject false positives and explain why. \
-                               Be decisive — false positives damage credibility more than false negatives."
-                        .into(),
-                },
-            },
-        ],
     }
 }
 
@@ -1126,6 +1095,19 @@ mod tests {
     }
 
     #[test]
+    fn test_default_pipeline_for_target_python() {
+        let pipeline = default_pipeline_for_target("app.py");
+        let hunter_stage = pipeline
+            .stages
+            .iter()
+            .find(|s| s.agent_name.starts_with("vuln-hunter"));
+        assert!(
+            hunter_stage.is_some(),
+            "Default pipeline must include a vuln-hunter variant"
+        );
+    }
+
+    #[test]
     fn test_memory_enabled_agents_expose_memory_tools() {
         let agents = [
             "decompile-renamer",
@@ -1149,11 +1131,19 @@ mod tests {
             let content = std::fs::read_to_string(&path)
                 .unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));
             assert!(
-                content.contains("\n  - store_memory\n"),
+                content.contains(
+                    "
+  - store_memory
+"
+                ),
                 "{name} should expose store_memory"
             );
             assert!(
-                content.contains("\n  - recall_memory\n"),
+                content.contains(
+                    "
+  - recall_memory
+"
+                ),
                 "{name} should expose recall_memory"
             );
         }

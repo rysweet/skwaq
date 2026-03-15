@@ -722,7 +722,7 @@ async fn run_llm_pipeline(
         })?
         .clone();
 
-    let pipeline = skwaq_core::agents::deep_pipeline();
+    let pipeline = skwaq_core::agents::deep_pipeline_for_target(file_str);
     let budget_amount = config.analysis.default_token_budget.min(100_000);
     let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
 
@@ -753,6 +753,22 @@ async fn run_llm_pipeline(
     match pipeline_result {
         Ok(Ok(results)) => {
             let total_tokens: u64 = results.iter().map(|r| r.tokens_used).sum();
+            for result in &results {
+                if let Some(parse_error) = &result.parsed_output_error {
+                    tracing::warn!(
+                        target = %target,
+                        investigation_id = %inv_id,
+                        agent = %result.agent_name,
+                        schema = %result
+                            .context_frame
+                            .output_schema
+                            .as_deref()
+                            .unwrap_or("unknown"),
+                        error = %parse_error,
+                        "Structured agent output did not match schema during gym analysis"
+                    );
+                }
+            }
             tracing::info!(
                 "LLM pipeline completed for {}: {} agents, {} tokens",
                 target,

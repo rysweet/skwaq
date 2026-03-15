@@ -73,15 +73,15 @@ pub async fn run(binary: &Path) -> anyhow::Result<()> {
     let config = skwaq_core::config::Config::load()?;
     let llm_client = skwaq_core::llm::create_client(&config.llm).await?;
 
-    println!("  Running AI agent pipeline...");
-    let pipeline = skwaq_core::agents::deep_pipeline();
-    let budget_amount = config.analysis.default_token_budget.min(200_000);
-    let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
-
     let file_name = binary
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| target.clone());
+
+    println!("  Running AI agent pipeline...");
+    let pipeline = skwaq_core::agents::deep_pipeline_for_target(&file_name);
+    let budget_amount = config.analysis.default_token_budget.min(200_000);
+    let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
 
     // Open durable memory for cross-run learning
     let memory = skwaq_core::memory::MemoryStore::open_default()?;
