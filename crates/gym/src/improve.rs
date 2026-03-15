@@ -33,6 +33,10 @@ pub struct Improvement {
     pub source_case: String,
     /// Priority from the analyst.
     pub priority: Priority,
+    /// Explicit KB or durable-memory evidence cited by the failure analyst.
+    pub supporting_evidence: Vec<EvidenceRef>,
+    /// Structured overfitting review attached to accepted or modified proposals.
+    pub review: Option<ReviewDecision>,
 }
 
 #[derive(Debug, Clone)]
@@ -62,6 +66,49 @@ pub struct Patch {
     pub replace: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct EvidenceRef {
+    pub source_type: EvidenceSourceType,
+    pub source: Option<String>,
+    pub topic: Option<String>,
+    pub title: Option<String>,
+    pub memory_type: Option<String>,
+    pub context: Option<String>,
+    pub tags: Vec<String>,
+    pub rationale: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EvidenceSourceType {
+    Knowledge,
+    Memory,
+    Heuristic,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReviewDecision {
+    pub verdict: ReviewVerdict,
+    pub reason: String,
+    pub overfitting_risk: ReviewRating,
+    pub real_world_applicability: ReviewRating,
+    pub suggested_modification: Option<String>,
+    pub evidence_refs: Vec<EvidenceRef>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReviewVerdict {
+    Accept,
+    Reject,
+    Modify,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReviewRating {
+    Low,
+    Medium,
+    High,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct LlmProposal {
     kind: String,
@@ -78,11 +125,52 @@ struct LlmProposal {
     patch_replace: Option<String>,
     #[serde(default)]
     priority: Option<String>,
+    #[serde(default)]
+    evidence_refs: Vec<LlmEvidenceRef>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct LlmProposalResponse {
     proposals: Vec<LlmProposal>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct LlmEvidenceRef {
+    source_type: String,
+    #[serde(default)]
+    source: Option<String>,
+    #[serde(default)]
+    topic: Option<String>,
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default, rename = "type")]
+    memory_type: Option<String>,
+    #[serde(default)]
+    context: Option<String>,
+    #[serde(default)]
+    tags: Vec<String>,
+    rationale: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct LlmReviewDecision {
+    #[serde(default)]
+    proposal_id: Option<String>,
+    #[serde(default)]
+    proposal_description: Option<String>,
+    verdict: String,
+    reason: String,
+    overfitting_risk: String,
+    real_world_applicability: String,
+    #[serde(default)]
+    suggested_modification: Option<String>,
+    #[serde(default)]
+    evidence_refs: Vec<LlmEvidenceRef>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct LlmReviewResponse {
+    reviews: Vec<LlmReviewDecision>,
 }
 
 /// Result of a self-improvement cycle.
@@ -91,7 +179,12 @@ pub struct ImprovementCycle {
     pub suite: String,
     pub baseline_score: AggregateScore,
     pub false_negatives: Vec<FalseNegativeCase>,
+    pub reviewed_proposals: Vec<Improvement>,
     pub proposals: Vec<Improvement>,
+}
+
+fn review_proposal_id(index: usize) -> String {
+    format!("P{}", index + 1)
 }
 
 /// A false negative case with context for the failure-analyst.
@@ -195,15 +288,26 @@ pub async fn run_improvement_cycle(
     );
 
     // Step 3: Analyze false negatives and generate proposals
-    let proposals = analyze_false_negatives(&false_negatives, &suite_name).await?;
+    let reviewed_proposals = analyze_false_negatives(&false_negatives, &suite_name).await?;
+    let proposals = reviewed_proposals
+        .iter()
+        .filter(|proposal| {
+            !matches!(
+                proposal.review.as_ref().map(|review| review.verdict),
+                Some(ReviewVerdict::Reject)
+            )
+        })
+        .cloned()
+        .collect::<Vec<_>>();
 
     // Step 4: Store insights as knowledge for future agents to reference
-    store_fn_insights(&false_negatives, &proposals, &suite_name, data_dir);
+    store_fn_insights(&false_negatives, &reviewed_proposals, &suite_name, data_dir);
 
     Ok(ImprovementCycle {
         suite: suite_name,
         baseline_score: score,
         false_negatives,
+        reviewed_proposals,
         proposals,
     })
 }
@@ -229,7 +333,8 @@ async fn analyze_false_negatives(
     proposals.extend(llm_proposals);
 
     // Heuristics are an explicit second signal, not a hidden fallback path.
-    let heuristic_proposals = heuristic_failure_analysis(false_negatives);
+    let heuristic_proposals =
+        annotate_heuristic_proposals(&knowledge_db, heuristic_failure_analysis(false_negatives))?;
     tracing::info!(
         "Heuristic analysis produced {} proposal(s) for {}",
         heuristic_proposals.len(),
@@ -291,7 +396,21 @@ async fn run_failure_analyst_agent(
              for prior generalized lessons before proposing changes. Use the KB guidance \
              above plus lookup_knowledge/lookup_cwe to cross-check the expected CWE family \
              before finalizing any proposal. Only store or reuse lessons that generalize \
-             beyond this specific benchmark case.",
+             beyond this specific benchmark case.\n\n\
+             Return a structured report with the exact headings below and no preamble:\n\
+             ## Case: {{case_id}}\n\
+             Expected: CWE-{{N}} ({{description}})\n\
+             File: {{path}}\n\
+             Vulnerability: {{what the actual vuln is, with line numbers}}\n\
+             Detection failure reason: {{why we missed it}}\n\
+             Proposed fix: {{NEW_PATTERN|DEEPER_ANALYSIS|NEW_AGENT_CAPABILITY|GROUND_TRUTH_ERROR|CWE_MAPPING|TAINT_RULE}}\n\
+             Details: {{specific actionable proposal}}\n\
+             Priority: {{HIGH|MEDIUM|LOW}}\n\
+             Evidence:\n\
+             - KNOWLEDGE | source=... | topic=... | title=... | rationale=...\n\
+             - MEMORY | type=... | context=... | tags=tag1,tag2 | rationale=...\n\
+             Every proposal must include at least one Evidence entry. Do not emit prose \
+             before ## Case:.",
             suite,
             fn_case.case_id,
             fn_case.expected_cwes,
@@ -318,54 +437,112 @@ async fn run_failure_analyst_agent(
                 anyhow::anyhow!("failure analyst failed on case {}: {e}", fn_case.case_id)
             })?;
 
-        proposals.extend(parse_analyst_proposals(&result.output, fn_case));
+        let mut formatter_budget = skwaq_core::llm::TokenBudget::new(budget_per_case.min(10_000));
+        let formatted_output = format_failure_analyst_output(
+            &config,
+            agent.model.as_str(),
+            fn_case,
+            &result.output,
+            &mut formatter_budget,
+        )
+        .await?;
+
+        proposals.extend(
+            parse_analyst_proposals(&formatted_output, fn_case).map_err(|e| {
+                anyhow::anyhow!(
+                    "failure analyst returned invalid proposal payload for case {}: {e}",
+                    fn_case.case_id
+                )
+            })?,
+        );
     }
 
     Ok(proposals)
 }
 
-/// Parse structured improvement proposals from the failure-analyst's output.
-fn parse_analyst_proposals(output: &str, fn_case: &FalseNegativeCase) -> Vec<Improvement> {
-    if let Some(proposals) = try_parse_json_proposals(output, fn_case) {
-        if !proposals.is_empty() {
-            return proposals;
-        }
-    }
+async fn format_failure_analyst_output(
+    config: &skwaq_core::config::Config,
+    model: &str,
+    fn_case: &FalseNegativeCase,
+    raw_output: &str,
+    budget: &mut skwaq_core::llm::TokenBudget,
+) -> anyhow::Result<String> {
+    let formatter_client = skwaq_core::llm::create_client(&config.llm).await?;
+    let system_prompt = "You convert analyst reports into strict JSON. Do not add commentary.";
+    let formatter_prompt = format!(
+        "Convert the analyst report below into a single ```json fenced block using this schema:\n\
+         {{\"proposals\":[{{\"kind\":\"NEW_PATTERN|DEEPER_ANALYSIS|NEW_AGENT_CAPABILITY|GROUND_TRUTH_ERROR|CWE_MAPPING|TAINT_RULE\",\
+         \"description\":\"...\",\"target_cwes\":[119],\"target_file\":\"optional path\",\
+         \"regex_pattern\":\"optional regex\",\"patch_find\":\"optional existing text\",\
+         \"patch_replace\":\"optional replacement text\",\"priority\":\"HIGH|MEDIUM|LOW\",\
+         \"evidence_refs\":[{{\"source_type\":\"knowledge\",\"source\":\"kb source\",\
+         \"topic\":\"kb topic\",\"title\":\"kb title\",\"rationale\":\"why this KB hit supports the proposal\"}},\
+         {{\"source_type\":\"memory\",\"type\":\"pattern|insight|failure\",\
+         \"context\":\"recalled generalized lesson\",\"tags\":[\"cwe-119\"],\
+         \"rationale\":\"why this memory supports the proposal\"}}]}}]}}\n\
+         Rules:\n\
+         - Return JSON only, inside one ```json fenced block.\n\
+         - Do not omit evidence_refs.\n\
+         - Preserve the exact proposal meaning from the analyst report.\n\
+         - Use case {} expected CWEs {:?} as target_cwes when the report omits them.\n\
+         - If the report contains multiple proposals, include them all.\n\n\
+         Analyst report:\n{}",
+        fn_case.case_id, fn_case.expected_cwes, raw_output
+    );
 
-    if let Some(proposals) = try_parse_delimited_proposals(output, fn_case) {
-        if !proposals.is_empty() {
-            return proposals;
-        }
-    }
-
-    parse_legacy_proposals(output, fn_case)
+    skwaq_core::llm::execute_with_tools(
+        &formatter_client,
+        model,
+        system_prompt,
+        &formatter_prompt,
+        &[],
+        |_tool_name, _args| async move {
+            Err(anyhow::anyhow!(
+                "formatter unexpectedly attempted a tool call"
+            ))
+        },
+        budget,
+    )
+    .await
 }
 
-fn try_parse_json_proposals(output: &str, fn_case: &FalseNegativeCase) -> Option<Vec<Improvement>> {
-    let json_str = extract_json_block(output)?;
+/// Parse structured improvement proposals from the failure-analyst's output.
+fn parse_analyst_proposals(
+    output: &str,
+    fn_case: &FalseNegativeCase,
+) -> anyhow::Result<Vec<Improvement>> {
+    let json_str = extract_json_block(output).ok_or_else(|| {
+        anyhow::anyhow!(
+            "failure analyst did not return a JSON payload; raw output: {}",
+            truncate_for_error(output)
+        )
+    })?;
 
-    if let Ok(response) = serde_json::from_str::<LlmProposalResponse>(&json_str) {
-        let proposals = response
-            .proposals
-            .into_iter()
-            .filter_map(|proposal| convert_llm_proposal(proposal, fn_case))
-            .collect::<Vec<_>>();
-        return Some(proposals);
+    let raw_proposals = if let Ok(response) = serde_json::from_str::<LlmProposalResponse>(&json_str)
+    {
+        response.proposals
+    } else if let Ok(raw_proposals) = serde_json::from_str::<Vec<LlmProposal>>(&json_str) {
+        raw_proposals
+    } else if let Ok(single) = serde_json::from_str::<LlmProposal>(&json_str) {
+        vec![single]
+    } else {
+        return Err(anyhow::anyhow!(
+            "failure analyst returned malformed JSON: {}",
+            truncate_for_error(&json_str)
+        ));
+    };
+
+    if raw_proposals.is_empty() {
+        return Err(anyhow::anyhow!(
+            "failure analyst returned zero proposals in JSON payload"
+        ));
     }
 
-    if let Ok(raw_proposals) = serde_json::from_str::<Vec<LlmProposal>>(&json_str) {
-        let proposals = raw_proposals
-            .into_iter()
-            .filter_map(|proposal| convert_llm_proposal(proposal, fn_case))
-            .collect::<Vec<_>>();
-        return Some(proposals);
-    }
-
-    if let Ok(single) = serde_json::from_str::<LlmProposal>(&json_str) {
-        return convert_llm_proposal(single, fn_case).map(|proposal| vec![proposal]);
-    }
-
-    None
+    raw_proposals
+        .into_iter()
+        .enumerate()
+        .map(|(index, proposal)| convert_llm_proposal(proposal, fn_case, index + 1))
+        .collect()
 }
 
 fn extract_json_block(text: &str) -> Option<String> {
@@ -442,7 +619,11 @@ fn find_outermost_block(text: &str, open: char, close: char) -> Option<String> {
     None
 }
 
-fn convert_llm_proposal(proposal: LlmProposal, fn_case: &FalseNegativeCase) -> Option<Improvement> {
+fn convert_llm_proposal(
+    proposal: LlmProposal,
+    fn_case: &FalseNegativeCase,
+    proposal_number: usize,
+) -> anyhow::Result<Improvement> {
     let kind = match proposal.kind.to_uppercase().as_str() {
         "NEW_PATTERN" | "NEWPATTERN" | "PATTERN" => ImprovementKind::NewPattern,
         "AGENT_PROMPT"
@@ -456,12 +637,21 @@ fn convert_llm_proposal(proposal: LlmProposal, fn_case: &FalseNegativeCase) -> O
         "GROUND_TRUTH_ERROR" | "GROUNDTRUTHERROR" | "GROUND_TRUTH" | "GROUNDTRUTH" => {
             ImprovementKind::GroundTruthFix
         }
-        _ => return None,
+        _ => {
+            return Err(anyhow::anyhow!(
+                "proposal {} for case {} used unsupported kind '{}'",
+                proposal_number,
+                fn_case.case_id,
+                proposal.kind
+            ))
+        }
     };
 
-    if proposal.description.is_empty() {
-        return None;
-    }
+    let description = require_non_empty_string(
+        proposal.description,
+        "description",
+        &format!("proposal {} for case {}", proposal_number, fn_case.case_id),
+    )?;
 
     let priority = match proposal
         .priority
@@ -481,6 +671,14 @@ fn convert_llm_proposal(proposal: LlmProposal, fn_case: &FalseNegativeCase) -> O
         proposal.target_cwes
     };
 
+    let supporting_evidence = convert_evidence_refs(
+        proposal.evidence_refs,
+        &format!(
+            "proposal {} ('{}') for case {}",
+            proposal_number, description, fn_case.case_id
+        ),
+    )?;
+
     let target_file = proposal
         .target_file
         .map(PathBuf::from)
@@ -494,9 +692,9 @@ fn convert_llm_proposal(proposal: LlmProposal, fn_case: &FalseNegativeCase) -> O
             ImprovementKind::GroundTruthFix => PathBuf::from("data/gym/ground_truth/"),
         });
 
-    Some(Improvement {
+    Ok(Improvement {
         kind,
-        description: proposal.description,
+        description,
         target_cwes,
         target_file,
         patch: Patch {
@@ -508,179 +706,165 @@ fn convert_llm_proposal(proposal: LlmProposal, fn_case: &FalseNegativeCase) -> O
         },
         source_case: fn_case.case_id.clone(),
         priority,
+        supporting_evidence,
+        review: None,
     })
 }
 
-fn try_parse_delimited_proposals(
-    output: &str,
-    fn_case: &FalseNegativeCase,
-) -> Option<Vec<Improvement>> {
-    let mut proposals = Vec::new();
-    let mut remaining = output;
+fn convert_evidence_refs(
+    raw_refs: Vec<LlmEvidenceRef>,
+    evidence_context: &str,
+) -> anyhow::Result<Vec<EvidenceRef>> {
+    if raw_refs.is_empty() {
+        return Err(anyhow::anyhow!(
+            "{evidence_context} must cite at least one KB or durable-memory evidence reference"
+        ));
+    }
 
-    while let Some(start_idx) = remaining.find("---PROPOSAL_START---") {
-        let after_start = &remaining[start_idx + 20..];
-        if let Some(end_idx) = after_start.find("---PROPOSAL_END---") {
-            let block = after_start[..end_idx].trim();
-            if let Some(proposal) = parse_delimited_block(block, fn_case) {
-                proposals.push(proposal);
+    raw_refs
+        .into_iter()
+        .enumerate()
+        .map(|(index, raw)| convert_evidence_ref(raw, evidence_context, index + 1))
+        .collect()
+}
+
+fn convert_evidence_ref(
+    raw: LlmEvidenceRef,
+    evidence_context: &str,
+    evidence_number: usize,
+) -> anyhow::Result<EvidenceRef> {
+    let source_type = match raw.source_type.trim().to_ascii_lowercase().as_str() {
+        "knowledge" => EvidenceSourceType::Knowledge,
+        "memory" => EvidenceSourceType::Memory,
+        other => {
+            return Err(anyhow::anyhow!(
+                "{} evidence {} used unsupported source_type '{}'",
+                evidence_context,
+                evidence_number,
+                other
+            ))
+        }
+    };
+
+    let rationale = require_non_empty_string(
+        raw.rationale,
+        "rationale",
+        &format!("{evidence_context} evidence {evidence_number}"),
+    )?;
+    let source = normalize_optional_string(raw.source);
+    let topic = normalize_optional_string(raw.topic);
+    let title = normalize_optional_string(raw.title);
+    let memory_type = normalize_optional_string(raw.memory_type);
+    let context = normalize_optional_string(raw.context);
+    let tags = raw
+        .tags
+        .into_iter()
+        .filter_map(|tag| {
+            let trimmed = tag.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
             }
-            remaining = &after_start[end_idx + 18..];
+        })
+        .collect::<Vec<_>>();
+
+    match source_type {
+        EvidenceSourceType::Knowledge => {
+            require_present(
+                source.as_deref(),
+                "source",
+                &format!("{evidence_context} evidence {evidence_number}"),
+            )?;
+            require_present(
+                topic.as_deref(),
+                "topic",
+                &format!("{evidence_context} evidence {evidence_number}"),
+            )?;
+            require_present(
+                title.as_deref(),
+                "title",
+                &format!("{evidence_context} evidence {evidence_number}"),
+            )?;
+        }
+        EvidenceSourceType::Memory => {
+            require_present(
+                memory_type.as_deref(),
+                "type",
+                &format!("{evidence_context} evidence {evidence_number}"),
+            )?;
+            require_present(
+                context.as_deref(),
+                "context",
+                &format!("{evidence_context} evidence {evidence_number}"),
+            )?;
+        }
+        EvidenceSourceType::Heuristic => {
+            require_present(
+                source.as_deref(),
+                "source",
+                &format!("{evidence_context} evidence {evidence_number}"),
+            )?;
+            require_present(
+                title.as_deref(),
+                "title",
+                &format!("{evidence_context} evidence {evidence_number}"),
+            )?;
+        }
+    }
+
+    Ok(EvidenceRef {
+        source_type,
+        source,
+        topic,
+        title,
+        memory_type,
+        context,
+        tags,
+        rationale,
+    })
+}
+
+fn require_non_empty_string(value: String, field: &str, context: &str) -> anyhow::Result<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        Err(anyhow::anyhow!(
+            "{context} is missing required field '{field}'"
+        ))
+    } else {
+        Ok(trimmed.to_string())
+    }
+}
+
+fn require_present(value: Option<&str>, field: &str, context: &str) -> anyhow::Result<()> {
+    if value.is_some_and(|value| !value.trim().is_empty()) {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "{context} is missing required field '{field}'"
+        ))
+    }
+}
+
+fn normalize_optional_string(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
         } else {
-            break;
+            Some(trimmed.to_string())
         }
-    }
-
-    if proposals.is_empty() {
-        None
-    } else {
-        Some(proposals)
-    }
-}
-
-fn parse_delimited_block(block: &str, fn_case: &FalseNegativeCase) -> Option<Improvement> {
-    let mut kind_str = String::new();
-    let mut description = String::new();
-    let mut cwes = Vec::new();
-    let mut priority_str = String::new();
-    let mut regex = String::new();
-
-    for line in block.lines() {
-        let line = line.trim();
-        if let Some(value) = line.strip_prefix("Kind:") {
-            kind_str = value.trim().to_string();
-        } else if let Some(value) = line.strip_prefix("Description:") {
-            description = value.trim().to_string();
-        } else if let Some(value) = line.strip_prefix("CWEs:") {
-            cwes = value
-                .split(',')
-                .filter_map(|item| item.trim().parse::<u32>().ok())
-                .collect();
-        } else if let Some(value) = line.strip_prefix("Priority:") {
-            priority_str = value.trim().to_string();
-        } else if let Some(value) = line.strip_prefix("Regex:") {
-            regex = value.trim().to_string();
-        }
-    }
-
-    let kind = match kind_str.to_uppercase().as_str() {
-        "NEW_PATTERN" => ImprovementKind::NewPattern,
-        "DEEPER_ANALYSIS" | "NEW_AGENT_CAPABILITY" => ImprovementKind::AgentPrompt,
-        "GROUND_TRUTH_ERROR" => ImprovementKind::GroundTruthFix,
-        "CWE_MAPPING" => ImprovementKind::CweMapping,
-        "TAINT_RULE" => ImprovementKind::TaintRule,
-        _ => return None,
-    };
-
-    if description.is_empty() {
-        return None;
-    }
-
-    let priority = match priority_str.to_uppercase().as_str() {
-        "HIGH" => Priority::High,
-        "LOW" => Priority::Low,
-        _ => Priority::Medium,
-    };
-
-    let target_cwes = if cwes.is_empty() {
-        fn_case.expected_cwes.clone()
-    } else {
-        cwes
-    };
-
-    let target_file = match kind {
-        ImprovementKind::NewPattern => PathBuf::from("crates/core/src/analysis/patterns_source.rs"),
-        ImprovementKind::AgentPrompt => PathBuf::from("agents/vuln-hunter.md"),
-        ImprovementKind::GroundTruthFix => PathBuf::from("data/gym/ground_truth/"),
-        ImprovementKind::CweMapping => PathBuf::from("crates/gym/src/scoring.rs"),
-        ImprovementKind::TaintRule => PathBuf::from("crates/core/src/analysis/taint.rs"),
-    };
-
-    Some(Improvement {
-        kind,
-        description,
-        target_cwes,
-        target_file,
-        patch: Patch {
-            find: String::new(),
-            replace: regex,
-        },
-        source_case: fn_case.case_id.clone(),
-        priority,
     })
 }
 
-fn parse_legacy_proposals(output: &str, fn_case: &FalseNegativeCase) -> Vec<Improvement> {
-    let mut proposals = Vec::new();
-
-    for line in output.lines() {
-        let trimmed = line.trim();
-
-        if trimmed.contains("NEW_PATTERN") {
-            if let Some(regex_start) = output.find("`\\b") {
-                let rest = &output[regex_start + 1..];
-                if let Some(regex_end) = rest.find('`') {
-                    let regex = &rest[..regex_end];
-                    proposals.push(Improvement {
-                        kind: ImprovementKind::NewPattern,
-                        description: format!(
-                            "Add pattern '{}' for CWE-{:?}",
-                            regex, fn_case.expected_cwes
-                        ),
-                        target_cwes: fn_case.expected_cwes.clone(),
-                        target_file: PathBuf::from("crates/core/src/analysis/patterns_source.rs"),
-                        patch: Patch {
-                            find: String::new(),
-                            replace: regex.to_string(),
-                        },
-                        source_case: fn_case.case_id.clone(),
-                        priority: Priority::High,
-                    });
-                }
-            }
-        }
-
-        if trimmed.contains("DEEPER_ANALYSIS") || trimmed.contains("NEW_AGENT_CAPABILITY") {
-            proposals.push(Improvement {
-                kind: ImprovementKind::AgentPrompt,
-                description: format!(
-                    "Agent needs deeper analysis for {} (CWE-{:?}): {}",
-                    fn_case.case_id,
-                    fn_case.expected_cwes,
-                    trimmed.chars().take(200).collect::<String>()
-                ),
-                target_cwes: fn_case.expected_cwes.clone(),
-                target_file: PathBuf::from("agents/vuln-hunter.md"),
-                patch: Patch {
-                    find: String::new(),
-                    replace: String::new(),
-                },
-                source_case: fn_case.case_id.clone(),
-                priority: Priority::Medium,
-            });
-        }
-
-        if trimmed.contains("GROUND_TRUTH_ERROR") {
-            proposals.push(Improvement {
-                kind: ImprovementKind::GroundTruthFix,
-                description: format!(
-                    "Ground truth may be incorrect for {}: {}",
-                    fn_case.case_id,
-                    trimmed.chars().take(200).collect::<String>()
-                ),
-                target_cwes: fn_case.expected_cwes.clone(),
-                target_file: PathBuf::from("data/gym/ground_truth/"),
-                patch: Patch {
-                    find: String::new(),
-                    replace: String::new(),
-                },
-                source_case: fn_case.case_id.clone(),
-                priority: Priority::Low,
-            });
-        }
+fn truncate_for_error(text: &str) -> String {
+    const LIMIT: usize = 240;
+    let truncated: String = text.chars().take(LIMIT).collect();
+    if text.chars().count() > LIMIT {
+        format!("{truncated}...")
+    } else {
+        truncated
     }
-
-    proposals
 }
 
 /// Run the overfitting-reviewer agent as a gate on proposals.
@@ -705,19 +889,33 @@ async fn run_overfitting_review(
         .await
         .map_err(|e| anyhow::anyhow!("overfitting review requires an LLM client: {e}"))?;
 
-    let agent = skwaq_core::agents::definition::load_agent("overfitting-reviewer")
-        .map_err(|e| anyhow::anyhow!("failed to load overfitting-reviewer agent: {e}"))?;
-
-    let runner = skwaq_core::agents::runner::AgentRunner::new(llm_client);
     let budget_amount = config.analysis.default_token_budget.min(20_000);
     let knowledge_context = build_overfitting_knowledge_context(knowledge_db, &proposals)?;
 
-    // Format all proposals for review
     let mut proposal_text = format!(
         "Use the knowledge-base guidance below as grounding when judging \
          real-world generality and CWE mapping accuracy.\n\n\
          {}\n\n\
-         Review these {} improvement proposals from the {} benchmark for overfitting risk:\n\n",
+         Review these {} improvement proposals from the {} benchmark for overfitting risk.\n\
+         Return JSON only in a single ```json fenced block using this schema:\n\
+         {{\"reviews\":[{{\"proposal_id\":\"P1\",\
+         \"proposal_description\":\"exact proposal description\",\
+         \"verdict\":\"ACCEPT|REJECT|MODIFY\",\"reason\":\"...\",\
+         \"overfitting_risk\":\"LOW|MEDIUM|HIGH\",\
+         \"real_world_applicability\":\"LOW|MEDIUM|HIGH\",\
+         \"suggested_modification\":\"required when verdict=MODIFY\",\
+         \"evidence_refs\":[{{\"source_type\":\"knowledge\",\"source\":\"kb source\",\
+         \"topic\":\"kb topic\",\"title\":\"kb title\",\"rationale\":\"why this KB hit justifies the verdict\"}},\
+         {{\"source_type\":\"memory\",\"type\":\"pattern|insight|failure\",\
+         \"context\":\"recalled generalized lesson\",\"tags\":[\"cwe-119\"],\
+         \"rationale\":\"why this memory justifies the verdict\"}}]}}]}}\n\
+         Rules:\n\
+         - Every proposal must have exactly one review entry.\n\
+         - proposal_id must match exactly.\n\
+         - proposal_description should also match exactly.\n\
+         - Each review entry must include at least one evidence_refs item.\n\
+         - Do not emit prose outside the JSON block.\n\n\
+         Review these proposals:\n\n",
         knowledge_context,
         proposals.len(),
         suite
@@ -731,8 +929,9 @@ async fn run_overfitting_review(
             ImprovementKind::GroundTruthFix => "GROUND_TRUTH",
         };
         proposal_text.push_str(&format!(
-            "{}. [{}] {}\n   Target CWEs: {:?}\n   Patch: {}\n   From case: {}\n\n",
+            "{}. Proposal ID: {}\n   Kind: [{}] {}\n   Target CWEs: {:?}\n   Patch: {}\n   From case: {}\n\n",
             i + 1,
+            review_proposal_id(i),
             kind,
             p.description,
             p.target_cwes,
@@ -741,51 +940,49 @@ async fn run_overfitting_review(
         ));
     }
 
-    let db = skwaq_core::graph::GraphDb::in_memory()
-        .map_err(|e| anyhow::anyhow!("failed to create graph DB for overfitting review: {e}"))?;
-    let inv_id = "overfitting-review";
-    let now = chrono::Utc::now().to_rfc3339();
-    db.execute(
-        "INSERT INTO investigations (id, name, target, status, created_at, updated_at) \
-         VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
-        &[&inv_id, &"review", &"review", &now.as_str(), &now.as_str()],
-    )
-    .map_err(|e| anyhow::anyhow!("failed to seed overfitting review investigation: {e}"))?;
-
     let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
+    let output = skwaq_core::llm::execute_with_tools(
+        &llm_client,
+        &config.llm.copilot.model,
+        "You are a strict overfitting reviewer. Return only the requested JSON.",
+        &proposal_text,
+        &[],
+        |_tool_name, _args| async move {
+            Err(anyhow::anyhow!(
+                "overfitting review unexpectedly attempted a tool call"
+            ))
+        },
+        &mut budget,
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("overfitting reviewer failed: {e}"))?;
 
-    match runner
-        .run_agent_with_db(&agent, inv_id, &proposal_text, &db, &mut budget)
-        .await
-    {
-        Ok(result) => {
-            let output = &result.output;
-            let total_count = proposals.len();
-            let mut accepted = Vec::new();
+    let decisions = parse_review_decisions(&output, &proposals).map_err(|e| {
+        anyhow::anyhow!("overfitting reviewer returned invalid review payload: {e}")
+    })?;
+    let total_count = proposals.len();
+    let mut reviewed = Vec::new();
+    let mut accepted_count = 0usize;
 
-            for (i, proposal) in proposals.into_iter().enumerate() {
-                let is_rejected =
-                    proposal_is_rejected(output, i + 1, proposal.description.as_str());
-
-                if is_rejected {
-                    tracing::info!(
-                        "Overfitting reviewer REJECTED proposal: {}",
-                        proposal.description
-                    );
-                } else {
-                    accepted.push(proposal);
-                }
-            }
-
+    for (proposal, review) in proposals.into_iter().zip(decisions.into_iter()) {
+        let mut proposal = proposal;
+        if matches!(review.verdict, ReviewVerdict::Reject) {
             tracing::info!(
-                "Overfitting review: {}/{} proposals accepted",
-                accepted.len(),
-                total_count
+                "Overfitting reviewer REJECTED proposal: {}",
+                proposal.description
             );
-            Ok(accepted)
+        } else {
+            accepted_count += 1;
         }
-        Err(e) => Err(anyhow::anyhow!("overfitting reviewer failed: {e}")),
+        proposal.review = Some(review);
+        reviewed.push(proposal);
     }
+    tracing::info!(
+        "Overfitting review: {}/{} proposals accepted",
+        accepted_count,
+        total_count
+    );
+    Ok(reviewed)
 }
 
 fn prepare_improvement_knowledge_db() -> anyhow::Result<skwaq_core::graph::GraphDb> {
@@ -925,51 +1122,156 @@ fn prepare_improvement_agent_db(
     Ok(db)
 }
 
-fn proposal_is_rejected(output: &str, proposal_number: usize, description: &str) -> bool {
-    let review_blocks = parse_review_blocks(output);
-    if let Some(block) = review_blocks
-        .iter()
-        .find(|block| block.heading.trim() == description)
-    {
-        return block.rejected;
-    }
-    if let Some(block) = review_blocks.get(proposal_number.saturating_sub(1)) {
-        return block.rejected;
+fn parse_review_decisions(
+    output: &str,
+    proposals: &[Improvement],
+) -> anyhow::Result<Vec<ReviewDecision>> {
+    let json_str = extract_json_block(output).ok_or_else(|| {
+        anyhow::anyhow!(
+            "overfitting reviewer did not return a JSON payload; raw output: {}",
+            truncate_for_error(output)
+        )
+    })?;
+
+    let raw_reviews = if let Ok(response) = serde_json::from_str::<LlmReviewResponse>(&json_str) {
+        response.reviews
+    } else if let Ok(raw_reviews) = serde_json::from_str::<Vec<LlmReviewDecision>>(&json_str) {
+        raw_reviews
+    } else if let Ok(single) = serde_json::from_str::<LlmReviewDecision>(&json_str) {
+        vec![single]
+    } else {
+        return Err(anyhow::anyhow!(
+            "overfitting reviewer returned malformed JSON: {}",
+            truncate_for_error(&json_str)
+        ));
+    };
+
+    if raw_reviews.len() != proposals.len() {
+        return Err(anyhow::anyhow!(
+            "overfitting reviewer returned {} review entries for {} proposals: {}",
+            raw_reviews.len(),
+            proposals.len(),
+            truncate_for_error(&json_str)
+        ));
     }
 
-    let numeric_prefixes = [
-        format!("{proposal_number}."),
-        format!("PROPOSAL {proposal_number}"),
-    ];
-    output.lines().any(|line| {
-        let trimmed = line.trim();
-        let upper = trimmed.to_uppercase();
-        numeric_prefixes
-            .iter()
-            .any(|prefix| upper.starts_with(&prefix.to_uppercase()))
-            && upper.contains("REJECT")
+    let mut raw_by_key = std::collections::HashMap::new();
+    for raw_review in raw_reviews {
+        let review_key = raw_review_key(&raw_review)?;
+        if raw_by_key.insert(review_key.clone(), raw_review).is_some() {
+            return Err(anyhow::anyhow!(
+                "overfitting reviewer returned duplicate review entry for '{}'",
+                review_key
+            ));
+        }
+    }
+
+    proposals
+        .iter()
+        .enumerate()
+        .map(|(index, proposal)| {
+            let proposal_id = review_proposal_id(index);
+            let raw_review = raw_by_key
+                .remove(&proposal_id)
+                .or_else(|| raw_by_key.remove(&proposal.description))
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "overfitting reviewer omitted review entry for {} ('{}')",
+                        proposal_id,
+                        proposal.description
+                    )
+                })?;
+            convert_review_decision(raw_review, &proposal.description)
+        })
+        .collect()
+}
+
+fn raw_review_key(raw_review: &LlmReviewDecision) -> anyhow::Result<String> {
+    if let Some(proposal_id) = raw_review.proposal_id.as_ref() {
+        return require_non_empty_string(proposal_id.clone(), "proposal_id", "review entry");
+    }
+    if let Some(proposal_description) = raw_review.proposal_description.as_ref() {
+        return require_non_empty_string(
+            proposal_description.clone(),
+            "proposal_description",
+            "review entry",
+        );
+    }
+    Err(anyhow::anyhow!(
+        "review entry is missing required field 'proposal_id'"
+    ))
+}
+
+fn convert_review_decision(
+    raw_review: LlmReviewDecision,
+    proposal_description: &str,
+) -> anyhow::Result<ReviewDecision> {
+    let verdict = match raw_review.verdict.trim().to_ascii_uppercase().as_str() {
+        "ACCEPT" => ReviewVerdict::Accept,
+        "REJECT" => ReviewVerdict::Reject,
+        "MODIFY" => ReviewVerdict::Modify,
+        other => {
+            return Err(anyhow::anyhow!(
+                "review for '{}' used unsupported verdict '{}'",
+                proposal_description,
+                other
+            ))
+        }
+    };
+
+    let reason = require_non_empty_string(
+        raw_review.reason,
+        "reason",
+        &format!("review for '{}'", proposal_description),
+    )?;
+    let overfitting_risk = parse_review_rating(
+        &raw_review.overfitting_risk,
+        "overfitting_risk",
+        proposal_description,
+    )?;
+    let real_world_applicability = parse_review_rating(
+        &raw_review.real_world_applicability,
+        "real_world_applicability",
+        proposal_description,
+    )?;
+    let suggested_modification = normalize_optional_string(raw_review.suggested_modification);
+    if matches!(verdict, ReviewVerdict::Modify) && suggested_modification.is_none() {
+        return Err(anyhow::anyhow!(
+            "review for '{}' used MODIFY without suggested_modification",
+            proposal_description
+        ));
+    }
+    let evidence_refs = convert_evidence_refs(
+        raw_review.evidence_refs,
+        &format!("review for '{}'", proposal_description),
+    )?;
+
+    Ok(ReviewDecision {
+        verdict,
+        reason,
+        overfitting_risk,
+        real_world_applicability,
+        suggested_modification,
+        evidence_refs,
     })
 }
 
-struct ReviewBlock {
-    heading: String,
-    rejected: bool,
-}
-
-fn parse_review_blocks(output: &str) -> Vec<ReviewBlock> {
-    output
-        .split("## Proposal:")
-        .skip(1)
-        .filter_map(|block| {
-            let mut lines = block.lines();
-            let heading = lines.next()?.trim().to_string();
-            let rejected = lines.any(|line| {
-                let trimmed = line.trim().to_uppercase();
-                trimmed.starts_with("VERDICT:") && trimmed.contains("REJECT")
-            });
-            Some(ReviewBlock { heading, rejected })
-        })
-        .collect()
+fn parse_review_rating(
+    rating: &str,
+    field: &str,
+    proposal_description: &str,
+) -> anyhow::Result<ReviewRating> {
+    match rating.trim().to_ascii_uppercase().as_str() {
+        "LOW" => Ok(ReviewRating::Low),
+        "MEDIUM" => Ok(ReviewRating::Medium),
+        "HIGH" => Ok(ReviewRating::High),
+        other => Err(anyhow::anyhow!(
+            "review for '{}' used unsupported {} '{}'",
+            proposal_description,
+            field,
+            other
+        )),
+    }
 }
 
 /// Heuristic analysis of false negatives (no LLM needed).
@@ -1056,6 +1358,8 @@ fn heuristic_failure_analysis(false_negatives: &[FalseNegativeCase]) -> Vec<Impr
                         },
                         source_case: fn_case.case_id.clone(),
                         priority: Priority::High,
+                        supporting_evidence: Vec::new(),
+                        review: None,
                     });
                 }
             }
@@ -1065,6 +1369,78 @@ fn heuristic_failure_analysis(false_negatives: &[FalseNegativeCase]) -> Vec<Impr
     proposals
 }
 
+fn annotate_heuristic_proposals(
+    knowledge_db: &skwaq_core::graph::GraphDb,
+    proposals: Vec<Improvement>,
+) -> anyhow::Result<Vec<Improvement>> {
+    proposals
+        .into_iter()
+        .map(|mut proposal| {
+            proposal.supporting_evidence = build_heuristic_evidence_refs(knowledge_db, &proposal)?;
+            Ok(proposal)
+        })
+        .collect()
+}
+
+fn build_heuristic_evidence_refs(
+    knowledge_db: &skwaq_core::graph::GraphDb,
+    proposal: &Improvement,
+) -> anyhow::Result<Vec<EvidenceRef>> {
+    let queries = build_improvement_knowledge_queries(proposal.target_cwes.iter().copied());
+    for query in queries {
+        let hits = skwaq_core::knowledge::search::search_knowledge(Some(knowledge_db), &query)?;
+        if let Some(hit) = hits.into_iter().next() {
+            return Ok(vec![EvidenceRef {
+                source_type: EvidenceSourceType::Knowledge,
+                source: Some(hit.source),
+                topic: Some(hit.topic),
+                title: Some(hit.title),
+                memory_type: None,
+                context: None,
+                tags: proposal
+                    .target_cwes
+                    .iter()
+                    .map(|cwe| format!("cwe-{cwe}"))
+                    .collect(),
+                rationale: format!(
+                    "This deterministic heuristic proposal was grounded in the knowledge-base hit for query '{}' so it preserves the cited-evidence contract.",
+                    query
+                ),
+            }]);
+        }
+    }
+
+    Ok(vec![synthetic_heuristic_evidence_ref(proposal)])
+}
+
+fn synthetic_heuristic_evidence_ref(proposal: &Improvement) -> EvidenceRef {
+    EvidenceRef {
+        source_type: EvidenceSourceType::Heuristic,
+        source: Some("deterministic-pattern-detector".to_string()),
+        topic: Some(
+            proposal
+                .target_cwes
+                .iter()
+                .map(|cwe| format!("cwe-{cwe}"))
+                .collect::<Vec<_>>()
+                .join(","),
+        ),
+        title: Some(format!("Deterministic heuristic for {}", proposal.target_file.display())),
+        memory_type: None,
+        context: None,
+        tags: proposal
+            .target_cwes
+            .iter()
+            .map(|cwe| format!("cwe-{cwe}"))
+            .collect(),
+        rationale: format!(
+            "This proposal came from the built-in deterministic heuristic that matched '{}' in {} after KB search produced no direct grounding hit.",
+            proposal.patch.replace,
+            proposal.source_case
+        ),
+    }
+}
+
 /// Store false-negative insights into `data/knowledge/` so future agents can reference them.
 ///
 /// Creates or appends to `data/knowledge/fn-insights.md` with structured knowledge
@@ -1072,11 +1448,11 @@ fn heuristic_failure_analysis(false_negatives: &[FalseNegativeCase]) -> Vec<Impr
 /// the `lookup_knowledge` tool that all agents can call.
 fn store_fn_insights(
     false_negatives: &[FalseNegativeCase],
-    proposals: &[Improvement],
+    reviewed_proposals: &[Improvement],
     suite: &str,
     data_dir: &Path,
 ) {
-    if false_negatives.is_empty() && proposals.is_empty() {
+    if false_negatives.is_empty() && reviewed_proposals.is_empty() {
         return;
     }
 
@@ -1154,12 +1530,24 @@ fn store_fn_insights(
     }
 
     // Record proposals as actionable insights.
-    if !proposals.is_empty() {
+    if !reviewed_proposals.is_empty() {
+        let accepted_count = reviewed_proposals
+            .iter()
+            .filter(|proposal| {
+                !matches!(
+                    proposal.review.as_ref().map(|review| review.verdict),
+                    Some(ReviewVerdict::Reject)
+                )
+            })
+            .count();
+        let rejected_count = reviewed_proposals.len().saturating_sub(accepted_count);
         content.push_str(&format!(
-            "### Actionable Insights ({} proposals)\n\n",
-            proposals.len()
+            "### Reviewed Improvement Proposals ({} total; {} accepted, {} rejected)\n\n",
+            reviewed_proposals.len(),
+            accepted_count,
+            rejected_count
         ));
-        for proposal in proposals.iter().take(10) {
+        for proposal in reviewed_proposals.iter().take(10) {
             let kind = match &proposal.kind {
                 ImprovementKind::NewPattern => "Pattern Gap",
                 ImprovementKind::AgentPrompt => "Agent Capability Gap",
@@ -1167,15 +1555,42 @@ fn store_fn_insights(
                 ImprovementKind::TaintRule => "Taint Rule Gap",
                 ImprovementKind::GroundTruthFix => "Ground Truth Issue",
             };
+            let review_status = proposal
+                .review
+                .as_ref()
+                .map(|review| render_review_verdict(review.verdict))
+                .unwrap_or("UNREVIEWED");
             content.push_str(&format!(
-                "- **[{}]** {}\n  CWEs: {:?} | From case: {}\n",
-                kind, proposal.description, proposal.target_cwes, proposal.source_case
+                "- **[{}] [{}]** {}\n  CWEs: {:?} | From case: {}\n",
+                kind,
+                review_status,
+                proposal.description,
+                proposal.target_cwes,
+                proposal.source_case
             ));
             if !proposal.patch.replace.is_empty() {
                 content.push_str(&format!(
                     "  Suggested pattern: `{}`\n",
                     proposal.patch.replace
                 ));
+            }
+            for evidence in &proposal.supporting_evidence {
+                content.push_str(&format!("{}\n", render_evidence_ref_markdown(evidence, 2)));
+            }
+            if let Some(review) = &proposal.review {
+                content.push_str(&format!(
+                    "  Overfitting review: {} | Risk: {} | Applicability: {}\n",
+                    render_review_verdict(review.verdict),
+                    render_review_rating(review.overfitting_risk),
+                    render_review_rating(review.real_world_applicability)
+                ));
+                content.push_str(&format!("  Review reason: {}\n", review.reason));
+                if let Some(modification) = &review.suggested_modification {
+                    content.push_str(&format!("  Suggested modification: {}\n", modification));
+                }
+                for evidence in &review.evidence_refs {
+                    content.push_str(&format!("{}\n", render_evidence_ref_markdown(evidence, 2)));
+                }
             }
         }
         content.push('\n');
@@ -1199,7 +1614,7 @@ fn store_fn_insights(
             tracing::info!(
                 "Stored {} FN insights and {} proposals in {}",
                 false_negatives.len(),
-                proposals.len(),
+                reviewed_proposals.len(),
                 insight_file.display()
             );
         }
@@ -1327,8 +1742,14 @@ pub fn store_improvement_lessons(cycle: &ImprovementCycle) -> anyhow::Result<()>
             ImprovementKind::GroundTruthFix => continue, // Not a generalizable lesson
         };
 
-        // Generalize: strip benchmark-specific details from the description
-        let context = skwaq_core::memory::pattern::strip_benchmark_specifics(&proposal.description);
+        let lesson_description = proposal
+            .review
+            .as_ref()
+            .and_then(|review| review.suggested_modification.as_deref())
+            .unwrap_or(&proposal.description);
+
+        // Generalize: strip benchmark-specific details from the final reviewed lesson
+        let context = skwaq_core::memory::pattern::strip_benchmark_specifics(lesson_description);
 
         // Check overfitting guard before storing
         let tags: Vec<String> = proposal
@@ -1352,7 +1773,13 @@ pub fn store_improvement_lessons(cycle: &ImprovementCycle) -> anyhow::Result<()>
         let outcome = format!(
             "Improvement proposal ({:?} priority): {}",
             proposal.priority,
-            if proposal.patch.replace.is_empty() {
+            if let Some(modification) = proposal
+                .review
+                .as_ref()
+                .and_then(|review| review.suggested_modification.as_deref())
+            {
+                format!("revised guidance: {modification}")
+            } else if proposal.patch.replace.is_empty() {
                 "requires deeper analysis".to_string()
             } else {
                 format!("pattern: {}", proposal.patch.replace)
@@ -1437,6 +1864,16 @@ pub fn store_improvement_lessons(cycle: &ImprovementCycle) -> anyhow::Result<()>
 
 /// Print improvement proposals in a human-readable format.
 pub fn print_proposals(cycle: &ImprovementCycle) {
+    let rejected_proposals = cycle
+        .reviewed_proposals
+        .iter()
+        .filter(|proposal| {
+            matches!(
+                proposal.review.as_ref().map(|review| review.verdict),
+                Some(ReviewVerdict::Reject)
+            )
+        })
+        .collect::<Vec<_>>();
     println!("\n{}", "=".repeat(70));
     println!(
         "  SELF-IMPROVEMENT PROPOSALS: {}",
@@ -1455,6 +1892,10 @@ pub fn print_proposals(cycle: &ImprovementCycle) {
         cycle.false_negatives.len()
     );
     println!("  Proposals generated: {}", cycle.proposals.len());
+    println!(
+        "  Proposals rejected by review: {}",
+        rejected_proposals.len()
+    );
     println!();
 
     for (i, proposal) in cycle.proposals.iter().enumerate() {
@@ -1481,8 +1922,136 @@ pub fn print_proposals(cycle: &ImprovementCycle) {
             println!("     Patch: {}", proposal.patch.replace);
         }
         println!("     From case: {}", proposal.source_case);
+        for evidence in &proposal.supporting_evidence {
+            println!("     Evidence: {}", render_evidence_ref_inline(evidence));
+        }
+        if let Some(review) = &proposal.review {
+            println!(
+                "     Review: {} | Risk={} | Applicability={}",
+                render_review_verdict(review.verdict),
+                render_review_rating(review.overfitting_risk),
+                render_review_rating(review.real_world_applicability)
+            );
+            println!("     Review reason: {}", review.reason);
+            if let Some(modification) = &review.suggested_modification {
+                println!("     Suggested modification: {}", modification);
+            }
+            for evidence in &review.evidence_refs {
+                println!(
+                    "     Review evidence: {}",
+                    render_evidence_ref_inline(evidence)
+                );
+            }
+        }
         println!();
     }
+
+    if !rejected_proposals.is_empty() {
+        println!("  Rejected proposals:");
+        println!();
+        for (i, proposal) in rejected_proposals.iter().enumerate() {
+            let kind = match &proposal.kind {
+                ImprovementKind::NewPattern => "NEW_PATTERN",
+                ImprovementKind::AgentPrompt => "AGENT_PROMPT",
+                ImprovementKind::CweMapping => "CWE_MAPPING",
+                ImprovementKind::TaintRule => "TAINT_RULE",
+                ImprovementKind::GroundTruthFix => "GROUND_TRUTH",
+            };
+            let priority = match &proposal.priority {
+                Priority::High => "HIGH",
+                Priority::Medium => "MEDIUM",
+                Priority::Low => "LOW",
+            };
+            println!(
+                "  R{}. [{}] [{}] {}",
+                i + 1,
+                kind,
+                priority,
+                proposal.description
+            );
+            println!("     From case: {}", proposal.source_case);
+            for evidence in &proposal.supporting_evidence {
+                println!("     Evidence: {}", render_evidence_ref_inline(evidence));
+            }
+            if let Some(review) = &proposal.review {
+                println!(
+                    "     Review: {} | Risk={} | Applicability={}",
+                    render_review_verdict(review.verdict),
+                    render_review_rating(review.overfitting_risk),
+                    render_review_rating(review.real_world_applicability)
+                );
+                println!("     Review reason: {}", review.reason);
+                if let Some(modification) = &review.suggested_modification {
+                    println!("     Suggested modification: {}", modification);
+                }
+                for evidence in &review.evidence_refs {
+                    println!(
+                        "     Review evidence: {}",
+                        render_evidence_ref_inline(evidence)
+                    );
+                }
+            }
+            println!();
+        }
+    }
+}
+
+fn render_review_verdict(verdict: ReviewVerdict) -> &'static str {
+    match verdict {
+        ReviewVerdict::Accept => "ACCEPT",
+        ReviewVerdict::Reject => "REJECT",
+        ReviewVerdict::Modify => "MODIFY",
+    }
+}
+
+fn render_review_rating(rating: ReviewRating) -> &'static str {
+    match rating {
+        ReviewRating::Low => "LOW",
+        ReviewRating::Medium => "MEDIUM",
+        ReviewRating::High => "HIGH",
+    }
+}
+
+fn render_evidence_ref_inline(evidence: &EvidenceRef) -> String {
+    match evidence.source_type {
+        EvidenceSourceType::Knowledge => format!(
+            "[KB] {}/{}/{} — {}",
+            evidence.source.as_deref().unwrap_or("unknown-source"),
+            evidence.topic.as_deref().unwrap_or("unknown-topic"),
+            evidence.title.as_deref().unwrap_or("unknown-title"),
+            evidence.rationale
+        ),
+        EvidenceSourceType::Memory => format!(
+            "[MEMORY] {} :: {}{} — {}",
+            evidence.memory_type.as_deref().unwrap_or("unknown-type"),
+            evidence.context.as_deref().unwrap_or("unknown-context"),
+            if evidence.tags.is_empty() {
+                String::new()
+            } else {
+                format!(" [{}]", evidence.tags.join(", "))
+            },
+            evidence.rationale
+        ),
+        EvidenceSourceType::Heuristic => format!(
+            "[HEURISTIC] {} :: {}{} — {}",
+            evidence.source.as_deref().unwrap_or("unknown-source"),
+            evidence.title.as_deref().unwrap_or("unknown-title"),
+            if evidence.tags.is_empty() {
+                String::new()
+            } else {
+                format!(" [{}]", evidence.tags.join(", "))
+            },
+            evidence.rationale
+        ),
+    }
+}
+
+fn render_evidence_ref_markdown(evidence: &EvidenceRef, indent: usize) -> String {
+    format!(
+        "{}- {}",
+        " ".repeat(indent),
+        render_evidence_ref_inline(evidence)
+    )
 }
 
 #[cfg(test)]
@@ -1547,6 +2116,7 @@ mod tests {
             suite: "fixtures".to_string(),
             baseline_score: make_score(vec![(119, 0.5)]),
             false_negatives: vec![],
+            reviewed_proposals: vec![],
             proposals: vec![
                 Improvement {
                     kind: ImprovementKind::NewPattern,
@@ -1559,6 +2129,8 @@ mod tests {
                     },
                     source_case: "test_case_1".to_string(),
                     priority: Priority::High,
+                    supporting_evidence: Vec::new(),
+                    review: None,
                 },
                 Improvement {
                     kind: ImprovementKind::AgentPrompt, // Not a pattern; should be skipped
@@ -1571,6 +2143,8 @@ mod tests {
                     },
                     source_case: "test_case_2".to_string(),
                     priority: Priority::Medium,
+                    supporting_evidence: Vec::new(),
+                    review: None,
                 },
             ],
         };
@@ -1607,6 +2181,65 @@ mod tests {
         assert!(proposals[0].description.contains("execl"));
     }
 
+    #[test]
+    fn test_annotate_heuristic_proposals_adds_kb_evidence() {
+        let knowledge_db = prepare_improvement_knowledge_db().unwrap();
+        let fn_cases = vec![FalseNegativeCase {
+            case_id: "test_execl".to_string(),
+            expected_cwes: vec![78],
+            detected_cwes: vec![],
+            source_path: PathBuf::from("test.c"),
+            source_content: "void vuln() { execl(\"/bin/sh\", \"sh\", \"-c\", cmd, NULL); }"
+                .to_string(),
+        }];
+
+        let proposals =
+            annotate_heuristic_proposals(&knowledge_db, heuristic_failure_analysis(&fn_cases))
+                .expect("heuristic proposals should be grounded in KB evidence");
+
+        assert!(!proposals.is_empty(), "Should preserve heuristic proposals");
+        assert_eq!(proposals[0].supporting_evidence.len(), 1);
+        assert!(matches!(
+            proposals[0].supporting_evidence[0].source_type,
+            EvidenceSourceType::Knowledge
+        ));
+    }
+
+    #[test]
+    fn test_synthetic_heuristic_evidence_ref_is_explicit() {
+        let proposal = Improvement {
+            kind: ImprovementKind::NewPattern,
+            description: "Add execl command injection pattern".to_string(),
+            target_cwes: vec![78],
+            target_file: PathBuf::from("crates/core/src/analysis/patterns_source.rs"),
+            patch: Patch {
+                find: String::new(),
+                replace: r"\bexecl\s*\(".to_string(),
+            },
+            source_case: "test_execl".to_string(),
+            priority: Priority::High,
+            supporting_evidence: Vec::new(),
+            review: None,
+        };
+
+        let evidence = synthetic_heuristic_evidence_ref(&proposal);
+
+        assert!(matches!(
+            evidence.source_type,
+            EvidenceSourceType::Heuristic
+        ));
+        assert_eq!(
+            evidence.source.as_deref(),
+            Some("deterministic-pattern-detector")
+        );
+        assert!(
+            evidence
+                .rationale
+                .contains("built-in deterministic heuristic"),
+            "heuristic evidence should explain why it exists"
+        );
+    }
+
     fn sample_false_negative_case() -> FalseNegativeCase {
         FalseNegativeCase {
             case_id: "sample_case".to_string(),
@@ -1629,6 +2262,17 @@ mod tests {
             },
             source_case: "sample_case".to_string(),
             priority: Priority::High,
+            supporting_evidence: vec![EvidenceRef {
+                source_type: EvidenceSourceType::Knowledge,
+                source: Some("fn-insights".to_string()),
+                topic: Some("cwe-119".to_string()),
+                title: Some("sprintf overflow patterns".to_string()),
+                memory_type: None,
+                context: None,
+                tags: Vec::new(),
+                rationale: "KB notes show sprintf overflows were repeatedly missed.".to_string(),
+            }],
+            review: None,
         }
     }
 
@@ -1638,15 +2282,16 @@ mod tests {
         let output = r#"
 analysis
 ```json
-{"proposals":[{"kind":"new_pattern","description":"Detect sprintf-based overflow","target_cwes":[119],"regex_pattern":"\\bsprintf\\s*\\(","priority":"high"}]}
+{"proposals":[{"kind":"new_pattern","description":"Detect sprintf-based overflow","target_cwes":[119],"regex_pattern":"\\bsprintf\\s*\\(","priority":"high","evidence_refs":[{"source_type":"knowledge","source":"fn-insights","topic":"cwe-119","title":"sprintf overflow patterns","rationale":"KB notes show this sink is repeatedly missed."}]}]}
 ```
 "#;
 
-        let proposals = parse_analyst_proposals(output, &fn_case);
+        let proposals = parse_analyst_proposals(output, &fn_case).expect("valid cited JSON");
         assert_eq!(proposals.len(), 1);
         assert!(matches!(proposals[0].kind, ImprovementKind::NewPattern));
         assert_eq!(proposals[0].patch.replace, r"\bsprintf\s*\(");
         assert_eq!(proposals[0].target_cwes, vec![119]);
+        assert_eq!(proposals[0].supporting_evidence.len(), 1);
     }
 
     #[test]
@@ -1659,23 +2304,16 @@ analysis
     }
 
     #[test]
-    fn test_parse_delimited_proposals() {
+    fn test_parse_analyst_proposals_rejects_missing_evidence() {
         let fn_case = sample_false_negative_case();
         let output = r#"
----PROPOSAL_START---
-Kind: NEW_PATTERN
-Description: Detect unsafe scanf widthless reads
-CWEs: 119, 121
-Priority: HIGH
-Regex: \bscanf\s*\(
----PROPOSAL_END---
+```json
+{"proposals":[{"kind":"new_pattern","description":"Detect unsafe scanf widthless reads","target_cwes":[119,121],"regex_pattern":"\\bscanf\\s*\\(","priority":"high"}]}
+```
 "#;
 
-        let proposals = parse_analyst_proposals(output, &fn_case);
-        assert_eq!(proposals.len(), 1);
-        assert!(matches!(proposals[0].kind, ImprovementKind::NewPattern));
-        assert_eq!(proposals[0].patch.replace, r"\bscanf\s*\(");
-        assert_eq!(proposals[0].target_cwes, vec![119, 121]);
+        let error = parse_analyst_proposals(output, &fn_case).expect_err("missing evidence");
+        assert!(error.to_string().contains("must cite at least one"));
     }
 
     #[test]
@@ -1745,6 +2383,8 @@ Regex: \bscanf\s*\(
                 },
                 source_case: "sample_case".to_string(),
                 priority: Priority::Medium,
+                supporting_evidence: Vec::new(),
+                review: None,
             },
         ];
 
@@ -1779,43 +2419,45 @@ Regex: \bscanf\s*\(
     }
 
     #[test]
-    fn test_proposal_is_rejected_uses_matching_verdict_block() {
-        let accepted = sample_improvement("Detect sprintf-based overflow");
-        let rejected = sample_improvement("Detect unsafe scanf widthless reads");
+    fn test_parse_review_decisions_requires_cited_json_and_matches_proposals() {
+        let proposals = vec![
+            sample_improvement("Detect sprintf-based overflow"),
+            sample_improvement("Detect unsafe scanf widthless reads"),
+        ];
         let output = r#"
-## Proposal: Detect sprintf-based overflow
-Verdict: ACCEPT
-Reason: This covers CWE-121. REJECT proposal 2 because it is benchmark-specific.
-
-## Proposal: Detect unsafe scanf widthless reads
-Verdict: REJECT
-Reason: benchmark-specific naming.
+```json
+{"reviews":[
+  {"proposal_id":"P1","proposal_description":"Detect sprintf-based overflow","verdict":"ACCEPT","reason":"Specific dangerous sink with real-world precedent.","overfitting_risk":"LOW","real_world_applicability":"HIGH","evidence_refs":[{"source_type":"knowledge","source":"methodology","topic":"cwe-families","title":"General sink guidance","rationale":"The KB guidance says concrete dangerous APIs generalize."}]},
+  {"proposal_id":"P2","proposal_description":"Detect unsafe scanf widthless reads","verdict":"MODIFY","reason":"The idea is sound but should key on widthless scanf usage.","overfitting_risk":"MEDIUM","real_world_applicability":"HIGH","suggested_modification":"Require a widthless format-string condition in addition to the sink.","evidence_refs":[{"source_type":"memory","type":"insight","context":"Earlier widening of scanf patterns caused noisy matches in real code.","tags":["cwe-119"],"rationale":"Prior durable-memory lessons show this needs tighter precision."}]}
+]}
+```
 "#;
 
-        assert!(!proposal_is_rejected(
-            output,
-            1,
-            accepted.description.as_str()
-        ));
-        assert!(proposal_is_rejected(
-            output,
-            2,
-            rejected.description.as_str()
-        ));
+        let reviews =
+            parse_review_decisions(output, &proposals).expect("valid structured review payload");
+        assert_eq!(reviews.len(), 2);
+        assert_eq!(reviews[0].verdict, ReviewVerdict::Accept);
+        assert_eq!(reviews[1].verdict, ReviewVerdict::Modify);
+        assert_eq!(
+            reviews[1].suggested_modification.as_deref(),
+            Some("Require a widthless format-string condition in addition to the sink.")
+        );
+        assert_eq!(reviews[1].evidence_refs.len(), 1);
     }
 
     #[test]
-    fn test_proposal_is_rejected_falls_back_to_block_order_when_heading_differs() {
+    fn test_parse_review_decisions_rejects_missing_review_evidence() {
+        let proposals = vec![sample_improvement("Detect sprintf-based overflow")];
         let output = r#"
-## Proposal: Detect sprintf-based overflow with broader wording
-Verdict: REJECT
-Reason: too broad for real-world code.
+```json
+{"reviews":[
+  {"proposal_id":"P1","proposal_description":"Detect sprintf-based overflow","verdict":"REJECT","reason":"Too broad.","overfitting_risk":"HIGH","real_world_applicability":"LOW","evidence_refs":[]}
+]}
+```
 "#;
 
-        assert!(proposal_is_rejected(
-            output,
-            1,
-            "Detect sprintf-based overflow"
-        ));
+        let error =
+            parse_review_decisions(output, &proposals).expect_err("review evidence is required");
+        assert!(error.to_string().contains("must cite at least one"));
     }
 }
