@@ -26,7 +26,18 @@ steps:
       exit_code: 0
       stdout_contains:
         - "=== threshold-tests ==="
-        - "test result: ok. 1 passed; 0 failed;"
+        - "PASS: vulnerable-consensus"
+        - "PASS: mitigated-consensus"
+        - "PASS: high-confidence-reject"
+        - "PASS: offense-only-review"
+        - "PASS: defense-only-review"
+        - "PASS: weak-consensus-review"
+        - "PASS: context-summary-thresholds"
+        - "PASS: previous-results-structured-summary"
+        - "PASS: newest-debate-context"
+        - "PASS: structured-frame-rendering"
+        - "PASS: threshold-hints-unavailable"
+        - "PASS: weighted-structured-summary"
         - "validated confidence threshold hints in weighted debate summaries"
     timeout: 300000
 
@@ -44,7 +55,18 @@ assertions:
       step: "Run weighted debate threshold smoke"
       required_strings:
         - "=== threshold-tests ==="
-        - "test result: ok. 1 passed; 0 failed;"
+        - "PASS: vulnerable-consensus"
+        - "PASS: mitigated-consensus"
+        - "PASS: high-confidence-reject"
+        - "PASS: offense-only-review"
+        - "PASS: defense-only-review"
+        - "PASS: weak-consensus-review"
+        - "PASS: context-summary-thresholds"
+        - "PASS: previous-results-structured-summary"
+        - "PASS: newest-debate-context"
+        - "PASS: structured-frame-rendering"
+        - "PASS: threshold-hints-unavailable"
+        - "PASS: weighted-structured-summary"
         - "validated confidence threshold hints in weighted debate summaries"
 
 metadata:

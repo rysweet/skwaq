@@ -351,32 +351,83 @@ impl AnalysisPipeline {
 
 /// Build context from previous agent results, with truncation.
 fn build_previous_results_context(preamble: &str, results: &[AgentResult]) -> String {
-    let mut ctx = preamble.to_string();
+    const OLDER_CONTEXT_OMITTED_NOTICE: &str =
+        "\n...[truncated older context to preserve newest debate evidence]";
+    const TRUNCATED_PREAMBLE_NOTICE: &str = "\n...[truncated]";
+
+    let mut sections = Vec::with_capacity(results.len());
     for prev in results {
-        ctx.push_str(&format!(
-            "\n\n--- Context frame from {} ---\n{}",
-            prev.agent_name,
-            format_context_frame(&prev.context_frame)
-        ));
-        if prev.context_frame.structured_summary.is_none() {
-            ctx.push_str(&format!(
-                "\n\n--- Condensed output from {} ---\n{}",
-                prev.agent_name,
-                format_output_excerpt(&prev.output)
-            ));
+        sections.push(render_previous_result_context(prev));
+    }
+
+    let mut kept_sections = Vec::new();
+    let mut total_len = preamble.len();
+    let mut omitted_any = false;
+
+    for section in sections.iter().rev() {
+        let reserve = if omitted_any || kept_sections.len() < sections.len() {
+            OLDER_CONTEXT_OMITTED_NOTICE.len()
+        } else {
+            0
+        };
+        if total_len + section.len() + reserve <= MAX_PIPELINE_CONTEXT_CHARS {
+            kept_sections.push(section.as_str());
+            total_len += section.len();
+        } else {
+            omitted_any = true;
         }
     }
-    // Truncate accumulated context to stay within LLM limits.
+
+    kept_sections.reverse();
+
+    let mut suffix = String::new();
+    if omitted_any {
+        suffix.push_str(OLDER_CONTEXT_OMITTED_NOTICE);
+    }
+    for section in &kept_sections {
+        suffix.push_str(section);
+    }
+
+    let mut ctx = preamble.to_string();
+    ctx.push_str(&suffix);
+
     if ctx.len() > MAX_PIPELINE_CONTEXT_CHARS {
-        // Find nearest char boundary at or before the limit.
-        let mut boundary = MAX_PIPELINE_CONTEXT_CHARS;
-        while boundary > 0 && !ctx.is_char_boundary(boundary) {
-            boundary -= 1;
+        let preamble_budget = MAX_PIPELINE_CONTEXT_CHARS
+            .saturating_sub(suffix.len())
+            .saturating_sub(TRUNCATED_PREAMBLE_NOTICE.len());
+        let mut trimmed = truncate_to_char_boundary(preamble, preamble_budget);
+        if trimmed.len() < preamble.len() {
+            trimmed.push_str(TRUNCATED_PREAMBLE_NOTICE);
         }
-        ctx.truncate(boundary);
-        ctx.push_str("\n...[truncated]");
+        trimmed.push_str(&suffix);
+        return trimmed;
     }
+
     ctx
+}
+
+fn truncate_to_char_boundary(text: &str, max_len: usize) -> String {
+    let mut boundary = max_len.min(text.len());
+    while boundary > 0 && !text.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+    text[..boundary].to_string()
+}
+
+fn render_previous_result_context(prev: &AgentResult) -> String {
+    let mut rendered = format!(
+        "\n\n--- Context frame from {} ---\n{}",
+        prev.agent_name,
+        format_context_frame(&prev.context_frame)
+    );
+    if prev.context_frame.structured_summary.is_none() {
+        rendered.push_str(&format!(
+            "\n\n--- Condensed output from {} ---\n{}",
+            prev.agent_name,
+            format_output_excerpt(&prev.output)
+        ));
+    }
+    rendered
 }
 
 fn build_debate_context_summary(summary: &str) -> String {
@@ -588,6 +639,12 @@ fn build_debate_summary(agent_a: &AgentResult, agent_b: &AgentResult) -> String 
          - {} (defense perspective): evaluated mitigations\n\n",
         agent_a.agent_name, agent_b.agent_name
     ));
+    if let Some(threshold_hint_unavailable) =
+        build_threshold_hint_unavailable_note(agent_a, agent_b)
+    {
+        summary.push_str(&threshold_hint_unavailable);
+        summary.push('\n');
+    }
 
     // Extract verdicts from agent A (CONFIRMED/DOWNGRADED/REJECTED)
     let a_verdicts: Vec<&str> = agent_a
@@ -647,6 +704,30 @@ fn build_debate_summary(agent_a: &AgentResult, agent_b: &AgentResult) -> String 
     }
 
     summary
+}
+
+fn build_threshold_hint_unavailable_note(
+    agent_a: &AgentResult,
+    agent_b: &AgentResult,
+) -> Option<String> {
+    let parse_failures = [agent_a, agent_b]
+        .into_iter()
+        .filter_map(|agent| {
+            agent
+                .parsed_output_error
+                .as_ref()
+                .map(|error| format!("{}: {}", agent.agent_name, error))
+        })
+        .collect::<Vec<_>>();
+
+    if parse_failures.is_empty() {
+        None
+    } else {
+        Some(format!(
+            "CONFIDENCE THRESHOLD NOTE: unavailable because structured debate parsing failed ({}). Do not auto-confirm or auto-reject from thresholds; read the code directly.",
+            parse_failures.join(" | ")
+        ))
+    }
 }
 
 fn build_weighted_debate_summary(
@@ -1546,7 +1627,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_debate_summary_marks_high_confidence_confirm() {
+    fn test_build_debate_summary_marks_high_confidence_confirm_for_vulnerable_consensus() {
         let result_a = AgentResult {
             agent_name: "exploit-analyst".into(),
             output: "free-form exploit review".into(),
@@ -2039,6 +2120,54 @@ mod tests {
     }
 
     #[test]
+    fn test_build_previous_results_context_preserves_newest_debate_summary_when_truncated() {
+        let mut results = Vec::new();
+        for idx in 0..20 {
+            let repeated = "x".repeat(700);
+            results.push(AgentResult {
+                agent_name: format!("older-agent-{idx}"),
+                output: repeated.clone(),
+                tokens_used: 0,
+                context_frame: AgentContextFrame::synthetic(
+                    format!("older-agent-{idx}"),
+                    "Older context",
+                    None,
+                    &repeated,
+                ),
+                parsed_output: None,
+                parsed_output_error: None,
+            });
+        }
+
+        let mut debate_frame = AgentContextFrame::synthetic(
+            "debate-summary",
+            "Pipeline-generated summary of offense/defense agreements and disagreements",
+            None,
+            "raw debate summary",
+        );
+        debate_frame.structured_summary = Some(
+            "Weighted debate threshold summary:\n- Final finding: offense=CONFIRMED @ 95%, defense=VULNERABLE @ 90%, net_weight=185\n  threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)"
+                .into(),
+        );
+        debate_frame.key_points =
+            vec!["threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)".into()];
+        results.push(AgentResult {
+            agent_name: "debate-summary".into(),
+            output: "raw debate summary".into(),
+            tokens_used: 0,
+            context_frame: debate_frame,
+            parsed_output: None,
+            parsed_output_error: None,
+        });
+
+        let ctx = build_previous_results_context("preamble", &results);
+        assert!(ctx.contains("[truncated older context to preserve newest debate evidence]"));
+        assert!(ctx.contains("Context frame from debate-summary"));
+        assert!(ctx.contains("threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)"));
+        assert!(!ctx.contains("older-agent-0"));
+    }
+
+    #[test]
     fn test_build_debate_context_summary_preserves_threshold_hints() {
         let summary = "Weighted finding comparisons:\n- Finding A: offense=CONFIRMED @ 95%, defense=VULNERABLE @ 90%, net_weight=185\n    threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)\n    offense_evidence: attacker controls length\n- Finding B: offense=CONFIRMED @ 60%, defense=MITIGATED @ 55%, net_weight=115\n    threshold_hint: REVIEW_REQUIRED (insufficient_consensus)\n    defense_evidence: partial bounds check\n\nSummary statistics:\n- offense_assessments: 2\n- defense_assessments: 2\n- weighted_disagreements: 0\n- high_confidence_confirm: 1\n- high_confidence_reject: 0\n- review_required: 1\nCONFIDENCE THRESHOLD NOTE: Only auto-confirm findings labelled HIGH_CONFIDENCE_CONFIRM. For REVIEW_REQUIRED findings, verify with direct code evidence before confirming.\n";
 
@@ -2057,6 +2186,44 @@ mod tests {
         assert!(compact.contains("CONFIDENCE THRESHOLD NOTE:"));
         assert!(!compact.contains("offense_evidence:"));
         assert!(!compact.contains("defense_evidence:"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_marks_threshold_hints_unavailable_on_parse_failure() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "CONFIRMED finding from fallback text".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "CONFIRMED finding from fallback text",
+            ),
+            parsed_output: None,
+            parsed_output_error: Some("failed to parse exploit-analyst-v1".into()),
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "SAFE finding from fallback text".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "SAFE finding from fallback text",
+            ),
+            parsed_output: None,
+            parsed_output_error: Some("failed to parse defense-analyst-v1".into()),
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains(
+            "CONFIDENCE THRESHOLD NOTE: unavailable because structured debate parsing failed"
+        ));
+        assert!(summary.contains("exploit-analyst: failed to parse exploit-analyst-v1"));
+        assert!(summary.contains("defense-analyst: failed to parse defense-analyst-v1"));
+        assert!(summary.contains("Do not auto-confirm or auto-reject from thresholds"));
     }
 
     #[test]
