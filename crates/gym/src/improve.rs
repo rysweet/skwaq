@@ -13,7 +13,12 @@
 use crate::adapters::{BenchmarkAdapter, BenchmarkConfig};
 use crate::scoring::{self, AggregateScore};
 use serde::Deserialize;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+
+const IMPROVE_KB_QUERY_LIMIT: usize = 6;
+const IMPROVE_KB_HITS_PER_QUERY: usize = 2;
+const IMPROVE_KB_SNIPPET_CHAR_LIMIT: usize = 700;
 
 /// A proposed improvement from the failure-analyst agent.
 #[derive(Debug, Clone)]
@@ -202,33 +207,27 @@ pub async fn run_improvement_cycle(
     })
 }
 
-/// Analyze false negatives using the failure-analyst agent (or heuristic fallback).
+/// Analyze false negatives using the failure-analyst agent plus explicit heuristics.
 async fn analyze_false_negatives(
     false_negatives: &[FalseNegativeCase],
     suite: &str,
 ) -> anyhow::Result<Vec<Improvement>> {
-    let mut proposals = Vec::new();
-
-    // Try LLM-based analysis first
-    match run_failure_analyst_agent(false_negatives, suite).await {
-        Ok(llm_proposals) => {
-            tracing::info!(
-                "Failure analyst produced {} proposal(s) for {}",
-                llm_proposals.len(),
-                suite
-            );
-            proposals.extend(llm_proposals);
-        }
-        Err(e) => {
-            tracing::warn!(
-                "Failure analyst unavailable for {}: {}; relying on heuristics",
-                suite,
-                e
-            );
-        }
+    if false_negatives.is_empty() {
+        return Ok(Vec::new());
     }
 
-    // Always run heuristic analysis as a baseline
+    let knowledge_db = prepare_improvement_knowledge_db()?;
+    let mut proposals = Vec::new();
+
+    let llm_proposals = run_failure_analyst_agent(false_negatives, suite, &knowledge_db).await?;
+    tracing::info!(
+        "Failure analyst produced {} proposal(s) for {}",
+        llm_proposals.len(),
+        suite
+    );
+    proposals.extend(llm_proposals);
+
+    // Heuristics are an explicit second signal, not a hidden fallback path.
     let heuristic_proposals = heuristic_failure_analysis(false_negatives);
     tracing::info!(
         "Heuristic analysis produced {} proposal(s) for {}",
@@ -242,7 +241,7 @@ async fn analyze_false_negatives(
     proposals.retain(|p| seen.insert(p.description.clone()));
 
     // Run overfitting review gate on proposals
-    proposals = run_overfitting_review(proposals, suite).await?;
+    proposals = run_overfitting_review(proposals, suite, &knowledge_db).await?;
 
     Ok(proposals)
 }
@@ -251,10 +250,11 @@ async fn analyze_false_negatives(
 async fn run_failure_analyst_agent(
     false_negatives: &[FalseNegativeCase],
     suite: &str,
+    knowledge_db: &skwaq_core::graph::GraphDb,
 ) -> anyhow::Result<Vec<Improvement>> {
     let config = skwaq_core::config::Config::load()?;
     let llm_client = skwaq_core::llm::create_client(&config.llm).await?;
-    let memory = skwaq_core::memory::MemoryStore::open_default().ok();
+    let memory = skwaq_core::memory::MemoryStore::open_default()?;
 
     let agent = skwaq_core::agents::definition::load_agent("failure-analyst")?;
     let runner = skwaq_core::agents::runner::AgentRunner::new(llm_client);
@@ -274,6 +274,7 @@ async fn run_failure_analyst_agent(
                 source_excerpt_len
             );
         }
+        let kb_context = build_false_negative_knowledge_context(knowledge_db, fn_case)?;
 
         // Build context with the missed case details
         let context = format!(
@@ -283,16 +284,20 @@ async fn run_failure_analyst_agent(
              Detected CWEs: {:?}\n\
              File: {}\n\n\
              Source code:\n```\n{}\n```\n\n\
+             Knowledge base guidance:\n{}\n\n\
              The vulnerability was NOT detected. Explain why and propose a fix.\n\n\
-             If durable memory tools are available, use recall_memory to check for \
-             prior generalized lessons before proposing changes. Only store or reuse \
-             lessons that generalize beyond this specific benchmark case.",
+             Durable memory is available for this improve cycle. Use recall_memory to check \
+             for prior generalized lessons before proposing changes. Use the KB guidance \
+             above plus lookup_knowledge/lookup_cwe to cross-check the expected CWE family \
+             before finalizing any proposal. Only store or reuse lessons that generalize \
+             beyond this specific benchmark case.",
             suite,
             fn_case.case_id,
             fn_case.expected_cwes,
             fn_case.detected_cwes,
             fn_case.source_path.display(),
             &fn_case.source_content[..source_excerpt_len],
+            kb_context,
         );
 
         // Create an in-memory DB for the agent to use
@@ -318,25 +323,14 @@ async fn run_failure_analyst_agent(
             false_negatives.len().min(5)
         );
 
-        let result = if let Some(ref memory) = memory {
-            runner
-                .run_agent_with_db_and_memory(&agent, &inv_id, &context, &db, memory, &mut budget)
-                .await
-        } else {
-            runner
-                .run_agent_with_db(&agent, &inv_id, &context, &db, &mut budget)
-                .await
-        };
+        let result = runner
+            .run_agent_with_db_and_memory(&agent, &inv_id, &context, &db, &memory, &mut budget)
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!("failure analyst failed on case {}: {e}", fn_case.case_id)
+            })?;
 
-        match result {
-            Ok(result) => {
-                // Parse proposals from the agent's output
-                proposals.extend(parse_analyst_proposals(&result.output, fn_case));
-            }
-            Err(e) => {
-                tracing::warn!("Failure analyst failed on case {}: {}", fn_case.case_id, e);
-            }
-        }
+        proposals.extend(parse_analyst_proposals(&result.output, fn_case));
     }
 
     Ok(proposals)
@@ -709,6 +703,7 @@ fn parse_legacy_proposals(output: &str, fn_case: &FalseNegativeCase) -> Vec<Impr
 async fn run_overfitting_review(
     proposals: Vec<Improvement>,
     suite: &str,
+    knowledge_db: &skwaq_core::graph::GraphDb,
 ) -> anyhow::Result<Vec<Improvement>> {
     if proposals.is_empty() {
         return Ok(proposals);
@@ -727,10 +722,15 @@ async fn run_overfitting_review(
 
     let runner = skwaq_core::agents::runner::AgentRunner::new(llm_client);
     let budget_amount = config.analysis.default_token_budget.min(20_000);
+    let knowledge_context = build_overfitting_knowledge_context(knowledge_db, &proposals)?;
 
     // Format all proposals for review
     let mut proposal_text = format!(
-        "Review these {} improvement proposals from the {} benchmark for overfitting risk:\n\n",
+        "Use the knowledge-base guidance below as grounding when judging \
+         real-world generality and CWE mapping accuracy.\n\n\
+         {}\n\n\
+         Review these {} improvement proposals from the {} benchmark for overfitting risk:\n\n",
+        knowledge_context,
         proposals.len(),
         suite
     );
@@ -798,6 +798,93 @@ async fn run_overfitting_review(
         }
         Err(e) => Err(anyhow::anyhow!("overfitting reviewer failed: {e}")),
     }
+}
+
+fn prepare_improvement_knowledge_db() -> anyhow::Result<skwaq_core::graph::GraphDb> {
+    let db = skwaq_core::graph::GraphDb::in_memory()?;
+    skwaq_core::knowledge::search::initialize_cwe_catalog(&db)?;
+    Ok(db)
+}
+
+fn build_false_negative_knowledge_context(
+    knowledge_db: &skwaq_core::graph::GraphDb,
+    fn_case: &FalseNegativeCase,
+) -> anyhow::Result<String> {
+    let mut queries = vec!["methodology".to_string(), "cwe-families".to_string()];
+    queries.extend(fn_case.expected_cwes.iter().map(|cwe| format!("cwe-{cwe}")));
+    tracing::info!(
+        "Building KB guidance for false negative case {} with queries {:?}",
+        fn_case.case_id,
+        queries
+    );
+    render_knowledge_context(knowledge_db, &queries)
+}
+
+fn build_overfitting_knowledge_context(
+    knowledge_db: &skwaq_core::graph::GraphDb,
+    proposals: &[Improvement],
+) -> anyhow::Result<String> {
+    let mut queries = vec!["methodology".to_string(), "cwe-families".to_string()];
+    let target_cwes: BTreeSet<u32> = proposals
+        .iter()
+        .flat_map(|proposal| proposal.target_cwes.iter().copied())
+        .collect();
+    queries.extend(target_cwes.into_iter().map(|cwe| format!("cwe-{cwe}")));
+    tracing::info!(
+        "Building KB guidance for overfitting review with queries {:?}",
+        queries
+    );
+    render_knowledge_context(knowledge_db, &queries)
+}
+
+fn render_knowledge_context(
+    knowledge_db: &skwaq_core::graph::GraphDb,
+    queries: &[String],
+) -> anyhow::Result<String> {
+    let mut sections = Vec::new();
+    let mut seen_hits = std::collections::HashSet::new();
+
+    for query in queries
+        .iter()
+        .filter(|query| !query.trim().is_empty())
+        .take(IMPROVE_KB_QUERY_LIMIT)
+    {
+        let hits = skwaq_core::knowledge::search::search_knowledge(Some(knowledge_db), query)?;
+        tracing::info!(
+            "KB query '{}' returned {} hit(s) for improve cycle context",
+            query,
+            hits.len()
+        );
+        for hit in hits.into_iter().take(IMPROVE_KB_HITS_PER_QUERY) {
+            let key = format!("{}::{}::{}", hit.source, hit.topic, hit.title);
+            if !seen_hits.insert(key) {
+                continue;
+            }
+
+            let snippet: String = hit
+                .content
+                .chars()
+                .take(IMPROVE_KB_SNIPPET_CHAR_LIMIT)
+                .collect();
+            sections.push(format!(
+                "### Query: {query}\n- Source: {}\n- Topic: {}\n- Title: {}\n{}\n",
+                hit.source, hit.topic, hit.title, snippet
+            ));
+        }
+    }
+
+    if sections.is_empty() {
+        return Ok(
+            "No matching KB guidance was found for the requested methodology/CWE queries."
+                .to_string(),
+        );
+    }
+
+    tracing::info!(
+        "Prepared {} KB guidance snippet(s) for improve cycle context",
+        sections.len()
+    );
+    Ok(sections.join("\n"))
 }
 
 fn proposal_is_rejected(output: &str, proposal_number: usize, description: &str) -> bool {
@@ -1566,6 +1653,48 @@ Regex: \bscanf\s*\(
             "Should propose hardcoded credential detection"
         );
         assert!(proposals[0].description.contains("password"));
+    }
+
+    #[test]
+    fn test_false_negative_knowledge_context_includes_expected_cwe() {
+        let knowledge_db = prepare_improvement_knowledge_db().unwrap();
+        let fn_case = FalseNegativeCase {
+            case_id: "case-1".to_string(),
+            expected_cwes: vec![119],
+            detected_cwes: vec![],
+            source_path: PathBuf::from("sample.c"),
+            source_content: "void vuln(char *src) { char dst[8]; memcpy(dst, src, 32); }"
+                .to_string(),
+        };
+
+        let context = build_false_negative_knowledge_context(&knowledge_db, &fn_case).unwrap();
+
+        assert!(context.contains("CWE-119"));
+    }
+
+    #[test]
+    fn test_overfitting_knowledge_context_deduplicates_repeated_cwes() {
+        let knowledge_db = prepare_improvement_knowledge_db().unwrap();
+        let proposals = vec![
+            sample_improvement("Detect sprintf-based overflow"),
+            Improvement {
+                kind: ImprovementKind::AgentPrompt,
+                description: "Tighten pointer-flow reasoning".to_string(),
+                target_cwes: vec![119, 120],
+                target_file: PathBuf::from("agents/vuln-hunter.md"),
+                patch: Patch {
+                    find: String::new(),
+                    replace: String::new(),
+                },
+                source_case: "sample_case".to_string(),
+                priority: Priority::Medium,
+            },
+        ];
+
+        let context = build_overfitting_knowledge_context(&knowledge_db, &proposals).unwrap();
+
+        assert_eq!(context.matches("### Query: cwe-119").count(), 1);
+        assert_eq!(context.matches("### Query: cwe-120").count(), 1);
     }
 
     #[test]
