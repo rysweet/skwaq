@@ -60,26 +60,27 @@ pub fn validate_target(target: &str) -> Result<std::path::PathBuf, AdapterError>
     }
 
     // Canonicalize to resolve symlinks and relative components
-    let canonical = path.canonicalize().map_err(|_| AdapterError::InputValidation {
-        message: "unable to resolve target path".to_string(),
-    })?;
+    let canonical = path
+        .canonicalize()
+        .map_err(|_| AdapterError::InputValidation {
+            message: "unable to resolve target path".to_string(),
+        })?;
 
-    // Check symlink metadata — reject if the original path is a symlink
-    // that resolves to a different directory tree than expected.
-    let metadata = std::fs::symlink_metadata(path).map_err(|_| AdapterError::InputValidation {
-        message: "unable to read target metadata".to_string(),
-    })?;
+    // Check symlink metadata on the *canonical* path to narrow the TOCTOU window.
+    // Verifying the canonical path (not the original) ensures we check the resolved target.
+    let metadata =
+        std::fs::symlink_metadata(&canonical).map_err(|_| AdapterError::InputValidation {
+            message: "unable to read target metadata".to_string(),
+        })?;
 
     if metadata.file_type().is_symlink() {
-        tracing::debug!(
-            "target is a symlink: {} -> {}",
-            target,
-            canonical.display()
-        );
+        return Err(AdapterError::InputValidation {
+            message: "resolved path is a symlink".to_string(),
+        });
     }
 
     // Must be a file or directory
-    if !canonical.is_file() && !canonical.is_dir() {
+    if !metadata.is_file() && !metadata.is_dir() {
         return Err(AdapterError::InputValidation {
             message: "target is not a file or directory".to_string(),
         });

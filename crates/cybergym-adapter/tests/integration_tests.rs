@@ -114,12 +114,24 @@ fn report_generates_severity_breakdown() {
         status: ScanStatus::Complete,
         findings: vec![
             Finding::new(
-                "f1".into(), vec![79], "high".into(), "inj".into(),
-                "a.c".into(), "fn1".into(), None, "injection".into(),
+                "f1".into(),
+                vec![79],
+                "high".into(),
+                "inj".into(),
+                "a.c".into(),
+                "fn1".into(),
+                None,
+                "injection".into(),
             ),
             Finding::new(
-                "f2".into(), vec![120], "medium".into(), "buf".into(),
-                "b.c".into(), "fn2".into(), None, "memory".into(),
+                "f2".into(),
+                vec![120],
+                "medium".into(),
+                "buf".into(),
+                "b.c".into(),
+                "fn2".into(),
+                None,
+                "memory".into(),
             ),
         ],
         started_at: chrono::Utc::now(),
@@ -175,8 +187,8 @@ fn security_finding_cap_prevents_unbounded_growth() {
         })
         .collect();
 
-    // Verify the cap constant
-    assert!(cybergym_adapter::output_writer::MAX_FINDINGS <= 10_000);
+    // Verify the cap constant at compile time
+    const { assert!(cybergym_adapter::output_writer::MAX_FINDINGS <= 10_000) };
 
     // Verify findings can be constructed but would be capped by scan_runner
     assert_eq!(findings.len(), 10_500);
@@ -255,12 +267,7 @@ fn validate_with_output_dir_checks_results_file() {
     // Without results.json, validation should report the issue
     let validation = cybergym_adapter::validate(&result, Some(temp.path()));
     assert!(!validation.valid);
-    assert!(
-        validation
-            .issues
-            .iter()
-            .any(|i| i.contains("results.json"))
-    );
+    assert!(validation.issues.iter().any(|i| i.contains("results.json")));
 
     // Write results.json and re-validate
     let run_dir =

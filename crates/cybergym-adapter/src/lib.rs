@@ -56,9 +56,7 @@ pub fn report(scan_result: &ScanResult) -> Report {
     let mut by_cwe: std::collections::HashMap<u32, usize> = std::collections::HashMap::new();
 
     for finding in &scan_result.findings {
-        *by_severity
-            .entry(finding.severity.clone())
-            .or_insert(0) += 1;
+        *by_severity.entry(finding.severity.clone()).or_insert(0) += 1;
         for &cwe in &finding.cwes {
             *by_cwe.entry(cwe).or_insert(0) += 1;
         }
@@ -149,16 +147,34 @@ mod tests {
     fn report_aggregates_by_severity() {
         let findings = vec![
             Finding::new(
-                "f1".into(), vec![79], "high".into(), "inj".into(),
-                "a.c".into(), "fn".into(), None, "injection".into(),
+                "f1".into(),
+                vec![79],
+                "high".into(),
+                "inj".into(),
+                "a.c".into(),
+                "fn".into(),
+                None,
+                "injection".into(),
             ),
             Finding::new(
-                "f2".into(), vec![120], "high".into(), "buf".into(),
-                "b.c".into(), "fn".into(), None, "memory".into(),
+                "f2".into(),
+                vec![120],
+                "high".into(),
+                "buf".into(),
+                "b.c".into(),
+                "fn".into(),
+                None,
+                "memory".into(),
             ),
             Finding::new(
-                "f3".into(), vec![22], "low".into(), "path".into(),
-                "c.c".into(), "fn".into(), None, "path".into(),
+                "f3".into(),
+                vec![22],
+                "low".into(),
+                "path".into(),
+                "c.c".into(),
+                "fn".into(),
+                None,
+                "path".into(),
             ),
         ];
         let result = make_scan_result(findings);
@@ -170,12 +186,16 @@ mod tests {
 
     #[test]
     fn report_aggregates_by_cwe() {
-        let findings = vec![
-            Finding::new(
-                "f1".into(), vec![79, 89], "high".into(), "multi".into(),
-                "a.c".into(), "fn".into(), None, "injection".into(),
-            ),
-        ];
+        let findings = vec![Finding::new(
+            "f1".into(),
+            vec![79, 89],
+            "high".into(),
+            "multi".into(),
+            "a.c".into(),
+            "fn".into(),
+            None,
+            "injection".into(),
+        )];
         let result = make_scan_result(findings);
         let rpt = report(&result);
         assert_eq!(rpt.by_cwe[&79], 1);
@@ -185,8 +205,14 @@ mod tests {
     #[test]
     fn validate_passes_for_valid_result() {
         let findings = vec![Finding::new(
-            "f1".into(), vec![79], "high".into(), "test".into(),
-            "a.c".into(), "fn".into(), None, "injection".into(),
+            "f1".into(),
+            vec![79],
+            "high".into(),
+            "test".into(),
+            "a.c".into(),
+            "fn".into(),
+            None,
+            "injection".into(),
         )];
         let result = make_scan_result(findings);
         let validation = validate(&result, None);
@@ -206,8 +232,14 @@ mod tests {
     #[test]
     fn validate_catches_empty_finding_id() {
         let findings = vec![Finding::new(
-            "".into(), vec![], "low".into(), "test".into(),
-            "a.c".into(), "fn".into(), None, "test".into(),
+            "".into(),
+            vec![],
+            "low".into(),
+            "test".into(),
+            "a.c".into(),
+            "fn".into(),
+            None,
+            "test".into(),
         )];
         let result = make_scan_result(findings);
         let validation = validate(&result, None);
@@ -220,12 +252,10 @@ mod tests {
         let result = make_scan_result(vec![]);
         let validation = validate(&result, Some(Path::new("/nonexistent")));
         assert!(!validation.valid);
-        assert!(
-            validation
-                .issues
-                .iter()
-                .any(|i| i.contains("does not exist"))
-        );
+        assert!(validation
+            .issues
+            .iter()
+            .any(|i| i.contains("does not exist")));
     }
 
     #[tokio::test]

@@ -64,18 +64,13 @@ pub async fn run_scan(
                 message: "scan analysis failed".to_string(),
             })
         }
-        Err(_) => Err(AdapterError::Timeout {
-            seconds: timeout,
-        }),
+        Err(_) => Err(AdapterError::Timeout { seconds: timeout }),
     }
 }
 
 /// Inner scan logic — runs pattern detection and optionally agentic analysis.
 /// Returns (findings, was_partial).
-async fn run_scan_inner(
-    target: &Path,
-    quick_only: bool,
-) -> anyhow::Result<(Vec<Finding>, bool)> {
+async fn run_scan_inner(target: &Path, quick_only: bool) -> anyhow::Result<(Vec<Finding>, bool)> {
     let mut all_findings = Vec::new();
     let mut partial = false;
 
@@ -140,10 +135,7 @@ fn scan_directory(dir: &Path, findings: &mut Vec<Finding>) -> anyhow::Result<()>
 
 /// Check if a file has a supported source extension.
 fn is_supported_source(path: &Path) -> bool {
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
     matches!(
         ext,
         "c" | "h" | "cpp" | "cxx" | "cc" | "hpp" | "py" | "js" | "ts" | "java"
@@ -165,9 +157,7 @@ async fn run_agentic_analysis(target: &Path) -> anyhow::Result<Vec<Finding>> {
             }
         }
         match source_file {
-            Some(file) => {
-                skwaq_gym::agentic::run_agentic_source_analysis(&file, 1800).await?
-            }
+            Some(file) => skwaq_gym::agentic::run_agentic_source_analysis(&file, 1800).await?,
             None => return Ok(vec![]),
         }
     } else {

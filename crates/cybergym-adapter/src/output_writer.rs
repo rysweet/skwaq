@@ -16,10 +16,7 @@ pub const MAX_FINDINGS: usize = 10_000;
 /// On Unix, permissions are set to 0o750 immediately at creation.
 pub fn create_run_dir(base_dir: &Path, run_id: &str) -> Result<PathBuf, AdapterError> {
     // Validate run_id: must be alphanumeric + hyphens only
-    if !run_id
-        .chars()
-        .all(|c| c.is_alphanumeric() || c == '-')
-    {
+    if !run_id.chars().all(|c| c.is_alphanumeric() || c == '-') {
         return Err(AdapterError::OutputFailed {
             message: "run_id contains invalid characters".to_string(),
         });
@@ -29,10 +26,9 @@ pub fn create_run_dir(base_dir: &Path, run_id: &str) -> Result<PathBuf, AdapterE
 
     // Reject if path already exists as a symlink
     if run_dir.symlink_metadata().is_ok() {
-        let meta =
-            std::fs::symlink_metadata(&run_dir).map_err(|e| AdapterError::OutputFailed {
-                message: format!("failed to read metadata: {}", e),
-            })?;
+        let meta = std::fs::symlink_metadata(&run_dir).map_err(|e| AdapterError::OutputFailed {
+            message: format!("failed to read metadata: {}", e),
+        })?;
         if meta.file_type().is_symlink() {
             return Err(AdapterError::OutputFailed {
                 message: "output path is a symlink".to_string(),
@@ -41,7 +37,11 @@ pub fn create_run_dir(base_dir: &Path, run_id: &str) -> Result<PathBuf, AdapterE
     }
 
     std::fs::create_dir_all(&run_dir).map_err(|e| {
-        tracing::debug!("failed to create run directory {}: {}", run_dir.display(), e);
+        tracing::debug!(
+            "failed to create run directory {}: {}",
+            run_dir.display(),
+            e
+        );
         AdapterError::OutputFailed {
             message: "failed to create output directory".to_string(),
         }
@@ -65,7 +65,7 @@ pub fn create_run_dir(base_dir: &Path, run_id: &str) -> Result<PathBuf, AdapterE
 
 /// Write scan results to the output directory as JSON.
 ///
-/// File permissions are set to 0o640 on Unix.
+/// On Unix, the file is created with 0o640 permissions atomically via `OpenOptions`.
 pub fn write_results(run_dir: &Path, result: &ScanResult) -> Result<PathBuf, AdapterError> {
     let output_path = run_dir.join("results.json");
 
@@ -76,14 +76,7 @@ pub fn write_results(run_dir: &Path, result: &ScanResult) -> Result<PathBuf, Ada
         }
     })?;
 
-    std::fs::write(&output_path, &json).map_err(|e| {
-        tracing::debug!("failed to write results to {}: {}", output_path.display(), e);
-        AdapterError::OutputFailed {
-            message: "failed to write results file".to_string(),
-        }
-    })?;
-
-    set_file_permissions(&output_path)?;
+    write_with_permissions(&output_path, json.as_bytes())?;
     Ok(output_path)
 }
 
@@ -98,32 +91,50 @@ pub fn write_report(run_dir: &Path, report: &Report) -> Result<PathBuf, AdapterE
         }
     })?;
 
-    std::fs::write(&output_path, &json).map_err(|e| {
-        tracing::debug!("failed to write report to {}: {}", output_path.display(), e);
-        AdapterError::OutputFailed {
-            message: "failed to write report file".to_string(),
-        }
-    })?;
-
-    set_file_permissions(&output_path)?;
+    write_with_permissions(&output_path, json.as_bytes())?;
     Ok(output_path)
 }
 
-/// Set file permissions to 0o640 on Unix.
-#[cfg(unix)]
-fn set_file_permissions(path: &Path) -> Result<(), AdapterError> {
-    use std::os::unix::fs::PermissionsExt;
-    let perms = std::fs::Permissions::from_mode(0o640);
-    std::fs::set_permissions(path, perms).map_err(|e| {
-        tracing::debug!("failed to set file permissions on {}: {}", path.display(), e);
-        AdapterError::OutputFailed {
-            message: "failed to set file permissions".to_string(),
-        }
-    })
-}
+/// Write data to a file with restricted permissions (0o640 on Unix).
+///
+/// On Unix, uses `OpenOptions` with mode to create the file with correct
+/// permissions atomically — no window where the file is world-readable.
+fn write_with_permissions(path: &Path, data: &[u8]) -> Result<(), AdapterError> {
+    #[cfg(unix)]
+    {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
 
-#[cfg(not(unix))]
-fn set_file_permissions(_path: &Path) -> Result<(), AdapterError> {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o640)
+            .open(path)
+            .map_err(|e| {
+                tracing::debug!("failed to create file {}: {}", path.display(), e);
+                AdapterError::OutputFailed {
+                    message: "failed to create output file".to_string(),
+                }
+            })?;
+        file.write_all(data).map_err(|e| {
+            tracing::debug!("failed to write to {}: {}", path.display(), e);
+            AdapterError::OutputFailed {
+                message: "failed to write output file".to_string(),
+            }
+        })?;
+    }
+
+    #[cfg(not(unix))]
+    {
+        std::fs::write(path, data).map_err(|e| {
+            tracing::debug!("failed to write to {}: {}", path.display(), e);
+            AdapterError::OutputFailed {
+                message: "failed to write output file".to_string(),
+            }
+        })?;
+    }
+
     Ok(())
 }
 
@@ -145,7 +156,10 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let result = create_run_dir(temp.path(), "bad/id");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid characters"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("invalid characters"));
     }
 
     #[test]
