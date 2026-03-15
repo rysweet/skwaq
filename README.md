@@ -73,7 +73,8 @@ cycles challenge the initial coarse finding.
 
 `skwaq agents list` now includes each agent's structured role title and any
 declared output schema, which is useful for verifying which specialization
-cards and schema-backed contracts are active in the current checkout.
+cards and schema-backed contracts are active in the current checkout, including
+debate-stage schemas such as `exploit-analyst-v1` and `defense-analyst-v1`.
 
 ### Investigation
 ```bash

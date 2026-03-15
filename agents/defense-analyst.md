@@ -11,6 +11,7 @@ tools:
   - store_memory
   - recall_memory
 max_turns: 15
+output_schema: defense-analyst-v1
 role:
   title: Defensive controls specialist
   expertise:
