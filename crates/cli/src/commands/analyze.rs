@@ -129,6 +129,18 @@ async fn run_combined_analysis(
     for result in &results {
         println!("--- {} ---", result.agent_name);
         println!("{}", result.output);
+        if let Some(parse_error) = &result.parsed_output_error {
+            eprintln!(
+                "warning: {} returned output that did not match schema {}: {}",
+                result.agent_name,
+                result
+                    .context_frame
+                    .output_schema
+                    .as_deref()
+                    .unwrap_or("unknown"),
+                parse_error
+            );
+        }
         println!();
     }
 

@@ -25,7 +25,7 @@ fn render_agents_list(agents: &[AgentDefinition]) -> String {
         "{:<18} {:<34} {:<24} {:<32} {:<18} {:>5}\n",
         "NAME", "DESCRIPTION", "MODEL", "ROLE", "SCHEMA", "TOOLS"
     ));
-    out.push_str(&format!("{}\n", "-".repeat(135)));
+    out.push_str(&format!("{}\n", "-".repeat(136)));
 
     for agent in agents {
         let desc = truncate(&agent.description, 38);

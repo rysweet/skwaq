@@ -90,6 +90,21 @@ pub async fn run(binary: &Path) -> anyhow::Result<()> {
         .run_with_memory(&file_name, &inv_id, &db, llm_client, &mut budget, &memory)
         .await?;
 
+    for result in &results {
+        if let Some(parse_error) = &result.parsed_output_error {
+            eprintln!(
+                "  Warning: {} returned output that did not match schema {}: {}",
+                result.agent_name,
+                result
+                    .context_frame
+                    .output_schema
+                    .as_deref()
+                    .unwrap_or("unknown"),
+                parse_error
+            );
+        }
+    }
+
     let total_tokens: u64 = results.iter().map(|r| r.tokens_used).sum();
     println!(
         "  Agent pipeline: {} agents, {} tokens used",

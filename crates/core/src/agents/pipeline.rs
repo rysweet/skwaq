@@ -346,11 +346,13 @@ fn build_previous_results_context(preamble: &str, results: &[AgentResult]) -> St
             prev.agent_name,
             format_context_frame(&prev.context_frame)
         ));
-        ctx.push_str(&format!(
-            "\n\n--- Condensed output from {} ---\n{}",
-            prev.agent_name,
-            format_output_excerpt(&prev.output)
-        ));
+        if prev.context_frame.structured_summary.is_none() {
+            ctx.push_str(&format!(
+                "\n\n--- Condensed output from {} ---\n{}",
+                prev.agent_name,
+                format_output_excerpt(&prev.output)
+            ));
+        }
     }
     // Truncate accumulated context to stay within LLM limits.
     if ctx.len() > MAX_PIPELINE_CONTEXT_CHARS {
@@ -1017,6 +1019,28 @@ mod tests {
         assert!(ctx.contains("key_points:"));
         assert!(ctx.contains("Concrete attack path"));
         assert!(ctx.contains("Condensed output from exploit-analyst"));
+    }
+
+    #[test]
+    fn test_build_previous_results_context_prefers_structured_summary_over_raw_excerpt() {
+        let mut frame =
+            AgentContextFrame::synthetic("vuln-hunter", "Primary discovery agent", None, "raw");
+        frame.output_schema = Some("vuln-hunter-v1".into());
+        frame.structured_summary = Some("summary: one parsed finding".into());
+        frame.key_points = vec!["summary: one parsed finding".into()];
+
+        let results = vec![AgentResult {
+            agent_name: "vuln-hunter".into(),
+            output: "raw output with duplicated details".into(),
+            tokens_used: 0,
+            context_frame: frame,
+            parsed_output: None,
+            parsed_output_error: None,
+        }];
+
+        let ctx = build_previous_results_context("preamble", &results);
+        assert!(ctx.contains("structured_summary:"));
+        assert!(!ctx.contains("Condensed output from vuln-hunter"));
     }
 
     #[test]
