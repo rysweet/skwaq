@@ -190,6 +190,12 @@ For full eval runs, `skwaq gym eval` now writes reproducibility metadata alongsi
 - `summary.md`
 - `dashboard.md`
 
+Gym reports also include semantic detection summaries derived from the same
+semantic classifier used by synthesis and `skwaq analyze --quick`. JSON and
+Markdown outputs surface per-semantic detection rates for classes such as
+`buffer_overflow`, `format_string`, `path_traversal`, `race_condition`, and
+`use_after_free`.
+
 The manual GitHub workflows under `.github/workflows/gym-eval.yml` and `.github/workflows/gym-full.yml` call the same preflight step before hybrid runs.
 
 ### BinPool benchmark setup

@@ -2,7 +2,8 @@
 
 use crate::adapters::DetectedFinding;
 use crate::ground_truth::TestCase;
-use std::collections::{HashMap, HashSet};
+use skwaq_core::analysis::{SemanticPatternClass, SemanticPatternClassifier};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// Outcome for a single test case.
 #[derive(Debug, Clone)]
@@ -28,11 +29,23 @@ pub struct AggregateScore {
     pub recall: f64,
     pub f1: f64,
     pub per_cwe: HashMap<u32, CweScore>,
+    pub per_semantic: HashMap<String, SemanticScore>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct CweScore {
     pub cwe_id: u32,
+    pub total_cases: u32,
+    pub true_positives: u32,
+    pub false_positives: u32,
+    pub false_negatives: u32,
+    pub detection_rate: f64,
+    pub precision: f64,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SemanticScore {
+    pub class_name: String,
     pub total_cases: u32,
     pub true_positives: u32,
     pub false_positives: u32,
@@ -171,6 +184,65 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
     }
 }
 
+pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
+    match class {
+        SemanticPatternClass::BufferOverflow => &[
+            119, 120, 121, 122, 123, 124, 125, 126, 127, 129, 131, 170, 787, 788, 805,
+        ],
+        SemanticPatternClass::CommandInjection => &[77, 78],
+        SemanticPatternClass::FormatString => &[134],
+        SemanticPatternClass::InsecureTempFile => &[377],
+        SemanticPatternClass::PathTraversal => &[22, 23, 36],
+        SemanticPatternClass::RaceCondition => &[362, 367],
+        SemanticPatternClass::UseAfterFree => &[415, 416],
+    }
+}
+
+pub fn inferred_finding_cwes(finding: &DetectedFinding) -> Vec<u32> {
+    if !finding.cwes.is_empty() {
+        return dedup_cwes(finding.cwes.iter().copied());
+    }
+
+    let semantic_cwes = semantic_finding_cwes(finding);
+    if !semantic_cwes.is_empty() {
+        return semantic_cwes;
+    }
+
+    category_to_cwes(&finding.category)
+}
+
+fn semantic_finding_cwes(finding: &DetectedFinding) -> Vec<u32> {
+    dedup_cwes(
+        SemanticPatternClassifier::new()
+            .classify(&finding.category, &finding.title, &finding.function)
+            .into_iter()
+            .flat_map(semantic_class_to_cwes)
+            .copied(),
+    )
+}
+
+fn dedup_cwes(cwes: impl IntoIterator<Item = u32>) -> Vec<u32> {
+    cwes.into_iter()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
+    match cwe {
+        119 | 120 | 121 | 122 | 123 | 124 | 125 | 126 | 127 | 129 | 131 | 170 | 787 | 788 | 805 => {
+            Some(SemanticPatternClass::BufferOverflow)
+        }
+        77 | 78 => Some(SemanticPatternClass::CommandInjection),
+        134 => Some(SemanticPatternClass::FormatString),
+        22 | 23 | 36 => Some(SemanticPatternClass::PathTraversal),
+        362 | 367 => Some(SemanticPatternClass::RaceCondition),
+        377 => Some(SemanticPatternClass::InsecureTempFile),
+        415 | 416 => Some(SemanticPatternClass::UseAfterFree),
+        _ => None,
+    }
+}
+
 /// Compute aggregate scores from a list of case outcomes.
 ///
 /// Deduplicates outcomes by `case_id` so that overlapping parallel shards
@@ -179,6 +251,7 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
 pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
     let mut score = AggregateScore::default();
     let mut per_cwe: HashMap<u32, CweScore> = HashMap::new();
+    let mut per_semantic: HashMap<String, SemanticScore> = HashMap::new();
     let mut seen_case_ids: HashSet<String> = HashSet::new();
 
     for outcome in outcomes {
@@ -195,6 +268,22 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
                 score.true_negatives += 1;
             } else {
                 score.false_positives += outcome.unmatched_finding_ids.len() as u32;
+                let detected_semantic_classes: HashSet<_> = outcome
+                    .detected_cwes
+                    .iter()
+                    .filter_map(|&cwe| cwe_to_semantic_class(cwe))
+                    .collect();
+                for class in detected_semantic_classes {
+                    let class_name = class.as_str().to_string();
+                    let entry =
+                        per_semantic
+                            .entry(class_name.clone())
+                            .or_insert_with(|| SemanticScore {
+                                class_name,
+                                ..Default::default()
+                            });
+                    entry.false_positives += 1;
+                }
             }
         } else {
             // Positive test case.
@@ -212,6 +301,35 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
                     score.false_negatives += 1;
                 }
             }
+
+            let expected_semantic_classes: HashSet<_> = outcome
+                .expected_cwes
+                .iter()
+                .filter_map(|&cwe| cwe_to_semantic_class(cwe))
+                .collect();
+            let detected_semantic_classes: HashSet<_> = outcome
+                .detected_cwes
+                .iter()
+                .filter_map(|&cwe| cwe_to_semantic_class(cwe))
+                .collect();
+
+            for class in &expected_semantic_classes {
+                let class_name = class.as_str().to_string();
+                let entry =
+                    per_semantic
+                        .entry(class_name.clone())
+                        .or_insert_with(|| SemanticScore {
+                            class_name,
+                            ..Default::default()
+                        });
+                entry.total_cases += 1;
+                if detected_semantic_classes.contains(class) {
+                    entry.true_positives += 1;
+                } else {
+                    entry.false_negatives += 1;
+                }
+            }
+
             // False positives: findings that don't match any expected CWE.
             score.false_positives += outcome.unmatched_finding_ids.len() as u32;
             for &cwe in &outcome.detected_cwes {
@@ -227,6 +345,18 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
                     });
                     entry.false_positives += 1;
                 }
+            }
+
+            for class in detected_semantic_classes.difference(&expected_semantic_classes) {
+                let class_name = class.as_str().to_string();
+                let entry =
+                    per_semantic
+                        .entry(class_name.clone())
+                        .or_insert_with(|| SemanticScore {
+                            class_name,
+                            ..Default::default()
+                        });
+                entry.false_positives += 1;
             }
         }
     }
@@ -252,7 +382,16 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
         entry.precision = if tp + fp > 0.0 { tp / (tp + fp) } else { 0.0 };
     }
 
+    for entry in per_semantic.values_mut() {
+        let tp = entry.true_positives as f64;
+        let fp = entry.false_positives as f64;
+        let fn_ = entry.false_negatives as f64;
+        entry.detection_rate = if tp + fn_ > 0.0 { tp / (tp + fn_) } else { 0.0 };
+        entry.precision = if tp + fp > 0.0 { tp / (tp + fp) } else { 0.0 };
+    }
+
     score.per_cwe = per_cwe;
+    score.per_semantic = per_semantic;
     score
 }
 
@@ -271,6 +410,19 @@ mod tests {
             function: "main".to_string(),
             line: Some(10),
             title: "test finding".to_string(),
+        }
+    }
+
+    fn make_semantic_finding(category: &str, function: &str, title: &str) -> DetectedFinding {
+        DetectedFinding {
+            id: uuid::Uuid::new_v4().to_string(),
+            category: category.to_string(),
+            severity: "high".to_string(),
+            cwes: vec![],
+            file: "test.c".to_string(),
+            function: function.to_string(),
+            line: Some(10),
+            title: title.to_string(),
         }
     }
 
@@ -491,5 +643,81 @@ mod tests {
         let unsafe_code = category_to_cwes("unsafe_code");
         assert!(unsafe_code.contains(&676));
         assert!(unsafe_code.contains(&242));
+    }
+
+    #[test]
+    fn test_inferred_finding_cwes_prefers_semantic_mapping() {
+        let finding =
+            make_semantic_finding("memory", "strcpy", "Dangerous pattern: strcpy (test.c:10)");
+
+        let inferred = inferred_finding_cwes(&finding);
+        assert!(inferred.contains(&119));
+        assert!(inferred.contains(&121));
+        assert!(!inferred.contains(&416));
+        assert!(!inferred.contains(&190));
+    }
+
+    #[test]
+    fn test_inferred_finding_cwes_falls_back_to_category_mapping() {
+        let finding = make_semantic_finding("memory", "allocator", "Potential memory issue");
+
+        let inferred = inferred_finding_cwes(&finding);
+        assert!(inferred.contains(&119));
+        assert!(inferred.contains(&416));
+        assert!(inferred.contains(&190));
+    }
+
+    #[test]
+    fn test_aggregate_tracks_per_semantic_scores() {
+        let outcomes = vec![
+            CaseOutcome {
+                case_id: "overflow-hit".to_string(),
+                suite: "test".to_string(),
+                expected_cwes: vec![121],
+                detected_cwes: vec![119],
+                matched_finding_ids: vec!["f1".to_string()],
+                unmatched_finding_ids: vec![],
+                cwe_hits: [(121, true)].into_iter().collect(),
+            },
+            CaseOutcome {
+                case_id: "fmt-miss".to_string(),
+                suite: "test".to_string(),
+                expected_cwes: vec![134],
+                detected_cwes: vec![],
+                matched_finding_ids: vec![],
+                unmatched_finding_ids: vec![],
+                cwe_hits: [(134, false)].into_iter().collect(),
+            },
+        ];
+
+        let score = aggregate(&outcomes);
+        let overflow = score.per_semantic.get("buffer_overflow").unwrap();
+        assert_eq!(overflow.total_cases, 1);
+        assert_eq!(overflow.true_positives, 1);
+        assert_eq!(overflow.false_negatives, 0);
+
+        let format = score.per_semantic.get("format_string").unwrap();
+        assert_eq!(format.total_cases, 1);
+        assert_eq!(format.true_positives, 0);
+        assert_eq!(format.false_negatives, 1);
+    }
+
+    #[test]
+    fn test_aggregate_tracks_semantic_false_positives_for_negative_cases() {
+        let outcomes = vec![CaseOutcome {
+            case_id: "negative-semantic-fp".to_string(),
+            suite: "test".to_string(),
+            expected_cwes: vec![],
+            detected_cwes: vec![119],
+            matched_finding_ids: vec![],
+            unmatched_finding_ids: vec!["f1".to_string()],
+            cwe_hits: HashMap::new(),
+        }];
+
+        let score = aggregate(&outcomes);
+        let overflow = score.per_semantic.get("buffer_overflow").unwrap();
+        assert_eq!(overflow.false_positives, 1);
+        assert_eq!(overflow.true_positives, 0);
+        assert_eq!(overflow.precision, 0.0);
     }
 }

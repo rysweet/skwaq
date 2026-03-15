@@ -975,6 +975,7 @@ mod tests {
                 detection_rate: 0.0,
                 precision: 0.0,
             }],
+            per_semantic: vec![],
         };
         let shard1 = JsonReport {
             suite: "fixtures".to_string(),
@@ -997,6 +998,7 @@ mod tests {
                 detection_rate: 0.0,
                 precision: 0.0,
             }],
+            per_semantic: vec![],
         };
 
         std::fs::write(

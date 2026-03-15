@@ -166,11 +166,7 @@ impl BenchmarkAdapter for CgcAdapter {
     }
 
     fn map_finding_to_cwes(&self, finding: &DetectedFinding) -> Vec<u32> {
-        if !finding.cwes.is_empty() {
-            return finding.cwes.clone();
-        }
-        // CGC challenges are overwhelmingly memory corruption (CWE-119 family)
-        crate::scoring::category_to_cwes(&finding.category)
+        crate::adapters::default_map_finding_to_cwes(finding)
     }
 }
 
