@@ -12,6 +12,7 @@
 pub mod definition;
 pub mod discovery;
 pub mod mcp_client;
+pub mod output_schema;
 pub mod pipeline;
 pub mod runner;
 pub mod tool_definitions;
@@ -20,10 +21,13 @@ pub mod tool_translate;
 
 pub use definition::{load_agent, AgentDefinition, AgentRoleMetadata};
 pub use discovery::discover_agents;
+pub use output_schema::{
+    ParsedAgentOutput, VulnHunterStructuredFinding, VulnHunterStructuredOutput,
+};
 pub use pipeline::{
     deep_pipeline, deep_pipeline_debate, deep_pipeline_for_target, default_pipeline,
-    pipeline_from_names, run_deep_pipeline_with_debate, select_vuln_hunter, AnalysisPipeline,
-    DebateGroup, PipelineStage,
+    default_pipeline_for_target, pipeline_from_names, run_deep_pipeline_with_debate,
+    select_vuln_hunter, AnalysisPipeline, DebateGroup, PipelineStage,
 };
 pub use runner::{AgentContextFrame, AgentResult, AgentRunner};
 pub use tool_definitions::{agent_tools, filter_tools};

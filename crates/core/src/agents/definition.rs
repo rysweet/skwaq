@@ -49,6 +49,8 @@ pub struct AgentDefinition {
     pub max_turns: u32,
     /// Optional structured role metadata used for prompt injection.
     pub role: Option<AgentRoleMetadata>,
+    /// Optional structured output schema name used for parsing agent output.
+    pub output_schema: Option<String>,
     /// The system prompt (markdown body after the frontmatter).
     pub system_prompt: String,
     /// Path the definition was loaded from (for diagnostics).
@@ -69,6 +71,8 @@ struct AgentFrontmatter {
     max_turns: u32,
     #[serde(default)]
     role: Option<AgentRoleMetadata>,
+    #[serde(default)]
+    output_schema: Option<String>,
 }
 
 fn default_model() -> String {
@@ -162,9 +166,18 @@ pub fn parse_agent_markdown(content: &str) -> anyhow::Result<AgentDefinition> {
         tools: fm.tools,
         max_turns: fm.max_turns,
         role: fm.role.filter(|role| !role.is_empty()),
+        output_schema: validate_output_schema(fm.output_schema)?,
         system_prompt: body.to_string(),
         source_path: None,
     })
+}
+
+fn validate_output_schema(schema: Option<String>) -> anyhow::Result<Option<String>> {
+    match schema.as_deref() {
+        None => Ok(None),
+        Some("vuln-hunter-v1") => Ok(schema),
+        Some(other) => anyhow::bail!("Unknown agent output schema '{other}'"),
+    }
 }
 
 #[cfg(test)]
@@ -220,6 +233,7 @@ Minimal agent."#;
         assert_eq!(def.max_turns, 30);
         assert!(def.tools.is_empty());
         assert!(def.role.is_none());
+        assert!(def.output_schema.is_none());
     }
 
     #[test]
@@ -254,5 +268,31 @@ Role-aware agent."#;
             vec!["reject findings without attacker control"]
         );
         assert_eq!(role.evidence_preferences, vec!["concrete code citations"]);
+    }
+
+    #[test]
+    fn test_parse_output_schema() {
+        let md = r#"---
+name: structured
+output_schema: vuln-hunter-v1
+---
+
+Structured agent."#;
+
+        let def = parse_agent_markdown(md).unwrap();
+        assert_eq!(def.output_schema.as_deref(), Some("vuln-hunter-v1"));
+    }
+
+    #[test]
+    fn test_reject_unknown_output_schema() {
+        let md = r#"---
+name: broken
+output_schema: made-up-schema
+---
+
+Broken agent."#;
+
+        let error = parse_agent_markdown(md).unwrap_err();
+        assert!(error.to_string().contains("Unknown agent output schema"));
     }
 }

@@ -6,7 +6,7 @@
 //! Use `--agents` or `--agent` to override which agents run in AI mode.
 
 use super::common::resolve_investigation;
-use skwaq_core::agents::{default_pipeline, pipeline_from_names};
+use skwaq_core::agents::{default_pipeline_for_target, pipeline_from_names};
 use skwaq_core::analysis::{
     extract_function_from_title, AnalysisOrchestrator, FindingStatus, SemanticPatternClassifier,
 };
@@ -87,7 +87,7 @@ async fn run_combined_analysis(
         let names: Vec<String> = names.split(',').map(|s| s.trim().to_string()).collect();
         pipeline_from_names(&names)
     } else {
-        default_pipeline()
+        default_pipeline_for_target(&target)
     };
 
     let stage_names: Vec<&str> = pipeline
@@ -129,6 +129,18 @@ async fn run_combined_analysis(
     for result in &results {
         println!("--- {} ---", result.agent_name);
         println!("{}", result.output);
+        if let Some(parse_error) = &result.parsed_output_error {
+            eprintln!(
+                "warning: {} returned output that did not match schema {}: {}",
+                result.agent_name,
+                result
+                    .context_frame
+                    .output_schema
+                    .as_deref()
+                    .unwrap_or("unknown"),
+                parse_error
+            );
+        }
         println!();
     }
 
