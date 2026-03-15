@@ -12,7 +12,7 @@ pub enum GymSub {
 
     /// Run benchmarks
     Run {
-        /// Suite name (fixtures, juliet, cgc, cyberseceval, owasp). Omit for all.
+        /// Suite name (e.g. fixtures, realworld, juliet, cgc, cyberseceval, owasp, binpool). Omit for all registered suites.
         suite: Option<String>,
 
         /// Filter to specific CWE (e.g., CWE-119)
@@ -110,7 +110,7 @@ pub enum GymSub {
 
     /// Run self-improvement loop: analyze failures and propose fixes
     Improve {
-        /// Suite to improve (fixtures, juliet, cgc, owasp, cyberseceval)
+        /// Suite to improve (fixtures, juliet, cgc, owasp, cyberseceval, binpool)
         suite: String,
 
         /// Maximum cases to analyze

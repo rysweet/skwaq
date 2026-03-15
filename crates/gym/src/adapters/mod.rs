@@ -55,6 +55,11 @@ pub trait BenchmarkAdapter {
     /// Check if benchmark data is already set up.
     fn is_ready(&self, config: &BenchmarkConfig) -> bool;
 
+    /// Validate run configuration before setup or execution.
+    fn validate_config(&self, _config: &BenchmarkConfig) -> anyhow::Result<()> {
+        Ok(())
+    }
+
     /// Compile test cases if needed. No-op for pre-built suites.
     async fn compile(&self, data_dir: &Path, config: &BenchmarkConfig) -> anyhow::Result<()>;
 

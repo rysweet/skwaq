@@ -32,6 +32,10 @@ steps:
         - "BinPool data is not auto-downloaded by skwaq."
         - "binpool_artifact/"
         - "skwaq gym setup"
+        - "=== binpool-empty-extract ==="
+        - "The extracted tree is incomplete"
+        - "=== binpool-source-only ==="
+        - "BinPool only supports binary analysis"
     timeout: 300000
 
 assertions:
@@ -52,6 +56,8 @@ assertions:
         - "BinPool data is not auto-downloaded by skwaq."
         - "binpool_artifact/"
         - "skwaq gym setup"
+        - "The extracted tree is incomplete"
+        - "BinPool only supports binary analysis"
 
 metadata:
   tags:

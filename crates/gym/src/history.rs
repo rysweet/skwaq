@@ -211,6 +211,21 @@ impl HistoryDb {
         Ok(())
     }
 
+    /// Remove a run that failed before producing a usable result.
+    pub fn abandon_run(&self, run_id: &str) -> anyhow::Result<()> {
+        self.conn.execute(
+            "DELETE FROM case_results WHERE run_id = ?1",
+            rusqlite::params![run_id],
+        )?;
+        self.conn.execute(
+            "DELETE FROM cwe_results WHERE run_id = ?1",
+            rusqlite::params![run_id],
+        )?;
+        self.conn
+            .execute("DELETE FROM runs WHERE id = ?1", rusqlite::params![run_id])?;
+        Ok(())
+    }
+
     /// Insert per-CWE results.
     pub fn insert_cwe_result(&self, result: &CweResult) -> anyhow::Result<()> {
         self.conn.execute(
@@ -258,6 +273,47 @@ impl HistoryDb {
                     precision, recall, f1, true_positives, false_positives,
                     false_negatives, true_negatives
               FROM runs ORDER BY started_at DESC LIMIT ?1",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![limit], |row| {
+            let metadata_json = row
+                .get::<_, Option<String>>(5)?
+                .unwrap_or_else(|| "{}".to_string());
+            Ok(BenchmarkRun {
+                id: row.get(0)?,
+                started_at: row.get::<_, String>(1)?.parse().unwrap_or_default(),
+                finished_at: row
+                    .get::<_, Option<String>>(2)?
+                    .and_then(|s| s.parse().ok()),
+                suite: row.get(3)?,
+                skwaq_commit: row.get(4)?,
+                metadata: serde_json::from_str(&metadata_json).map_err(|err| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        5,
+                        rusqlite::types::Type::Text,
+                        Box::new(err),
+                    )
+                })?,
+                precision: row.get(6)?,
+                recall: row.get(7)?,
+                f1: row.get(8)?,
+                true_positives: row.get(9)?,
+                false_positives: row.get(10)?,
+                false_negatives: row.get(11)?,
+                true_negatives: row.get(12)?,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
+    /// Load the N most recent completed runs.
+    pub fn recent_finished_runs(&self, limit: u32) -> anyhow::Result<Vec<BenchmarkRun>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, started_at, finished_at, suite, skwaq_commit, run_metadata_json,
+                    precision, recall, f1, true_positives, false_positives,
+                    false_negatives, true_negatives
+              FROM runs
+              WHERE finished_at IS NOT NULL
+              ORDER BY started_at DESC LIMIT ?1",
         )?;
         let rows = stmt.query_map(rusqlite::params![limit], |row| {
             let metadata_json = row
@@ -675,5 +731,45 @@ mod tests {
             .unwrap();
 
         assert!(columns.iter().any(|column| column == "run_metadata_json"));
+    }
+
+    #[test]
+    fn test_recent_finished_runs_excludes_unfinished_rows_and_abandon_run_deletes_them() {
+        let db = HistoryDb::in_memory().unwrap();
+        let metadata = RunMetadata::default();
+
+        let unfinished = db.start_run("fixtures", "abc123", &metadata).unwrap();
+        let finished = db.start_run("fixtures", "def456", &metadata).unwrap();
+        db.finish_run(&BenchmarkRun {
+            id: finished.clone(),
+            started_at: Utc::now(),
+            finished_at: Some(Utc::now()),
+            suite: "fixtures".to_string(),
+            skwaq_commit: "def456".to_string(),
+            metadata,
+            precision: 1.0,
+            recall: 1.0,
+            f1: 1.0,
+            true_positives: 1,
+            false_positives: 0,
+            false_negatives: 0,
+            true_negatives: 0,
+        })
+        .unwrap();
+
+        let runs = db.recent_finished_runs(10).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].id, finished);
+
+        db.abandon_run(&unfinished).unwrap();
+        let unfinished_rows: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM runs WHERE id = ?1",
+                rusqlite::params![unfinished],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(unfinished_rows, 0);
     }
 }
