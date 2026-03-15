@@ -527,6 +527,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             let cycle =
                 skwaq_gym::improve::run_improvement_cycle(adapter.as_ref(), &config, &data_dir)
                     .await?;
+            skwaq_gym::improve::store_improvement_lessons(&cycle)?;
             skwaq_gym::improve::print_proposals(&cycle);
         }
         GymSub::Dashboard => {

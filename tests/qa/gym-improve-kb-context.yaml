@@ -21,13 +21,16 @@ steps:
     agent: "skwaq-cli"
     action: "execute_command"
     params:
-      command: "RUST_LOG=info ./tests/qa/bin/gym-improve-kb-context.sh"
+      command: "./tests/qa/bin/gym-improve-kb-context.sh"
     expect:
       exit_code: 0
       stdout_contains:
         - "QA CHECK: methodology KB query returned positive hits"
         - "QA CHECK: cwe-families KB query returned positive hits"
         - "QA CHECK: improve cycle prepared non-empty KB guidance snippets"
+        - "QA CHECK: improve output surfaced cited review evidence"
+        - "QA CHECK: fn-insights preserved reviewed proposal evidence"
+        - "QA CHECK: improve command persisted durable memory lessons"
     timeout: 240000
 
 assertions:
@@ -46,6 +49,9 @@ assertions:
         - "QA CHECK: methodology KB query returned positive hits"
         - "QA CHECK: cwe-families KB query returned positive hits"
         - "QA CHECK: improve cycle prepared non-empty KB guidance snippets"
+        - "QA CHECK: improve output surfaced cited review evidence"
+        - "QA CHECK: fn-insights preserved reviewed proposal evidence"
+        - "QA CHECK: improve command persisted durable memory lessons"
 
 metadata:
   tags:
