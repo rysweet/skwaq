@@ -7,12 +7,18 @@
 //! The deep pipeline runs exploit-analyst and defense-analyst in parallel,
 //! then feeds both perspectives into a debate stage before final synthesis.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use crate::graph::GraphDb;
 use crate::llm::{Client, TokenBudget};
 use crate::memory::MemoryStore;
 use crate::skills::discovery::load_skill;
 
 use super::definition::load_agent;
+use super::output_schema::{
+    DefenseAnalystAssessment, DefenseAnalystStructuredOutput, DefenseAnalystVerdict,
+    ExploitAnalystStructuredOutput, ExploitAnalystVerdict, ParsedAgentOutput,
+};
 use super::runner::{build_analysis_context, AgentContextFrame, AgentResult, AgentRunner};
 
 /// Maximum characters for accumulated previous-results context passed between
@@ -465,6 +471,42 @@ fn append_role_list(rendered: &mut String, label: &str, values: &[String]) {
 /// - Agreements (both say exploitable or both say safe)
 /// - Disagreements (one says exploitable, other says safe)
 fn build_debate_summary(agent_a: &AgentResult, agent_b: &AgentResult) -> String {
+    if let (Some(exploit), Some(defense)) = (
+        agent_a
+            .parsed_output
+            .as_ref()
+            .and_then(ParsedAgentOutput::as_exploit_analyst_v1),
+        agent_b
+            .parsed_output
+            .as_ref()
+            .and_then(ParsedAgentOutput::as_defense_analyst_v1),
+    ) {
+        return build_weighted_debate_summary(
+            agent_a.agent_name.as_str(),
+            exploit,
+            agent_b.agent_name.as_str(),
+            defense,
+        );
+    }
+
+    if let (Some(exploit), Some(defense)) = (
+        agent_b
+            .parsed_output
+            .as_ref()
+            .and_then(ParsedAgentOutput::as_exploit_analyst_v1),
+        agent_a
+            .parsed_output
+            .as_ref()
+            .and_then(ParsedAgentOutput::as_defense_analyst_v1),
+    ) {
+        return build_weighted_debate_summary(
+            agent_b.agent_name.as_str(),
+            exploit,
+            agent_a.agent_name.as_str(),
+            defense,
+        );
+    }
+
     let mut summary = String::from("=== DEBATE SUMMARY ===\n\n");
     summary.push_str(&format!(
         "Two independent analysts reviewed the findings:\n\
@@ -539,6 +581,109 @@ fn build_debate_summary(agent_a: &AgentResult, agent_b: &AgentResult) -> String 
     }
 
     summary
+}
+
+fn build_weighted_debate_summary(
+    offense_name: &str,
+    exploit: &ExploitAnalystStructuredOutput,
+    defense_name: &str,
+    defense: &DefenseAnalystStructuredOutput,
+) -> String {
+    let mut summary = String::from("=== WEIGHTED DEBATE SUMMARY ===\n\n");
+    summary.push_str(&format!(
+        "Two independent analysts reviewed the findings with structured confidence:\n\
+         - {} (offense perspective): exploitability confidence\n\
+         - {} (defense perspective): mitigation confidence\n\n",
+        offense_name, defense_name
+    ));
+    summary.push_str(&format!(
+        "Offense summary: {}\nDefense summary: {}\n",
+        exploit.summary, defense.summary
+    ));
+
+    let defense_by_title: BTreeMap<&str, &DefenseAnalystAssessment> = defense
+        .assessments
+        .iter()
+        .map(|assessment| (assessment.finding_title.as_str(), assessment))
+        .collect();
+
+    let mut disagreement_count = 0usize;
+    let mut seen_titles = BTreeSet::new();
+    summary.push_str("\nWeighted finding comparisons:\n");
+    for assessment in &exploit.assessments {
+        seen_titles.insert(assessment.finding_title.as_str());
+        let Some(defense_assessment) = defense_by_title.get(assessment.finding_title.as_str())
+        else {
+            summary.push_str(&format!(
+                "- {}: offense={} @ {}%, defense=missing\n",
+                assessment.finding_title, assessment.verdict, assessment.confidence_percent
+            ));
+            continue;
+        };
+
+        let offense_score =
+            exploit_verdict_score(&assessment.verdict) * i32::from(assessment.confidence_percent);
+        let defense_score = defense_verdict_score(&defense_assessment.verdict)
+            * i32::from(defense_assessment.confidence_percent);
+        let net_score = offense_score + defense_score;
+        if offense_score.signum() != 0
+            && defense_score.signum() != 0
+            && offense_score.signum() != defense_score.signum()
+        {
+            disagreement_count += 1;
+        }
+
+        summary.push_str(&format!(
+            "- {}: offense={} @ {}%, defense={} @ {}%, net_weight={}\n",
+            assessment.finding_title,
+            assessment.verdict,
+            assessment.confidence_percent,
+            defense_assessment.verdict,
+            defense_assessment.confidence_percent,
+            net_score
+        ));
+    }
+
+    for assessment in &defense.assessments {
+        if seen_titles.contains(assessment.finding_title.as_str()) {
+            continue;
+        }
+        summary.push_str(&format!(
+            "- {}: offense=missing, defense={} @ {}%\n",
+            assessment.finding_title, assessment.verdict, assessment.confidence_percent
+        ));
+    }
+
+    summary.push_str(&format!(
+        "\nSummary statistics:\n- offense_assessments: {}\n- defense_assessments: {}\n- weighted_disagreements: {}\n",
+        exploit.assessments.len(),
+        defense.assessments.len(),
+        disagreement_count
+    ));
+
+    if disagreement_count > 0 {
+        summary.push_str(
+            "\nWEIGHTED DISAGREEMENTS DETECTED: Use the net_weight values, concrete evidence, and direct code reading to resolve conflicts.\n",
+        );
+    }
+
+    summary
+}
+
+fn exploit_verdict_score(verdict: &ExploitAnalystVerdict) -> i32 {
+    match verdict {
+        ExploitAnalystVerdict::Confirmed => 1,
+        ExploitAnalystVerdict::Downgraded => 1,
+        ExploitAnalystVerdict::Rejected => -1,
+    }
+}
+
+fn defense_verdict_score(verdict: &DefenseAnalystVerdict) -> i32 {
+    match verdict {
+        DefenseAnalystVerdict::Vulnerable => 1,
+        DefenseAnalystVerdict::Mitigated => 0,
+        DefenseAnalystVerdict::Safe => -1,
+    }
 }
 
 fn vuln_hunter_stage(agent_name: String, include_create_finding_preamble: bool) -> PipelineStage {
@@ -940,6 +1085,65 @@ mod tests {
             summary.contains("DISAGREEMENTS DETECTED"),
             "Should flag disagreement when offense confirms but defense says safe"
         );
+    }
+
+    #[test]
+    fn test_build_debate_summary_prefers_weighted_structured_outputs() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit confidence favors one finding".into(),
+                        assessments: vec![super::super::output_schema::ExploitAnalystAssessment {
+                            finding_title: "Buffer overflow in parse_header".into(),
+                            verdict: super::super::output_schema::ExploitAnalystVerdict::Confirmed,
+                            confidence_percent: 88,
+                            evidence: vec!["Attacker controls packet length".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Mitigation confidence is weaker".into(),
+                        assessments: vec![super::super::output_schema::DefenseAnalystAssessment {
+                            finding_title: "Buffer overflow in parse_header".into(),
+                            verdict: super::super::output_schema::DefenseAnalystVerdict::Safe,
+                            confidence_percent: 35,
+                            evidence: vec!["Caller normally caps input".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("WEIGHTED DEBATE SUMMARY"));
+        assert!(summary.contains("net_weight=53"));
+        assert!(summary.contains("weighted_disagreements: 1"));
     }
 
     #[test]

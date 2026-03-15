@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+if script_path="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null)"; then
+  :
+else
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  script_path="$script_dir/$(basename "${BASH_SOURCE[0]}")"
+fi
+repo_root="${SKWAQ_REPO_ROOT:-$(cd "$(dirname "$script_path")/../../.." && pwd)}"
 run_dir="$(mktemp -d /tmp/skwaq-agents-role-cards-XXXXXX)"
 target_dir="${CARGO_TARGET_DIR:-/tmp/skwaq-agent-context-target}"
 skwaq_bin="$target_dir/debug/skwaq"
@@ -31,8 +37,10 @@ required = [
     "vuln-hunter-v1",
     "exploit-analyst",
     "Exploitability specialist",
+    "exploit-analyst-v1",
     "defense-analyst",
     "Defensive controls specialist",
+    "defense-analyst-v1",
     "verdict-synthesizer",
     "Final evidence-weighting synthesizer",
 ]

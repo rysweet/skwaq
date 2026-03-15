@@ -176,6 +176,8 @@ fn validate_output_schema(schema: Option<String>) -> anyhow::Result<Option<Strin
     match schema.as_deref() {
         None => Ok(None),
         Some("vuln-hunter-v1") => Ok(schema),
+        Some("exploit-analyst-v1") => Ok(schema),
+        Some("defense-analyst-v1") => Ok(schema),
         Some(other) => anyhow::bail!("Unknown agent output schema '{other}'"),
     }
 }
@@ -281,6 +283,31 @@ Structured agent."#;
 
         let def = parse_agent_markdown(md).unwrap();
         assert_eq!(def.output_schema.as_deref(), Some("vuln-hunter-v1"));
+    }
+
+    #[test]
+    fn test_parse_debate_output_schemas() {
+        let exploit = parse_agent_markdown(
+            r#"---
+name: exploit-analyst
+output_schema: exploit-analyst-v1
+---
+
+Structured exploit analyst."#,
+        )
+        .unwrap();
+        assert_eq!(exploit.output_schema.as_deref(), Some("exploit-analyst-v1"));
+
+        let defense = parse_agent_markdown(
+            r#"---
+name: defense-analyst
+output_schema: defense-analyst-v1
+---
+
+Structured defense analyst."#,
+        )
+        .unwrap();
+        assert_eq!(defense.output_schema.as_deref(), Some("defense-analyst-v1"));
     }
 
     #[test]
