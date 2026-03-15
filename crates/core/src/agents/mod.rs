@@ -18,13 +18,13 @@ pub mod tool_definitions;
 pub mod tool_executor;
 pub mod tool_translate;
 
-pub use definition::{load_agent, AgentDefinition};
+pub use definition::{load_agent, AgentDefinition, AgentRoleMetadata};
 pub use discovery::discover_agents;
 pub use pipeline::{
     deep_pipeline, deep_pipeline_debate, deep_pipeline_for_target, default_pipeline,
     pipeline_from_names, run_deep_pipeline_with_debate, select_vuln_hunter, AnalysisPipeline,
     DebateGroup, PipelineStage,
 };
-pub use runner::{AgentResult, AgentRunner};
+pub use runner::{AgentContextFrame, AgentResult, AgentRunner};
 pub use tool_definitions::{agent_tools, filter_tools};
 pub use tool_executor::{execute_tool, execute_tool_with_memory};

@@ -63,12 +63,17 @@ skwaq xrefs <function>         # Cross-references
 ```bash
 skwaq analyze --quick          # Pattern detection + taint analysis
 skwaq analyze --investigation <id>  # Analyze specific investigation
+skwaq agents list              # List installed agents and their role cards
 ```
 
 `skwaq analyze --quick` now prints a `SEMANTIC` column for discovered and final
 findings. This surfaces stable vulnerability classes such as
 `buffer_overflow`, `format_string`, and `command_injection`, even when later
 cycles challenge the initial coarse finding.
+
+`skwaq agents list` now includes each agent's structured role title, which is
+useful for verifying which specialization cards are active in the current
+checkout.
 
 ### Investigation
 ```bash

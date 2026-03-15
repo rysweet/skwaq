@@ -4,6 +4,36 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 
+/// Structured role metadata loaded from agent frontmatter.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Default)]
+pub struct AgentRoleMetadata {
+    /// Short role title used when injecting the agent's role card.
+    #[serde(default)]
+    pub title: String,
+    /// Areas where this agent is expected to be strongest.
+    #[serde(default)]
+    pub expertise: Vec<String>,
+    /// Concrete focus areas the agent should prioritize.
+    #[serde(default)]
+    pub focus: Vec<String>,
+    /// Checks that should make the agent skeptical before concluding.
+    #[serde(default)]
+    pub skepticism: Vec<String>,
+    /// Evidence types the agent should favor in its reasoning.
+    #[serde(default)]
+    pub evidence_preferences: Vec<String>,
+}
+
+impl AgentRoleMetadata {
+    pub fn is_empty(&self) -> bool {
+        self.title.is_empty()
+            && self.expertise.is_empty()
+            && self.focus.is_empty()
+            && self.skepticism.is_empty()
+            && self.evidence_preferences.is_empty()
+    }
+}
+
 /// An agent definition loaded from a markdown file.
 #[derive(Debug, Clone)]
 pub struct AgentDefinition {
@@ -17,6 +47,8 @@ pub struct AgentDefinition {
     pub tools: Vec<String>,
     /// Maximum number of LLM turns before stopping.
     pub max_turns: u32,
+    /// Optional structured role metadata used for prompt injection.
+    pub role: Option<AgentRoleMetadata>,
     /// The system prompt (markdown body after the frontmatter).
     pub system_prompt: String,
     /// Path the definition was loaded from (for diagnostics).
@@ -35,6 +67,8 @@ struct AgentFrontmatter {
     tools: Vec<String>,
     #[serde(default = "default_max_turns")]
     max_turns: u32,
+    #[serde(default)]
+    role: Option<AgentRoleMetadata>,
 }
 
 fn default_model() -> String {
@@ -127,6 +161,7 @@ pub fn parse_agent_markdown(content: &str) -> anyhow::Result<AgentDefinition> {
         model: fm.model,
         tools: fm.tools,
         max_turns: fm.max_turns,
+        role: fm.role.filter(|role| !role.is_empty()),
         system_prompt: body.to_string(),
         source_path: None,
     })
@@ -184,5 +219,40 @@ Minimal agent."#;
         assert_eq!(def.model, "claude-opus-4.6");
         assert_eq!(def.max_turns, 30);
         assert!(def.tools.is_empty());
+        assert!(def.role.is_none());
+    }
+
+    #[test]
+    fn test_parse_role_metadata() {
+        let md = r#"---
+name: role-aware
+role:
+  title: Evidence-focused reviewer
+  expertise:
+    - exploitability analysis
+    - reachability tracing
+  focus:
+    - externally reachable paths
+  skepticism:
+    - reject findings without attacker control
+  evidence_preferences:
+    - concrete code citations
+---
+
+Role-aware agent."#;
+
+        let def = parse_agent_markdown(md).unwrap();
+        let role = def.role.expect("role metadata should parse");
+        assert_eq!(role.title, "Evidence-focused reviewer");
+        assert_eq!(
+            role.expertise,
+            vec!["exploitability analysis", "reachability tracing"]
+        );
+        assert_eq!(role.focus, vec!["externally reachable paths"]);
+        assert_eq!(
+            role.skepticism,
+            vec!["reject findings without attacker control"]
+        );
+        assert_eq!(role.evidence_preferences, vec!["concrete code citations"]);
     }
 }
