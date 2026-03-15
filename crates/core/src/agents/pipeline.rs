@@ -760,7 +760,7 @@ fn classify_confidence_threshold(
     if has_offense_signal
         && has_defense_signal
         && offense_score >= 80
-        && defense_score >= 0
+        && defense_score > 0
         && net_score >= HIGH_CONFIDENCE_CONFIRM_THRESHOLD
     {
         return (
@@ -770,8 +770,9 @@ fn classify_confidence_threshold(
     }
 
     if net_score <= HIGH_CONFIDENCE_REJECT_THRESHOLD
-        && ((has_defense_signal && defense_score <= -70)
-            || (has_offense_signal && offense_score <= -70))
+        && has_offense_signal
+        && has_defense_signal
+        && (defense_score <= -70 || offense_score <= -70)
     {
         return (
             ConfidenceThresholdHint::HighConfidenceReject,
@@ -1589,6 +1590,168 @@ mod tests {
         assert!(summary.contains("net_weight=-175"));
         assert!(summary.contains("threshold_hint: HIGH_CONFIDENCE_REJECT (strong_negative_signal)"));
         assert!(summary.contains("high_confidence_reject: 1"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_requires_review_for_offense_only_signal() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![super::super::output_schema::ExploitAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::ExploitAnalystVerdict::Confirmed,
+                            confidence_percent: 95,
+                            evidence: vec!["Attacker fully controls copy length".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("threshold_hint: REVIEW_REQUIRED (missing_counterparty_signal)"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_requires_review_for_defense_only_signal() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![super::super::output_schema::DefenseAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::DefenseAnalystVerdict::Safe,
+                            confidence_percent: 90,
+                            evidence: vec!["Bounds guard rejects oversized packets".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("threshold_hint: REVIEW_REQUIRED (missing_counterparty_signal)"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_requires_review_for_weak_consensus() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![super::super::output_schema::ExploitAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::ExploitAnalystVerdict::Confirmed,
+                            confidence_percent: 50,
+                            evidence: vec!["Attacker influences copy length".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![super::super::output_schema::DefenseAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::DefenseAnalystVerdict::Vulnerable,
+                            confidence_percent: 30,
+                            evidence: vec!["No complete sanitizer found".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("net_weight=80"));
+        assert!(summary.contains("threshold_hint: REVIEW_REQUIRED (insufficient_consensus)"));
     }
 
     #[test]
