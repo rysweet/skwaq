@@ -83,11 +83,18 @@ pub fn score_case(
             .collect()
     };
 
-    let detected_cwe_set: HashSet<u32> = relevant_findings
-        .iter()
-        .flat_map(|f| finding_to_cwes(f))
-        .filter(|d| expected_families.contains(&cwe_family(*d)) || expected_set.contains(d))
-        .collect();
+    let detected_cwe_set: HashSet<u32> = if expected_set.is_empty() {
+        relevant_findings
+            .iter()
+            .flat_map(|f| finding_to_cwes(f))
+            .collect()
+    } else {
+        relevant_findings
+            .iter()
+            .flat_map(|f| finding_to_cwes(f))
+            .filter(|d| expected_families.contains(&cwe_family(*d)) || expected_set.contains(d))
+            .collect()
+    };
 
     let mut cwe_hits = HashMap::new();
 
@@ -566,6 +573,7 @@ mod tests {
 
         let outcome = score_case(&case, &findings, &|f| f.cwes.clone());
         // All findings count for negative cases
+        assert_eq!(outcome.detected_cwes, vec![119]);
         assert_eq!(outcome.unmatched_finding_ids.len(), 1);
     }
 
@@ -665,6 +673,20 @@ mod tests {
         assert!(inferred.contains(&119));
         assert!(inferred.contains(&416));
         assert!(inferred.contains(&190));
+    }
+
+    #[test]
+    fn test_inferred_finding_cwes_does_not_overlap_mktemp_into_race_family() {
+        let finding = make_semantic_finding(
+            "temp_file",
+            "mktemp",
+            "Pattern: insecure temporary file via mktemp",
+        );
+
+        let inferred = inferred_finding_cwes(&finding);
+        assert!(inferred.contains(&377));
+        assert!(!inferred.contains(&362));
+        assert!(!inferred.contains(&367));
     }
 
     #[test]

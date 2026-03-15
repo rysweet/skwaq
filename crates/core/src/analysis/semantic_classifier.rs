@@ -183,7 +183,7 @@ fn is_use_after_free(title: &str) -> bool {
 
 fn is_race_condition(category: &str, title: &str, function_name: &str) -> bool {
     category == "race"
-        || is_function(function_name, &["mktemp", "access"])
+        || is_function(function_name, &["access"])
         || contains_any(title, &["race condition", "toctou", "time-of-check"])
 }
 
@@ -253,15 +253,26 @@ mod tests {
     }
 
     #[test]
-    fn classifies_race_and_tempfile_from_mktemp() {
+    fn classifies_tempfile_from_mktemp_without_race_overlap() {
         let classes = SemanticPatternClassifier::new().classify(
             "temp_file",
             "Pattern: insecure temporary file via mktemp",
             "mktemp",
         );
 
-        assert!(classes.contains(&SemanticPatternClass::RaceCondition));
         assert!(classes.contains(&SemanticPatternClass::InsecureTempFile));
+        assert!(!classes.contains(&SemanticPatternClass::RaceCondition));
+    }
+
+    #[test]
+    fn classifies_race_from_access_symbol() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "race",
+            "Pattern: time-of-check race via access",
+            "access",
+        );
+
+        assert!(classes.contains(&SemanticPatternClass::RaceCondition));
     }
 
     #[test]
