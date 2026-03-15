@@ -67,5 +67,61 @@ pub fn generate(score: &AggregateScore, suite: &str, commit: &str) -> String {
     }
 
     md.push_str("\n\n_Legend: + >80% detection, ~ 50-80%, - <50%_\n");
+
+    md.push_str("\n## Per-Semantic Detection Rates\n\n");
+    if score.per_semantic.is_empty() {
+        md.push_str("_No semantic-class metrics available._\n");
+        return md;
+    }
+
+    md.push_str("| Semantic class | Cases | TP | FN | Detection % | Precision % |\n");
+    md.push_str("|----------------|-------|----|----|-------------|-------------|\n");
+
+    let mut semantics: Vec<_> = score.per_semantic.values().collect();
+    semantics.sort_by(|a, b| {
+        a.detection_rate
+            .partial_cmp(&b.detection_rate)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    for semantic in &semantics {
+        md.push_str(&format!(
+            "| {} | {} | {} | {} | {:.1}% | {:.1}% |\n",
+            semantic.class_name,
+            semantic.total_cases,
+            semantic.true_positives,
+            semantic.false_negatives,
+            semantic.detection_rate * 100.0,
+            semantic.precision * 100.0
+        ));
+    }
+
     md
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::scoring::{AggregateScore, SemanticScore};
+
+    #[test]
+    fn test_generate_includes_semantic_section() {
+        let mut score = AggregateScore::default();
+        score.per_semantic.insert(
+            "buffer_overflow".to_string(),
+            SemanticScore {
+                class_name: "buffer_overflow".to_string(),
+                total_cases: 2,
+                true_positives: 1,
+                false_positives: 0,
+                false_negatives: 1,
+                detection_rate: 0.5,
+                precision: 1.0,
+            },
+        );
+
+        let markdown = generate(&score, "fixtures", "abc123");
+        assert!(markdown.contains("## Per-Semantic Detection Rates"));
+        assert!(markdown.contains("buffer_overflow"));
+    }
 }

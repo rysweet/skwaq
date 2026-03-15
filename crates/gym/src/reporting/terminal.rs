@@ -52,6 +52,42 @@ pub fn print_summary(score: &AggregateScore, suite: &str) {
         );
     }
     println!();
+
+    if !score.per_semantic.is_empty() {
+        let mut semantics: Vec<_> = score.per_semantic.values().collect();
+        semantics.sort_by(|a, b| {
+            a.detection_rate
+                .partial_cmp(&b.detection_rate)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        println!(
+            "  {:>22} {:>8} {:>8} {:>8} {:>10} {:>10}",
+            "Semantic", "Cases", "TP", "FN", "Detect%", "Prec%"
+        );
+        println!("  {}", "-".repeat(86));
+
+        for semantic in &semantics {
+            let detect_color = if semantic.detection_rate >= 0.8 {
+                "\x1b[32m"
+            } else if semantic.detection_rate >= 0.5 {
+                "\x1b[33m"
+            } else {
+                "\x1b[31m"
+            };
+            println!(
+                "  {:>22} {:>8} {:>8} {:>8} {}{:>9.1}%\x1b[0m {:>9.1}%",
+                semantic.class_name,
+                semantic.total_cases,
+                semantic.true_positives,
+                semantic.false_negatives,
+                detect_color,
+                semantic.detection_rate * 100.0,
+                semantic.precision * 100.0
+            );
+        }
+        println!();
+    }
 }
 
 /// Print a comparison between two runs.

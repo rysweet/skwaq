@@ -96,6 +96,10 @@ pub struct DetectedFinding {
     pub title: String,
 }
 
+pub fn default_map_finding_to_cwes(finding: &DetectedFinding) -> Vec<u32> {
+    crate::scoring::inferred_finding_cwes(finding)
+}
+
 /// Run skwaq's binary analysis on a compiled binary and collect findings.
 ///
 /// Two-layer detection:

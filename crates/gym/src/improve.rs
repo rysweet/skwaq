@@ -2078,6 +2078,7 @@ mod tests {
         }
         AggregateScore {
             per_cwe,
+            per_semantic: HashMap::new(),
             ..Default::default()
         }
     }

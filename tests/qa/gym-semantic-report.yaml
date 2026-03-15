@@ -1,0 +1,62 @@
+name: "skwaq gym run - semantic report surfaces persisted semantic metrics"
+description: "Verifies a quick fixtures run writes JSON and Markdown reports that include persisted per-semantic benchmark metrics."
+version: "1.0.0"
+
+config:
+  timeout: 300000
+  retries: 0
+  parallel: false
+
+agents:
+  - name: "skwaq-cli"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "."
+      timeout: 300000
+      capture_output: true
+
+steps:
+  - name: "Run semantic report smoke"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "./tests/qa/bin/gym-semantic-report.sh"
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "=== semantic-report-command ==="
+        - "Per-Semantic Detection Rates"
+        - "buffer_overflow"
+        - "\"per_semantic\": ["
+        - "\"class_name\": \"buffer_overflow\""
+        - "validated semantic report classes:"
+    timeout: 300000
+
+assertions:
+  - name: "Semantic report smoke succeeds"
+    type: "command_success"
+    agent: "skwaq-cli"
+    params:
+      step: "Run semantic report smoke"
+
+  - name: "Semantic report output includes persisted semantic metrics"
+    type: "output_contains_all"
+    agent: "skwaq-cli"
+    params:
+      step: "Run semantic report smoke"
+      required_strings:
+        - "Per-Semantic Detection Rates"
+        - "buffer_overflow"
+        - "\"per_semantic\": ["
+        - "\"class_name\": \"buffer_overflow\""
+        - "validated semantic report classes:"
+
+metadata:
+  tags:
+    - "cli"
+    - "gym"
+    - "semantic"
+    - "regression"
+  priority: "high"
+  author: "copilot-cli"

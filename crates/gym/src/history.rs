@@ -55,6 +55,19 @@ pub struct CweResult {
     pub precision: f64,
 }
 
+/// Per-semantic-class result within a run.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticResult {
+    pub run_id: String,
+    pub class_name: String,
+    pub total_cases: u32,
+    pub true_positives: u32,
+    pub false_positives: u32,
+    pub false_negatives: u32,
+    pub detection_rate: f64,
+    pub precision: f64,
+}
+
 /// Per-test-case result within a run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CaseResult {
@@ -143,6 +156,18 @@ impl HistoryDb {
                 PRIMARY KEY (run_id, cwe_id)
             );
 
+            CREATE TABLE IF NOT EXISTS semantic_results (
+                run_id TEXT NOT NULL REFERENCES runs(id),
+                class_name TEXT NOT NULL,
+                total_cases INTEGER NOT NULL,
+                true_positives INTEGER DEFAULT 0,
+                false_positives INTEGER DEFAULT 0,
+                false_negatives INTEGER DEFAULT 0,
+                detection_rate REAL DEFAULT 0.0,
+                precision REAL DEFAULT 0.0,
+                PRIMARY KEY (run_id, class_name)
+            );
+
             CREATE TABLE IF NOT EXISTS case_results (
                 run_id TEXT NOT NULL REFERENCES runs(id),
                 suite TEXT NOT NULL,
@@ -156,6 +181,7 @@ impl HistoryDb {
             );
 
             CREATE INDEX IF NOT EXISTS idx_cwe_results_cwe ON cwe_results(cwe_id);
+            CREATE INDEX IF NOT EXISTS idx_semantic_results_class ON semantic_results(class_name);
             CREATE INDEX IF NOT EXISTS idx_case_results_suite ON case_results(suite);
             CREATE INDEX IF NOT EXISTS idx_runs_started ON runs(started_at);
             ",
@@ -221,6 +247,10 @@ impl HistoryDb {
             "DELETE FROM cwe_results WHERE run_id = ?1",
             rusqlite::params![run_id],
         )?;
+        self.conn.execute(
+            "DELETE FROM semantic_results WHERE run_id = ?1",
+            rusqlite::params![run_id],
+        )?;
         self.conn
             .execute("DELETE FROM runs WHERE id = ?1", rusqlite::params![run_id])?;
         Ok(())
@@ -235,6 +265,26 @@ impl HistoryDb {
             rusqlite::params![
                 result.run_id,
                 result.cwe_id,
+                result.total_cases,
+                result.true_positives,
+                result.false_positives,
+                result.false_negatives,
+                result.detection_rate,
+                result.precision
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Insert per-semantic-class results.
+    pub fn insert_semantic_result(&self, result: &SemanticResult) -> anyhow::Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO semantic_results (run_id, class_name, total_cases, true_positives,
+             false_positives, false_negatives, detection_rate, precision)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            rusqlite::params![
+                result.run_id,
+                result.class_name,
                 result.total_cases,
                 result.true_positives,
                 result.false_positives,
@@ -460,6 +510,28 @@ impl HistoryDb {
         })?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
+
+    /// Load per-semantic-class results for a run.
+    pub fn semantic_results_for_run(&self, run_id: &str) -> anyhow::Result<Vec<SemanticResult>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT run_id, class_name, total_cases, true_positives, false_positives,
+                    false_negatives, detection_rate, precision
+             FROM semantic_results WHERE run_id = ?1 ORDER BY class_name",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![run_id], |row| {
+            Ok(SemanticResult {
+                run_id: row.get(0)?,
+                class_name: row.get(1)?,
+                total_cases: row.get(2)?,
+                true_positives: row.get(3)?,
+                false_positives: row.get(4)?,
+                false_negatives: row.get(5)?,
+                detection_rate: row.get(6)?,
+                precision: row.get(7)?,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
 }
 
 #[cfg(test)]
@@ -533,6 +605,18 @@ mod tests {
         })
         .unwrap();
 
+        db.insert_semantic_result(&SemanticResult {
+            run_id: run_id.clone(),
+            class_name: "buffer_overflow".to_string(),
+            total_cases: 5,
+            true_positives: 3,
+            false_positives: 0,
+            false_negatives: 2,
+            detection_rate: 0.6,
+            precision: 1.0,
+        })
+        .unwrap();
+
         // Query recent runs.
         let runs = db.recent_runs(10).unwrap();
         assert_eq!(runs.len(), 1);
@@ -544,6 +628,10 @@ mod tests {
         let cwes = db.cwe_results_for_run(&run_id).unwrap();
         assert_eq!(cwes.len(), 1);
         assert_eq!(cwes[0].cwe_id, 119);
+
+        let semantics = db.semantic_results_for_run(&run_id).unwrap();
+        assert_eq!(semantics.len(), 1);
+        assert_eq!(semantics[0].class_name, "buffer_overflow");
     }
 
     #[test]

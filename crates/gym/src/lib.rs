@@ -477,6 +477,30 @@ impl Gym {
                 }
             }
 
+            for semantic_score in score.per_semantic.values() {
+                if let Err(err) = self
+                    .history_db
+                    .insert_semantic_result(&history::SemanticResult {
+                        run_id: run_id.clone(),
+                        class_name: semantic_score.class_name.clone(),
+                        total_cases: semantic_score.total_cases,
+                        true_positives: semantic_score.true_positives,
+                        false_positives: semantic_score.false_positives,
+                        false_negatives: semantic_score.false_negatives,
+                        detection_rate: semantic_score.detection_rate,
+                        precision: semantic_score.precision,
+                    })
+                {
+                    if let Err(cleanup_err) = self.history_db.abandon_run(&run_id) {
+                        return Err(err.context(format!(
+                            "failed to store per-semantic results and failed to clean up unfinished run {}: {}",
+                            run_id, cleanup_err
+                        )));
+                    }
+                    return Err(err);
+                }
+            }
+
             let run = history::BenchmarkRun {
                 id: run_id.clone(),
                 started_at: chrono::Utc::now(),
@@ -511,19 +535,20 @@ impl Gym {
             .ok_or_else(|| anyhow::anyhow!("No runs yet. Run `skwaq gym run` first."))?;
 
         let cwe_results = self.history_db.cwe_results_for_run(&run.id)?;
-        let score = reconstruct_score(run, &cwe_results);
+        let semantic_results = self.history_db.semantic_results_for_run(&run.id)?;
+        let score = reconstruct_score(run, &cwe_results, &semantic_results);
 
         match format {
             ReportFormat::Terminal => {
                 reporting::terminal::print_summary(&score, &run.suite);
                 Ok(String::new())
             }
-            ReportFormat::Json => Ok(reporting::json_report::generate(
+            ReportFormat::Json => reporting::json_report::generate(
                 &score,
                 &run.suite,
                 &run.skwaq_commit,
                 &run.metadata,
-            )),
+            ),
             ReportFormat::Markdown => Ok(reporting::markdown_report::generate(
                 &score,
                 &run.suite,
@@ -618,6 +643,7 @@ fn build_run_metadata(repo: &std::path::Path, config: &BenchmarkConfig) -> histo
 fn reconstruct_score(
     run: &history::BenchmarkRun,
     cwe_results: &[history::CweResult],
+    semantic_results: &[history::SemanticResult],
 ) -> scoring::AggregateScore {
     let mut per_cwe = std::collections::HashMap::new();
     for cr in cwe_results {
@@ -634,6 +660,21 @@ fn reconstruct_score(
             },
         );
     }
+    let mut per_semantic = std::collections::HashMap::new();
+    for semantic in semantic_results {
+        per_semantic.insert(
+            semantic.class_name.clone(),
+            scoring::SemanticScore {
+                class_name: semantic.class_name.clone(),
+                total_cases: semantic.total_cases,
+                true_positives: semantic.true_positives,
+                false_positives: semantic.false_positives,
+                false_negatives: semantic.false_negatives,
+                detection_rate: semantic.detection_rate,
+                precision: semantic.precision,
+            },
+        );
+    }
     scoring::AggregateScore {
         true_positives: run.true_positives,
         false_positives: run.false_positives,
@@ -643,12 +684,14 @@ fn reconstruct_score(
         recall: run.recall,
         f1: run.f1,
         per_cwe,
+        per_semantic,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Gym;
+    use super::{reconstruct_score, Gym};
+    use crate::history;
 
     fn write_manifest(path: &std::path::Path, suite: &str) {
         std::fs::write(
@@ -714,6 +757,56 @@ language = "c"
         assert_eq!(
             err.to_string(),
             "Unknown suite. Available: binpool, fixtures"
+        );
+    }
+
+    #[test]
+    fn test_reconstruct_score_restores_semantic_metrics() {
+        let run = history::BenchmarkRun {
+            id: "run-1".to_string(),
+            started_at: chrono::Utc::now(),
+            finished_at: Some(chrono::Utc::now()),
+            suite: "fixtures".to_string(),
+            skwaq_commit: "abc123".to_string(),
+            metadata: history::RunMetadata::default(),
+            precision: 1.0,
+            recall: 1.0,
+            f1: 1.0,
+            true_positives: 1,
+            false_positives: 0,
+            false_negatives: 0,
+            true_negatives: 0,
+        };
+
+        let score = reconstruct_score(
+            &run,
+            &[history::CweResult {
+                run_id: "run-1".to_string(),
+                cwe_id: 119,
+                total_cases: 1,
+                true_positives: 1,
+                false_positives: 0,
+                false_negatives: 0,
+                detection_rate: 1.0,
+                precision: 1.0,
+            }],
+            &[history::SemanticResult {
+                run_id: "run-1".to_string(),
+                class_name: "buffer_overflow".to_string(),
+                total_cases: 1,
+                true_positives: 1,
+                false_positives: 0,
+                false_negatives: 0,
+                detection_rate: 1.0,
+                precision: 1.0,
+            }],
+        );
+
+        assert_eq!(score.per_cwe.len(), 1);
+        assert_eq!(score.per_semantic.len(), 1);
+        assert_eq!(
+            score.per_semantic["buffer_overflow"].class_name,
+            "buffer_overflow"
         );
     }
 }
