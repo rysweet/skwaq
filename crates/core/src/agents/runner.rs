@@ -7,9 +7,47 @@ use crate::graph::GraphDb;
 use crate::llm::{execute_with_tools, Client, TokenBudget};
 use crate::memory::MemoryStore;
 
-use super::definition::AgentDefinition;
+use super::definition::{AgentDefinition, AgentRoleMetadata};
 use super::tool_definitions::{agent_tools, filter_tools};
 use super::tool_executor::{execute_tool, execute_tool_with_memory};
+
+/// Lightweight structured summary passed between pipeline stages.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentContextFrame {
+    /// Agent that produced this frame.
+    pub agent_name: String,
+    /// Short human-facing description of the agent's role in the pipeline.
+    pub description: String,
+    /// Optional structured role metadata from the agent definition.
+    pub role: Option<AgentRoleMetadata>,
+    /// High-signal observations extracted from the final output.
+    pub key_points: Vec<String>,
+}
+
+impl AgentContextFrame {
+    pub fn from_agent(agent: &AgentDefinition, output: &str) -> Self {
+        Self::synthetic(
+            agent.name.clone(),
+            agent.description.clone(),
+            agent.role.clone(),
+            output,
+        )
+    }
+
+    pub fn synthetic(
+        agent_name: impl Into<String>,
+        description: impl Into<String>,
+        role: Option<AgentRoleMetadata>,
+        output: &str,
+    ) -> Self {
+        Self {
+            agent_name: agent_name.into(),
+            description: description.into(),
+            role,
+            key_points: extract_key_points(output),
+        }
+    }
+}
 
 /// Result from running an agent.
 #[derive(Debug, Clone)]
@@ -20,6 +58,8 @@ pub struct AgentResult {
     pub output: String,
     /// Tokens used during this agent's run.
     pub tokens_used: u64,
+    /// Structured summary of the agent output for downstream stages.
+    pub context_frame: AgentContextFrame,
 }
 
 /// Runs any agent definition against the graph database.
@@ -69,11 +109,13 @@ impl AgentRunner {
         .await?;
 
         let tokens_used = budget.used - tokens_before;
+        let context_frame = AgentContextFrame::from_agent(agent, &output);
 
         Ok(AgentResult {
             agent_name: agent.name.clone(),
             output,
             tokens_used,
+            context_frame,
         })
     }
 
@@ -123,13 +165,60 @@ impl AgentRunner {
         .await?;
 
         let tokens_used = budget.used - tokens_before;
+        let context_frame = AgentContextFrame::from_agent(agent, &output);
 
         Ok(AgentResult {
             agent_name: agent.name.clone(),
             output,
             tokens_used,
+            context_frame,
         })
     }
+}
+
+fn extract_key_points(output: &str) -> Vec<String> {
+    const MAX_KEY_POINTS: usize = 10;
+    const VERDICT_MARKERS: [&str; 6] = [
+        "CONFIRMED",
+        "DOWNGRADED",
+        "REJECTED",
+        "VULNERABLE",
+        "MITIGATED",
+        "SAFE",
+    ];
+
+    let lines: Vec<String> = output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(ToOwned::to_owned)
+        .collect();
+
+    let mut points: Vec<String> = lines
+        .iter()
+        .filter(|line| VERDICT_MARKERS.iter().any(|marker| line.contains(marker)))
+        .take(MAX_KEY_POINTS)
+        .cloned()
+        .collect();
+
+    if points.is_empty() {
+        points = lines
+            .iter()
+            .filter(|line| {
+                line.starts_with("- ")
+                    || line.starts_with("* ")
+                    || line.chars().next().is_some_and(|c| c.is_ascii_digit())
+            })
+            .take(MAX_KEY_POINTS)
+            .cloned()
+            .collect();
+    }
+
+    if points.is_empty() {
+        points = lines.into_iter().take(MAX_KEY_POINTS).collect();
+    }
+
+    points
 }
 
 /// Maximum characters for the analysis context sent to the LLM.
@@ -264,8 +353,12 @@ pub fn build_analysis_context_with_limit(
         "\n\nYou have access to durable memory (store_memory/recall_memory tools). \
          Use recall_memory to check for relevant past experiences before starting your analysis. \
          Use store_memory to record significant findings and lessons learned. \
-         Keep stored memories generalized — avoid target-specific addresses or paths.\n\n\
-         Start your analysis. Use the tools to dig deeper, then create findings for \
+         Keep stored memories generalized — avoid target-specific addresses or paths."
+            .into(),
+    );
+
+    parts.push(
+        "\n\nStart your analysis. Use the tools to dig deeper, then create findings for \
          each confirmed vulnerability."
             .into(),
     );

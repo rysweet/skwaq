@@ -1,0 +1,70 @@
+name: "skwaq agents list - surfaces structured role cards"
+description: "Verifies the CLI exposes agent role metadata through the agents list command."
+version: "1.0.0"
+
+config:
+  timeout: 300000
+  retries: 0
+  parallel: false
+
+agents:
+  - name: "skwaq-cli"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "."
+      timeout: 300000
+      capture_output: true
+
+steps:
+  - name: "Run agents list role-card smoke"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "./tests/qa/bin/agents-role-cards.sh"
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "=== agents-list-command ==="
+        - "ROLE"
+        - "vuln-hunter"
+        - "Primary discovery specialist"
+        - "exploit-analyst"
+        - "Exploitability specialist"
+        - "verdict-synthesizer"
+        - "Final evidence-weighting synthesizer"
+        - "validated role titles in agents list output"
+    timeout: 300000
+
+assertions:
+  - name: "Agents list role-card smoke succeeds"
+    type: "command_success"
+    agent: "skwaq-cli"
+    params:
+      step: "Run agents list role-card smoke"
+
+  - name: "Agents list output includes structured role titles"
+    type: "output_contains_all"
+    agent: "skwaq-cli"
+    params:
+      step: "Run agents list role-card smoke"
+      required_strings:
+        - "ROLE"
+        - "vuln-hunter"
+        - "Primary discovery specialist"
+        - "exploit-analyst"
+        - "Exploitability specialist"
+        - "defense-analyst"
+        - "Defensive controls specialist"
+        - "verdict-synthesizer"
+        - "Final evidence-weighting synthesizer"
+        - "validated role titles in agents list output"
+
+metadata:
+  tags:
+    - "cli"
+    - "agents"
+    - "roles"
+    - "regression"
+  priority: "high"
+  author: "copilot-cli"

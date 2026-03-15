@@ -13,7 +13,7 @@ use crate::memory::MemoryStore;
 use crate::skills::discovery::load_skill;
 
 use super::definition::load_agent;
-use super::runner::{build_analysis_context, AgentResult, AgentRunner};
+use super::runner::{build_analysis_context, AgentContextFrame, AgentResult, AgentRunner};
 
 /// Maximum characters for accumulated previous-results context passed between
 /// pipeline stages.  Keeps subsequent agent prompts within LLM token limits.
@@ -82,6 +82,7 @@ impl AnalysisPipeline {
             // Inject relevant skill content into the agent's system prompt.
             // This gives agents access to research-backed techniques and
             // best practices from skills like llm-binary-vuln-guide.
+            inject_role_context(&mut agent);
             inject_skill_context(&mut agent);
 
             let context = match &stage.context_mode {
@@ -139,6 +140,7 @@ impl AnalysisPipeline {
             }
 
             let mut agent = load_agent(&stage.agent_name)?;
+            inject_role_context(&mut agent);
             inject_skill_context(&mut agent);
 
             let context = match &stage.context_mode {
@@ -219,6 +221,7 @@ impl AnalysisPipeline {
             }
 
             let mut agent = load_agent(&stage.agent_name)?;
+            inject_role_context(&mut agent);
             inject_skill_context(&mut agent);
 
             let context = match &stage.context_mode {
@@ -248,6 +251,7 @@ impl AnalysisPipeline {
 
             // Agent A
             let mut agent_a = load_agent(&debate.agent_a)?;
+            inject_role_context(&mut agent_a);
             inject_skill_context(&mut agent_a);
             eprintln!(
                 "  Running debate agent A: {} ({})",
@@ -263,6 +267,7 @@ impl AnalysisPipeline {
 
             // Agent B (independent — does NOT see Agent A's output)
             let mut agent_b = load_agent(&debate.agent_b)?;
+            inject_role_context(&mut agent_b);
             inject_skill_context(&mut agent_b);
             eprintln!(
                 "  Running debate agent B: {} ({})",
@@ -278,12 +283,19 @@ impl AnalysisPipeline {
 
             // Create a debate summary that highlights agreements and disagreements.
             let debate_summary = build_debate_summary(&result_a, &result_b);
+            let debate_frame = AgentContextFrame::synthetic(
+                "debate-summary",
+                "Pipeline-generated summary of offense/defense agreements and disagreements",
+                None,
+                &debate_summary,
+            );
             results.push(result_a);
             results.push(result_b);
             results.push(AgentResult {
                 agent_name: "debate-summary".into(),
                 output: debate_summary,
                 tokens_used: 0,
+                context_frame: debate_frame,
             });
         }
 
@@ -298,6 +310,7 @@ impl AnalysisPipeline {
             }
 
             let mut agent = load_agent(&stage.agent_name)?;
+            inject_role_context(&mut agent);
             inject_skill_context(&mut agent);
 
             let context = match &stage.context_mode {
@@ -327,8 +340,14 @@ fn build_previous_results_context(preamble: &str, results: &[AgentResult]) -> St
     let mut ctx = preamble.to_string();
     for prev in results {
         ctx.push_str(&format!(
-            "\n\n--- Output from {} ---\n{}",
-            prev.agent_name, prev.output
+            "\n\n--- Context frame from {} ---\n{}",
+            prev.agent_name,
+            format_context_frame(&prev.context_frame)
+        ));
+        ctx.push_str(&format!(
+            "\n\n--- Condensed output from {} ---\n{}",
+            prev.agent_name,
+            format_output_excerpt(&prev.output)
         ));
     }
     // Truncate accumulated context to stay within LLM limits.
@@ -342,6 +361,86 @@ fn build_previous_results_context(preamble: &str, results: &[AgentResult]) -> St
         ctx.push_str("\n...[truncated]");
     }
     ctx
+}
+
+fn format_context_frame(frame: &AgentContextFrame) -> String {
+    let mut rendered = format!(
+        "agent: {}\ndescription: {}",
+        frame.agent_name, frame.description
+    );
+
+    if let Some(role) = &frame.role {
+        if !role.title.is_empty() {
+            rendered.push_str(&format!("\nrole_title: {}", role.title));
+        }
+        append_role_list(&mut rendered, "expertise", &role.expertise);
+        append_role_list(&mut rendered, "focus", &role.focus);
+        append_role_list(&mut rendered, "skepticism", &role.skepticism);
+        append_role_list(
+            &mut rendered,
+            "evidence_preferences",
+            &role.evidence_preferences,
+        );
+    }
+
+    if !frame.key_points.is_empty() {
+        rendered.push_str("\nkey_points:");
+        for point in &frame.key_points {
+            rendered.push_str(&format!("\n- {}", point));
+        }
+    }
+
+    rendered
+}
+
+fn format_output_excerpt(output: &str) -> String {
+    const MAX_EXCERPT_LINES: usize = 12;
+    const MAX_EXCERPT_CHARS: usize = 1200;
+    const EXCERPT_HEAD_LINES: usize = 6;
+    const EXCERPT_TAIL_LINES: usize = 6;
+
+    let lines: Vec<&str> = output.lines().collect();
+    let line_based_excerpt = if lines.len() > MAX_EXCERPT_LINES {
+        let mut excerpt_lines = lines
+            .iter()
+            .take(EXCERPT_HEAD_LINES)
+            .copied()
+            .collect::<Vec<_>>();
+        excerpt_lines.push("...[middle lines omitted]...");
+        excerpt_lines.extend(lines.iter().rev().take(EXCERPT_TAIL_LINES).copied().rev());
+        excerpt_lines.join("\n")
+    } else {
+        lines.join("\n")
+    };
+
+    let mut excerpt = line_based_excerpt;
+    let needs_line_truncation = lines.len() > MAX_EXCERPT_LINES;
+    let needs_char_truncation = excerpt.len() > MAX_EXCERPT_CHARS;
+    let needs_truncation = needs_line_truncation || needs_char_truncation;
+    if needs_char_truncation {
+        let mut boundary = MAX_EXCERPT_CHARS;
+        while boundary > 0 && !excerpt.is_char_boundary(boundary) {
+            boundary -= 1;
+        }
+        excerpt.truncate(boundary);
+    }
+
+    if needs_truncation && !excerpt.ends_with("\n...[truncated excerpt]") {
+        excerpt.push_str("\n...[truncated excerpt]");
+    }
+
+    excerpt
+}
+
+fn append_role_list(rendered: &mut String, label: &str, values: &[String]) {
+    if values.is_empty() {
+        return;
+    }
+
+    rendered.push_str(&format!("\n{}:", label));
+    for value in values {
+        rendered.push_str(&format!("\n- {}", value));
+    }
 }
 
 /// Build a debate summary comparing two agent outputs.
@@ -711,6 +810,37 @@ fn inject_skill_context(agent: &mut super::definition::AgentDefinition) {
     }
 }
 
+fn inject_role_context(agent: &mut super::definition::AgentDefinition) {
+    let Some(role) = &agent.role else {
+        return;
+    };
+
+    let mut role_card = String::from("\n\n--- Role Card ---");
+    if !role.title.is_empty() {
+        role_card.push_str(&format!("\nTitle: {}", role.title));
+    }
+    append_prompt_list(&mut role_card, "Expertise", &role.expertise);
+    append_prompt_list(&mut role_card, "Focus", &role.focus);
+    append_prompt_list(&mut role_card, "Skepticism checklist", &role.skepticism);
+    append_prompt_list(
+        &mut role_card,
+        "Preferred evidence",
+        &role.evidence_preferences,
+    );
+    agent.system_prompt.push_str(&role_card);
+}
+
+fn append_prompt_list(rendered: &mut String, label: &str, values: &[String]) {
+    if values.is_empty() {
+        return;
+    }
+
+    rendered.push_str(&format!("\n{}:", label));
+    for value in values {
+        rendered.push_str(&format!("\n- {}", value));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -756,6 +886,13 @@ mod tests {
                      Finding 2: **REJECTED**: Dead code, never called."
                 .into(),
             tokens_used: 100,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "Finding 1: **CONFIRMED [high]**: Buffer overflow is exploitable.\n\
+                 Finding 2: **REJECTED**: Dead code, never called.",
+            ),
         };
         let result_b = AgentResult {
             agent_name: "defense-analyst".into(),
@@ -763,6 +900,13 @@ mod tests {
                      Finding 2: **SAFE**: Function is never reachable."
                 .into(),
             tokens_used: 100,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "Finding 1: **VULNERABLE**: No bounds checking found.\n\
+                 Finding 2: **SAFE**: Function is never reachable.",
+            ),
         };
 
         let summary = build_debate_summary(&result_a, &result_b);
@@ -779,11 +923,23 @@ mod tests {
             agent_name: "exploit-analyst".into(),
             output: "**CONFIRMED [critical]**: RCE via command injection".into(),
             tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "**CONFIRMED [critical]**: RCE via command injection",
+            ),
         };
         let result_b = AgentResult {
             agent_name: "defense-analyst".into(),
             output: "**SAFE**: Input is validated by allowlist".into(),
             tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "**SAFE**: Input is validated by allowlist",
+            ),
         };
 
         let summary = build_debate_summary(&result_a, &result_b);
@@ -799,10 +955,84 @@ mod tests {
             agent_name: "test".into(),
             output: "x".repeat(MAX_PIPELINE_CONTEXT_CHARS + 1000),
             tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic("test", "Test agent", None, "x"),
         }];
-        let ctx = build_previous_results_context("preamble", &results);
+        let ctx = build_previous_results_context(
+            &"p".repeat(MAX_PIPELINE_CONTEXT_CHARS + 1000),
+            &results,
+        );
         assert!(ctx.len() <= MAX_PIPELINE_CONTEXT_CHARS + 20); // +20 for truncation marker
         assert!(ctx.contains("[truncated]"));
+    }
+
+    #[test]
+    fn test_build_previous_results_context_includes_structured_frame() {
+        let results = vec![AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "**CONFIRMED [high]**: Concrete attack path".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                Some(super::super::definition::AgentRoleMetadata {
+                    title: "Exploitability specialist".into(),
+                    expertise: vec!["reachability".into()],
+                    focus: vec!["attacker control".into()],
+                    skepticism: vec!["reject theoretical findings".into()],
+                    evidence_preferences: vec!["concrete trigger paths".into()],
+                }),
+                "**CONFIRMED [high]**: Concrete attack path",
+            ),
+        }];
+
+        let ctx = build_previous_results_context("preamble", &results);
+        assert!(ctx.contains("Context frame from exploit-analyst"));
+        assert!(ctx.contains("role_title: Exploitability specialist"));
+        assert!(ctx.contains("key_points:"));
+        assert!(ctx.contains("Concrete attack path"));
+        assert!(ctx.contains("Condensed output from exploit-analyst"));
+    }
+
+    #[test]
+    fn test_output_excerpt_truncates_long_multiline_output() {
+        let output =
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\nline11\nline12\nline13";
+        let excerpt = format_output_excerpt(output);
+        assert!(excerpt.contains("line1"));
+        assert!(excerpt.contains("line6"));
+        assert!(excerpt.contains("line13"));
+        assert!(excerpt.contains("[middle lines omitted]"));
+        assert!(excerpt.contains("[truncated excerpt]"));
+        assert!(!excerpt.contains("line7\nline8\nline9\nline10"));
+    }
+
+    #[test]
+    fn test_inject_role_context_appends_role_card() {
+        let mut agent = super::super::definition::AgentDefinition {
+            name: "role-aware".into(),
+            description: "Role-aware agent".into(),
+            model: "claude-opus-4.6".into(),
+            tools: vec![],
+            max_turns: 5,
+            role: Some(super::super::definition::AgentRoleMetadata {
+                title: "Exploitability specialist".into(),
+                expertise: vec!["reachability tracing".into()],
+                focus: vec!["attacker control".into()],
+                skepticism: vec!["reject dead code".into()],
+                evidence_preferences: vec!["line-level citations".into()],
+            }),
+            system_prompt: "Base prompt".into(),
+            source_path: None,
+        };
+
+        inject_role_context(&mut agent);
+
+        assert!(agent.system_prompt.contains("--- Role Card ---"));
+        assert!(agent
+            .system_prompt
+            .contains("Title: Exploitability specialist"));
+        assert!(agent.system_prompt.contains("Expertise:"));
+        assert!(agent.system_prompt.contains("Preferred evidence:"));
     }
 
     #[test]
