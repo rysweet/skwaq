@@ -17,7 +17,8 @@ use crate::skills::discovery::load_skill;
 use super::definition::load_agent;
 use super::output_schema::{
     DefenseAnalystAssessment, DefenseAnalystStructuredOutput, DefenseAnalystVerdict,
-    ExploitAnalystStructuredOutput, ExploitAnalystVerdict, ParsedAgentOutput,
+    ExploitAnalystAssessment, ExploitAnalystStructuredOutput, ExploitAnalystVerdict,
+    ParsedAgentOutput,
 };
 use super::runner::{build_analysis_context, AgentContextFrame, AgentResult, AgentRunner};
 
@@ -519,22 +520,14 @@ fn build_debate_summary(agent_a: &AgentResult, agent_b: &AgentResult) -> String 
     let a_verdicts: Vec<&str> = agent_a
         .output
         .lines()
-        .filter(|line| {
-            let upper = line.to_uppercase();
-            upper.contains("CONFIRMED")
-                || upper.contains("REJECTED")
-                || upper.contains("DOWNGRADED")
-        })
+        .filter(|line| line_has_any_verdict_token(line, &["CONFIRMED", "REJECTED", "DOWNGRADED"]))
         .collect();
 
     // Extract verdicts from agent B (VULNERABLE/MITIGATED/SAFE)
     let b_verdicts: Vec<&str> = agent_b
         .output
         .lines()
-        .filter(|line| {
-            let upper = line.to_uppercase();
-            upper.contains("VULNERABLE") || upper.contains("MITIGATED") || upper.contains("SAFE")
-        })
+        .filter(|line| line_has_any_verdict_token(line, &["VULNERABLE", "MITIGATED", "SAFE"]))
         .collect();
 
     summary.push_str("Offense analyst verdicts:\n");
@@ -550,19 +543,19 @@ fn build_debate_summary(agent_a: &AgentResult, agent_b: &AgentResult) -> String 
     // Identify agreements and disagreements.
     let a_confirms = a_verdicts
         .iter()
-        .filter(|l| l.to_uppercase().contains("CONFIRMED"))
+        .filter(|l| line_has_verdict_token(l, "CONFIRMED"))
         .count();
     let a_rejects = a_verdicts
         .iter()
-        .filter(|l| l.to_uppercase().contains("REJECTED"))
+        .filter(|l| line_has_verdict_token(l, "REJECTED"))
         .count();
     let b_vulnerable = b_verdicts
         .iter()
-        .filter(|l| l.to_uppercase().contains("VULNERABLE"))
+        .filter(|l| line_has_verdict_token(l, "VULNERABLE"))
         .count();
     let b_safe = b_verdicts
         .iter()
-        .filter(|l| l.to_uppercase().contains("SAFE"))
+        .filter(|l| line_has_verdict_token(l, "SAFE"))
         .count();
 
     summary.push_str(&format!(
@@ -601,32 +594,45 @@ fn build_weighted_debate_summary(
         exploit.summary, defense.summary
     ));
 
-    let defense_by_title: BTreeMap<&str, &DefenseAnalystAssessment> = defense
-        .assessments
-        .iter()
-        .map(|assessment| (assessment.finding_title.as_str(), assessment))
-        .collect();
+    let exploit_by_title = group_exploit_assessments(&exploit.assessments);
+    let defense_by_title = group_defense_assessments(&defense.assessments);
 
     let mut disagreement_count = 0usize;
-    let mut seen_titles = BTreeSet::new();
+    let all_titles: BTreeSet<String> = exploit_by_title
+        .keys()
+        .cloned()
+        .chain(defense_by_title.keys().cloned())
+        .collect();
     summary.push_str("\nWeighted finding comparisons:\n");
-    for assessment in &exploit.assessments {
-        seen_titles.insert(assessment.finding_title.as_str());
-        let Some(defense_assessment) = defense_by_title.get(assessment.finding_title.as_str())
-        else {
-            summary.push_str(&format!(
-                "- {}: offense={} @ {}%, defense=missing\n",
-                assessment.finding_title, assessment.verdict, assessment.confidence_percent
-            ));
-            continue;
-        };
-
-        let offense_score =
-            exploit_verdict_score(&assessment.verdict) * i32::from(assessment.confidence_percent);
-        let defense_score = defense_verdict_score(&defense_assessment.verdict)
-            * i32::from(defense_assessment.confidence_percent);
+    for title_key in all_titles {
+        let offense_assessments = exploit_by_title
+            .get(&title_key)
+            .cloned()
+            .unwrap_or_default();
+        let defense_assessments = defense_by_title
+            .get(&title_key)
+            .cloned()
+            .unwrap_or_default();
+        let display_title = display_title_for_group(&offense_assessments, &defense_assessments);
+        let offense_score = offense_assessments
+            .iter()
+            .map(|assessment| {
+                exploit_verdict_score(&assessment.verdict)
+                    * i32::from(assessment.confidence_percent)
+            })
+            .sum::<i32>();
+        let defense_score = defense_assessments
+            .iter()
+            .map(|assessment| {
+                defense_verdict_score(&assessment.verdict)
+                    * i32::from(assessment.confidence_percent)
+            })
+            .sum::<i32>();
         let net_score = offense_score + defense_score;
-        if offense_score.signum() != 0
+
+        if !offense_assessments.is_empty()
+            && !defense_assessments.is_empty()
+            && offense_score.signum() != 0
             && defense_score.signum() != 0
             && offense_score.signum() != defense_score.signum()
         {
@@ -634,24 +640,30 @@ fn build_weighted_debate_summary(
         }
 
         summary.push_str(&format!(
-            "- {}: offense={} @ {}%, defense={} @ {}%, net_weight={}\n",
-            assessment.finding_title,
-            assessment.verdict,
-            assessment.confidence_percent,
-            defense_assessment.verdict,
-            defense_assessment.confidence_percent,
-            net_score
+            "- {}: offense={}, defense={}",
+            display_title,
+            format_exploit_assessments(&offense_assessments),
+            format_defense_assessments(&defense_assessments),
         ));
-    }
-
-    for assessment in &defense.assessments {
-        if seen_titles.contains(assessment.finding_title.as_str()) {
-            continue;
+        if !offense_assessments.is_empty() && !defense_assessments.is_empty() {
+            summary.push_str(&format!(", net_weight={}", net_score));
         }
-        summary.push_str(&format!(
-            "- {}: offense=missing, defense={} @ {}%\n",
-            assessment.finding_title, assessment.verdict, assessment.confidence_percent
-        ));
+        summary.push('\n');
+
+        let offense_evidence = collect_exploit_evidence(&offense_assessments);
+        if !offense_evidence.is_empty() {
+            summary.push_str(&format!(
+                "    offense_evidence: {}\n",
+                offense_evidence.join(" | ")
+            ));
+        }
+        let defense_evidence = collect_defense_evidence(&defense_assessments);
+        if !defense_evidence.is_empty() {
+            summary.push_str(&format!(
+                "    defense_evidence: {}\n",
+                defense_evidence.join(" | ")
+            ));
+        }
     }
 
     summary.push_str(&format!(
@@ -684,6 +696,131 @@ fn defense_verdict_score(verdict: &DefenseAnalystVerdict) -> i32 {
         DefenseAnalystVerdict::Mitigated => 0,
         DefenseAnalystVerdict::Safe => -1,
     }
+}
+
+fn line_has_any_verdict_token(line: &str, tokens: &[&str]) -> bool {
+    tokens
+        .iter()
+        .any(|token| line_has_verdict_token(line, token))
+}
+
+fn line_has_verdict_token(line: &str, token: &str) -> bool {
+    line.to_uppercase()
+        .split(|ch: char| !ch.is_ascii_alphanumeric())
+        .any(|part| part == token)
+}
+
+fn normalize_finding_title(title: &str) -> String {
+    let normalized = title
+        .split(|ch: char| !ch.is_ascii_alphanumeric())
+        .filter(|part| !part.is_empty())
+        .map(|part| part.to_ascii_lowercase())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if normalized.is_empty() {
+        title.trim().to_ascii_lowercase()
+    } else {
+        normalized
+    }
+}
+
+fn group_exploit_assessments(
+    assessments: &[ExploitAnalystAssessment],
+) -> BTreeMap<String, Vec<&ExploitAnalystAssessment>> {
+    let mut grouped = BTreeMap::new();
+    for assessment in assessments {
+        grouped
+            .entry(normalize_finding_title(&assessment.finding_title))
+            .or_insert_with(Vec::new)
+            .push(assessment);
+    }
+    grouped
+}
+
+fn group_defense_assessments(
+    assessments: &[DefenseAnalystAssessment],
+) -> BTreeMap<String, Vec<&DefenseAnalystAssessment>> {
+    let mut grouped = BTreeMap::new();
+    for assessment in assessments {
+        grouped
+            .entry(normalize_finding_title(&assessment.finding_title))
+            .or_insert_with(Vec::new)
+            .push(assessment);
+    }
+    grouped
+}
+
+fn display_title_for_group(
+    offense_assessments: &[&ExploitAnalystAssessment],
+    defense_assessments: &[&DefenseAnalystAssessment],
+) -> String {
+    offense_assessments
+        .first()
+        .map(|assessment| assessment.finding_title.clone())
+        .or_else(|| {
+            defense_assessments
+                .first()
+                .map(|assessment| assessment.finding_title.clone())
+        })
+        .unwrap_or_else(|| "(unknown finding)".into())
+}
+
+fn format_exploit_assessments(assessments: &[&ExploitAnalystAssessment]) -> String {
+    if assessments.is_empty() {
+        return "missing".into();
+    }
+    assessments
+        .iter()
+        .map(|assessment| {
+            format!(
+                "{} @ {}%",
+                assessment.verdict, assessment.confidence_percent
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn format_defense_assessments(assessments: &[&DefenseAnalystAssessment]) -> String {
+    if assessments.is_empty() {
+        return "missing".into();
+    }
+    assessments
+        .iter()
+        .map(|assessment| {
+            format!(
+                "{} @ {}%",
+                assessment.verdict, assessment.confidence_percent
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn collect_exploit_evidence(assessments: &[&ExploitAnalystAssessment]) -> Vec<String> {
+    let mut evidence = BTreeSet::new();
+    for assessment in assessments {
+        for item in &assessment.evidence {
+            let trimmed = item.trim();
+            if !trimmed.is_empty() {
+                evidence.insert(trimmed.to_string());
+            }
+        }
+    }
+    evidence.into_iter().collect()
+}
+
+fn collect_defense_evidence(assessments: &[&DefenseAnalystAssessment]) -> Vec<String> {
+    let mut evidence = BTreeSet::new();
+    for assessment in assessments {
+        for item in &assessment.evidence {
+            let trimmed = item.trim();
+            if !trimmed.is_empty() {
+                evidence.insert(trimmed.to_string());
+            }
+        }
+    }
+    evidence.into_iter().collect()
 }
 
 fn vuln_hunter_stage(agent_name: String, include_create_finding_preamble: bool) -> PipelineStage {
@@ -1088,6 +1225,40 @@ mod tests {
     }
 
     #[test]
+    fn test_build_debate_summary_does_not_treat_unsafe_as_safe() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "**CONFIRMED [high]**: strcpy call is exploitable".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "**CONFIRMED [high]**: strcpy call is exploitable",
+            ),
+            parsed_output: None,
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "This code is UNSAFE because strcpy lacks bounds checks".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "This code is UNSAFE because strcpy lacks bounds checks",
+            ),
+            parsed_output: None,
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(!summary.contains("DISAGREEMENTS DETECTED"));
+        assert!(summary.contains("Defense: 0 vulnerable, 0 safe"));
+    }
+
+    #[test]
     fn test_build_debate_summary_prefers_weighted_structured_outputs() {
         let result_a = AgentResult {
             agent_name: "exploit-analyst".into(),
@@ -1144,6 +1315,91 @@ mod tests {
         assert!(summary.contains("WEIGHTED DEBATE SUMMARY"));
         assert!(summary.contains("net_weight=53"));
         assert!(summary.contains("weighted_disagreements: 1"));
+        assert!(summary.contains("offense_evidence: Attacker controls packet length"));
+        assert!(summary.contains("defense_evidence: Caller normally caps input"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_normalizes_titles_and_reports_missing_branches() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![
+                            super::super::output_schema::ExploitAnalystAssessment {
+                                finding_title: "Buffer Overflow in parse_header".into(),
+                                verdict:
+                                    super::super::output_schema::ExploitAnalystVerdict::Confirmed,
+                                confidence_percent: 80,
+                                evidence: vec!["Attacker controls packet length".into()],
+                            },
+                            super::super::output_schema::ExploitAnalystAssessment {
+                                finding_title: "Use-after-free in cleanup".into(),
+                                verdict:
+                                    super::super::output_schema::ExploitAnalystVerdict::Rejected,
+                                confidence_percent: 40,
+                                evidence: vec!["Refcount is released before use".into()],
+                            },
+                        ],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![
+                            super::super::output_schema::DefenseAnalystAssessment {
+                                finding_title: "buffer overflow in parse-header".into(),
+                                verdict: super::super::output_schema::DefenseAnalystVerdict::Safe,
+                                confidence_percent: 35,
+                                evidence: vec!["Caller normally caps input".into()],
+                            },
+                            super::super::output_schema::DefenseAnalystAssessment {
+                                finding_title: "Integer overflow in length parse".into(),
+                                verdict:
+                                    super::super::output_schema::DefenseAnalystVerdict::Vulnerable,
+                                confidence_percent: 72,
+                                evidence: vec!["Length arithmetic is unchecked".into()],
+                            },
+                        ],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("Buffer Overflow in parse_header"));
+        assert!(summary.contains("net_weight=45"));
+        assert!(
+            summary.contains("Use-after-free in cleanup: offense=REJECTED @ 40%, defense=missing")
+        );
+        assert!(summary.contains(
+            "Integer overflow in length parse: offense=missing, defense=VULNERABLE @ 72%"
+        ));
     }
 
     #[test]

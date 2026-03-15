@@ -34,6 +34,8 @@ steps:
         - "exploit-analyst"
         - "Exploitability specialist"
         - "exploit-analyst-v1"
+        - "defense-analyst"
+        - "Defensive controls specialist"
         - "defense-analyst-v1"
         - "verdict-synthesizer"
         - "Final evidence-weighting synthesizer"

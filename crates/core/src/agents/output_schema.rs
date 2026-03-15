@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::fmt;
 
 pub const VULN_HUNTER_V1_SCHEMA: &str = "vuln-hunter-v1";
@@ -163,8 +162,11 @@ impl ParsedAgentOutput {
                 points.push(format!("summary: {}", output.summary));
                 for assessment in &output.assessments {
                     points.push(format!(
-                        "assessment: {} [{} @ {}%]",
-                        assessment.finding_title, assessment.verdict, assessment.confidence_percent
+                        "assessment: {} [{} @ {}%] evidence: {}",
+                        assessment.finding_title,
+                        assessment.verdict,
+                        assessment.confidence_percent,
+                        format_evidence_list(&assessment.evidence)
                     ));
                 }
                 points
@@ -174,8 +176,11 @@ impl ParsedAgentOutput {
                 points.push(format!("summary: {}", output.summary));
                 for assessment in &output.assessments {
                     points.push(format!(
-                        "assessment: {} [{} @ {}%]",
-                        assessment.finding_title, assessment.verdict, assessment.confidence_percent
+                        "assessment: {} [{} @ {}%] evidence: {}",
+                        assessment.finding_title,
+                        assessment.verdict,
+                        assessment.confidence_percent,
+                        format_evidence_list(&assessment.evidence)
                     ));
                 }
                 points
@@ -220,13 +225,13 @@ pub fn output_schema_contract(schema_name: &str) -> Option<&'static str> {
                  {\n\
                    \"finding_title\": \"Exact finding title under review\",\n\
                    \"verdict\": \"CONFIRMED|DOWNGRADED|REJECTED\",\n\
-                   \"confidence_percent\": 0,\n\
-                   \"evidence\": [\"Concrete reachability or attacker-control evidence\"]\n\
-                 }\n\
-               ]\n\
-             }\n\
-             ```\n\
-             Include every finding you assessed. Use confidence_percent in the 0-100 range.",
+                    \"confidence_percent\": 1,\n\
+                    \"evidence\": [\"Concrete reachability or attacker-control evidence\"]\n\
+                  }\n\
+                ]\n\
+              }\n\
+              ```\n\
+             Include every finding you assessed. Use confidence_percent in the 1-100 range and include at least one evidence item per assessment.",
         ),
         DEFENSE_ANALYST_V1_SCHEMA => Some(
             "\n\n--- Structured Output Contract ---\n\
@@ -239,13 +244,13 @@ pub fn output_schema_contract(schema_name: &str) -> Option<&'static str> {
                  {\n\
                    \"finding_title\": \"Exact finding title under review\",\n\
                    \"verdict\": \"VULNERABLE|MITIGATED|SAFE\",\n\
-                   \"confidence_percent\": 0,\n\
-                   \"evidence\": [\"Concrete mitigation or missing-control evidence\"]\n\
-                 }\n\
-               ]\n\
-             }\n\
-             ```\n\
-             Include every finding you assessed. Use confidence_percent in the 0-100 range.",
+                    \"confidence_percent\": 1,\n\
+                    \"evidence\": [\"Concrete mitigation or missing-control evidence\"]\n\
+                  }\n\
+                ]\n\
+              }\n\
+              ```\n\
+             Include every finding you assessed. Use confidence_percent in the 1-100 range and include at least one evidence item per assessment.",
         ),
         _ => None,
     }
@@ -297,37 +302,25 @@ fn validate_vuln_hunter_output(output: &VulnHunterStructuredOutput) -> anyhow::R
 }
 
 fn validate_exploit_analyst_output(output: &ExploitAnalystStructuredOutput) -> anyhow::Result<()> {
-    let mut seen_titles = HashSet::new();
     for assessment in &output.assessments {
         validate_confidence_and_title(
             assessment.finding_title.as_str(),
             assessment.confidence_percent,
             "exploit assessment",
         )?;
-        if !seen_titles.insert(assessment.finding_title.as_str()) {
-            anyhow::bail!(
-                "duplicate finding_title '{}' in exploit assessments",
-                assessment.finding_title
-            );
-        }
+        validate_assessment_evidence(&assessment.evidence, assessment.finding_title.as_str())?;
     }
     Ok(())
 }
 
 fn validate_defense_analyst_output(output: &DefenseAnalystStructuredOutput) -> anyhow::Result<()> {
-    let mut seen_titles = HashSet::new();
     for assessment in &output.assessments {
         validate_confidence_and_title(
             assessment.finding_title.as_str(),
             assessment.confidence_percent,
             "defense assessment",
         )?;
-        if !seen_titles.insert(assessment.finding_title.as_str()) {
-            anyhow::bail!(
-                "duplicate finding_title '{}' in defense assessments",
-                assessment.finding_title
-            );
-        }
+        validate_assessment_evidence(&assessment.evidence, assessment.finding_title.as_str())?;
     }
     Ok(())
 }
@@ -340,10 +333,37 @@ fn validate_confidence_and_title(
     if finding_title.trim().is_empty() {
         anyhow::bail!("{label} must include a non-empty finding_title");
     }
+    if confidence_percent == 0 {
+        anyhow::bail!("{label} confidence_percent must be in the 1-100 range");
+    }
     if confidence_percent > 100 {
-        anyhow::bail!("{label} confidence_percent must be in the 0-100 range");
+        anyhow::bail!("{label} confidence_percent must be in the 1-100 range");
     }
     Ok(())
+}
+
+fn validate_assessment_evidence(evidence: &[String], finding_title: &str) -> anyhow::Result<()> {
+    if evidence.iter().all(|item| item.trim().is_empty()) {
+        anyhow::bail!(
+            "assessment '{}' must include at least one evidence item",
+            finding_title
+        );
+    }
+    Ok(())
+}
+
+fn format_evidence_list(evidence: &[String]) -> String {
+    let filtered: Vec<&str> = evidence
+        .iter()
+        .map(String::as_str)
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .collect();
+    if filtered.is_empty() {
+        "none".into()
+    } else {
+        filtered.join(" | ")
+    }
 }
 
 fn is_valid_cwe_id(value: &str) -> bool {
@@ -530,47 +550,35 @@ mod tests {
     }
 
     #[test]
-    fn rejects_duplicate_exploit_assessment_titles() {
+    fn rejects_zero_confidence_exploit_assessments() {
         let output = r#"```json
 {
-  "summary": "duplicate exploit assessments",
+  "summary": "invalid exploit confidence",
   "assessments": [
     {
       "finding_title": "Buffer overflow in parse_header",
       "verdict": "CONFIRMED",
-      "confidence_percent": 88,
-      "evidence": []
-    },
-    {
-      "finding_title": "Buffer overflow in parse_header",
-      "verdict": "REJECTED",
-      "confidence_percent": 20,
-      "evidence": []
+      "confidence_percent": 0,
+      "evidence": ["Attacker controls packet length"]
     }
   ]
 }
 ```"#;
 
         let error = parse_structured_output(EXPLOIT_ANALYST_V1_SCHEMA, output).unwrap_err();
-        assert!(error.to_string().contains("duplicate finding_title"));
+        assert!(error.to_string().contains("1-100"));
     }
 
     #[test]
-    fn rejects_duplicate_defense_assessment_titles() {
+    fn rejects_empty_defense_assessment_evidence() {
         let output = r#"```json
 {
-  "summary": "duplicate defense assessments",
+  "summary": "missing defense evidence",
   "assessments": [
     {
       "finding_title": "Buffer overflow in parse_header",
       "verdict": "SAFE",
       "confidence_percent": 55,
-      "evidence": []
-    },
-    {
-      "finding_title": "Buffer overflow in parse_header",
-      "verdict": "VULNERABLE",
-      "confidence_percent": 80,
       "evidence": []
     }
   ]
@@ -578,6 +586,6 @@ mod tests {
 ```"#;
 
         let error = parse_structured_output(DEFENSE_ANALYST_V1_SCHEMA, output).unwrap_err();
-        assert!(error.to_string().contains("duplicate finding_title"));
+        assert!(error.to_string().contains("at least one evidence item"));
     }
 }
