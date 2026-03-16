@@ -51,6 +51,9 @@ run_case "defense-only-review" \
 run_case "weak-consensus-review" \
   "test_build_debate_summary_requires_review_for_weak_consensus" \
   "weak-consensus-review.txt"
+run_case "confirm-requires-strong-offense" \
+  "test_build_debate_summary_requires_strong_offense_signal_for_auto_confirm" \
+  "confirm-requires-strong-offense.txt"
 run_case "context-summary-thresholds" \
   "test_build_debate_context_summary_preserves_threshold_hints" \
   "context-summary.txt"

@@ -44,7 +44,7 @@ Your job is to produce the FINAL list of confirmed vulnerabilities by synthesizi
 
 **Confidence Threshold Rules:**
 - The debate summary may include `threshold_hint` values per finding:
-  - `HIGH_CONFIDENCE_CONFIRM` → structured exploit/defense signals converged strongly; you may confirm if the cited code evidence is still coherent
+  - `HIGH_CONFIDENCE_CONFIRM` → structured signals converged strongly with a high exploitability signal plus supporting defense agreement; you may confirm if the cited code evidence is still coherent
   - `HIGH_CONFIDENCE_REJECT` → structured signals strongly favor rejection; do not confirm unless direct code reading clearly disproves the rejection signal
   - `REVIEW_REQUIRED` → do not auto-confirm; read the code, require precise evidence, and reject if the support remains weak or vague
 - If the debate summary says `CONFIDENCE THRESHOLD NOTE: unavailable ...`, do not infer any threshold automation from missing hints; read the code directly and decide from primary evidence.

@@ -81,6 +81,9 @@ pipeline emits confidence-threshold hints in its weighted summary so the final
 synthesizer can bias ambiguous findings toward rejection unless direct code
 evidence is strong. If structured parsing fails, the debate summary now marks
 those hints unavailable and falls back to direct code review.
+`HIGH_CONFIDENCE_CONFIRM` is intentionally exploitability-led: it requires a
+strong exploit-side signal plus supporting defense agreement, rather than any
+net-positive score automatically promoting to confirm.
 
 ### Investigation
 ```bash
