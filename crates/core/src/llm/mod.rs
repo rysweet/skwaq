@@ -114,37 +114,66 @@ async fn create_client_for_backend_name(backend: &str, field_name: &str) -> anyh
 }
 
 pub fn validate_benchmark_copilot_config(config: &LlmConfig) -> anyhow::Result<()> {
-    let backend = validate_backend_name(config.reasoning.trim(), "llm.reasoning")?;
-    if backend != "copilot" {
-        anyhow::bail!(
-            "Hybrid benchmark runs require [llm].reasoning = \"copilot\", found {:?}",
-            config.reasoning
-        );
+    validate_benchmark_copilot_config_for_pipeline(config, true, true)
+}
+
+pub async fn ensure_benchmark_copilot_ready(config: &LlmConfig) -> anyhow::Result<()> {
+    ensure_benchmark_copilot_ready_for_pipeline(config, true, true).await
+}
+
+pub fn validate_benchmark_copilot_config_for_pipeline(
+    config: &LlmConfig,
+    require_reasoning: bool,
+    require_decompilation: bool,
+) -> anyhow::Result<()> {
+    if require_reasoning {
+        let backend = validate_backend_name(config.reasoning.trim(), "llm.reasoning")?;
+        if backend != "copilot" {
+            anyhow::bail!(
+                "Hybrid benchmark runs require [llm].reasoning = \"copilot\", found {:?}",
+                config.reasoning
+            );
+        }
     }
 
-    let decompilation = validate_backend_name(config.decompilation.trim(), "llm.decompilation")?;
-    if decompilation != "copilot" {
-        anyhow::bail!(
-            "Hybrid benchmark runs require [llm].decompilation = \"copilot\", found {:?}",
-            config.decompilation
-        );
+    if require_decompilation {
+        let decompilation =
+            validate_backend_name(config.decompilation.trim(), "llm.decompilation")?;
+        if decompilation != "copilot" {
+            anyhow::bail!(
+                "Hybrid benchmark runs require [llm].decompilation = \"copilot\", found {:?}",
+                config.decompilation
+            );
+        }
     }
 
-    let model = config.copilot.model.trim();
-    if model.is_empty() || !model.to_ascii_lowercase().contains("opus") {
-        anyhow::bail!(
-            "Hybrid benchmark runs require an Opus-class Copilot model, found {:?}. \
-             Set [llm.copilot].model = \"claude-opus-4.6\".",
-            config.copilot.model
-        );
+    if require_reasoning || require_decompilation {
+        let model = config.copilot.model.trim();
+        if model.is_empty() || !model.to_ascii_lowercase().contains("opus") {
+            anyhow::bail!(
+                "Hybrid benchmark runs require an Opus-class Copilot model, found {:?}. \
+                 Set [llm.copilot].model = \"claude-opus-4.6\".",
+                config.copilot.model
+            );
+        }
     }
 
     Ok(())
 }
 
-pub async fn ensure_benchmark_copilot_ready(config: &LlmConfig) -> anyhow::Result<()> {
-    validate_benchmark_copilot_config(config)?;
-    let _ = create_pipeline_clients(config, true, true).await.context(
+pub async fn ensure_benchmark_copilot_ready_for_pipeline(
+    config: &LlmConfig,
+    require_reasoning: bool,
+    require_decompilation: bool,
+) -> anyhow::Result<()> {
+    validate_benchmark_copilot_config_for_pipeline(
+        config,
+        require_reasoning,
+        require_decompilation,
+    )?;
+    let _ = create_pipeline_clients(config, require_reasoning, require_decompilation)
+        .await
+        .context(
         "Hybrid benchmark runs require working GitHub Copilot authentication. \
          Run `gh auth login` / `gh auth refresh --scopes copilot`, or set GH_TOKEN/GITHUB_TOKEN with Copilot access.",
     )?;
