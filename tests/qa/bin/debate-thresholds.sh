@@ -54,6 +54,9 @@ run_case "weak-consensus-review" \
 run_case "confirm-requires-strong-offense" \
   "test_build_debate_summary_requires_strong_offense_signal_for_auto_confirm" \
   "confirm-requires-strong-offense.txt"
+run_case "duplicate-title-no-inflation" \
+  "test_build_debate_summary_does_not_inflate_duplicate_title_scores" \
+  "duplicate-title-no-inflation.txt"
 run_case "context-summary-thresholds" \
   "test_build_debate_context_summary_preserves_threshold_hints" \
   "context-summary.txt"

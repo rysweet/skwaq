@@ -830,20 +830,8 @@ fn build_weighted_debate_summary(
             .cloned()
             .unwrap_or_default();
         let display_title = display_title_for_group(&offense_assessments, &defense_assessments);
-        let offense_score = offense_assessments
-            .iter()
-            .map(|assessment| {
-                exploit_verdict_score(&assessment.verdict)
-                    * i32::from(assessment.confidence_percent)
-            })
-            .sum::<i32>();
-        let defense_score = defense_assessments
-            .iter()
-            .map(|assessment| {
-                defense_verdict_score(&assessment.verdict)
-                    * i32::from(assessment.confidence_percent)
-            })
-            .sum::<i32>();
+        let offense_score = aggregate_exploit_group_score(&offense_assessments);
+        let defense_score = aggregate_defense_group_score(&defense_assessments);
         let net_score = offense_score + defense_score;
 
         let has_disagreement = !offense_assessments.is_empty()
@@ -948,12 +936,32 @@ fn exploit_verdict_score(verdict: &ExploitAnalystVerdict) -> i32 {
     }
 }
 
+fn aggregate_exploit_group_score(assessments: &[&ExploitAnalystAssessment]) -> i32 {
+    assessments
+        .iter()
+        .map(|assessment| {
+            exploit_verdict_score(&assessment.verdict) * i32::from(assessment.confidence_percent)
+        })
+        .max_by_key(|score| score.abs())
+        .unwrap_or(0)
+}
+
 fn defense_verdict_score(verdict: &DefenseAnalystVerdict) -> i32 {
     match verdict {
         DefenseAnalystVerdict::Vulnerable => 1,
         DefenseAnalystVerdict::Mitigated => 1,
         DefenseAnalystVerdict::Safe => -1,
     }
+}
+
+fn aggregate_defense_group_score(assessments: &[&DefenseAnalystAssessment]) -> i32 {
+    assessments
+        .iter()
+        .map(|assessment| {
+            defense_verdict_score(&assessment.verdict) * i32::from(assessment.confidence_percent)
+        })
+        .max_by_key(|score| score.abs())
+        .unwrap_or(0)
 }
 
 fn classify_confidence_threshold(
@@ -2080,6 +2088,74 @@ mod tests {
 
         let summary = build_debate_summary(&result_a, &result_b);
         assert!(summary.contains("net_weight=140"));
+        assert!(summary.contains("threshold_hint: REVIEW_REQUIRED (insufficient_consensus)"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_does_not_inflate_duplicate_title_scores() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![super::super::output_schema::ExploitAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::ExploitAnalystVerdict::Confirmed,
+                            confidence_percent: 85,
+                            evidence: vec!["Attacker controls copy length".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![
+                            super::super::output_schema::DefenseAnalystAssessment {
+                                finding_title: "Heap overflow in parse_header".into(),
+                                verdict:
+                                    super::super::output_schema::DefenseAnalystVerdict::Vulnerable,
+                                confidence_percent: 30,
+                                evidence: vec!["No complete bounds check found".into()],
+                            },
+                            super::super::output_schema::DefenseAnalystAssessment {
+                                finding_title: "heap overflow in parse-header".into(),
+                                verdict:
+                                    super::super::output_schema::DefenseAnalystVerdict::Vulnerable,
+                                confidence_percent: 30,
+                                evidence: vec!["Repeated summary of the same issue".into()],
+                            },
+                        ],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("net_weight=115"));
         assert!(summary.contains("threshold_hint: REVIEW_REQUIRED (insufficient_consensus)"));
     }
 

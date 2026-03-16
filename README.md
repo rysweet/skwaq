@@ -84,6 +84,10 @@ those hints unavailable and falls back to direct code review.
 `HIGH_CONFIDENCE_CONFIRM` is intentionally exploitability-led: it requires a
 strong exploit-side signal plus supporting defense agreement, rather than any
 net-positive score automatically promoting to confirm.
+When a `threshold_hint` is present, it is the auto-confirm/auto-reject gate:
+`REVIEW_REQUIRED` means the synthesizer should not auto-confirm from raw
+category pairs alone, even if the debate text includes `CONFIRMED`,
+`VULNERABLE`, `MITIGATED`, or `DOWNGRADED`.
 
 ### Investigation
 ```bash
