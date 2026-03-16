@@ -25,6 +25,8 @@ use super::runner::{build_analysis_context, AgentContextFrame, AgentResult, Agen
 /// Maximum characters for accumulated previous-results context passed between
 /// pipeline stages.  Keeps subsequent agent prompts within LLM token limits.
 const MAX_PIPELINE_CONTEXT_CHARS: usize = 8000;
+const HIGH_CONFIDENCE_CONFIRM_THRESHOLD: i32 = 140;
+const HIGH_CONFIDENCE_REJECT_THRESHOLD: i32 = -80;
 
 /// A composable analysis pipeline of agent stages.
 pub struct AnalysisPipeline {
@@ -290,12 +292,15 @@ impl AnalysisPipeline {
 
             // Create a debate summary that highlights agreements and disagreements.
             let debate_summary = build_debate_summary(&result_a, &result_b);
-            let debate_frame = AgentContextFrame::synthetic(
+            let mut debate_frame = AgentContextFrame::synthetic(
                 "debate-summary",
                 "Pipeline-generated summary of offense/defense agreements and disagreements",
                 None,
                 &debate_summary,
             );
+            let debate_context_summary = build_debate_context_summary(&debate_summary);
+            debate_frame.structured_summary = Some(debate_context_summary.clone());
+            debate_frame.key_points = extract_debate_context_key_points(&debate_context_summary);
             results.push(result_a);
             results.push(result_b);
             results.push(AgentResult {
@@ -346,32 +351,210 @@ impl AnalysisPipeline {
 
 /// Build context from previous agent results, with truncation.
 fn build_previous_results_context(preamble: &str, results: &[AgentResult]) -> String {
-    let mut ctx = preamble.to_string();
+    const OLDER_CONTEXT_OMITTED_NOTICE: &str =
+        "\n...[truncated older context to preserve newest debate evidence]";
+    const TRUNCATED_PREAMBLE_NOTICE: &str = "\n...[truncated]";
+
+    let mut sections = Vec::with_capacity(results.len());
     for prev in results {
-        ctx.push_str(&format!(
-            "\n\n--- Context frame from {} ---\n{}",
-            prev.agent_name,
-            format_context_frame(&prev.context_frame)
-        ));
-        if prev.context_frame.structured_summary.is_none() {
-            ctx.push_str(&format!(
-                "\n\n--- Condensed output from {} ---\n{}",
-                prev.agent_name,
-                format_output_excerpt(&prev.output)
-            ));
+        sections.push(render_previous_result_context(prev));
+    }
+
+    let mut kept_sections: Vec<String> = Vec::new();
+    let mut total_len = preamble.len();
+    let mut omitted_any = false;
+
+    for section in sections.iter().rev() {
+        if total_len + section.len() <= MAX_PIPELINE_CONTEXT_CHARS {
+            kept_sections.push(section.clone());
+            total_len += section.len();
+        } else if kept_sections.is_empty() {
+            let available = MAX_PIPELINE_CONTEXT_CHARS
+                .saturating_sub(total_len)
+                .saturating_sub(OLDER_CONTEXT_OMITTED_NOTICE.len());
+            let truncated = truncate_section_middle(section, available);
+            if !truncated.is_empty() {
+                total_len += truncated.len();
+                kept_sections.push(truncated);
+            }
+            omitted_any = true;
+        } else {
+            omitted_any = true;
         }
     }
-    // Truncate accumulated context to stay within LLM limits.
+
+    kept_sections.reverse();
+
+    if omitted_any {
+        while total_len + OLDER_CONTEXT_OMITTED_NOTICE.len() > MAX_PIPELINE_CONTEXT_CHARS
+            && !kept_sections.is_empty()
+        {
+            let removed = kept_sections.remove(0);
+            total_len = total_len.saturating_sub(removed.len());
+        }
+    }
+
+    let mut suffix = String::new();
+    if omitted_any {
+        suffix.push_str(OLDER_CONTEXT_OMITTED_NOTICE);
+    }
+    for section in &kept_sections {
+        suffix.push_str(section);
+    }
+
+    let mut ctx = preamble.to_string();
+    ctx.push_str(&suffix);
+
     if ctx.len() > MAX_PIPELINE_CONTEXT_CHARS {
-        // Find nearest char boundary at or before the limit.
-        let mut boundary = MAX_PIPELINE_CONTEXT_CHARS;
-        while boundary > 0 && !ctx.is_char_boundary(boundary) {
-            boundary -= 1;
+        let preamble_budget = MAX_PIPELINE_CONTEXT_CHARS
+            .saturating_sub(suffix.len())
+            .saturating_sub(TRUNCATED_PREAMBLE_NOTICE.len());
+        let mut trimmed = truncate_to_char_boundary(preamble, preamble_budget);
+        if trimmed.len() < preamble.len() {
+            trimmed.push_str(TRUNCATED_PREAMBLE_NOTICE);
         }
-        ctx.truncate(boundary);
-        ctx.push_str("\n...[truncated]");
+        trimmed.push_str(&suffix);
+        return trimmed;
     }
+
     ctx
+}
+
+fn truncate_to_char_boundary(text: &str, max_len: usize) -> String {
+    let mut boundary = max_len.min(text.len());
+    while boundary > 0 && !text.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+    text[..boundary].to_string()
+}
+
+fn truncate_from_end_to_char_boundary(text: &str, max_len: usize) -> String {
+    if max_len >= text.len() {
+        return text.to_string();
+    }
+
+    let mut start = text.len().saturating_sub(max_len);
+    while start < text.len() && !text.is_char_boundary(start) {
+        start += 1;
+    }
+    text[start..].to_string()
+}
+
+fn truncate_section_middle(section: &str, max_len: usize) -> String {
+    const TRUNCATED_SECTION_NOTICE: &str = "\n...[truncated newest context]...\n";
+
+    if section.len() <= max_len {
+        return section.to_string();
+    }
+    if max_len <= TRUNCATED_SECTION_NOTICE.len() {
+        return truncate_to_char_boundary(section, max_len);
+    }
+
+    let remaining = max_len - TRUNCATED_SECTION_NOTICE.len();
+    let head_len = remaining / 2;
+    let tail_len = remaining - head_len;
+    let head = truncate_to_char_boundary(section, head_len);
+    let tail = truncate_from_end_to_char_boundary(section, tail_len);
+    format!("{head}{TRUNCATED_SECTION_NOTICE}{tail}")
+}
+
+fn render_previous_result_context(prev: &AgentResult) -> String {
+    let mut rendered = format!(
+        "\n\n--- Context frame from {} ---\n{}",
+        prev.agent_name,
+        format_context_frame(&prev.context_frame)
+    );
+    if prev.context_frame.structured_summary.is_none() {
+        rendered.push_str(&format!(
+            "\n\n--- Condensed output from {} ---\n{}",
+            prev.agent_name,
+            format_output_excerpt(&prev.output)
+        ));
+    }
+    rendered
+}
+
+fn build_debate_context_summary(summary: &str) -> String {
+    let mut compact = String::from("Weighted debate threshold summary:\n");
+    let mut current_finding: Option<String> = None;
+    let mut in_summary_statistics = false;
+
+    for line in summary.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed == "Weighted finding comparisons:" {
+            continue;
+        }
+
+        if trimmed == "Summary statistics:" {
+            in_summary_statistics = true;
+            compact.push_str("\nSummary statistics:\n");
+            continue;
+        }
+
+        if trimmed.starts_with("CONFIDENCE THRESHOLD NOTE:") && trimmed.contains("unavailable") {
+            compact.push_str(trimmed);
+            compact.push('\n');
+            continue;
+        }
+
+        if in_summary_statistics {
+            if trimmed.starts_with("- ")
+                || trimmed.starts_with("WEIGHTED DISAGREEMENTS DETECTED:")
+                || trimmed.starts_with("DISAGREEMENTS DETECTED:")
+                || trimmed.starts_with("CONFIDENCE THRESHOLD NOTE:")
+            {
+                compact.push_str(trimmed);
+                compact.push('\n');
+            }
+            continue;
+        }
+
+        if trimmed.starts_with("- ") {
+            current_finding = Some(trimmed.to_string());
+            continue;
+        }
+
+        if trimmed.starts_with("threshold_hint:") {
+            if let Some(finding) = current_finding.take() {
+                compact.push_str(&finding);
+                compact.push('\n');
+            }
+            compact.push_str("  ");
+            compact.push_str(trimmed);
+            compact.push('\n');
+            continue;
+        }
+
+        if trimmed.starts_with("offense_evidence:") || trimmed.starts_with("defense_evidence:") {
+            compact.push_str("  ");
+            compact.push_str(trimmed);
+            compact.push('\n');
+        }
+    }
+
+    if compact.trim() == "Weighted debate threshold summary:" {
+        summary.to_string()
+    } else {
+        compact.trim_end().to_string()
+    }
+}
+
+fn extract_debate_context_key_points(summary: &str) -> Vec<String> {
+    const MAX_KEY_POINTS: usize = 10;
+
+    summary
+        .lines()
+        .map(str::trim)
+        .filter(|line| {
+            line.starts_with("- ")
+                || line.starts_with("threshold_hint:")
+                || line.starts_with("CONFIDENCE THRESHOLD NOTE:")
+                || line.starts_with("WEIGHTED DISAGREEMENTS DETECTED:")
+                || line.starts_with("DISAGREEMENTS DETECTED:")
+        })
+        .take(MAX_KEY_POINTS)
+        .map(ToOwned::to_owned)
+        .collect()
 }
 
 fn format_context_frame(frame: &AgentContextFrame) -> String {
@@ -515,6 +698,12 @@ fn build_debate_summary(agent_a: &AgentResult, agent_b: &AgentResult) -> String 
          - {} (defense perspective): evaluated mitigations\n\n",
         agent_a.agent_name, agent_b.agent_name
     ));
+    if let Some(threshold_hint_unavailable) =
+        build_threshold_hint_unavailable_note(agent_a, agent_b)
+    {
+        summary.push_str(&threshold_hint_unavailable);
+        summary.push('\n');
+    }
 
     // Extract verdicts from agent A (CONFIRMED/DOWNGRADED/REJECTED)
     let a_verdicts: Vec<&str> = agent_a
@@ -541,17 +730,17 @@ fn build_debate_summary(agent_a: &AgentResult, agent_b: &AgentResult) -> String 
     }
 
     // Identify agreements and disagreements.
-    let a_confirms = a_verdicts
+    let a_positive = a_verdicts
         .iter()
-        .filter(|l| line_has_verdict_token(l, "CONFIRMED"))
+        .filter(|l| line_has_any_verdict_token(l, &["CONFIRMED", "DOWNGRADED"]))
         .count();
     let a_rejects = a_verdicts
         .iter()
         .filter(|l| line_has_verdict_token(l, "REJECTED"))
         .count();
-    let b_vulnerable = b_verdicts
+    let b_positive = b_verdicts
         .iter()
-        .filter(|l| line_has_verdict_token(l, "VULNERABLE"))
+        .filter(|l| line_has_any_verdict_token(l, &["VULNERABLE", "MITIGATED"]))
         .count();
     let b_safe = b_verdicts
         .iter()
@@ -560,20 +749,44 @@ fn build_debate_summary(agent_a: &AgentResult, agent_b: &AgentResult) -> String 
 
     summary.push_str(&format!(
         "\nSummary statistics:\n\
-         - Offense: {} confirmed, {} rejected\n\
-         - Defense: {} vulnerable, {} safe\n",
-        a_confirms, a_rejects, b_vulnerable, b_safe
+         - Offense: {} positive, {} rejected\n\
+         - Defense: {} positive, {} safe\n",
+        a_positive, a_rejects, b_positive, b_safe
     ));
 
-    if a_confirms > 0 && b_safe > 0 {
+    if (a_positive > 0 && b_safe > 0) || (a_rejects > 0 && b_positive > 0) {
         summary.push_str(
-            "\nDISAGREEMENTS DETECTED: Offense confirmed findings that Defense considers safe.\n\
+            "\nDISAGREEMENTS DETECTED: Offense and Defense reached opposing conclusions in the fallback debate summary.\n\
              The verdict-synthesizer should carefully examine these conflicts and read the code \
              before making a final decision.\n",
         );
     }
 
     summary
+}
+
+fn build_threshold_hint_unavailable_note(
+    agent_a: &AgentResult,
+    agent_b: &AgentResult,
+) -> Option<String> {
+    let parse_failures = [agent_a, agent_b]
+        .into_iter()
+        .filter_map(|agent| {
+            agent
+                .parsed_output_error
+                .as_ref()
+                .map(|error| format!("{}: {}", agent.agent_name, error))
+        })
+        .collect::<Vec<_>>();
+
+    if parse_failures.is_empty() {
+        None
+    } else {
+        Some(format!(
+            "CONFIDENCE THRESHOLD NOTE: unavailable because structured debate parsing failed ({}). Do not auto-confirm or auto-reject from thresholds; read the code directly.",
+            parse_failures.join(" | ")
+        ))
+    }
 }
 
 fn build_weighted_debate_summary(
@@ -598,6 +811,9 @@ fn build_weighted_debate_summary(
     let defense_by_title = group_defense_assessments(&defense.assessments);
 
     let mut disagreement_count = 0usize;
+    let mut high_confidence_confirm_count = 0usize;
+    let mut high_confidence_reject_count = 0usize;
+    let mut review_required_count = 0usize;
     let all_titles: BTreeSet<String> = exploit_by_title
         .keys()
         .cloned()
@@ -614,29 +830,33 @@ fn build_weighted_debate_summary(
             .cloned()
             .unwrap_or_default();
         let display_title = display_title_for_group(&offense_assessments, &defense_assessments);
-        let offense_score = offense_assessments
-            .iter()
-            .map(|assessment| {
-                exploit_verdict_score(&assessment.verdict)
-                    * i32::from(assessment.confidence_percent)
-            })
-            .sum::<i32>();
-        let defense_score = defense_assessments
-            .iter()
-            .map(|assessment| {
-                defense_verdict_score(&assessment.verdict)
-                    * i32::from(assessment.confidence_percent)
-            })
-            .sum::<i32>();
+        let offense_aggregate = aggregate_exploit_group_score(&offense_assessments);
+        let defense_aggregate = aggregate_defense_group_score(&defense_assessments);
+        let offense_score = offense_aggregate.score;
+        let defense_score = defense_aggregate.score;
         let net_score = offense_score + defense_score;
 
-        if !offense_assessments.is_empty()
-            && !defense_assessments.is_empty()
-            && offense_score.signum() != 0
-            && defense_score.signum() != 0
-            && offense_score.signum() != defense_score.signum()
-        {
+        let has_disagreement = offense_aggregate.has_internal_conflict
+            || defense_aggregate.has_internal_conflict
+            || (!offense_assessments.is_empty()
+                && !defense_assessments.is_empty()
+                && offense_score.signum() != 0
+                && defense_score.signum() != 0
+                && offense_score.signum() != defense_score.signum());
+        if has_disagreement {
             disagreement_count += 1;
+        }
+        let (threshold_hint, threshold_reason) = classify_confidence_threshold(
+            offense_score,
+            defense_score,
+            has_disagreement,
+            !offense_assessments.is_empty(),
+            !defense_assessments.is_empty(),
+        );
+        match threshold_hint {
+            ConfidenceThresholdHint::HighConfidenceConfirm => high_confidence_confirm_count += 1,
+            ConfidenceThresholdHint::HighConfidenceReject => high_confidence_reject_count += 1,
+            ConfidenceThresholdHint::ReviewRequired => review_required_count += 1,
         }
 
         summary.push_str(&format!(
@@ -649,6 +869,11 @@ fn build_weighted_debate_summary(
             summary.push_str(&format!(", net_weight={}", net_score));
         }
         summary.push('\n');
+        summary.push_str(&format!(
+            "    threshold_hint: {} ({})\n",
+            threshold_hint.as_str(),
+            threshold_reason
+        ));
 
         let offense_evidence = collect_exploit_evidence(&offense_assessments);
         if !offense_evidence.is_empty() {
@@ -667,10 +892,13 @@ fn build_weighted_debate_summary(
     }
 
     summary.push_str(&format!(
-        "\nSummary statistics:\n- offense_assessments: {}\n- defense_assessments: {}\n- weighted_disagreements: {}\n",
+        "\nSummary statistics:\n- offense_assessments: {}\n- defense_assessments: {}\n- weighted_disagreements: {}\n- high_confidence_confirm: {}\n- high_confidence_reject: {}\n- review_required: {}\n",
         exploit.assessments.len(),
         defense.assessments.len(),
-        disagreement_count
+        disagreement_count,
+        high_confidence_confirm_count,
+        high_confidence_reject_count,
+        review_required_count
     ));
 
     if disagreement_count > 0 {
@@ -678,8 +906,36 @@ fn build_weighted_debate_summary(
             "\nWEIGHTED DISAGREEMENTS DETECTED: Use the net_weight values, concrete evidence, and direct code reading to resolve conflicts.\n",
         );
     }
+    if review_required_count > 0 {
+        summary.push_str(
+            "CONFIDENCE THRESHOLD NOTE: Only auto-confirm findings labelled HIGH_CONFIDENCE_CONFIRM. For REVIEW_REQUIRED findings, verify with direct code evidence before confirming.\n",
+        );
+    }
 
     summary
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ConfidenceThresholdHint {
+    HighConfidenceConfirm,
+    HighConfidenceReject,
+    ReviewRequired,
+}
+
+impl ConfidenceThresholdHint {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::HighConfidenceConfirm => "HIGH_CONFIDENCE_CONFIRM",
+            Self::HighConfidenceReject => "HIGH_CONFIDENCE_REJECT",
+            Self::ReviewRequired => "REVIEW_REQUIRED",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct AggregatedGroupScore {
+    score: i32,
+    has_internal_conflict: bool,
 }
 
 fn exploit_verdict_score(verdict: &ExploitAnalystVerdict) -> i32 {
@@ -690,12 +946,109 @@ fn exploit_verdict_score(verdict: &ExploitAnalystVerdict) -> i32 {
     }
 }
 
+fn aggregate_group_scores(scores: impl Iterator<Item = i32>) -> AggregatedGroupScore {
+    let mut best_score = 0;
+    let mut best_abs = 0;
+    let mut saw_positive = false;
+    let mut saw_negative = false;
+
+    for score in scores {
+        if score > 0 {
+            saw_positive = true;
+        } else if score < 0 {
+            saw_negative = true;
+        }
+
+        let abs = score.abs();
+        if abs > best_abs {
+            best_abs = abs;
+            best_score = score;
+        }
+    }
+
+    if saw_positive && saw_negative {
+        AggregatedGroupScore {
+            score: 0,
+            has_internal_conflict: true,
+        }
+    } else {
+        AggregatedGroupScore {
+            score: best_score,
+            has_internal_conflict: false,
+        }
+    }
+}
+
+fn aggregate_exploit_group_score(
+    assessments: &[&ExploitAnalystAssessment],
+) -> AggregatedGroupScore {
+    aggregate_group_scores(assessments.iter().map(|assessment| {
+        exploit_verdict_score(&assessment.verdict) * i32::from(assessment.confidence_percent)
+    }))
+}
+
 fn defense_verdict_score(verdict: &DefenseAnalystVerdict) -> i32 {
     match verdict {
         DefenseAnalystVerdict::Vulnerable => 1,
-        DefenseAnalystVerdict::Mitigated => 0,
+        DefenseAnalystVerdict::Mitigated => 1,
         DefenseAnalystVerdict::Safe => -1,
     }
+}
+
+fn aggregate_defense_group_score(
+    assessments: &[&DefenseAnalystAssessment],
+) -> AggregatedGroupScore {
+    aggregate_group_scores(assessments.iter().map(|assessment| {
+        defense_verdict_score(&assessment.verdict) * i32::from(assessment.confidence_percent)
+    }))
+}
+
+fn classify_confidence_threshold(
+    offense_score: i32,
+    defense_score: i32,
+    has_disagreement: bool,
+    has_offense_signal: bool,
+    has_defense_signal: bool,
+) -> (ConfidenceThresholdHint, &'static str) {
+    if has_disagreement {
+        return (ConfidenceThresholdHint::ReviewRequired, "disagreement");
+    }
+
+    let net_score = offense_score + defense_score;
+    if has_offense_signal
+        && has_defense_signal
+        && offense_score >= 80
+        && defense_score > 0
+        && net_score >= HIGH_CONFIDENCE_CONFIRM_THRESHOLD
+    {
+        return (
+            ConfidenceThresholdHint::HighConfidenceConfirm,
+            "strong_consensus",
+        );
+    }
+
+    if net_score <= HIGH_CONFIDENCE_REJECT_THRESHOLD
+        && has_offense_signal
+        && has_defense_signal
+        && (defense_score <= -70 || offense_score <= -70)
+    {
+        return (
+            ConfidenceThresholdHint::HighConfidenceReject,
+            "strong_negative_signal",
+        );
+    }
+
+    if has_offense_signal ^ has_defense_signal {
+        return (
+            ConfidenceThresholdHint::ReviewRequired,
+            "missing_counterparty_signal",
+        );
+    }
+
+    (
+        ConfidenceThresholdHint::ReviewRequired,
+        "insufficient_consensus",
+    )
 }
 
 fn line_has_any_verdict_token(line: &str, tokens: &[&str]) -> bool {
@@ -1255,7 +1608,7 @@ mod tests {
 
         let summary = build_debate_summary(&result_a, &result_b);
         assert!(!summary.contains("DISAGREEMENTS DETECTED"));
-        assert!(summary.contains("Defense: 0 vulnerable, 0 safe"));
+        assert!(summary.contains("Defense: 0 positive, 0 safe"));
     }
 
     #[test]
@@ -1315,6 +1668,7 @@ mod tests {
         assert!(summary.contains("WEIGHTED DEBATE SUMMARY"));
         assert!(summary.contains("net_weight=53"));
         assert!(summary.contains("weighted_disagreements: 1"));
+        assert!(summary.contains("threshold_hint: REVIEW_REQUIRED (disagreement)"));
         assert!(summary.contains("offense_evidence: Attacker controls packet length"));
         assert!(summary.contains("defense_evidence: Caller normally caps input"));
     }
@@ -1375,6 +1729,675 @@ mod tests {
         let summary = build_debate_summary(&result_a, &result_b);
         assert!(summary.contains("WEIGHTED DISAGREEMENTS DETECTED"));
         assert!(summary.contains("net_weight=-30"));
+        assert!(summary.contains("threshold_hint: REVIEW_REQUIRED (disagreement)"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_marks_high_confidence_confirm_for_vulnerable_consensus() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![super::super::output_schema::ExploitAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::ExploitAnalystVerdict::Confirmed,
+                            confidence_percent: 90,
+                            evidence: vec!["Attacker fully controls copy length".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![super::super::output_schema::DefenseAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::DefenseAnalystVerdict::Vulnerable,
+                            confidence_percent: 70,
+                            evidence: vec!["No bounds check before memcpy".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("net_weight=160"));
+        assert!(summary.contains("threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)"));
+        assert!(summary.contains("high_confidence_confirm: 1"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_marks_high_confidence_confirm_at_exact_boundary() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![super::super::output_schema::ExploitAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::ExploitAnalystVerdict::Confirmed,
+                            confidence_percent: 80,
+                            evidence: vec!["Attacker controls copy length".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![super::super::output_schema::DefenseAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::DefenseAnalystVerdict::Vulnerable,
+                            confidence_percent: 60,
+                            evidence: vec!["No complete bounds check found".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("net_weight=140"));
+        assert!(summary.contains("threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_marks_high_confidence_reject_strong_negative_case() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![super::super::output_schema::ExploitAnalystAssessment {
+                            finding_title: "Stack overflow in parse_header".into(),
+                            verdict: super::super::output_schema::ExploitAnalystVerdict::Rejected,
+                            confidence_percent: 85,
+                            evidence: vec!["Length is clamped before copy".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![super::super::output_schema::DefenseAnalystAssessment {
+                            finding_title: "Stack overflow in parse_header".into(),
+                            verdict: super::super::output_schema::DefenseAnalystVerdict::Safe,
+                            confidence_percent: 90,
+                            evidence: vec!["Bounds guard rejects oversized packets".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("net_weight=-175"));
+        assert!(summary.contains("threshold_hint: HIGH_CONFIDENCE_REJECT (strong_negative_signal)"));
+        assert!(summary.contains("high_confidence_reject: 1"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_marks_high_confidence_reject_at_exact_boundary() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![super::super::output_schema::ExploitAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::ExploitAnalystVerdict::Rejected,
+                            confidence_percent: 70,
+                            evidence: vec!["Attacker cannot reach the sink".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![super::super::output_schema::DefenseAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::DefenseAnalystVerdict::Safe,
+                            confidence_percent: 10,
+                            evidence: vec!["Bounds check blocks oversized input".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("net_weight=-80"));
+        assert!(summary.contains("threshold_hint: HIGH_CONFIDENCE_REJECT (strong_negative_signal)"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_marks_high_confidence_confirm_for_mitigated_consensus() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![super::super::output_schema::ExploitAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::ExploitAnalystVerdict::Confirmed,
+                            confidence_percent: 95,
+                            evidence: vec!["Attacker fully controls copy length".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![super::super::output_schema::DefenseAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::DefenseAnalystVerdict::Mitigated,
+                            confidence_percent: 90,
+                            evidence: vec!["Exploit path is partially constrained".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("defense=MITIGATED @ 90%"));
+        assert!(summary.contains("net_weight=185"));
+        assert!(summary.contains("threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)"));
+        assert!(summary.contains("high_confidence_confirm: 1"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_requires_review_for_offense_only_signal() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![super::super::output_schema::ExploitAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::ExploitAnalystVerdict::Confirmed,
+                            confidence_percent: 95,
+                            evidence: vec!["Attacker fully controls copy length".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("threshold_hint: REVIEW_REQUIRED (missing_counterparty_signal)"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_requires_review_for_defense_only_signal() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![super::super::output_schema::DefenseAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::DefenseAnalystVerdict::Safe,
+                            confidence_percent: 90,
+                            evidence: vec!["Bounds guard rejects oversized packets".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("threshold_hint: REVIEW_REQUIRED (missing_counterparty_signal)"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_requires_review_for_weak_consensus() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![super::super::output_schema::ExploitAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::ExploitAnalystVerdict::Confirmed,
+                            confidence_percent: 50,
+                            evidence: vec!["Attacker influences copy length".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![super::super::output_schema::DefenseAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::DefenseAnalystVerdict::Vulnerable,
+                            confidence_percent: 30,
+                            evidence: vec!["No complete sanitizer found".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("net_weight=80"));
+        assert!(summary.contains("threshold_hint: REVIEW_REQUIRED (insufficient_consensus)"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_requires_strong_offense_signal_for_auto_confirm() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![super::super::output_schema::ExploitAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::ExploitAnalystVerdict::Confirmed,
+                            confidence_percent: 70,
+                            evidence: vec!["Attacker controls copy length".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![super::super::output_schema::DefenseAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::DefenseAnalystVerdict::Vulnerable,
+                            confidence_percent: 70,
+                            evidence: vec!["No complete bounds check found".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("net_weight=140"));
+        assert!(summary.contains("threshold_hint: REVIEW_REQUIRED (insufficient_consensus)"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_does_not_inflate_duplicate_title_scores() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![super::super::output_schema::ExploitAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::ExploitAnalystVerdict::Confirmed,
+                            confidence_percent: 85,
+                            evidence: vec!["Attacker controls copy length".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![
+                            super::super::output_schema::DefenseAnalystAssessment {
+                                finding_title: "Heap overflow in parse_header".into(),
+                                verdict:
+                                    super::super::output_schema::DefenseAnalystVerdict::Vulnerable,
+                                confidence_percent: 30,
+                                evidence: vec!["No complete bounds check found".into()],
+                            },
+                            super::super::output_schema::DefenseAnalystAssessment {
+                                finding_title: "heap overflow in parse-header".into(),
+                                verdict:
+                                    super::super::output_schema::DefenseAnalystVerdict::Vulnerable,
+                                confidence_percent: 30,
+                                evidence: vec!["Repeated summary of the same issue".into()],
+                            },
+                        ],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("net_weight=115"));
+        assert!(summary.contains("threshold_hint: REVIEW_REQUIRED (insufficient_consensus)"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_reviews_conflicting_duplicate_titles_regardless_of_order() {
+        for exploit_assessments in [
+            vec![
+                super::super::output_schema::ExploitAnalystAssessment {
+                    finding_title: "Heap overflow in parse_header".into(),
+                    verdict: super::super::output_schema::ExploitAnalystVerdict::Confirmed,
+                    confidence_percent: 90,
+                    evidence: vec!["Attacker controls copy length".into()],
+                },
+                super::super::output_schema::ExploitAnalystAssessment {
+                    finding_title: "heap overflow in parse-header".into(),
+                    verdict: super::super::output_schema::ExploitAnalystVerdict::Rejected,
+                    confidence_percent: 90,
+                    evidence: vec!["Alternate path blocks the sink".into()],
+                },
+            ],
+            vec![
+                super::super::output_schema::ExploitAnalystAssessment {
+                    finding_title: "heap overflow in parse-header".into(),
+                    verdict: super::super::output_schema::ExploitAnalystVerdict::Rejected,
+                    confidence_percent: 90,
+                    evidence: vec!["Alternate path blocks the sink".into()],
+                },
+                super::super::output_schema::ExploitAnalystAssessment {
+                    finding_title: "Heap overflow in parse_header".into(),
+                    verdict: super::super::output_schema::ExploitAnalystVerdict::Confirmed,
+                    confidence_percent: 90,
+                    evidence: vec!["Attacker controls copy length".into()],
+                },
+            ],
+        ] {
+            let result_a = AgentResult {
+                agent_name: "exploit-analyst".into(),
+                output: "free-form exploit review".into(),
+                tokens_used: 50,
+                context_frame: AgentContextFrame::synthetic(
+                    "exploit-analyst",
+                    "Validates exploitability of vulnerability findings",
+                    None,
+                    "free-form exploit review",
+                ),
+                parsed_output: Some(
+                    super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                        super::super::output_schema::ExploitAnalystStructuredOutput {
+                            summary: "Exploit review".into(),
+                            assessments: exploit_assessments,
+                        },
+                    ),
+                ),
+                parsed_output_error: None,
+            };
+            let result_b = AgentResult {
+                agent_name: "defense-analyst".into(),
+                output: "free-form defense review".into(),
+                tokens_used: 50,
+                context_frame: AgentContextFrame::synthetic(
+                    "defense-analyst",
+                    "Identifies mitigations and defensive controls",
+                    None,
+                    "free-form defense review",
+                ),
+                parsed_output: Some(
+                    super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                        super::super::output_schema::DefenseAnalystStructuredOutput {
+                            summary: "Defense review".into(),
+                            assessments:
+                                vec![super::super::output_schema::DefenseAnalystAssessment {
+                                finding_title: "Heap overflow in parse_header".into(),
+                                verdict:
+                                    super::super::output_schema::DefenseAnalystVerdict::Vulnerable,
+                                confidence_percent: 70,
+                                evidence: vec!["No complete bounds check found".into()],
+                            }],
+                        },
+                    ),
+                ),
+                parsed_output_error: None,
+            };
+
+            let summary = build_debate_summary(&result_a, &result_b);
+            assert!(summary.contains("net_weight=70"));
+            assert!(summary.contains("threshold_hint: REVIEW_REQUIRED (disagreement)"));
+        }
     }
 
     #[test]
@@ -1528,6 +2551,304 @@ mod tests {
         let ctx = build_previous_results_context("preamble", &results);
         assert!(ctx.contains("structured_summary:"));
         assert!(!ctx.contains("Condensed output from vuln-hunter"));
+    }
+
+    #[test]
+    fn test_build_previous_results_context_preserves_newest_debate_summary_when_truncated() {
+        let mut results = Vec::new();
+        for idx in 0..20 {
+            let repeated = "x".repeat(700);
+            results.push(AgentResult {
+                agent_name: format!("older-agent-{idx}"),
+                output: repeated.clone(),
+                tokens_used: 0,
+                context_frame: AgentContextFrame::synthetic(
+                    format!("older-agent-{idx}"),
+                    "Older context",
+                    None,
+                    &repeated,
+                ),
+                parsed_output: None,
+                parsed_output_error: None,
+            });
+        }
+
+        let mut debate_frame = AgentContextFrame::synthetic(
+            "debate-summary",
+            "Pipeline-generated summary of offense/defense agreements and disagreements",
+            None,
+            "raw debate summary",
+        );
+        debate_frame.structured_summary = Some(
+            "Weighted debate threshold summary:\n- Final finding: offense=CONFIRMED @ 95%, defense=VULNERABLE @ 90%, net_weight=185\n  threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)"
+                .into(),
+        );
+        debate_frame.key_points =
+            vec!["threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)".into()];
+        results.push(AgentResult {
+            agent_name: "debate-summary".into(),
+            output: "raw debate summary".into(),
+            tokens_used: 0,
+            context_frame: debate_frame,
+            parsed_output: None,
+            parsed_output_error: None,
+        });
+
+        let ctx = build_previous_results_context("preamble", &results);
+        assert!(ctx.contains("[truncated older context to preserve newest debate evidence]"));
+        assert!(ctx.contains("Context frame from debate-summary"));
+        assert!(ctx.contains("threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)"));
+        assert!(!ctx.contains("older-agent-0"));
+    }
+
+    #[test]
+    fn test_build_previous_results_context_keeps_exact_fit_without_omission_notice() {
+        let preamble = "p".repeat(100);
+        let mut frame_a =
+            AgentContextFrame::synthetic("older-a", "Older context", None, "raw output");
+        frame_a.structured_summary = Some(String::new());
+        let mut frame_b =
+            AgentContextFrame::synthetic("older-b", "Older context", None, "raw output");
+        frame_b.structured_summary = Some(String::new());
+
+        let mut result_a = AgentResult {
+            agent_name: "older-a".into(),
+            output: "raw output".into(),
+            tokens_used: 0,
+            context_frame: frame_a,
+            parsed_output: None,
+            parsed_output_error: None,
+        };
+        let mut result_b = AgentResult {
+            agent_name: "older-b".into(),
+            output: "raw output".into(),
+            tokens_used: 0,
+            context_frame: frame_b,
+            parsed_output: None,
+            parsed_output_error: None,
+        };
+
+        let base_len_a = render_previous_result_context(&result_a).len();
+        let base_len_b = render_previous_result_context(&result_b).len();
+        let remaining = MAX_PIPELINE_CONTEXT_CHARS
+            .saturating_sub(preamble.len())
+            .saturating_sub(base_len_a)
+            .saturating_sub(base_len_b);
+        let extra_a = remaining / 2;
+        let extra_b = remaining - extra_a;
+        result_a.context_frame.structured_summary = Some("a".repeat(extra_a));
+        result_b.context_frame.structured_summary = Some("b".repeat(extra_b));
+
+        let ctx = build_previous_results_context(&preamble, &[result_a, result_b]);
+        assert!(ctx.len() <= MAX_PIPELINE_CONTEXT_CHARS);
+        assert!(ctx.contains("Context frame from older-a"));
+        assert!(ctx.contains("Context frame from older-b"));
+        assert!(!ctx.contains("[truncated older context to preserve newest debate evidence]"));
+    }
+
+    #[test]
+    fn test_build_previous_results_context_keeps_truncated_newest_section_when_oversized() {
+        let older = AgentResult {
+            agent_name: "older".into(),
+            output: "older output".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic("older", "Older context", None, "older"),
+            parsed_output: None,
+            parsed_output_error: None,
+        };
+
+        let mut debate_frame = AgentContextFrame::synthetic(
+            "debate-summary",
+            "Pipeline-generated summary of offense/defense agreements and disagreements",
+            None,
+            "raw debate summary",
+        );
+        debate_frame.structured_summary = Some(
+            "Weighted debate threshold summary:\n".to_string()
+                + &"x".repeat(MAX_PIPELINE_CONTEXT_CHARS + 500),
+        );
+        let newest = AgentResult {
+            agent_name: "debate-summary".into(),
+            output: "raw debate summary".into(),
+            tokens_used: 0,
+            context_frame: debate_frame,
+            parsed_output: None,
+            parsed_output_error: None,
+        };
+
+        let ctx = build_previous_results_context("preamble", &[older, newest]);
+        assert!(ctx.contains("Context frame from debate-summary"));
+        assert!(ctx.contains("[truncated newest context]"));
+    }
+
+    #[test]
+    fn test_build_debate_context_summary_preserves_threshold_hints() {
+        let summary = "Weighted finding comparisons:\n- Finding A: offense=CONFIRMED @ 95%, defense=VULNERABLE @ 90%, net_weight=185\n    threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)\n    offense_evidence: attacker controls length\n- Finding B: offense=CONFIRMED @ 60%, defense=MITIGATED @ 55%, net_weight=115\n    threshold_hint: REVIEW_REQUIRED (insufficient_consensus)\n    defense_evidence: partial bounds check\n\nSummary statistics:\n- offense_assessments: 2\n- defense_assessments: 2\n- weighted_disagreements: 0\n- high_confidence_confirm: 1\n- high_confidence_reject: 0\n- review_required: 1\nCONFIDENCE THRESHOLD NOTE: Only auto-confirm findings labelled HIGH_CONFIDENCE_CONFIRM. For REVIEW_REQUIRED findings, verify with direct code evidence before confirming.\n";
+
+        let compact = build_debate_context_summary(summary);
+        assert!(compact.contains("Weighted debate threshold summary:"));
+        assert!(compact.contains(
+            "- Finding A: offense=CONFIRMED @ 95%, defense=VULNERABLE @ 90%, net_weight=185"
+        ));
+        assert!(compact.contains("threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)"));
+        assert!(compact.contains("offense_evidence: attacker controls length"));
+        assert!(compact.contains(
+            "- Finding B: offense=CONFIRMED @ 60%, defense=MITIGATED @ 55%, net_weight=115"
+        ));
+        assert!(compact.contains("threshold_hint: REVIEW_REQUIRED (insufficient_consensus)"));
+        assert!(compact.contains("defense_evidence: partial bounds check"));
+        assert!(compact.contains("Summary statistics:"));
+        assert!(compact.contains("- review_required: 1"));
+        assert!(compact.contains("CONFIDENCE THRESHOLD NOTE:"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_marks_threshold_hints_unavailable_on_parse_failure() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "CONFIRMED finding from fallback text".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "CONFIRMED finding from fallback text",
+            ),
+            parsed_output: None,
+            parsed_output_error: Some("failed to parse exploit-analyst-v1".into()),
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "SAFE finding from fallback text".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "SAFE finding from fallback text",
+            ),
+            parsed_output: None,
+            parsed_output_error: Some("failed to parse defense-analyst-v1".into()),
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains(
+            "CONFIDENCE THRESHOLD NOTE: unavailable because structured debate parsing failed"
+        ));
+        assert!(summary.contains("exploit-analyst: failed to parse exploit-analyst-v1"));
+        assert!(summary.contains("defense-analyst: failed to parse defense-analyst-v1"));
+        assert!(summary.contains("Do not auto-confirm or auto-reject from thresholds"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_flags_rejected_vs_vulnerable_fallback_disagreement() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "REJECTED: attacker cannot reach sink".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "REJECTED: attacker cannot reach sink",
+            ),
+            parsed_output: None,
+            parsed_output_error: Some("failed to parse exploit-analyst-v1".into()),
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "VULNERABLE: guard is incomplete".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "VULNERABLE: guard is incomplete",
+            ),
+            parsed_output: None,
+            parsed_output_error: Some("failed to parse defense-analyst-v1".into()),
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains(
+            "Summary statistics:\n- Offense: 0 positive, 1 rejected\n- Defense: 1 positive, 0 safe"
+        ));
+        assert!(summary.contains("DISAGREEMENTS DETECTED"));
+    }
+
+    #[test]
+    fn test_build_debate_context_summary_preserves_unavailable_note_on_fallback_summary() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "CONFIRMED finding from fallback text".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "CONFIRMED finding from fallback text",
+            ),
+            parsed_output: None,
+            parsed_output_error: Some("failed to parse exploit-analyst-v1".into()),
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "SAFE finding from fallback text".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "SAFE finding from fallback text",
+            ),
+            parsed_output: None,
+            parsed_output_error: Some("failed to parse defense-analyst-v1".into()),
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        let context_summary = build_debate_context_summary(&summary);
+        assert!(context_summary.contains(
+            "CONFIDENCE THRESHOLD NOTE: unavailable because structured debate parsing failed"
+        ));
+        assert!(context_summary.contains("Do not auto-confirm or auto-reject from thresholds"));
+    }
+
+    #[test]
+    fn test_build_debate_context_summary_preserves_fallback_disagreement_warning() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "REJECTED: attacker cannot reach sink".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "REJECTED: attacker cannot reach sink",
+            ),
+            parsed_output: None,
+            parsed_output_error: Some("failed to parse exploit-analyst-v1".into()),
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "VULNERABLE: guard is incomplete".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "VULNERABLE: guard is incomplete",
+            ),
+            parsed_output: None,
+            parsed_output_error: Some("failed to parse defense-analyst-v1".into()),
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        let context_summary = build_debate_context_summary(&summary);
+        let key_points = extract_debate_context_key_points(&context_summary);
+        assert!(context_summary.contains("DISAGREEMENTS DETECTED:"));
+        assert!(key_points
+            .iter()
+            .any(|point| point.contains("DISAGREEMENTS DETECTED:")));
     }
 
     #[test]

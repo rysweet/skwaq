@@ -42,6 +42,15 @@ Your job is to produce the FINAL list of confirmed vulnerabilities by synthesizi
 - If agents disagree → Read the code yourself using read_function, examine the evidence, and make the final call
 - If a finding was marked DOWNGRADED or MITIGATED → **CONFIRM at reduced severity**
 
+**Confidence Threshold Rules:**
+- The debate summary may include `threshold_hint` values per finding:
+  - `HIGH_CONFIDENCE_CONFIRM` → structured signals converged strongly with a high exploitability signal plus supporting defense agreement; you may confirm if the cited code evidence is still coherent
+  - `HIGH_CONFIDENCE_REJECT` → structured signals strongly favor rejection; do not confirm unless direct code reading clearly disproves the rejection signal
+  - `REVIEW_REQUIRED` → do not auto-confirm; read the code, require precise evidence, and reject if the support remains weak or vague
+- When a `threshold_hint` is present, it is the automation gate for those categorical rules above. In particular, `REVIEW_REQUIRED` means you must not auto-confirm even if the raw category pair looks like `CONFIRMED + VULNERABLE` or includes `MITIGATED` / `DOWNGRADED`; use direct code evidence instead.
+- If the debate summary says `CONFIDENCE THRESHOLD NOTE: unavailable ...`, do not infer any threshold automation from missing hints; read the code directly and decide from primary evidence.
+- To reduce false positives, ambiguous findings (`REVIEW_REQUIRED`) should default toward rejection unless you can cite concrete code evidence that an attacker can actually exploit.
+
 **For each CONFIRMED finding, use create_finding to record it with:**
 - A clear, specific title describing the vulnerability
 - The correct severity (critical/high/medium/low)
