@@ -36,12 +36,18 @@ echo "=== threshold-tests ==="
 run_case "vulnerable-consensus" \
   "test_build_debate_summary_marks_high_confidence_confirm_for_vulnerable_consensus" \
   "high-confirm.txt"
+run_case "confirm-boundary" \
+  "test_build_debate_summary_marks_high_confidence_confirm_at_exact_boundary" \
+  "confirm-boundary.txt"
 run_case "mitigated-consensus" \
   "test_build_debate_summary_marks_high_confidence_confirm_for_mitigated_consensus" \
   "mitigated-confirm.txt"
 run_case "high-confidence-reject" \
-  "test_build_debate_summary_marks_high_confidence_reject" \
+  "test_build_debate_summary_marks_high_confidence_reject_strong_negative_case" \
   "high-reject.txt"
+run_case "reject-boundary" \
+  "test_build_debate_summary_marks_high_confidence_reject_at_exact_boundary" \
+  "reject-boundary.txt"
 run_case "offense-only-review" \
   "test_build_debate_summary_requires_review_for_offense_only_signal" \
   "offense-only-review.txt"

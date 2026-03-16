@@ -27,8 +27,10 @@ steps:
       stdout_contains:
         - "=== threshold-tests ==="
         - "PASS: vulnerable-consensus"
+        - "PASS: confirm-boundary"
         - "PASS: mitigated-consensus"
         - "PASS: high-confidence-reject"
+        - "PASS: reject-boundary"
         - "PASS: offense-only-review"
         - "PASS: defense-only-review"
         - "PASS: weak-consensus-review"
@@ -62,8 +64,10 @@ assertions:
       required_strings:
         - "=== threshold-tests ==="
         - "PASS: vulnerable-consensus"
+        - "PASS: confirm-boundary"
         - "PASS: mitigated-consensus"
         - "PASS: high-confidence-reject"
+        - "PASS: reject-boundary"
         - "PASS: offense-only-review"
         - "PASS: defense-only-review"
         - "PASS: weak-consensus-review"

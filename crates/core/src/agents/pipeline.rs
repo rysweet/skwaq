@@ -1792,7 +1792,65 @@ mod tests {
     }
 
     #[test]
-    fn test_build_debate_summary_marks_high_confidence_reject() {
+    fn test_build_debate_summary_marks_high_confidence_confirm_at_exact_boundary() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![super::super::output_schema::ExploitAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::ExploitAnalystVerdict::Confirmed,
+                            confidence_percent: 80,
+                            evidence: vec!["Attacker controls copy length".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![super::super::output_schema::DefenseAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::DefenseAnalystVerdict::Vulnerable,
+                            confidence_percent: 60,
+                            evidence: vec!["No complete bounds check found".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("net_weight=140"));
+        assert!(summary.contains("threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_marks_high_confidence_reject_strong_negative_case() {
         let result_a = AgentResult {
             agent_name: "exploit-analyst".into(),
             output: "free-form exploit review".into(),
@@ -1848,6 +1906,64 @@ mod tests {
         assert!(summary.contains("net_weight=-175"));
         assert!(summary.contains("threshold_hint: HIGH_CONFIDENCE_REJECT (strong_negative_signal)"));
         assert!(summary.contains("high_confidence_reject: 1"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_marks_high_confidence_reject_at_exact_boundary() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "free-form exploit review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "free-form exploit review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::ExploitAnalystV1(
+                    super::super::output_schema::ExploitAnalystStructuredOutput {
+                        summary: "Exploit review".into(),
+                        assessments: vec![super::super::output_schema::ExploitAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::ExploitAnalystVerdict::Rejected,
+                            confidence_percent: 70,
+                            evidence: vec!["Attacker cannot reach the sink".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "free-form defense review".into(),
+            tokens_used: 50,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "free-form defense review",
+            ),
+            parsed_output: Some(
+                super::super::output_schema::ParsedAgentOutput::DefenseAnalystV1(
+                    super::super::output_schema::DefenseAnalystStructuredOutput {
+                        summary: "Defense review".into(),
+                        assessments: vec![super::super::output_schema::DefenseAnalystAssessment {
+                            finding_title: "Heap overflow in parse_header".into(),
+                            verdict: super::super::output_schema::DefenseAnalystVerdict::Safe,
+                            confidence_percent: 10,
+                            evidence: vec!["Bounds check blocks oversized input".into()],
+                        }],
+                    },
+                ),
+            ),
+            parsed_output_error: None,
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains("net_weight=-80"));
+        assert!(summary.contains("threshold_hint: HIGH_CONFIDENCE_REJECT (strong_negative_signal)"));
     }
 
     #[test]
