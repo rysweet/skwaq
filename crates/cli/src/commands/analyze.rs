@@ -6,7 +6,7 @@
 //! Use `--agents` or `--agent` to override which agents run in AI mode.
 
 use super::common::resolve_investigation;
-use skwaq_core::agents::{default_pipeline_for_target, pipeline_from_names};
+use skwaq_core::agents::{default_pipeline_for_target, pipeline_from_names, PipelineClients};
 use skwaq_core::analysis::{
     extract_function_from_title, AnalysisOrchestrator, FindingStatus, SemanticPatternClassifier,
 };
@@ -109,7 +109,12 @@ async fn run_combined_analysis(
     eprintln!("  Pipeline: {}", stage_names.join(" -> "));
     println!();
 
-    let llm_client = skwaq_core::llm::create_client(&config.llm).await?;
+    let (reasoning_client, decompilation_client) = skwaq_core::llm::create_pipeline_clients(
+        &config.llm,
+        pipeline.requires_reasoning_client(),
+        pipeline.requires_decompilation_client(),
+    )
+    .await?;
     let mut token_budget = skwaq_core::llm::TokenBudget::new(budget_amount);
 
     // Open durable memory for cross-run learning
@@ -120,7 +125,7 @@ async fn run_combined_analysis(
             &target,
             &inv_id,
             &db,
-            llm_client,
+            PipelineClients::from_optional(reasoning_client, decompilation_client),
             &mut token_budget,
             &memory,
         )

@@ -1365,7 +1365,7 @@ fn collect_review_findings(
 /// Cached LLM client for the process. Avoids redundant Copilot token
 /// negotiation when many cases run concurrently. The `Client` is `Clone`,
 /// so each pipeline stage gets a cheap clone.
-static LLM_CLIENT: tokio::sync::OnceCell<skwaq_core::llm::Client> =
+static PIPELINE_CLIENTS: tokio::sync::OnceCell<skwaq_core::agents::PipelineClients> =
     tokio::sync::OnceCell::const_new();
 
 /// Open the default durable memory store for agents.
@@ -1399,10 +1399,17 @@ async fn run_llm_pipeline(
     // Copilot readiness and negotiates a token; subsequent calls reuse it.
     // This eliminates cold-start rate-limit failures when many cases start
     // concurrently.
-    let llm_client = LLM_CLIENT
+    let pipeline_clients = PIPELINE_CLIENTS
         .get_or_try_init(|| async {
             skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm).await?;
-            skwaq_core::llm::create_client(&config.llm).await
+            let (reasoning_client, decompilation_client) =
+                skwaq_core::llm::create_pipeline_clients(&config.llm, true, true).await?;
+            Ok::<skwaq_core::agents::PipelineClients, anyhow::Error>(
+                skwaq_core::agents::PipelineClients::from_optional(
+                    reasoning_client,
+                    decompilation_client,
+                ),
+            )
         })
         .await
         .with_context(|| {
@@ -1430,13 +1437,20 @@ async fn run_llm_pipeline(
     let pipeline_result = if let Some(ref mem) = memory {
         tokio::time::timeout(
             std::time::Duration::from_secs(timeout_secs),
-            pipeline.run_with_memory(&target, inv_id, db, llm_client, &mut budget, mem),
+            pipeline.run_with_memory(
+                &target,
+                inv_id,
+                db,
+                pipeline_clients.clone(),
+                &mut budget,
+                mem,
+            ),
         )
         .await
     } else {
         tokio::time::timeout(
             std::time::Duration::from_secs(timeout_secs),
-            pipeline.run(&target, inv_id, db, llm_client, &mut budget),
+            pipeline.run(&target, inv_id, db, pipeline_clients.clone(), &mut budget),
         )
         .await
     };

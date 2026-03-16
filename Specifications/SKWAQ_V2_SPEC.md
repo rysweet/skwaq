@@ -77,7 +77,7 @@ Multi-stage, with each stage independently useful:
 
 **Stage 1 - Ghidra decompilation** (always runs, fast): Raw C pseudocode. Shown immediately.
 
-**Stage 2 - LLM naming & typing** (async, optional): Meaningful function/variable names, type recovery. Runs in background, results appear when ready. Uses Copilot API, Azure OpenAI, or local Ollama.
+**Stage 2 - LLM naming & typing** (async, optional): Meaningful function/variable names, type recovery. Implemented via the `decompile-*` agent lane, which uses the explicit `[llm].decompilation` backend instead of borrowing the general reasoning lane. Results appear when ready and failures surface explicitly instead of silently downgrading.
 
 **Stage 3 - Structural verification** (optional, `--verify`): Checks basic block count matches, call graph consistency, all paths accounted for. NOT recompilation (that's unreliable for real-world binaries).
 

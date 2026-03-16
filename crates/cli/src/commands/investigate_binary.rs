@@ -71,7 +71,8 @@ pub async fn run(binary: &Path) -> anyhow::Result<()> {
 
     // LLM agent pipeline — required
     let config = skwaq_core::config::Config::load()?;
-    let llm_client = skwaq_core::llm::create_client(&config.llm).await?;
+    let (reasoning_client, decompilation_client) =
+        skwaq_core::llm::create_pipeline_clients(&config.llm, true, true).await?;
 
     let file_name = binary
         .file_name()
@@ -87,7 +88,17 @@ pub async fn run(binary: &Path) -> anyhow::Result<()> {
     let memory = skwaq_core::memory::MemoryStore::open_default()?;
 
     let results = pipeline
-        .run_with_memory(&file_name, &inv_id, &db, llm_client, &mut budget, &memory)
+        .run_with_memory(
+            &file_name,
+            &inv_id,
+            &db,
+            skwaq_core::agents::PipelineClients::from_optional(
+                reasoning_client,
+                decompilation_client,
+            ),
+            &mut budget,
+            &memory,
+        )
         .await?;
 
     for result in &results {

@@ -31,23 +31,90 @@ use anyhow::Context;
 ///
 /// Any other value is rejected. skwaq does not silently switch providers.
 pub async fn create_client(config: &LlmConfig) -> anyhow::Result<Client> {
-    validate_backend_selection(config)?;
-    match normalized_backend(config).as_str() {
+    create_reasoning_client(config).await
+}
+
+/// Create a client for reasoning stages using `[llm].reasoning`.
+pub async fn create_reasoning_client(config: &LlmConfig) -> anyhow::Result<Client> {
+    create_client_for_backend(config.reasoning.trim(), "llm.reasoning").await
+}
+
+/// Create a client for decompilation stages using `[llm].decompilation`.
+pub async fn create_decompilation_client(config: &LlmConfig) -> anyhow::Result<Client> {
+    create_client_for_backend(config.decompilation.trim(), "llm.decompilation").await
+}
+
+/// Create the clients needed by the agent pipeline.
+///
+/// When reasoning and decompilation use the same backend, the client is created
+/// once and cloned so the pipeline reuses the same authenticated session.
+pub async fn create_pipeline_clients(
+    config: &LlmConfig,
+    require_reasoning: bool,
+    require_decompilation: bool,
+) -> anyhow::Result<(Option<Client>, Option<Client>)> {
+    if !require_reasoning && !require_decompilation {
+        return Ok((None, None));
+    }
+
+    let reasoning_backend = if require_reasoning {
+        Some(validate_backend_name(
+            config.reasoning.trim(),
+            "llm.reasoning",
+        )?)
+    } else {
+        None
+    };
+    let decompilation_backend = if require_decompilation {
+        Some(validate_backend_name(
+            config.decompilation.trim(),
+            "llm.decompilation",
+        )?)
+    } else {
+        None
+    };
+
+    if let (Some(reasoning_backend), Some(decompilation_backend)) =
+        (&reasoning_backend, &decompilation_backend)
+    {
+        if reasoning_backend == decompilation_backend {
+            let client = create_client_for_backend_name(reasoning_backend, "llm.reasoning").await?;
+            return Ok((Some(client.clone()), Some(client)));
+        }
+    }
+
+    let reasoning = match reasoning_backend {
+        Some(backend) => Some(create_client_for_backend_name(&backend, "llm.reasoning").await?),
+        None => None,
+    };
+    let decompilation = match decompilation_backend {
+        Some(backend) => Some(create_client_for_backend_name(&backend, "llm.decompilation").await?),
+        None => None,
+    };
+
+    Ok((reasoning, decompilation))
+}
+
+async fn create_client_for_backend(raw_backend: &str, field_name: &str) -> anyhow::Result<Client> {
+    let backend = validate_backend_name(raw_backend, field_name)?;
+    create_client_for_backend_name(&backend, field_name).await
+}
+
+async fn create_client_for_backend_name(backend: &str, field_name: &str) -> anyhow::Result<Client> {
+    match backend {
         "copilot" => {
-            let client = Client::new_copilot()
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to create Copilot client: {e}"))?;
+            let client = Client::new_copilot().await.map_err(|e| {
+                anyhow::anyhow!("Failed to create Copilot client for {field_name}: {e}")
+            })?;
             Ok(client)
         }
-        "anthropic" => create_anthropic_client(config),
-        _ => unreachable!("validate_backend_selection rejected unsupported backends"),
+        "anthropic" => create_anthropic_client(),
+        _ => unreachable!("validate_backend_name rejected unsupported backends"),
     }
 }
 
 pub fn validate_benchmark_copilot_config(config: &LlmConfig) -> anyhow::Result<()> {
-    validate_backend_selection(config)?;
-
-    let backend = normalized_backend(config);
+    let backend = validate_backend_name(config.reasoning.trim(), "llm.reasoning")?;
     if backend != "copilot" {
         anyhow::bail!(
             "Hybrid benchmark runs require [llm].reasoning = \"copilot\", found {:?}",
@@ -55,7 +122,7 @@ pub fn validate_benchmark_copilot_config(config: &LlmConfig) -> anyhow::Result<(
         );
     }
 
-    let decompilation = config.decompilation.trim().to_ascii_lowercase();
+    let decompilation = validate_backend_name(config.decompilation.trim(), "llm.decompilation")?;
     if decompilation != "copilot" {
         anyhow::bail!(
             "Hybrid benchmark runs require [llm].decompilation = \"copilot\", found {:?}",
@@ -77,17 +144,15 @@ pub fn validate_benchmark_copilot_config(config: &LlmConfig) -> anyhow::Result<(
 
 pub async fn ensure_benchmark_copilot_ready(config: &LlmConfig) -> anyhow::Result<()> {
     validate_benchmark_copilot_config(config)?;
-    create_client(config)
-        .await
-        .map(|_| ())
-        .context(
-            "Hybrid benchmark runs require working GitHub Copilot authentication. \
-             Run `gh auth login` / `gh auth refresh --scopes copilot`, or set GH_TOKEN/GITHUB_TOKEN with Copilot access.",
-        )
+    let _ = create_pipeline_clients(config, true, true).await.context(
+        "Hybrid benchmark runs require working GitHub Copilot authentication. \
+         Run `gh auth login` / `gh auth refresh --scopes copilot`, or set GH_TOKEN/GITHUB_TOKEN with Copilot access.",
+    )?;
+    Ok(())
 }
 
 /// Build an Anthropic-backend client from the environment key.
-fn create_anthropic_client(_config: &LlmConfig) -> anyhow::Result<Client> {
+fn create_anthropic_client() -> anyhow::Result<Client> {
     use rustyclawd_core::client::{ApiKey, Config as RcConfig};
 
     let raw_key = std::env::var("ANTHROPIC_API_KEY")
@@ -100,18 +165,22 @@ fn create_anthropic_client(_config: &LlmConfig) -> anyhow::Result<Client> {
     Ok(client)
 }
 
-fn validate_backend_selection(config: &LlmConfig) -> anyhow::Result<()> {
-    match normalized_backend(config).as_str() {
-        "copilot" | "anthropic" => Ok(()),
-        other => anyhow::bail!(
-            "Unsupported llm.reasoning backend {:?}. Set [llm].reasoning explicitly to \"copilot\" or \"anthropic\"; hidden fallback is disabled.",
-            if other.is_empty() { "<empty>" } else { other }
-        ),
+fn validate_backend_name(raw_backend: &str, field_name: &str) -> anyhow::Result<String> {
+    let backend = raw_backend.trim().to_ascii_lowercase();
+    if !matches!(backend.as_str(), "copilot" | "anthropic") {
+        let display = if backend.is_empty() {
+            "<empty>"
+        } else {
+            backend.as_str()
+        };
+        anyhow::bail!(
+            "Unsupported {} backend {:?}. Set {} explicitly to \"copilot\" or \"anthropic\"; hidden fallback is disabled.",
+            field_name,
+            display,
+            field_name
+        );
     }
-}
-
-fn normalized_backend(config: &LlmConfig) -> String {
-    config.reasoning.trim().to_ascii_lowercase()
+    Ok(backend)
 }
 
 #[cfg(test)]
@@ -128,7 +197,8 @@ mod tests {
             reasoning: "anthropic".into(),
             ..Default::default()
         };
-        let result = create_anthropic_client(&config);
+        let _ = config;
+        let result = create_anthropic_client();
         assert!(result.is_ok());
 
         match original {
@@ -142,8 +212,7 @@ mod tests {
         let original = std::env::var("ANTHROPIC_API_KEY").ok();
         std::env::remove_var("ANTHROPIC_API_KEY");
 
-        let config = LlmConfig::default();
-        let result = create_anthropic_client(&config);
+        let result = create_anthropic_client();
         assert!(result.is_err());
 
         if let Some(key) = original {
@@ -153,16 +222,19 @@ mod tests {
 
     #[test]
     fn test_validate_backend_selection_rejects_unknown_backend() {
-        let config = LlmConfig {
-            reasoning: "auto".into(),
-            ..Default::default()
-        };
-
-        let err = validate_backend_selection(&config).unwrap_err();
+        let err = validate_backend_name("auto", "llm.reasoning").unwrap_err();
         assert!(err
             .to_string()
             .contains("Unsupported llm.reasoning backend"));
         assert!(err.to_string().contains("hidden fallback is disabled"));
+    }
+
+    #[test]
+    fn test_validate_backend_name_rejects_unknown_decompilation_backend() {
+        let err = validate_backend_name("auto", "llm.decompilation").unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Unsupported llm.decompilation backend"));
     }
 
     #[test]
@@ -198,5 +270,43 @@ mod tests {
         assert!(err
             .to_string()
             .contains("require [llm].decompilation = \"copilot\""));
+    }
+
+    #[tokio::test]
+    async fn test_create_pipeline_clients_rejects_invalid_decompilation_backend() {
+        let config = LlmConfig {
+            decompilation: "auto".into(),
+            ..Default::default()
+        };
+
+        let err = create_pipeline_clients(&config, false, true)
+            .await
+            .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Unsupported llm.decompilation backend"));
+    }
+
+    #[tokio::test]
+    async fn test_create_pipeline_clients_allows_reasoning_only_pipelines() {
+        let original = std::env::var("ANTHROPIC_API_KEY").ok();
+        std::env::set_var("ANTHROPIC_API_KEY", "sk-ant-test-key-123");
+
+        let config = LlmConfig {
+            reasoning: "anthropic".into(),
+            decompilation: "auto".into(),
+            ..Default::default()
+        };
+
+        let (reasoning, decompilation) = create_pipeline_clients(&config, true, false)
+            .await
+            .expect("reasoning-only pipelines should not validate llm.decompilation");
+        assert!(reasoning.is_some());
+        assert!(decompilation.is_none());
+
+        match original {
+            Some(key) => std::env::set_var("ANTHROPIC_API_KEY", key),
+            None => std::env::remove_var("ANTHROPIC_API_KEY"),
+        }
     }
 }
