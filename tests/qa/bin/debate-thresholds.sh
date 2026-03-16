@@ -19,72 +19,62 @@ trap cleanup EXIT
 
 cd "$repo_root"
 
+run_case() {
+  local case_name="$1"
+  local test_filter="$2"
+  local output_file="$3"
+
+  echo "CASE: $case_name"
+  CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
+    "$test_filter" -- --nocapture | tee "$run_dir/$output_file"
+  grep -q "running 1 test" "$run_dir/$output_file"
+  grep -q "test result: ok. 1 passed; 0 failed;" "$run_dir/$output_file"
+  echo "PASS: $case_name"
+}
+
 echo "=== threshold-tests ==="
-echo "CASE: vulnerable-consensus"
-CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
-  test_build_debate_summary_marks_high_confidence_confirm_for_vulnerable_consensus -- --nocapture \
-  | tee "$run_dir/high-confirm.txt"
-echo "PASS: vulnerable-consensus"
-echo "CASE: mitigated-consensus"
-CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
-  test_build_debate_summary_marks_high_confidence_confirm_for_mitigated_consensus -- --nocapture \
-  | tee "$run_dir/mitigated-confirm.txt"
-echo "PASS: mitigated-consensus"
-echo "CASE: high-confidence-reject"
-CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
-  test_build_debate_summary_marks_high_confidence_reject -- --nocapture \
-  | tee "$run_dir/high-reject.txt"
-echo "PASS: high-confidence-reject"
-echo "CASE: offense-only-review"
-CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
-  test_build_debate_summary_requires_review_for_offense_only_signal -- --nocapture \
-  | tee "$run_dir/offense-only-review.txt"
-echo "PASS: offense-only-review"
-echo "CASE: defense-only-review"
-CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
-  test_build_debate_summary_requires_review_for_defense_only_signal -- --nocapture \
-  | tee "$run_dir/defense-only-review.txt"
-echo "PASS: defense-only-review"
-echo "CASE: weak-consensus-review"
-CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
-  test_build_debate_summary_requires_review_for_weak_consensus -- --nocapture \
-  | tee "$run_dir/weak-consensus-review.txt"
-echo "PASS: weak-consensus-review"
-echo "CASE: context-summary-thresholds"
-CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
-  test_build_debate_context_summary_preserves_threshold_hints -- --nocapture \
-  | tee "$run_dir/context-summary.txt"
-echo "PASS: context-summary-thresholds"
-echo "CASE: previous-results-structured-summary"
-CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
-  test_build_previous_results_context_prefers_structured_summary_over_raw_excerpt -- --nocapture \
-  | tee "$run_dir/previous-results-summary.txt"
-echo "PASS: previous-results-structured-summary"
-echo "CASE: newest-debate-context"
-CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
-  test_build_previous_results_context_preserves_newest_debate_summary_when_truncated -- --nocapture \
-  | tee "$run_dir/newest-debate-context.txt"
-echo "PASS: newest-debate-context"
-echo "CASE: structured-frame-rendering"
-CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
-  format_context_frame_includes_structured_summary -- --nocapture \
-  | tee "$run_dir/structured-frame-rendering.txt"
-echo "PASS: structured-frame-rendering"
-echo "CASE: threshold-hints-unavailable"
-CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
-  test_build_debate_summary_marks_threshold_hints_unavailable_on_parse_failure -- --nocapture \
-  | tee "$run_dir/threshold-hints-unavailable.txt"
-echo "PASS: threshold-hints-unavailable"
-echo "CASE: fallback-context-unavailable-note"
-CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
-  test_build_debate_context_summary_preserves_unavailable_note_on_fallback_summary -- --nocapture \
-  | tee "$run_dir/fallback-context-unavailable-note.txt"
-echo "PASS: fallback-context-unavailable-note"
-echo "CASE: weighted-structured-summary"
-CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
-  test_build_debate_summary_prefers_weighted_structured_outputs -- --nocapture \
-  | tee "$run_dir/weighted-structured.txt"
-echo "PASS: weighted-structured-summary"
+run_case "vulnerable-consensus" \
+  "test_build_debate_summary_marks_high_confidence_confirm_for_vulnerable_consensus" \
+  "high-confirm.txt"
+run_case "mitigated-consensus" \
+  "test_build_debate_summary_marks_high_confidence_confirm_for_mitigated_consensus" \
+  "mitigated-confirm.txt"
+run_case "high-confidence-reject" \
+  "test_build_debate_summary_marks_high_confidence_reject" \
+  "high-reject.txt"
+run_case "offense-only-review" \
+  "test_build_debate_summary_requires_review_for_offense_only_signal" \
+  "offense-only-review.txt"
+run_case "defense-only-review" \
+  "test_build_debate_summary_requires_review_for_defense_only_signal" \
+  "defense-only-review.txt"
+run_case "weak-consensus-review" \
+  "test_build_debate_summary_requires_review_for_weak_consensus" \
+  "weak-consensus-review.txt"
+run_case "context-summary-thresholds" \
+  "test_build_debate_context_summary_preserves_threshold_hints" \
+  "context-summary.txt"
+run_case "previous-results-structured-summary" \
+  "test_build_previous_results_context_prefers_structured_summary_over_raw_excerpt" \
+  "previous-results-summary.txt"
+run_case "newest-debate-context" \
+  "test_build_previous_results_context_preserves_newest_debate_summary_when_truncated" \
+  "newest-debate-context.txt"
+run_case "oversized-newest-context" \
+  "test_build_previous_results_context_keeps_truncated_newest_section_when_oversized" \
+  "oversized-newest-context.txt"
+run_case "structured-frame-rendering" \
+  "format_context_frame_includes_structured_summary" \
+  "structured-frame-rendering.txt"
+run_case "threshold-hints-unavailable" \
+  "test_build_debate_summary_marks_threshold_hints_unavailable_on_parse_failure" \
+  "threshold-hints-unavailable.txt"
+run_case "fallback-context-unavailable-note" \
+  "test_build_debate_context_summary_preserves_unavailable_note_on_fallback_summary" \
+  "fallback-context-unavailable-note.txt"
+run_case "weighted-structured-summary" \
+  "test_build_debate_summary_prefers_weighted_structured_outputs" \
+  "weighted-structured.txt"
 
 echo
 echo "validated confidence threshold hints in weighted debate summaries"

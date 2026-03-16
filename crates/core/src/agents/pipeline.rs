@@ -360,14 +360,24 @@ fn build_previous_results_context(preamble: &str, results: &[AgentResult]) -> St
         sections.push(render_previous_result_context(prev));
     }
 
-    let mut kept_sections = Vec::new();
+    let mut kept_sections: Vec<String> = Vec::new();
     let mut total_len = preamble.len();
     let mut omitted_any = false;
 
     for section in sections.iter().rev() {
         if total_len + section.len() <= MAX_PIPELINE_CONTEXT_CHARS {
-            kept_sections.push(section.as_str());
+            kept_sections.push(section.clone());
             total_len += section.len();
+        } else if kept_sections.is_empty() {
+            let available = MAX_PIPELINE_CONTEXT_CHARS
+                .saturating_sub(total_len)
+                .saturating_sub(OLDER_CONTEXT_OMITTED_NOTICE.len());
+            let truncated = truncate_section_middle(section, available);
+            if !truncated.is_empty() {
+                total_len += truncated.len();
+                kept_sections.push(truncated);
+            }
+            omitted_any = true;
         } else {
             omitted_any = true;
         }
@@ -416,6 +426,36 @@ fn truncate_to_char_boundary(text: &str, max_len: usize) -> String {
         boundary -= 1;
     }
     text[..boundary].to_string()
+}
+
+fn truncate_from_end_to_char_boundary(text: &str, max_len: usize) -> String {
+    if max_len >= text.len() {
+        return text.to_string();
+    }
+
+    let mut start = text.len().saturating_sub(max_len);
+    while start < text.len() && !text.is_char_boundary(start) {
+        start += 1;
+    }
+    text[start..].to_string()
+}
+
+fn truncate_section_middle(section: &str, max_len: usize) -> String {
+    const TRUNCATED_SECTION_NOTICE: &str = "\n...[truncated newest context]...\n";
+
+    if section.len() <= max_len {
+        return section.to_string();
+    }
+    if max_len <= TRUNCATED_SECTION_NOTICE.len() {
+        return truncate_to_char_boundary(section, max_len);
+    }
+
+    let remaining = max_len - TRUNCATED_SECTION_NOTICE.len();
+    let head_len = remaining / 2;
+    let tail_len = remaining - head_len;
+    let head = truncate_to_char_boundary(section, head_len);
+    let tail = truncate_from_end_to_char_boundary(section, tail_len);
+    format!("{head}{TRUNCATED_SECTION_NOTICE}{tail}")
 }
 
 fn render_previous_result_context(prev: &AgentResult) -> String {
@@ -478,6 +518,13 @@ fn build_debate_context_summary(summary: &str) -> String {
                 compact.push_str(&finding);
                 compact.push('\n');
             }
+            compact.push_str("  ");
+            compact.push_str(trimmed);
+            compact.push('\n');
+            continue;
+        }
+
+        if trimmed.starts_with("offense_evidence:") || trimmed.starts_with("defense_evidence:") {
             compact.push_str("  ");
             compact.push_str(trimmed);
             compact.push('\n');
@@ -681,17 +728,17 @@ fn build_debate_summary(agent_a: &AgentResult, agent_b: &AgentResult) -> String 
     }
 
     // Identify agreements and disagreements.
-    let a_confirms = a_verdicts
+    let a_positive = a_verdicts
         .iter()
-        .filter(|l| line_has_verdict_token(l, "CONFIRMED"))
+        .filter(|l| line_has_any_verdict_token(l, &["CONFIRMED", "DOWNGRADED"]))
         .count();
     let a_rejects = a_verdicts
         .iter()
         .filter(|l| line_has_verdict_token(l, "REJECTED"))
         .count();
-    let b_vulnerable = b_verdicts
+    let b_positive = b_verdicts
         .iter()
-        .filter(|l| line_has_verdict_token(l, "VULNERABLE"))
+        .filter(|l| line_has_any_verdict_token(l, &["VULNERABLE", "MITIGATED"]))
         .count();
     let b_safe = b_verdicts
         .iter()
@@ -700,14 +747,14 @@ fn build_debate_summary(agent_a: &AgentResult, agent_b: &AgentResult) -> String 
 
     summary.push_str(&format!(
         "\nSummary statistics:\n\
-         - Offense: {} confirmed, {} rejected\n\
-         - Defense: {} vulnerable, {} safe\n",
-        a_confirms, a_rejects, b_vulnerable, b_safe
+         - Offense: {} positive, {} rejected\n\
+         - Defense: {} positive, {} safe\n",
+        a_positive, a_rejects, b_positive, b_safe
     ));
 
-    if a_confirms > 0 && b_safe > 0 {
+    if (a_positive > 0 && b_safe > 0) || (a_rejects > 0 && b_positive > 0) {
         summary.push_str(
-            "\nDISAGREEMENTS DETECTED: Offense confirmed findings that Defense considers safe.\n\
+            "\nDISAGREEMENTS DETECTED: Offense and Defense reached opposing conclusions in the fallback debate summary.\n\
              The verdict-synthesizer should carefully examine these conflicts and read the code \
              before making a final decision.\n",
         );
@@ -1512,7 +1559,7 @@ mod tests {
 
         let summary = build_debate_summary(&result_a, &result_b);
         assert!(!summary.contains("DISAGREEMENTS DETECTED"));
-        assert!(summary.contains("Defense: 0 vulnerable, 0 safe"));
+        assert!(summary.contains("Defense: 0 positive, 0 safe"));
     }
 
     #[test]
@@ -2223,6 +2270,41 @@ mod tests {
     }
 
     #[test]
+    fn test_build_previous_results_context_keeps_truncated_newest_section_when_oversized() {
+        let older = AgentResult {
+            agent_name: "older".into(),
+            output: "older output".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic("older", "Older context", None, "older"),
+            parsed_output: None,
+            parsed_output_error: None,
+        };
+
+        let mut debate_frame = AgentContextFrame::synthetic(
+            "debate-summary",
+            "Pipeline-generated summary of offense/defense agreements and disagreements",
+            None,
+            "raw debate summary",
+        );
+        debate_frame.structured_summary = Some(
+            "Weighted debate threshold summary:\n".to_string()
+                + &"x".repeat(MAX_PIPELINE_CONTEXT_CHARS + 500),
+        );
+        let newest = AgentResult {
+            agent_name: "debate-summary".into(),
+            output: "raw debate summary".into(),
+            tokens_used: 0,
+            context_frame: debate_frame,
+            parsed_output: None,
+            parsed_output_error: None,
+        };
+
+        let ctx = build_previous_results_context("preamble", &[older, newest]);
+        assert!(ctx.contains("Context frame from debate-summary"));
+        assert!(ctx.contains("[truncated newest context]"));
+    }
+
+    #[test]
     fn test_build_debate_context_summary_preserves_threshold_hints() {
         let summary = "Weighted finding comparisons:\n- Finding A: offense=CONFIRMED @ 95%, defense=VULNERABLE @ 90%, net_weight=185\n    threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)\n    offense_evidence: attacker controls length\n- Finding B: offense=CONFIRMED @ 60%, defense=MITIGATED @ 55%, net_weight=115\n    threshold_hint: REVIEW_REQUIRED (insufficient_consensus)\n    defense_evidence: partial bounds check\n\nSummary statistics:\n- offense_assessments: 2\n- defense_assessments: 2\n- weighted_disagreements: 0\n- high_confidence_confirm: 1\n- high_confidence_reject: 0\n- review_required: 1\nCONFIDENCE THRESHOLD NOTE: Only auto-confirm findings labelled HIGH_CONFIDENCE_CONFIRM. For REVIEW_REQUIRED findings, verify with direct code evidence before confirming.\n";
 
@@ -2232,15 +2314,15 @@ mod tests {
             "- Finding A: offense=CONFIRMED @ 95%, defense=VULNERABLE @ 90%, net_weight=185"
         ));
         assert!(compact.contains("threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)"));
+        assert!(compact.contains("offense_evidence: attacker controls length"));
         assert!(compact.contains(
             "- Finding B: offense=CONFIRMED @ 60%, defense=MITIGATED @ 55%, net_weight=115"
         ));
         assert!(compact.contains("threshold_hint: REVIEW_REQUIRED (insufficient_consensus)"));
+        assert!(compact.contains("defense_evidence: partial bounds check"));
         assert!(compact.contains("Summary statistics:"));
         assert!(compact.contains("- review_required: 1"));
         assert!(compact.contains("CONFIDENCE THRESHOLD NOTE:"));
-        assert!(!compact.contains("offense_evidence:"));
-        assert!(!compact.contains("defense_evidence:"));
     }
 
     #[test]
@@ -2279,6 +2361,42 @@ mod tests {
         assert!(summary.contains("exploit-analyst: failed to parse exploit-analyst-v1"));
         assert!(summary.contains("defense-analyst: failed to parse defense-analyst-v1"));
         assert!(summary.contains("Do not auto-confirm or auto-reject from thresholds"));
+    }
+
+    #[test]
+    fn test_build_debate_summary_flags_rejected_vs_vulnerable_fallback_disagreement() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "REJECTED: attacker cannot reach sink".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "REJECTED: attacker cannot reach sink",
+            ),
+            parsed_output: None,
+            parsed_output_error: Some("failed to parse exploit-analyst-v1".into()),
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "VULNERABLE: guard is incomplete".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "VULNERABLE: guard is incomplete",
+            ),
+            parsed_output: None,
+            parsed_output_error: Some("failed to parse defense-analyst-v1".into()),
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        assert!(summary.contains(
+            "Summary statistics:\n- Offense: 0 positive, 1 rejected\n- Defense: 1 positive, 0 safe"
+        ));
+        assert!(summary.contains("DISAGREEMENTS DETECTED"));
     }
 
     #[test]
