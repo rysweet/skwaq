@@ -365,12 +365,7 @@ fn build_previous_results_context(preamble: &str, results: &[AgentResult]) -> St
     let mut omitted_any = false;
 
     for section in sections.iter().rev() {
-        let reserve = if omitted_any || kept_sections.len() < sections.len() {
-            OLDER_CONTEXT_OMITTED_NOTICE.len()
-        } else {
-            0
-        };
-        if total_len + section.len() + reserve <= MAX_PIPELINE_CONTEXT_CHARS {
+        if total_len + section.len() <= MAX_PIPELINE_CONTEXT_CHARS {
             kept_sections.push(section.as_str());
             total_len += section.len();
         } else {
@@ -379,6 +374,15 @@ fn build_previous_results_context(preamble: &str, results: &[AgentResult]) -> St
     }
 
     kept_sections.reverse();
+
+    if omitted_any {
+        while total_len + OLDER_CONTEXT_OMITTED_NOTICE.len() > MAX_PIPELINE_CONTEXT_CHARS
+            && !kept_sections.is_empty()
+        {
+            let removed = kept_sections.remove(0);
+            total_len = total_len.saturating_sub(removed.len());
+        }
+    }
 
     let mut suffix = String::new();
     if omitted_any {
@@ -444,6 +448,12 @@ fn build_debate_context_summary(summary: &str) -> String {
         if trimmed == "Summary statistics:" {
             in_summary_statistics = true;
             compact.push_str("\nSummary statistics:\n");
+            continue;
+        }
+
+        if trimmed.starts_with("CONFIDENCE THRESHOLD NOTE:") && trimmed.contains("unavailable") {
+            compact.push_str(trimmed);
+            compact.push('\n');
             continue;
         }
 
@@ -2168,6 +2178,51 @@ mod tests {
     }
 
     #[test]
+    fn test_build_previous_results_context_keeps_exact_fit_without_omission_notice() {
+        let preamble = "p".repeat(100);
+        let mut frame_a =
+            AgentContextFrame::synthetic("older-a", "Older context", None, "raw output");
+        frame_a.structured_summary = Some(String::new());
+        let mut frame_b =
+            AgentContextFrame::synthetic("older-b", "Older context", None, "raw output");
+        frame_b.structured_summary = Some(String::new());
+
+        let mut result_a = AgentResult {
+            agent_name: "older-a".into(),
+            output: "raw output".into(),
+            tokens_used: 0,
+            context_frame: frame_a,
+            parsed_output: None,
+            parsed_output_error: None,
+        };
+        let mut result_b = AgentResult {
+            agent_name: "older-b".into(),
+            output: "raw output".into(),
+            tokens_used: 0,
+            context_frame: frame_b,
+            parsed_output: None,
+            parsed_output_error: None,
+        };
+
+        let base_len_a = render_previous_result_context(&result_a).len();
+        let base_len_b = render_previous_result_context(&result_b).len();
+        let remaining = MAX_PIPELINE_CONTEXT_CHARS
+            .saturating_sub(preamble.len())
+            .saturating_sub(base_len_a)
+            .saturating_sub(base_len_b);
+        let extra_a = remaining / 2;
+        let extra_b = remaining - extra_a;
+        result_a.context_frame.structured_summary = Some("a".repeat(extra_a));
+        result_b.context_frame.structured_summary = Some("b".repeat(extra_b));
+
+        let ctx = build_previous_results_context(&preamble, &[result_a, result_b]);
+        assert!(ctx.len() <= MAX_PIPELINE_CONTEXT_CHARS);
+        assert!(ctx.contains("Context frame from older-a"));
+        assert!(ctx.contains("Context frame from older-b"));
+        assert!(!ctx.contains("[truncated older context to preserve newest debate evidence]"));
+    }
+
+    #[test]
     fn test_build_debate_context_summary_preserves_threshold_hints() {
         let summary = "Weighted finding comparisons:\n- Finding A: offense=CONFIRMED @ 95%, defense=VULNERABLE @ 90%, net_weight=185\n    threshold_hint: HIGH_CONFIDENCE_CONFIRM (strong_consensus)\n    offense_evidence: attacker controls length\n- Finding B: offense=CONFIRMED @ 60%, defense=MITIGATED @ 55%, net_weight=115\n    threshold_hint: REVIEW_REQUIRED (insufficient_consensus)\n    defense_evidence: partial bounds check\n\nSummary statistics:\n- offense_assessments: 2\n- defense_assessments: 2\n- weighted_disagreements: 0\n- high_confidence_confirm: 1\n- high_confidence_reject: 0\n- review_required: 1\nCONFIDENCE THRESHOLD NOTE: Only auto-confirm findings labelled HIGH_CONFIDENCE_CONFIRM. For REVIEW_REQUIRED findings, verify with direct code evidence before confirming.\n";
 
@@ -2224,6 +2279,43 @@ mod tests {
         assert!(summary.contains("exploit-analyst: failed to parse exploit-analyst-v1"));
         assert!(summary.contains("defense-analyst: failed to parse defense-analyst-v1"));
         assert!(summary.contains("Do not auto-confirm or auto-reject from thresholds"));
+    }
+
+    #[test]
+    fn test_build_debate_context_summary_preserves_unavailable_note_on_fallback_summary() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "CONFIRMED finding from fallback text".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "CONFIRMED finding from fallback text",
+            ),
+            parsed_output: None,
+            parsed_output_error: Some("failed to parse exploit-analyst-v1".into()),
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "SAFE finding from fallback text".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "SAFE finding from fallback text",
+            ),
+            parsed_output: None,
+            parsed_output_error: Some("failed to parse defense-analyst-v1".into()),
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        let context_summary = build_debate_context_summary(&summary);
+        assert!(context_summary.contains(
+            "CONFIDENCE THRESHOLD NOTE: unavailable because structured debate parsing failed"
+        ));
+        assert!(context_summary.contains("Do not auto-confirm or auto-reject from thresholds"));
     }
 
     #[test]

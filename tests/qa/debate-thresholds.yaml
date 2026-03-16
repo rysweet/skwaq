@@ -37,6 +37,7 @@ steps:
         - "PASS: newest-debate-context"
         - "PASS: structured-frame-rendering"
         - "PASS: threshold-hints-unavailable"
+        - "PASS: fallback-context-unavailable-note"
         - "PASS: weighted-structured-summary"
         - "validated confidence threshold hints in weighted debate summaries"
     timeout: 300000
@@ -66,6 +67,7 @@ assertions:
         - "PASS: newest-debate-context"
         - "PASS: structured-frame-rendering"
         - "PASS: threshold-hints-unavailable"
+        - "PASS: fallback-context-unavailable-note"
         - "PASS: weighted-structured-summary"
         - "validated confidence threshold hints in weighted debate summaries"
 

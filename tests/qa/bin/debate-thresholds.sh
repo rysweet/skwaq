@@ -75,6 +75,11 @@ CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
   test_build_debate_summary_marks_threshold_hints_unavailable_on_parse_failure -- --nocapture \
   | tee "$run_dir/threshold-hints-unavailable.txt"
 echo "PASS: threshold-hints-unavailable"
+echo "CASE: fallback-context-unavailable-note"
+CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
+  test_build_debate_context_summary_preserves_unavailable_note_on_fallback_summary -- --nocapture \
+  | tee "$run_dir/fallback-context-unavailable-note.txt"
+echo "PASS: fallback-context-unavailable-note"
 echo "CASE: weighted-structured-summary"
 CARGO_TARGET_DIR="$target_dir" cargo test -q -p skwaq-core \
   test_build_debate_summary_prefers_weighted_structured_outputs -- --nocapture \
