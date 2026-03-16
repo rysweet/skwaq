@@ -396,6 +396,51 @@ impl HistoryDb {
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 
+    /// Load the N most recent completed runs for a specific suite.
+    pub fn recent_finished_runs_for_suite(
+        &self,
+        suite: &str,
+        limit: u32,
+    ) -> anyhow::Result<Vec<BenchmarkRun>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, started_at, finished_at, suite, skwaq_commit, run_metadata_json,
+                    precision, recall, f1, true_positives, false_positives,
+                    false_negatives, true_negatives
+              FROM runs
+              WHERE finished_at IS NOT NULL AND suite = ?1
+              ORDER BY started_at DESC LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![suite, limit], |row| {
+            let metadata_json = row
+                .get::<_, Option<String>>(5)?
+                .unwrap_or_else(|| "{}".to_string());
+            Ok(BenchmarkRun {
+                id: row.get(0)?,
+                started_at: row.get::<_, String>(1)?.parse().unwrap_or_default(),
+                finished_at: row
+                    .get::<_, Option<String>>(2)?
+                    .and_then(|s| s.parse().ok()),
+                suite: row.get(3)?,
+                skwaq_commit: row.get(4)?,
+                metadata: serde_json::from_str(&metadata_json).map_err(|err| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        5,
+                        rusqlite::types::Type::Text,
+                        Box::new(err),
+                    )
+                })?,
+                precision: row.get(6)?,
+                recall: row.get(7)?,
+                f1: row.get(8)?,
+                true_positives: row.get(9)?,
+                false_positives: row.get(10)?,
+                false_negatives: row.get(11)?,
+                true_negatives: row.get(12)?,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
     fn ensure_run_metadata_column(&self) -> anyhow::Result<()> {
         let mut stmt = self.conn.prepare("PRAGMA table_info(runs)")?;
         let columns = stmt.query_map([], |row| row.get::<_, String>(1))?;
@@ -859,5 +904,71 @@ mod tests {
             )
             .unwrap();
         assert_eq!(unfinished_rows, 0);
+    }
+
+    #[test]
+    fn test_recent_finished_runs_for_suite_filters_other_suites() {
+        let db = HistoryDb::in_memory().unwrap();
+        let metadata = RunMetadata::default();
+
+        let fixtures_old = db.start_run("fixtures", "aaa111", &metadata).unwrap();
+        db.finish_run(&BenchmarkRun {
+            id: fixtures_old.clone(),
+            started_at: Utc::now(),
+            finished_at: Some(Utc::now()),
+            suite: "fixtures".to_string(),
+            skwaq_commit: "aaa111".to_string(),
+            metadata: metadata.clone(),
+            precision: 0.5,
+            recall: 0.5,
+            f1: 0.5,
+            true_positives: 1,
+            false_positives: 1,
+            false_negatives: 1,
+            true_negatives: 0,
+        })
+        .unwrap();
+
+        let juliet = db.start_run("juliet", "bbb222", &metadata).unwrap();
+        db.finish_run(&BenchmarkRun {
+            id: juliet,
+            started_at: Utc::now(),
+            finished_at: Some(Utc::now()),
+            suite: "juliet".to_string(),
+            skwaq_commit: "bbb222".to_string(),
+            metadata: metadata.clone(),
+            precision: 0.8,
+            recall: 0.8,
+            f1: 0.8,
+            true_positives: 4,
+            false_positives: 1,
+            false_negatives: 1,
+            true_negatives: 0,
+        })
+        .unwrap();
+
+        let fixtures_new = db.start_run("fixtures", "ccc333", &metadata).unwrap();
+        db.finish_run(&BenchmarkRun {
+            id: fixtures_new.clone(),
+            started_at: Utc::now(),
+            finished_at: Some(Utc::now()),
+            suite: "fixtures".to_string(),
+            skwaq_commit: "ccc333".to_string(),
+            metadata,
+            precision: 0.9,
+            recall: 0.9,
+            f1: 0.9,
+            true_positives: 9,
+            false_positives: 1,
+            false_negatives: 1,
+            true_negatives: 0,
+        })
+        .unwrap();
+
+        let runs = db.recent_finished_runs_for_suite("fixtures", 2).unwrap();
+        assert_eq!(runs.len(), 2);
+        assert_eq!(runs[0].id, fixtures_new);
+        assert_eq!(runs[1].id, fixtures_old);
+        assert!(runs.iter().all(|run| run.suite == "fixtures"));
     }
 }

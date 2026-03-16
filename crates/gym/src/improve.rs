@@ -1664,14 +1664,7 @@ fn store_fn_insights(
 /// Check if any CWE's detection rate dropped beyond the noise margin (2%).
 /// CWEs absent from the new score are ignored (they weren't tested in the new run).
 pub fn has_cwe_regression(baseline: &AggregateScore, new: &AggregateScore) -> bool {
-    for baseline_cwe in baseline.per_cwe.values() {
-        if let Some(new_cwe) = new.per_cwe.get(&baseline_cwe.cwe_id) {
-            if new_cwe.detection_rate < baseline_cwe.detection_rate - 0.02 {
-                return true;
-            }
-        }
-    }
-    false
+    !crate::scoring::cwe_regressions(baseline, new).is_empty()
 }
 
 /// Append successful patterns from improvement proposals to the knowledge pack.

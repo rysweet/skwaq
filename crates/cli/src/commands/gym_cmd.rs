@@ -66,7 +66,7 @@ pub enum GymSub {
         format: String,
     },
 
-    /// Compare last two runs
+    /// Compare the latest two finished runs for the most recently run suite
     Compare,
 
     /// Show benchmark history
