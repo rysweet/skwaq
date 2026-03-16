@@ -75,6 +75,9 @@ run_case "threshold-hints-unavailable" \
 run_case "fallback-context-unavailable-note" \
   "test_build_debate_context_summary_preserves_unavailable_note_on_fallback_summary" \
   "fallback-context-unavailable-note.txt"
+run_case "fallback-disagreement-warning" \
+  "test_build_debate_context_summary_preserves_fallback_disagreement_warning" \
+  "fallback-disagreement-warning.txt"
 run_case "weighted-structured-summary" \
   "test_build_debate_summary_prefers_weighted_structured_outputs" \
   "weighted-structured.txt"

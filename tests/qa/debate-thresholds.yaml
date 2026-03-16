@@ -40,6 +40,7 @@ steps:
         - "PASS: structured-frame-rendering"
         - "PASS: threshold-hints-unavailable"
         - "PASS: fallback-context-unavailable-note"
+        - "PASS: fallback-disagreement-warning"
         - "PASS: weighted-structured-summary"
         - "validated confidence threshold hints in weighted debate summaries"
     timeout: 300000
@@ -72,6 +73,7 @@ assertions:
         - "PASS: structured-frame-rendering"
         - "PASS: threshold-hints-unavailable"
         - "PASS: fallback-context-unavailable-note"
+        - "PASS: fallback-disagreement-warning"
         - "PASS: weighted-structured-summary"
         - "validated confidence threshold hints in weighted debate summaries"
 

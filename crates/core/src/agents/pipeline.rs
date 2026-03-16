@@ -500,6 +500,7 @@ fn build_debate_context_summary(summary: &str) -> String {
         if in_summary_statistics {
             if trimmed.starts_with("- ")
                 || trimmed.starts_with("WEIGHTED DISAGREEMENTS DETECTED:")
+                || trimmed.starts_with("DISAGREEMENTS DETECTED:")
                 || trimmed.starts_with("CONFIDENCE THRESHOLD NOTE:")
             {
                 compact.push_str(trimmed);
@@ -549,6 +550,7 @@ fn extract_debate_context_key_points(summary: &str) -> Vec<String> {
                 || line.starts_with("threshold_hint:")
                 || line.starts_with("CONFIDENCE THRESHOLD NOTE:")
                 || line.starts_with("WEIGHTED DISAGREEMENTS DETECTED:")
+                || line.starts_with("DISAGREEMENTS DETECTED:")
         })
         .take(MAX_KEY_POINTS)
         .map(ToOwned::to_owned)
@@ -2492,6 +2494,44 @@ mod tests {
             "CONFIDENCE THRESHOLD NOTE: unavailable because structured debate parsing failed"
         ));
         assert!(context_summary.contains("Do not auto-confirm or auto-reject from thresholds"));
+    }
+
+    #[test]
+    fn test_build_debate_context_summary_preserves_fallback_disagreement_warning() {
+        let result_a = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "REJECTED: attacker cannot reach sink".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic(
+                "exploit-analyst",
+                "Validates exploitability of vulnerability findings",
+                None,
+                "REJECTED: attacker cannot reach sink",
+            ),
+            parsed_output: None,
+            parsed_output_error: Some("failed to parse exploit-analyst-v1".into()),
+        };
+        let result_b = AgentResult {
+            agent_name: "defense-analyst".into(),
+            output: "VULNERABLE: guard is incomplete".into(),
+            tokens_used: 0,
+            context_frame: AgentContextFrame::synthetic(
+                "defense-analyst",
+                "Identifies mitigations and defensive controls",
+                None,
+                "VULNERABLE: guard is incomplete",
+            ),
+            parsed_output: None,
+            parsed_output_error: Some("failed to parse defense-analyst-v1".into()),
+        };
+
+        let summary = build_debate_summary(&result_a, &result_b);
+        let context_summary = build_debate_context_summary(&summary);
+        let key_points = extract_debate_context_key_points(&context_summary);
+        assert!(context_summary.contains("DISAGREEMENTS DETECTED:"));
+        assert!(key_points
+            .iter()
+            .any(|point| point.contains("DISAGREEMENTS DETECTED:")));
     }
 
     #[test]
