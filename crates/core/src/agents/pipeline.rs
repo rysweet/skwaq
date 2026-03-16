@@ -2909,6 +2909,35 @@ mod tests {
     }
 
     #[test]
+    fn test_bundled_cwe121_guidance_is_shipped_for_vuln_hunter() {
+        let vuln_hunter_prompt = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../agents/vuln-hunter.md"
+        ));
+        let binary_guide = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../skills/llm-binary-vuln-guide/SKILL.md"
+        ));
+
+        assert!(
+            AGENT_SKILL_MAP.contains(&("vuln-hunter", "llm-binary-vuln-guide")),
+            "vuln-hunter should stay mapped to the binary vulnerability guide skill"
+        );
+        assert!(
+            vuln_hunter_prompt.contains(
+                "CWE-121 (stack-based buffer overflow) requires BOTH a stack buffer and an unsafe write"
+            ),
+            "vuln-hunter prompt should include explicit CWE-121 tracing guidance"
+        );
+        assert!(
+            binary_guide.contains(
+                "Stack array or `alloca` existence alone is not a vulnerability; confirm the unsafe write path"
+            ),
+            "binary guidance skill should reject declaration-only CWE-121 findings"
+        );
+    }
+
+    #[test]
     fn test_deep_pipeline_has_verdict_synthesizer() {
         let pipeline = deep_pipeline();
         assert!(

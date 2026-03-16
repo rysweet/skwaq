@@ -100,7 +100,9 @@ When reviewing decompiled code, look for these patterns that frequently indicate
 ### Firmware / IoT Specific
 - Hardcoded credentials in `.rodata` section (CWE-798)
 - Default keys/IVs adjacent to crypto function calls (CWE-321)
-- `recv`/`read` directly into stack buffer without length check (CWE-120)
+- `recv`/`read` directly into stack buffer without length check (CWE-121 if stack, CWE-120/CWE-122 otherwise)
+  - Verify the destination is actually stack-allocated and that the write can exceed its available size
+  - Stack array or `alloca` existence alone is not a vulnerability; confirm the unsafe write path
 - UART/serial handlers with no authentication (CWE-306)
 
 ## Compiler Optimization Awareness
