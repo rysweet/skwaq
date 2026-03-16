@@ -5,24 +5,40 @@
 # Results are written to separate JSON files, then merged.
 #
 # Usage:
-#   ./scripts/parallel-gym.sh <suite> <total_cases> <num_procs> [extra_args...]
+#   ./scripts/parallel-gym.sh <suite> [total_cases] <num_procs> [extra_args...]
 #
 # Examples:
-#   # 10 processes, 500 cases each for Juliet
-#   ./scripts/parallel-gym.sh juliet 5000 10
+#   # 10 processes across the full Juliet manifest
+#   ./scripts/parallel-gym.sh juliet 10
 #
-#   # 5 processes, 100 cases each for OWASP with concurrency 4
-#   ./scripts/parallel-gym.sh owasp 500 5 -j 4
+#   # 5 processes across the full OWASP manifest with concurrency 4
+#   ./scripts/parallel-gym.sh owasp 5 -j 4
 #
-#   # Quick mode (pattern only), 10 procs
-#   ./scripts/parallel-gym.sh juliet 5000 10 --quick
+#   # Quick mode (pattern only), 10 procs, explicit temporary override
+#   SKWAQ_SUITE_CASES_JULIET=1000 ./scripts/parallel-gym.sh juliet 10 --quick
 
 set -euo pipefail
 
-SUITE="${1:?Usage: parallel-gym.sh <suite> <total_cases> <num_procs> [extra_args...]}"
-TOTAL="${2:?Specify total cases}"
-NPROCS="${3:?Specify number of processes}"
-shift 3
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=lib/suite_cases.sh
+source "$SCRIPT_DIR/lib/suite_cases.sh"
+
+SUITE="${1:?Usage: parallel-gym.sh <suite> [total_cases] <num_procs> [extra_args...]}"
+shift
+
+if [[ $# -ge 2 && "$1" =~ ^[0-9]+$ && "$2" =~ ^[0-9]+$ ]]; then
+    TOTAL="$1"
+    NPROCS="$2"
+    shift 2
+else
+    NPROCS="${1:?Specify num_procs}"
+    TOTAL="$(get_suite_cases "$REPO_ROOT" "$SUITE")"
+    shift
+fi
+
+validate_suite_case_count "$TOTAL" "total_cases" || exit 1
+validate_suite_case_count "$NPROCS" "num_procs" || exit 1
 EXTRA_ARGS=("$@")
 
 CASES_PER_PROC=$(( (TOTAL + NPROCS - 1) / NPROCS ))  # ceiling division

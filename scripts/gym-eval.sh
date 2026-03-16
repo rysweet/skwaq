@@ -22,6 +22,11 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=lib/suite_cases.sh
+source "$SCRIPT_DIR/lib/suite_cases.sh"
+
 # Defaults
 PROCS=5
 CONCURRENCY=2  # Conservative to avoid API rate limits
@@ -50,14 +55,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Suite configurations: name, total_cases
-declare -A SUITE_CASES
-SUITE_CASES[juliet]=5000
-SUITE_CASES[owasp]=2740
-SUITE_CASES[cyberseceval]=578
-SUITE_CASES[cgc]=204
-SUITE_CASES[fixtures]=7
-
 EVAL_DIR=$(mktemp -d /tmp/gym-eval-XXXXXX)
 
 echo "╔══════════════════════════════════════════════════╗"
@@ -76,7 +73,15 @@ if [ ! -f "$SKWAQ" ]; then
     cargo build --release 2>&1 | tail -1
 fi
 
-# Always run fixtures sequentially (only 7 cases)
+IFS=',' read -ra SUITE_LIST <<< "$SUITES"
+declare -A SUITE_CASES
+for suite in "${SUITE_LIST[@]}"; do
+    suite="${suite// /}"
+    [ -z "$suite" ] && continue
+    SUITE_CASES["$suite"]="$(get_suite_cases "$REPO_ROOT" "$suite")"
+done
+
+# Always run fixtures sequentially.
 echo "[fixtures] Running fixtures..."
 "$SKWAQ" gym run fixtures ${QUICK:+$QUICK} -j 1 \
     --json "$EVAL_DIR/fixtures.json" \
@@ -85,14 +90,14 @@ echo "[fixtures] Done"
 grep -E "F1|Precision|Recall" "$EVAL_DIR/fixtures.log" | head -3
 
 # Launch parallel runs for each suite
-IFS=',' read -ra SUITE_LIST <<< "$SUITES"
 declare -A SUITE_PIDS
 declare -A SUITE_DIRS
 
 for suite in "${SUITE_LIST[@]}"; do
+    suite="${suite// /}"
     [ "$suite" = "fixtures" ] && continue  # Already ran
 
-    total=${SUITE_CASES[$suite]:-100}
+    total=${SUITE_CASES[$suite]}
     cases_per=$(( (total + PROCS - 1) / PROCS ))
     suite_dir="$EVAL_DIR/$suite"
     mkdir -p "$suite_dir"
@@ -129,6 +134,7 @@ while ! $all_done; do
     echo ""
     echo "--- $(date +%H:%M:%S) ---"
     for suite in "${SUITE_LIST[@]}"; do
+        suite="${suite// /}"
         [ "$suite" = "fixtures" ] && continue
         dir="${SUITE_DIRS[$suite]}"
 
@@ -148,7 +154,7 @@ while ! $all_done; do
         done
 
         retries=$(grep -c "Retrying request" "$dir"/shard-*.log 2>/dev/null || echo 0)
-        total=${SUITE_CASES[$suite]:-0}
+        total=${SUITE_CASES[$suite]}
         pct=$((completed_cases * 100 / (total + 1)))
 
         echo "  $suite: $completed_cases/$total cases ($pct%) | $running procs running | $retries retries"
@@ -169,23 +175,24 @@ HEADER
 
 # Add fixtures
 if [ -f "$EVAL_DIR/fixtures.json" ]; then
-    f1=$(grep "F1" "$EVAL_DIR/fixtures.log" | head -1 | grep -oP '[\d.]+' | head -1)
-    prec=$(grep "Precision" "$EVAL_DIR/fixtures.log" | head -1 | grep -oP '[\d.]+' | head -1)
-    rec=$(grep "Recall" "$EVAL_DIR/fixtures.log" | head -1 | grep -oP '[\d.]+' | head -1)
-    echo "| Fixtures | ${f1}% | ${prec}% | ${rec}% | - | - | - | - | 7 |" >> "$SUMMARY"
+    f1=$(grep "F1" "$EVAL_DIR/fixtures.log" | head -1 | grep -oE '[0-9.]+' | head -1)
+    prec=$(grep "Precision" "$EVAL_DIR/fixtures.log" | head -1 | grep -oE '[0-9.]+' | head -1)
+    rec=$(grep "Recall" "$EVAL_DIR/fixtures.log" | head -1 | grep -oE '[0-9.]+' | head -1)
+    echo "| Fixtures | ${f1}% | ${prec}% | ${rec}% | - | - | - | - | ${SUITE_CASES[fixtures]} |" >> "$SUMMARY"
 fi
 
 for suite in "${SUITE_LIST[@]}"; do
+    suite="${suite// /}"
     [ "$suite" = "fixtures" ] && continue
     dir="${SUITE_DIRS[$suite]}"
 
     # Collect per-shard results
     total_tp=0; total_fp=0; total_fn=0; total_tn=0
     for shard_log in "$dir"/shard-*.log; do
-        tp=$(grep "TP:" "$shard_log" 2>/dev/null | grep -oP 'TP: \K\d+' | head -1 || echo 0)
-        fp=$(grep "FP:" "$shard_log" 2>/dev/null | grep -oP 'FP: \K\d+' | head -1 || echo 0)
-        fn=$(grep "FN:" "$shard_log" 2>/dev/null | grep -oP 'FN: \K\d+' | head -1 || echo 0)
-        tn=$(grep "TN:" "$shard_log" 2>/dev/null | grep -oP 'TN: \K\d+' | head -1 || echo 0)
+        tp=$(grep "TP:" "$shard_log" 2>/dev/null | grep -oE 'TP: [0-9]+' | head -1 | grep -oE '[0-9]+' || echo 0)
+        fp=$(grep "FP:" "$shard_log" 2>/dev/null | grep -oE 'FP: [0-9]+' | head -1 | grep -oE '[0-9]+' || echo 0)
+        fn=$(grep "FN:" "$shard_log" 2>/dev/null | grep -oE 'FN: [0-9]+' | head -1 | grep -oE '[0-9]+' || echo 0)
+        tn=$(grep "TN:" "$shard_log" 2>/dev/null | grep -oE 'TN: [0-9]+' | head -1 | grep -oE '[0-9]+' || echo 0)
         total_tp=$((total_tp + tp))
         total_fp=$((total_fp + fp))
         total_fn=$((total_fn + fn))
