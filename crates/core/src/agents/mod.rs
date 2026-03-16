@@ -27,7 +27,8 @@ pub use output_schema::{
 pub use pipeline::{
     deep_pipeline, deep_pipeline_debate, deep_pipeline_for_target, default_pipeline,
     default_pipeline_for_target, pipeline_from_names, run_deep_pipeline_with_debate,
-    select_vuln_hunter, AnalysisPipeline, ClientRole, DebateGroup, PipelineClients, PipelineStage,
+    select_vuln_hunter, source_pipeline_for_target, AnalysisPipeline, ClientRole, DebateGroup,
+    PipelineClients, PipelineStage,
 };
 pub use runner::{AgentContextFrame, AgentResult, AgentRunner};
 pub use tool_definitions::{agent_tools, filter_tools};

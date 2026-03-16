@@ -6,7 +6,9 @@
 //! Use `--agents` or `--agent` to override which agents run in AI mode.
 
 use super::common::resolve_investigation;
-use skwaq_core::agents::{default_pipeline_for_target, pipeline_from_names, PipelineClients};
+use skwaq_core::agents::{
+    default_pipeline_for_target, pipeline_from_names, source_pipeline_for_target, PipelineClients,
+};
 use skwaq_core::analysis::{
     extract_function_from_title, AnalysisOrchestrator, FindingStatus, SemanticPatternClassifier,
 };
@@ -48,14 +50,14 @@ async fn run_combined_analysis(
     let inv_id = resolve_investigation(&db, investigation_id)?;
 
     // Get the target name for the prompt
-    let target: String = db
+    let (target, investigation_name): (String, String) = db
         .conn()
         .query_row(
-            "SELECT COALESCE(target, name) FROM investigations WHERE id = ?1",
+            "SELECT COALESCE(target, name), name FROM investigations WHERE id = ?1",
             [&inv_id],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
-        .unwrap_or_else(|_| inv_id.clone());
+        .unwrap_or_else(|_| (inv_id.clone(), inv_id.clone()));
 
     // --- Phase 1: Pattern detection + multi-cycle orchestrator ---
     eprintln!("Phase 1: Running pattern detection + data flow analysis...");
@@ -81,11 +83,14 @@ async fn run_combined_analysis(
     // --- Phase 2: AI agent pipeline ---
     let budget_amount = budget.unwrap_or(config.analysis.default_token_budget);
 
+    let source_investigation = investigation_name.starts_with("source:");
     let pipeline = if let Some(single) = agent_flag {
         pipeline_from_names(&[single.to_string()])
     } else if let Some(names) = agents_flag {
         let names: Vec<String> = names.split(',').map(|s| s.trim().to_string()).collect();
         pipeline_from_names(&names)
+    } else if source_investigation {
+        source_pipeline_for_target(&target)
     } else {
         default_pipeline_for_target(&target)
     };

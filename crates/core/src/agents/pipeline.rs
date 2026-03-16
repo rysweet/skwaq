@@ -1296,6 +1296,31 @@ pub fn default_pipeline() -> AnalysisPipeline {
     default_pipeline_for_target("")
 }
 
+/// Build the default source-analysis pipeline: attack-surface -> vuln-hunter -> critic.
+pub fn source_pipeline_for_target(target: &str) -> AnalysisPipeline {
+    let hunter = select_vuln_hunter(target);
+    AnalysisPipeline {
+        stages: vec![
+            PipelineStage {
+                agent_name: "attack-surface".into(),
+                context_mode: ContextMode::FromGraph,
+                client_role: ClientRole::Reasoning,
+            },
+            vuln_hunter_stage(hunter, false),
+            PipelineStage {
+                agent_name: "critic".into(),
+                context_mode: ContextMode::FromPreviousResults {
+                    preamble: "Review the following vulnerability findings and validate each one. \
+                               For each finding, determine if it is a true positive or false \
+                               positive, and adjust severity if needed."
+                        .into(),
+                },
+                client_role: ClientRole::Reasoning,
+            },
+        ],
+    }
+}
+
 /// Build the default analysis pipeline with language-aware vuln-hunter selection.
 pub fn default_pipeline_for_target(target: &str) -> AnalysisPipeline {
     let hunter = select_vuln_hunter(target);
@@ -3122,6 +3147,22 @@ mod tests {
 
         assert_eq!(pipeline.stages[0].client_role, ClientRole::Decompilation);
         assert_eq!(pipeline.stages[1].client_role, ClientRole::Reasoning);
+    }
+
+    #[test]
+    fn test_source_pipeline_for_target_uses_reasoning_only() {
+        let pipeline = source_pipeline_for_target("sample.c");
+
+        assert!(pipeline.requires_reasoning_client());
+        assert!(!pipeline.requires_decompilation_client());
+        assert_eq!(
+            pipeline
+                .stages
+                .iter()
+                .map(|stage| stage.agent_name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["attack-surface", "vuln-hunter", "critic"]
+        );
     }
 
     #[test]

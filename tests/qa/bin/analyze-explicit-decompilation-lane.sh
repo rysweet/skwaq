@@ -59,6 +59,27 @@ if [[ -z "$investigation_id" ]]; then
 fi
 
 echo
+echo "=== analyze-default-source ==="
+default_output="$(
+  cd "$workspace_dir" &&
+    env "${common_env[@]}" \
+      "$skwaq_bin" analyze --investigation "$investigation_id" --budget 0 2>&1
+)"
+echo "$default_output"
+
+if [[ "$default_output" == *"Unsupported llm.decompilation backend"* ]]; then
+  echo "default source pipeline still rejected unused llm.decompilation" >&2
+  exit 1
+fi
+
+if [[ "$default_output" != *"Pipeline: attack-surface -> vuln-hunter -> critic"* ]]; then
+  echo "default source pipeline did not stay on the reasoning-only source path" >&2
+  exit 1
+fi
+
+echo "default source pipeline stayed on reasoning lane"
+
+echo
 echo "=== analyze-reasoning-only ==="
 reasoning_output="$(
   cd "$workspace_dir" &&

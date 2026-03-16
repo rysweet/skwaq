@@ -26,6 +26,9 @@ steps:
       exit_code: 0
       stdout_contains:
         - "=== ingest-source ==="
+        - "=== analyze-default-source ==="
+        - "Pipeline: attack-surface -> vuln-hunter -> critic"
+        - "default source pipeline stayed on reasoning lane"
         - "=== analyze-reasoning-only ==="
         - "Pipeline: attack-surface"
         - "Total tokens used: 0"
@@ -48,6 +51,8 @@ assertions:
     params:
       step: "Run explicit decompilation lane smoke"
       required_strings:
+        - "Pipeline: attack-surface -> vuln-hunter -> critic"
+        - "default source pipeline stayed on reasoning lane"
         - "Pipeline: attack-surface"
         - "reasoning-only pipeline ignored unused llm.decompilation"
         - "Unsupported llm.decompilation backend"
