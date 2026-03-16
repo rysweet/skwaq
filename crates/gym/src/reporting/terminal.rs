@@ -1,7 +1,7 @@
 //! Rich terminal output for benchmark results.
 
-use crate::history::BenchmarkRun;
-use crate::scoring::AggregateScore;
+use crate::history::{BenchmarkRun, CaseRegression};
+use crate::scoring::{self, AggregateScore};
 
 /// Print a summary of benchmark results.
 pub fn print_summary(score: &AggregateScore, suite: &str) {
@@ -91,50 +91,229 @@ pub fn print_summary(score: &AggregateScore, suite: &str) {
 }
 
 /// Print a comparison between two runs.
-pub fn print_comparison(previous: &BenchmarkRun, current: &BenchmarkRun) {
-    println!("\n{}", "=".repeat(70));
-    println!("  IMPROVEMENT COMPARISON");
-    println!("{}", "=".repeat(70));
-    println!();
+pub fn print_comparison(
+    previous: &BenchmarkRun,
+    current: &BenchmarkRun,
+    previous_score: &AggregateScore,
+    current_score: &AggregateScore,
+    case_regressions: &[CaseRegression],
+) {
+    print!(
+        "{}",
+        render_comparison(
+            previous,
+            current,
+            previous_score,
+            current_score,
+            case_regressions,
+        )
+    );
+}
+
+fn render_comparison(
+    previous: &BenchmarkRun,
+    current: &BenchmarkRun,
+    previous_score: &AggregateScore,
+    current_score: &AggregateScore,
+    case_regressions: &[CaseRegression],
+) -> String {
+    let mut output = String::new();
+    output.push_str(&format!("\n{}\n", "=".repeat(70)));
+    output.push_str("  IMPROVEMENT COMPARISON\n");
+    output.push_str(&format!("{}\n\n", "=".repeat(70)));
+    output.push_str(&format!("  Suite: {}\n", current.suite));
+    output.push_str(&format!(
+        "  Commits: {} -> {}\n\n",
+        short_commit(&previous.skwaq_commit),
+        short_commit(&current.skwaq_commit)
+    ));
 
     let delta_f1 = current.f1 - previous.f1;
     let delta_p = current.precision - previous.precision;
     let delta_r = current.recall - previous.recall;
 
-    println!(
-        "  {:>12} {:>10} {:>10} {:>10}",
+    output.push_str(&format!(
+        "  {:>12} {:>10} {:>10} {:>10}\n",
         "", "Previous", "Current", "Delta"
-    );
-    println!("  {}", "-".repeat(46));
-    println!(
-        "  {:>12} {:>9.1}% {:>9.1}% {:>+9.1}%",
+    ));
+    output.push_str(&format!("  {}\n", "-".repeat(46)));
+    output.push_str(&format!(
+        "  {:>12} {:>9.1}% {:>9.1}% {:>+9.1}%\n",
         "Precision",
         previous.precision * 100.0,
         current.precision * 100.0,
         delta_p * 100.0
-    );
-    println!(
-        "  {:>12} {:>9.1}% {:>9.1}% {:>+9.1}%",
+    ));
+    output.push_str(&format!(
+        "  {:>12} {:>9.1}% {:>9.1}% {:>+9.1}%\n",
         "Recall",
         previous.recall * 100.0,
         current.recall * 100.0,
         delta_r * 100.0
-    );
-    println!(
-        "  {:>12} {:>9.1}% {:>9.1}% {:>+9.1}%",
+    ));
+    output.push_str(&format!(
+        "  {:>12} {:>9.1}% {:>9.1}% {:>+9.1}%\n\n",
         "F1",
         previous.f1 * 100.0,
         current.f1 * 100.0,
         delta_f1 * 100.0
-    );
-    println!();
+    ));
 
     if delta_f1 > 0.0 {
-        println!("  Overall: IMPROVED");
+        output.push_str("  Overall: IMPROVED\n");
     } else if delta_f1 < 0.0 {
-        println!("  Overall: REGRESSED");
+        output.push_str("  Overall: REGRESSED\n");
     } else {
-        println!("  Overall: No change");
+        output.push_str("  Overall: No change\n");
     }
-    println!();
+
+    let cwe_regressions = scoring::cwe_regressions(previous_score, current_score);
+    output.push('\n');
+    if cwe_regressions.is_empty() {
+        output.push_str(&format!(
+            "  No per-CWE detection regressions beyond the {:.1}% noise margin.\n",
+            scoring::CWE_REGRESSION_NOISE_MARGIN * 100.0
+        ));
+    } else {
+        output.push_str(&format!(
+            "  Per-CWE detection regressions (> {:.1}% drop):\n",
+            scoring::CWE_REGRESSION_NOISE_MARGIN * 100.0
+        ));
+        output.push_str(&format!(
+            "  {:>8} {:>10} {:>10} {:>10}\n",
+            "CWE", "Previous", "Current", "Delta"
+        ));
+        output.push_str(&format!("  {}\n", "-".repeat(46)));
+        for regression in &cwe_regressions {
+            output.push_str(&format!(
+                "  {:>8} {:>9.1}% {:>9.1}% {:>+9.1}%\n",
+                regression.cwe_id,
+                regression.previous_detection_rate * 100.0,
+                regression.current_detection_rate * 100.0,
+                regression.delta_detection_rate * 100.0
+            ));
+        }
+    }
+
+    output.push('\n');
+    if case_regressions.is_empty() {
+        output.push_str("  No case regressions (TP -> FN).\n\n");
+    } else {
+        output.push_str("  Case regressions (TP -> FN):\n");
+        for regression in case_regressions.iter().take(10) {
+            output.push_str(&format!(
+                "    - {} [{}] expected {:?}, baseline {:?}, current {:?}\n",
+                regression.case_id,
+                regression.suite,
+                regression.expected_cwes,
+                regression.baseline_detected,
+                regression.new_detected
+            ));
+        }
+        if case_regressions.len() > 10 {
+            output.push_str(&format!(
+                "    ... and {} more case regressions\n",
+                case_regressions.len() - 10
+            ));
+        }
+        output.push('\n');
+    }
+
+    output
+}
+
+fn short_commit(commit: &str) -> &str {
+    &commit[..6.min(commit.len())]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use std::collections::HashMap;
+
+    fn run(
+        id: &str,
+        suite: &str,
+        commit: &str,
+        precision: f64,
+        recall: f64,
+        f1: f64,
+    ) -> BenchmarkRun {
+        BenchmarkRun {
+            id: id.to_string(),
+            started_at: Utc::now(),
+            finished_at: Some(Utc::now()),
+            suite: suite.to_string(),
+            skwaq_commit: commit.to_string(),
+            metadata: crate::history::RunMetadata::default(),
+            precision,
+            recall,
+            f1,
+            true_positives: 0,
+            false_positives: 0,
+            false_negatives: 0,
+            true_negatives: 0,
+        }
+    }
+
+    fn score(per_cwe: Vec<(u32, f64)>) -> AggregateScore {
+        let mut per_cwe_map = HashMap::new();
+        for (cwe_id, detection_rate) in per_cwe {
+            per_cwe_map.insert(
+                cwe_id,
+                crate::scoring::CweScore {
+                    cwe_id,
+                    detection_rate,
+                    ..Default::default()
+                },
+            );
+        }
+        AggregateScore {
+            per_cwe: per_cwe_map,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn render_comparison_surfaces_cwe_and_case_regressions() {
+        let previous = run("run-a", "fixtures", "abcdef123456", 0.8, 0.8, 0.8);
+        let current = run("run-b", "fixtures", "123456abcdef", 0.7, 0.6, 0.64);
+        let previous_score = score(vec![(119, 0.80), (134, 0.60)]);
+        let current_score = score(vec![(119, 0.75), (134, 0.40)]);
+        let case_regressions = vec![CaseRegression {
+            case_id: "overflow".to_string(),
+            suite: "fixtures".to_string(),
+            expected_cwes: vec![121],
+            baseline_detected: vec![119],
+            new_detected: vec![],
+        }];
+
+        let rendered = render_comparison(
+            &previous,
+            &current,
+            &previous_score,
+            &current_score,
+            &case_regressions,
+        );
+
+        assert!(rendered.contains("Suite: fixtures"));
+        assert!(rendered.contains("Per-CWE detection regressions"));
+        assert!(rendered.contains("134"));
+        assert!(rendered.contains("Case regressions (TP -> FN):"));
+        assert!(rendered.contains("overflow [fixtures]"));
+    }
+
+    #[test]
+    fn render_comparison_reports_when_no_regressions_exist() {
+        let previous = run("run-a", "fixtures", "abcdef123456", 0.8, 0.8, 0.8);
+        let current = run("run-b", "fixtures", "123456abcdef", 0.82, 0.81, 0.815);
+        let previous_score = score(vec![(119, 0.80)]);
+        let current_score = score(vec![(119, 0.79)]);
+
+        let rendered = render_comparison(&previous, &current, &previous_score, &current_score, &[]);
+
+        assert!(rendered.contains("No per-CWE detection regressions"));
+        assert!(rendered.contains("No case regressions (TP -> FN)."));
+    }
 }

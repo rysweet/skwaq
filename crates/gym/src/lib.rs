@@ -557,13 +557,44 @@ impl Gym {
         }
     }
 
-    /// Compare the two most recent runs.
+    /// Compare the two most recent finished runs for the latest suite.
     pub fn compare(&self) -> anyhow::Result<()> {
-        let runs = self.history_db.recent_finished_runs(2)?;
+        let current = self
+            .history_db
+            .recent_finished_runs(1)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("No finished runs yet. Run `skwaq gym run` first."))?;
+        let runs = self
+            .history_db
+            .recent_finished_runs_for_suite(&current.suite, 2)?;
         if runs.len() < 2 {
-            anyhow::bail!("Need at least 2 runs to compare. Run `skwaq gym run` twice.");
+            anyhow::bail!(
+                "Need at least 2 finished runs for suite `{}` to compare. Run `skwaq gym run {}` twice.",
+                current.suite,
+                current.suite
+            );
         }
-        reporting::terminal::print_comparison(&runs[1], &runs[0]);
+
+        let previous_run = &runs[1];
+        let current_run = &runs[0];
+        let previous_cwes = self.history_db.cwe_results_for_run(&previous_run.id)?;
+        let previous_semantics = self.history_db.semantic_results_for_run(&previous_run.id)?;
+        let current_cwes = self.history_db.cwe_results_for_run(&current_run.id)?;
+        let current_semantics = self.history_db.semantic_results_for_run(&current_run.id)?;
+        let previous_score = reconstruct_score(previous_run, &previous_cwes, &previous_semantics);
+        let current_score = reconstruct_score(current_run, &current_cwes, &current_semantics);
+        let case_regressions = self
+            .history_db
+            .case_regressions(&previous_run.id, &current_run.id)?;
+
+        reporting::terminal::print_comparison(
+            previous_run,
+            current_run,
+            &previous_score,
+            &current_score,
+            &case_regressions,
+        );
         Ok(())
     }
 

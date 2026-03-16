@@ -5,6 +5,8 @@ use crate::ground_truth::TestCase;
 use skwaq_core::analysis::{SemanticPatternClass, SemanticPatternClassifier};
 use std::collections::{BTreeSet, HashMap, HashSet};
 
+pub const CWE_REGRESSION_NOISE_MARGIN: f64 = 0.02;
+
 /// Outcome for a single test case.
 #[derive(Debug, Clone)]
 pub struct CaseOutcome {
@@ -52,6 +54,14 @@ pub struct SemanticScore {
     pub false_negatives: u32,
     pub detection_rate: f64,
     pub precision: f64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CweRegressionDelta {
+    pub cwe_id: u32,
+    pub previous_detection_rate: f64,
+    pub current_detection_rate: f64,
+    pub delta_detection_rate: f64,
 }
 
 /// Score a single test case against ground truth.
@@ -402,6 +412,34 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
     score
 }
 
+pub fn cwe_regressions(baseline: &AggregateScore, new: &AggregateScore) -> Vec<CweRegressionDelta> {
+    let mut regressions: Vec<_> = baseline
+        .per_cwe
+        .values()
+        .filter_map(|baseline_cwe| {
+            let new_cwe = new.per_cwe.get(&baseline_cwe.cwe_id)?;
+            let delta = new_cwe.detection_rate - baseline_cwe.detection_rate;
+            if delta < -CWE_REGRESSION_NOISE_MARGIN {
+                Some(CweRegressionDelta {
+                    cwe_id: baseline_cwe.cwe_id,
+                    previous_detection_rate: baseline_cwe.detection_rate,
+                    current_detection_rate: new_cwe.detection_rate,
+                    delta_detection_rate: delta,
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+    regressions.sort_by(|a, b| {
+        a.delta_detection_rate
+            .partial_cmp(&b.delta_detection_rate)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.cwe_id.cmp(&b.cwe_id))
+    });
+    regressions
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -741,5 +779,42 @@ mod tests {
         assert_eq!(overflow.false_positives, 1);
         assert_eq!(overflow.true_positives, 0);
         assert_eq!(overflow.precision, 0.0);
+    }
+
+    fn make_score(per_cwe: Vec<(u32, f64)>) -> AggregateScore {
+        let mut score = AggregateScore::default();
+        for (cwe_id, detection_rate) in per_cwe {
+            score.per_cwe.insert(
+                cwe_id,
+                CweScore {
+                    cwe_id,
+                    detection_rate,
+                    ..Default::default()
+                },
+            );
+        }
+        score
+    }
+
+    #[test]
+    fn test_cwe_regressions_reports_only_drops_beyond_margin() {
+        let baseline = make_score(vec![(119, 0.75), (134, 0.50), (190, 0.40)]);
+        let new = make_score(vec![(119, 0.72), (134, 0.49), (190, 0.39)]);
+
+        let regressions = cwe_regressions(&baseline, &new);
+
+        assert_eq!(regressions.len(), 1);
+        assert_eq!(regressions[0].cwe_id, 119);
+        assert!((regressions[0].delta_detection_rate + 0.03).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_cwe_regressions_ignores_missing_cwe_in_new_score() {
+        let baseline = make_score(vec![(119, 0.75), (134, 0.50)]);
+        let new = make_score(vec![(119, 0.75)]);
+
+        let regressions = cwe_regressions(&baseline, &new);
+
+        assert!(regressions.is_empty());
     }
 }
