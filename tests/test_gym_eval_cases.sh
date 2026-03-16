@@ -78,6 +78,24 @@ test_missing_manifest_fails_loudly() {
     rm -rf "$temp_repo"
 }
 
+test_empty_manifest_reports_invalid_count() {
+    local temp_repo output manifest_path
+    temp_repo="$(mktemp -d)"
+    mkdir -p "$temp_repo/data/gym/ground_truth"
+    manifest_path="$temp_repo/data/gym/ground_truth/fixtures.toml"
+    cat >"$manifest_path" <<'EOF'
+suite = "fixtures"
+EOF
+    set +e
+    output="$(get_suite_cases "$temp_repo" fixtures 2>&1)"
+    local status=$?
+    set -e
+    [[ $status -ne 0 ]] || fail "empty manifest should fail validation"
+    assert_contains "$output" "$manifest_path" "empty manifest should identify manifest path"
+    assert_contains "$output" "positive integer" "empty manifest should fail as invalid count"
+    rm -rf "$temp_repo"
+}
+
 test_missing_suite_fails() {
     local temp_repo output
     temp_repo="$(mktemp -d)"
@@ -122,6 +140,12 @@ EOF
     rm -rf "$temp_repo"
 }
 
+test_eval_script_seeds_fixtures_count_for_summary() {
+    assert_contains "$(cat "$repo_root/scripts/gym-eval.sh")" \
+        'SUITE_CASES["fixtures"]="$(get_suite_cases "$REPO_ROOT" fixtures)"' \
+        "gym-eval should seed fixtures count before summary rendering"
+}
+
 test_total_cases_positional_override_still_validates() {
     validate_suite_case_count "50" "total_cases" >/dev/null
     set +e
@@ -139,13 +163,15 @@ main() {
     test_env_override_wins
     test_invalid_override_fails
     test_missing_manifest_fails_loudly
+    test_empty_manifest_reports_invalid_count
     test_missing_suite_fails
     test_scripts_source_shared_helper
     test_eval_script_has_no_stale_suite_totals
     test_parallel_examples_drop_hardcoded_juliet_total
     test_manifest_counter_counts_cases
+    test_eval_script_seeds_fixtures_count_for_summary
     test_total_cases_positional_override_still_validates
-    echo "PASS: 11/11 tests"
+    echo "PASS: 13/13 tests"
 }
 
 main "$@"

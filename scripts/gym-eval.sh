@@ -80,6 +80,7 @@ for suite in "${SUITE_LIST[@]}"; do
     [ -z "$suite" ] && continue
     SUITE_CASES["$suite"]="$(get_suite_cases "$REPO_ROOT" "$suite")"
 done
+SUITE_CASES["fixtures"]="$(get_suite_cases "$REPO_ROOT" fixtures)"
 
 # Always run fixtures sequentially.
 echo "[fixtures] Running fixtures..."

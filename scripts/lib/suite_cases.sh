@@ -27,7 +27,7 @@ count_cases_from_manifest() {
         return 1
     fi
 
-    grep -cE '^\[\[cases\]\]' "$manifest_path"
+    grep -cE '^\[\[cases\]\]' "$manifest_path" || true
 }
 
 get_suite_cases() {
