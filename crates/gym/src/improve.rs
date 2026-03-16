@@ -20,6 +20,10 @@ const IMPROVE_KB_MAX_CWE_QUERIES: usize = 6;
 const IMPROVE_KB_HITS_PER_QUERY: usize = 2;
 const IMPROVE_KB_SNIPPET_CHAR_LIMIT: usize = 700;
 const IMPROVE_KB_FIXED_QUERIES: [&str; 2] = ["methodology", "cwe-families"];
+const FAILURE_ANALYST_MIN_CASES: usize = 5;
+const FAILURE_ANALYST_MAX_CASES: usize = 20;
+const FAILURE_ANALYST_TARGET_BUDGET_PER_CASE: u64 = 10_000;
+const FAILURE_ANALYST_MAX_BUDGET_PER_CASE: u64 = 30_000;
 
 /// A proposed improvement from the failure-analyst agent.
 #[derive(Debug, Clone)]
@@ -366,10 +370,19 @@ async fn run_failure_analyst_agent(
     let runner = skwaq_core::agents::runner::AgentRunner::new(llm_client);
 
     let mut proposals = Vec::new();
-    let budget_per_case = config.analysis.default_token_budget.min(30_000);
+    let case_limit =
+        failure_analyst_case_limit(config.analysis.default_token_budget, false_negatives.len());
+    let budget_per_case =
+        failure_analyst_budget_per_case(config.analysis.default_token_budget, case_limit);
 
-    for (i, fn_case) in false_negatives.iter().enumerate().take(5) {
-        // Cap at 5 cases per cycle
+    tracing::info!(
+        "Failure analyst evaluating up to {} false negatives with {} tokens per case ({} total FN cases available)",
+        case_limit,
+        budget_per_case,
+        false_negatives.len()
+    );
+
+    for (i, fn_case) in false_negatives.iter().enumerate().take(case_limit) {
         let mut budget = skwaq_core::llm::TokenBudget::new(budget_per_case);
         let source_excerpt_len = fn_case.source_content.len().min(4000);
         if fn_case.source_content.len() > source_excerpt_len {
@@ -427,7 +440,7 @@ async fn run_failure_analyst_agent(
             "Running failure-analyst on case {} ({}/{})",
             fn_case.case_id,
             i + 1,
-            false_negatives.len().min(5)
+            case_limit
         );
 
         let result = runner
@@ -458,6 +471,26 @@ async fn run_failure_analyst_agent(
     }
 
     Ok(proposals)
+}
+
+fn failure_analyst_case_limit(default_token_budget: u64, false_negative_count: usize) -> usize {
+    if false_negative_count == 0 {
+        return 0;
+    }
+
+    let budget_scaled_limit =
+        (default_token_budget / FAILURE_ANALYST_TARGET_BUDGET_PER_CASE) as usize;
+    let desired_limit =
+        budget_scaled_limit.clamp(FAILURE_ANALYST_MIN_CASES, FAILURE_ANALYST_MAX_CASES);
+    desired_limit.min(false_negative_count)
+}
+
+fn failure_analyst_budget_per_case(default_token_budget: u64, case_limit: usize) -> u64 {
+    if case_limit == 0 {
+        return 0;
+    }
+
+    (default_token_budget / case_limit as u64).clamp(1, FAILURE_ANALYST_MAX_BUDGET_PER_CASE)
 }
 
 async fn format_failure_analyst_output(
@@ -2180,6 +2213,24 @@ mod tests {
         let proposals = heuristic_failure_analysis(&fn_cases);
         assert!(!proposals.is_empty(), "Should propose adding execl pattern");
         assert!(proposals[0].description.contains("execl"));
+    }
+
+    #[test]
+    fn test_failure_analyst_case_limit_scales_with_budget() {
+        assert_eq!(failure_analyst_case_limit(100_000, 50), 10);
+        assert_eq!(failure_analyst_case_limit(250_000, 50), 20);
+        assert_eq!(failure_analyst_case_limit(30_000, 50), 5);
+        assert_eq!(failure_analyst_case_limit(100_000, 3), 3);
+        assert_eq!(failure_analyst_case_limit(100_000, 0), 0);
+    }
+
+    #[test]
+    fn test_failure_analyst_budget_per_case_respects_total_budget() {
+        assert_eq!(failure_analyst_budget_per_case(100_000, 10), 10_000);
+        assert_eq!(failure_analyst_budget_per_case(30_000, 5), 6_000);
+        assert_eq!(failure_analyst_budget_per_case(1_000_000, 20), 30_000);
+        assert_eq!(failure_analyst_budget_per_case(1, 5), 1);
+        assert_eq!(failure_analyst_budget_per_case(100_000, 0), 0);
     }
 
     #[test]
