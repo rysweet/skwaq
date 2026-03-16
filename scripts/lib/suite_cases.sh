@@ -1,17 +1,7 @@
 #!/usr/bin/env bash
 
 # Shared suite-case resolution for shell benchmark tooling.
-# Resolution order: explicit env override -> manifest-derived count -> named fallback.
-
-declare -Ar FALLBACK_SUITE_CASES=(
-    [binpool]=236
-    [cgc]=204
-    [cyberseceval]=653
-    [fixtures]=22
-    [juliet]=54488
-    [owasp]=2740
-    [realworld]=6
-)
+# Resolution order: explicit env override -> manifest-derived count -> hard failure.
 
 suite_case_env_var_name() {
     local suite="$1"
@@ -43,7 +33,7 @@ count_cases_from_manifest() {
 get_suite_cases() {
     local repo_root="$1"
     local suite="$2"
-    local env_var_name env_value manifest_path manifest_value fallback_value
+    local env_var_name env_value manifest_path manifest_value
 
     env_var_name="$(suite_case_env_var_name "$suite")"
     env_value="${!env_var_name:-}"
@@ -60,14 +50,7 @@ get_suite_cases() {
         return 0
     fi
 
-    fallback_value="${FALLBACK_SUITE_CASES[$suite]:-}"
-    if [[ -n "$fallback_value" ]]; then
-        validate_suite_case_count "$fallback_value" "FALLBACK_SUITE_CASES[$suite]" || return 1
-        printf 'WARNING: using fallback suite case count for %s: %s\n' "$suite" "$fallback_value" >&2
-        printf '%s' "$fallback_value"
-        return 0
-    fi
-
-    printf 'ERROR: unable to resolve suite case count for %s\n' "$suite" >&2
+    printf 'ERROR: unable to resolve suite case count for %s; expected manifest at %s or env override %s\n' \
+        "$suite" "$manifest_path" "$env_var_name" >&2
     return 1
 }

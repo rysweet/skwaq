@@ -64,7 +64,7 @@ test_invalid_override_fails() {
     assert_contains "$output" "positive integer" "invalid override should explain failure"
 }
 
-test_fallback_count_and_warning() {
+test_missing_manifest_fails_loudly() {
     local temp_repo output
     temp_repo="$(mktemp -d)"
     mkdir -p "$temp_repo/data/gym/ground_truth"
@@ -72,9 +72,9 @@ test_fallback_count_and_warning() {
     output="$(get_suite_cases "$temp_repo" cgc 2>&1)"
     local status=$?
     set -e
-    [[ $status -eq 0 ]] || fail "fallback count should succeed"
-    assert_contains "$output" "WARNING: using fallback suite case count for cgc: 204" "fallback should warn"
-    assert_contains "$output" "204" "fallback should emit count"
+    [[ $status -ne 0 ]] || fail "missing manifest should fail loudly"
+    assert_contains "$output" "expected manifest at $temp_repo/data/gym/ground_truth/cgc.toml" "missing manifest path should be reported"
+    assert_contains "$output" "SKWAQ_SUITE_CASES_CGC" "missing manifest should mention env override"
     rm -rf "$temp_repo"
 }
 
@@ -138,7 +138,7 @@ main() {
     test_manifest_count
     test_env_override_wins
     test_invalid_override_fails
-    test_fallback_count_and_warning
+    test_missing_manifest_fails_loudly
     test_missing_suite_fails
     test_scripts_source_shared_helper
     test_eval_script_has_no_stale_suite_totals
