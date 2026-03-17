@@ -25,6 +25,7 @@ use skwaq_core::source::parse_file;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::{Duration, Instant};
 
 /// Tracks how many cases used LLM synthesis vs. encountered errors.
 ///
@@ -93,6 +94,7 @@ static SYNTHESIS_STATS: std::sync::LazyLock<SynthesisStats> =
     std::sync::LazyLock::new(SynthesisStats::new);
 
 const GHIDRA_ANALYSIS_TIMEOUT_SECS: u64 = 300;
+const SYNTHESIS_REFINEMENT_MAX_BUDGET: u64 = 10_000;
 
 /// Get the global synthesis stats. Call [`SynthesisStats::report`] at end of run.
 pub fn synthesis_stats() -> &'static SynthesisStats {
@@ -533,6 +535,10 @@ async fn llm_synthesize(
         .await
         .context("LLM synthesis requires a working LLM client")?;
 
+    if timeout_secs == 0 {
+        anyhow::bail!("LLM synthesis requires a positive timeout budget");
+    }
+
     // Build the synthesis prompt
     let mut prompt = String::from(
         "You are a lead security reviewer evaluating vulnerability findings from two sources:\n\
@@ -541,31 +547,15 @@ async fn llm_synthesize(
          Your job: decide which findings are REAL vulnerabilities.\n\n\
          For each finding, respond with one line:\n\
          CONFIRM <id> — strong evidence from one or both sources\n\
+         REVIEW <id> — plausible finding, but the evidence is conflicting or incomplete and needs a second pass\n\
          REJECT <id> — insufficient evidence, likely false positive\n\n\
          Only REJECT findings where you are confident they are false positives.\n\
-         When in doubt, CONFIRM.\n\n",
+         Use REVIEW when the finding may be real but you need a stricter second-pass check.\n\
+         When evidence is strong enough, prefer CONFIRM over REVIEW.\n\n",
     );
 
-    prompt.push_str("=== PATTERN FINDINGS ===\n");
-    for f in pattern_findings {
-        // Sanitize titles to prevent prompt injection from finding content
-        let safe_title = sanitize_for_prompt(&f.title);
-        let semantic = semantic_prompt_hint(f);
-        prompt.push_str(&format!(
-            "ID: {} | Category: {} | Severity: {} | Semantic classes: {} | {}\n",
-            f.id, f.category, f.severity, semantic, safe_title
-        ));
-    }
-
-    prompt.push_str("\n=== LLM AGENT FINDINGS ===\n");
-    for f in llm_findings {
-        let safe_title = sanitize_for_prompt(&f.title);
-        let semantic = semantic_prompt_hint(f);
-        prompt.push_str(&format!(
-            "ID: {} | Category: {} | Severity: {} | Semantic classes: {} | {}\n",
-            f.id, f.category, f.severity, semantic, safe_title
-        ));
-    }
+    append_findings_for_prompt(&mut prompt, "=== PATTERN FINDINGS ===\n", pattern_findings);
+    append_findings_for_prompt(&mut prompt, "\n=== LLM AGENT FINDINGS ===\n", llm_findings);
 
     prompt.push_str("\nEvaluate each finding. Respond with CONFIRM or REJECT for each ID.\n");
 
@@ -576,36 +566,154 @@ async fn llm_synthesize(
         .min(10_000 + (pattern_findings.len() + llm_findings.len()) as u64 * 500);
     let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
     let model = &config.llm.copilot.model;
+    let synthesis_started = Instant::now();
 
-    // Use execute_with_tools with no tools for a simple completion
+    let response_text = execute_synthesis_completion(
+        &client,
+        model,
+        "You are a lead security reviewer evaluating vulnerability findings.",
+        &prompt,
+        timeout_secs,
+        &mut budget,
+    )
+    .await?;
+    let first_pass = parse_synthesis_decisions(&response_text);
+    let mut rejected_ids = first_pass.rejected_ids.clone();
+
+    let review_findings = collect_review_findings(
+        pattern_findings,
+        llm_findings,
+        &first_pass.review_ids,
+        &rejected_ids,
+    );
+
+    if !review_findings.is_empty() {
+        let remaining_timeout =
+            remaining_refinement_timeout(timeout_secs, synthesis_started.elapsed());
+        if remaining_timeout == 0 {
+            tracing::warn!(
+                "Skipping synthesis refinement for {} finding(s): no timeout budget remained after first pass",
+                review_findings.len()
+            );
+        } else {
+            tracing::info!(
+                "Running synthesis refinement on {} uncertain finding(s) with {}s remaining",
+                review_findings.len(),
+                remaining_timeout
+            );
+            let refinement_prompt = build_refinement_prompt(&review_findings);
+            let mut refinement_budget = skwaq_core::llm::TokenBudget::new(
+                (budget_amount / 4).clamp(2_000, SYNTHESIS_REFINEMENT_MAX_BUDGET),
+            );
+            let refinement_text = match execute_synthesis_completion(
+                &client,
+                model,
+                "You are a lead security reviewer performing a stricter second-pass review.",
+                &refinement_prompt,
+                remaining_timeout,
+                &mut refinement_budget,
+            )
+            .await
+            {
+                Ok(text) => text,
+                Err(error) => {
+                    tracing::warn!(
+                        "LLM synthesis refinement failed after successful initial synthesis; using initial decisions: {}",
+                        error
+                    );
+                    return Ok(apply_rejected_synthesis_decisions(
+                        pattern_findings,
+                        llm_findings,
+                        &rejected_ids,
+                    ));
+                }
+            };
+            let refinement = parse_synthesis_decisions(&refinement_text);
+            let refined_rejections: HashSet<String> = refinement
+                .rejected_ids
+                .into_iter()
+                .filter(|id| first_pass.review_ids.contains(id))
+                .collect();
+            tracing::info!(
+                "Synthesis refinement rejected {} of {} reviewed finding(s)",
+                refined_rejections.len(),
+                review_findings.len()
+            );
+            rejected_ids.extend(refined_rejections);
+        }
+    }
+
+    // Parse and apply synthesis decisions
+    let synthesized =
+        apply_rejected_synthesis_decisions(pattern_findings, llm_findings, &rejected_ids);
+
+    Ok(synthesized)
+}
+
+fn remaining_refinement_timeout(timeout_secs: u64, elapsed: Duration) -> u64 {
+    timeout_secs.saturating_sub(elapsed.as_secs())
+}
+
+fn append_findings_for_prompt(prompt: &mut String, heading: &str, findings: &[DetectedFinding]) {
+    prompt.push_str(heading);
+    for finding in findings {
+        let safe_title = sanitize_for_prompt(&finding.title);
+        let semantic = semantic_prompt_hint(finding);
+        prompt.push_str(&format!(
+            "ID: {} | Category: {} | Severity: {} | Semantic classes: {} | {}\n",
+            finding.id, finding.category, finding.severity, semantic, safe_title
+        ));
+    }
+}
+
+fn build_refinement_prompt(review_findings: &[DetectedFinding]) -> String {
+    let mut prompt = String::from(
+        "You are performing a stricter second-pass review of findings that were previously marked REVIEW.\n\
+         These findings may be real, but the first pass considered the evidence incomplete or conflicting.\n\n\
+         For each finding, respond with exactly one line:\n\
+         CONFIRM <id> — enough concrete evidence remains after re-checking\n\
+         REJECT <id> — evidence is still incomplete, conflicting, or too speculative\n\n\
+         Do not emit REVIEW on the second pass.\n\
+         Prefer REJECT when the finding depends on assumptions not supported by the evidence.\n\n",
+    );
+    append_findings_for_prompt(&mut prompt, "=== REVIEW FINDINGS ===\n", review_findings);
+    prompt.push_str(
+        "\nRe-evaluate each reviewed finding. Respond with CONFIRM or REJECT for every ID.\n",
+    );
+    prompt
+}
+
+async fn execute_synthesis_completion(
+    client: &skwaq_core::llm::Client,
+    model: &str,
+    system_prompt: &str,
+    prompt: &str,
+    timeout_secs: u64,
+    budget: &mut skwaq_core::llm::TokenBudget,
+) -> anyhow::Result<String> {
     let noop_executor = |_name: String, _args: serde_json::Value| async move {
         Ok::<serde_json::Value, anyhow::Error>(serde_json::json!({"error": "no tools"}))
     };
 
     let result = tokio::time::timeout(
-        std::time::Duration::from_secs(timeout_secs),
+        Duration::from_secs(timeout_secs),
         skwaq_core::llm::execute_with_tools(
-            &client,
+            client,
             model,
-            "You are a lead security reviewer evaluating vulnerability findings.",
-            &prompt,
+            system_prompt,
+            prompt,
             &[],
             noop_executor,
-            &mut budget,
+            budget,
         ),
     )
     .await;
 
-    let response_text = match result {
-        Ok(Ok(text)) => text,
+    match result {
+        Ok(Ok(text)) => Ok(text),
         Ok(Err(e)) => anyhow::bail!("LLM synthesis call failed: {}", e),
         Err(_) => anyhow::bail!("LLM synthesis timed out after {}s", timeout_secs),
-    };
-
-    // Parse and apply synthesis decisions
-    let synthesized = apply_synthesis_decisions(pattern_findings, llm_findings, &response_text);
-
-    Ok(synthesized)
+    }
 }
 
 /// Sanitize a string for safe inclusion in an LLM prompt.
@@ -622,28 +730,57 @@ fn sanitize_for_prompt(s: &str) -> String {
 ///
 /// Pure function — no I/O, fully testable.
 /// Default behavior: CONFIRM all (only explicit REJECT removes findings).
+#[derive(Debug, Default)]
+struct SynthesisDecisionSummary {
+    rejected_ids: HashSet<String>,
+    review_ids: HashSet<String>,
+}
+
+fn parse_synthesis_decisions(response_text: &str) -> SynthesisDecisionSummary {
+    let mut decisions = SynthesisDecisionSummary::default();
+
+    for line in response_text.lines() {
+        let trimmed = line.trim();
+        let upper = trimmed.to_uppercase();
+        let id = trimmed
+            .split_whitespace()
+            .nth(1)
+            .map(|raw| {
+                raw.trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != '-' && ch != '_')
+            })
+            .filter(|raw| !raw.is_empty())
+            .map(|raw| raw.to_ascii_lowercase());
+
+        match (upper.starts_with("REJECT"), upper.starts_with("REVIEW"), id) {
+            (true, _, Some(id)) => {
+                decisions.review_ids.remove(&id);
+                decisions.rejected_ids.insert(id);
+            }
+            (false, true, Some(id)) if !decisions.rejected_ids.contains(&id) => {
+                decisions.review_ids.insert(id);
+            }
+            _ => {}
+        }
+    }
+
+    decisions
+}
+
+#[cfg(test)]
 fn apply_synthesis_decisions(
     pattern_findings: &[DetectedFinding],
     llm_findings: &[DetectedFinding],
     response_text: &str,
 ) -> Vec<DetectedFinding> {
-    // Parse REJECT decisions (CONFIRM is the default — unlisted = confirmed)
-    let rejected_ids: HashSet<String> = response_text
-        .lines()
-        .filter_map(|line| {
-            let trimmed = line.trim().to_uppercase();
-            if trimmed.starts_with("REJECT") {
-                // Extract ID: "REJECT abc-123" or "REJECT abc-123 — reason"
-                trimmed
-                    .split_whitespace()
-                    .nth(1)
-                    .map(|id| id.to_lowercase()) // Normalize case for matching
-            } else {
-                None
-            }
-        })
-        .collect();
+    let decisions = parse_synthesis_decisions(response_text);
+    apply_rejected_synthesis_decisions(pattern_findings, llm_findings, &decisions.rejected_ids)
+}
 
+fn apply_rejected_synthesis_decisions(
+    pattern_findings: &[DetectedFinding],
+    llm_findings: &[DetectedFinding],
+    rejected_ids: &HashSet<String>,
+) -> Vec<DetectedFinding> {
     let total = pattern_findings.len() + llm_findings.len();
     tracing::info!(
         "LLM synthesis: {} rejected out of {} total findings",
@@ -651,9 +788,6 @@ fn apply_synthesis_decisions(
         total
     );
 
-    // Keep all non-rejected findings, deduplicated by semantic class when
-    // available so coarse categories like "memory" do not collapse distinct
-    // vulnerability classes.
     let mut seen_categories: HashSet<String> = HashSet::new();
     let mut synthesized: Vec<DetectedFinding> = Vec::new();
 
@@ -669,6 +803,23 @@ fn apply_synthesis_decisions(
     }
 
     synthesized
+}
+
+fn collect_review_findings(
+    pattern_findings: &[DetectedFinding],
+    llm_findings: &[DetectedFinding],
+    review_ids: &HashSet<String>,
+    rejected_ids: &HashSet<String>,
+) -> Vec<DetectedFinding> {
+    llm_findings
+        .iter()
+        .chain(pattern_findings.iter())
+        .filter(|finding| {
+            let finding_id = finding.id.to_ascii_lowercase();
+            review_ids.contains(&finding_id) && !rejected_ids.contains(&finding_id)
+        })
+        .cloned()
+        .collect()
 }
 
 /// Cached LLM client for the process. Avoids redundant Copilot token
@@ -1341,6 +1492,76 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_synthesis_decisions_tracks_review_ids() {
+        let response = "CONFIRM p1\nREVIEW l1 — conflicting evidence\nREJECT p2 — false positive\n";
+        let decisions = parse_synthesis_decisions(response);
+        assert!(decisions.review_ids.contains("l1"));
+        assert!(decisions.rejected_ids.contains("p2"));
+        assert!(!decisions.review_ids.contains("p2"));
+    }
+
+    #[test]
+    fn test_apply_synthesis_review_keeps_finding_until_rejected() {
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "copy".into(),
+            line: Some(12),
+            title: "LLM: possible stack overflow".into(),
+        }];
+        let response = "REVIEW l1 — re-check required\n";
+        let result = apply_synthesis_decisions(&[], &llm, response);
+        assert_eq!(
+            result.len(),
+            1,
+            "REVIEW alone should not drop a finding before the refinement pass"
+        );
+    }
+
+    #[test]
+    fn test_collect_review_findings_excludes_already_rejected_ids() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "copy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+        let mut review_ids = HashSet::new();
+        review_ids.insert("p1".to_string());
+        let mut rejected_ids = HashSet::new();
+        rejected_ids.insert("p1".to_string());
+
+        let result = collect_review_findings(&pattern, &[], &review_ids, &rejected_ids);
+        assert!(
+            result.is_empty(),
+            "Rejected findings should not be re-reviewed"
+        );
+    }
+
+    #[test]
+    fn test_remaining_refinement_timeout_stays_within_budget() {
+        for (timeout_secs, elapsed_secs, expected) in [
+            (0_u64, 0_u64, 0_u64),
+            (1, 0, 1),
+            (1, 1, 0),
+            (2, 1, 1),
+            (30, 12, 18),
+        ] {
+            let remaining =
+                remaining_refinement_timeout(timeout_secs, Duration::from_secs(elapsed_secs));
+            assert_eq!(remaining, expected);
+            assert!(remaining <= timeout_secs);
+        }
+    }
+
+    #[test]
     fn test_sanitize_for_prompt() {
         assert_eq!(sanitize_for_prompt("normal title"), "normal title");
         assert_eq!(
@@ -1442,8 +1663,8 @@ mod tests {
         let result = synthesize_findings(findings, &cats, &db, 30).await;
         if let Ok(findings) = &result {
             assert!(
-                !findings.is_empty(),
-                "Successful synthesis should produce findings"
+                findings.len() <= 2,
+                "Successful synthesis should return a bounded subset of the candidate findings"
             );
         }
 
