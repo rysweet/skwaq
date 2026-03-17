@@ -165,8 +165,13 @@ pub fn cwe_family(cwe: u32) -> u32 {
         129 | 131 | 170 | 805 => 119,
         // Path traversal family -> CWE-22
         23 | 36 => 22,
+        // Untrusted/uncontrolled search path -> path traversal family
+        426 | 427 => 22,
         // Crypto weakness family -> CWE-327
         326 | 328 | 330 | 338 | 310 | 295 => 327,
+        // Cleartext transmission / hard-coded key / hard-coded password /
+        // plaintext storage -> crypto family
+        319 | 321 | 256 | 259 => 327,
         // Use of potentially dangerous function -> CWE-676
         242 | 676 => 676,
         // Hardware crypto with short key -> crypto family
@@ -178,9 +183,13 @@ pub fn cwe_family(cwe: u32) -> u32 {
         // Invalid release / offset free -> memory lifecycle family
         761 | 763 => 416,
         // Resource leak family -> CWE-401
-        459 | 772 | 775 | 789 => 401,
+        // Includes: improper cleanup (459), missing release (772/775),
+        // resource consumption (400), improper shutdown (404),
+        // missing FD reference (773), resource lifetime errors (666/675)
+        400 | 404 | 459 | 666 | 675 | 772 | 773 | 775 | 789 => 401,
         // Uninitialized variable family -> CWE-457
-        908 => 457,
+        // Includes: improper initialization (665), missing init (908)
+        665 | 908 => 457,
         // Everything else maps to itself.
         other => other,
     }
@@ -197,17 +206,19 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
         "format_string" => vec![134],
         "race" => vec![362, 367],
         "temp_file" => vec![377],
-        "path_traversal" => vec![22, 23, 36],
+        "path_traversal" => vec![22, 23, 36, 426, 427],
         "deserialization" => vec![502],
-        "crypto" => vec![326, 327, 328, 330, 338, 310, 295, 614, 798, 312, 347, 1240],
+        "crypto" => vec![
+            256, 259, 295, 310, 312, 319, 321, 326, 327, 328, 330, 338, 347, 614, 798, 1240,
+        ],
         "unsafe_code" => vec![676, 242],
         "prototype_pollution" => vec![1321],
         "xss" => vec![79, 80],
         "null_deref" => vec![476, 252, 253, 690],
         "integer_overflow" => vec![128, 190, 191, 192, 193, 194, 195, 196, 197, 680, 681],
         "divide_by_zero" => vec![369],
-        "resource_leak" => vec![401, 459, 772, 775, 789],
-        "uninitialized_var" => vec![457, 908],
+        "resource_leak" => vec![400, 401, 404, 459, 666, 675, 772, 773, 775, 789],
+        "uninitialized_var" => vec![457, 665, 908],
         "use_after_free" => vec![415, 416],
         _ => vec![],
     }
@@ -220,11 +231,13 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         ],
         SemanticPatternClass::CommandInjection => &[77, 78],
         SemanticPatternClass::CrossSiteScripting => &[79, 80],
-        SemanticPatternClass::CryptoWeakness => &[326, 327, 328, 330, 338, 310, 295, 1240],
+        SemanticPatternClass::CryptoWeakness => {
+            &[256, 259, 295, 310, 319, 321, 326, 327, 328, 330, 338, 1240]
+        }
         SemanticPatternClass::Deserialization => &[502],
         SemanticPatternClass::FormatString => &[134],
         SemanticPatternClass::InsecureTempFile => &[377],
-        SemanticPatternClass::PathTraversal => &[22, 23, 36],
+        SemanticPatternClass::PathTraversal => &[22, 23, 36, 426, 427],
         SemanticPatternClass::PrototypePollution => &[1321],
         SemanticPatternClass::RaceCondition => &[362, 367],
         SemanticPatternClass::UnsafeApiUsage => &[242, 676],
@@ -234,8 +247,8 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
             &[128, 190, 191, 192, 193, 194, 195, 196, 197, 680, 681]
         }
         SemanticPatternClass::DivideByZero => &[369],
-        SemanticPatternClass::ResourceLeak => &[401, 459, 772, 775, 789],
-        SemanticPatternClass::UninitializedVar => &[457, 908],
+        SemanticPatternClass::ResourceLeak => &[400, 401, 404, 459, 666, 675, 772, 773, 775, 789],
+        SemanticPatternClass::UninitializedVar => &[457, 665, 908],
     }
 }
 
@@ -276,12 +289,12 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         }
         77 | 78 => Some(SemanticPatternClass::CommandInjection),
         79 | 80 => Some(SemanticPatternClass::CrossSiteScripting),
-        295 | 310 | 326 | 327 | 328 | 330 | 338 | 1240 => {
+        256 | 259 | 295 | 310 | 319 | 321 | 326 | 327 | 328 | 330 | 338 | 1240 => {
             Some(SemanticPatternClass::CryptoWeakness)
         }
         502 => Some(SemanticPatternClass::Deserialization),
         134 => Some(SemanticPatternClass::FormatString),
-        22 | 23 | 36 => Some(SemanticPatternClass::PathTraversal),
+        22 | 23 | 36 | 426 | 427 => Some(SemanticPatternClass::PathTraversal),
         1321 => Some(SemanticPatternClass::PrototypePollution),
         362 | 367 => Some(SemanticPatternClass::RaceCondition),
         377 => Some(SemanticPatternClass::InsecureTempFile),
@@ -292,8 +305,10 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
             Some(SemanticPatternClass::IntegerOverflow)
         }
         369 => Some(SemanticPatternClass::DivideByZero),
-        401 | 459 | 772 | 775 | 789 => Some(SemanticPatternClass::ResourceLeak),
-        457 | 908 => Some(SemanticPatternClass::UninitializedVar),
+        400 | 401 | 404 | 459 | 666 | 675 | 772 | 773 | 775 | 789 => {
+            Some(SemanticPatternClass::ResourceLeak)
+        }
+        457 | 665 | 908 => Some(SemanticPatternClass::UninitializedVar),
         _ => None,
     }
 }
@@ -668,6 +683,132 @@ mod tests {
         assert_eq!(cwe_family(242), 676);
         // Type confusion → memory safety
         assert_eq!(cwe_family(843), 119);
+    }
+
+    #[test]
+    fn test_expanded_cwe_family_mappings() {
+        // Resource management variants -> CWE-401
+        assert_eq!(cwe_family(400), 401); // uncontrolled resource consumption
+        assert_eq!(cwe_family(404), 401); // improper resource shutdown
+        assert_eq!(cwe_family(773), 401); // missing FD reference
+        assert_eq!(cwe_family(675), 401); // multiple operations on resource
+        assert_eq!(cwe_family(666), 401); // operation in wrong lifetime phase
+
+        // Crypto/secrets variants -> CWE-327
+        assert_eq!(cwe_family(319), 327); // cleartext transmission
+        assert_eq!(cwe_family(321), 327); // hard-coded crypto key
+        assert_eq!(cwe_family(259), 327); // hard-coded password
+        assert_eq!(cwe_family(256), 327); // plaintext password storage
+
+        // Initialization variants -> CWE-457
+        assert_eq!(cwe_family(665), 457); // improper initialization
+
+        // Search path variants -> CWE-22
+        assert_eq!(cwe_family(426), 22); // untrusted search path
+        assert_eq!(cwe_family(427), 22); // uncontrolled search path element
+    }
+
+    #[test]
+    fn test_expanded_category_to_cwes() {
+        let resource = category_to_cwes("resource_leak");
+        assert!(resource.contains(&400));
+        assert!(resource.contains(&404));
+        assert!(resource.contains(&773));
+        assert!(resource.contains(&675));
+        assert!(resource.contains(&666));
+
+        let crypto = category_to_cwes("crypto");
+        assert!(crypto.contains(&319));
+        assert!(crypto.contains(&321));
+        assert!(crypto.contains(&259));
+        assert!(crypto.contains(&256));
+
+        let uninit = category_to_cwes("uninitialized_var");
+        assert!(uninit.contains(&665));
+
+        let path = category_to_cwes("path_traversal");
+        assert!(path.contains(&426));
+        assert!(path.contains(&427));
+    }
+
+    #[test]
+    fn test_expanded_cwe_to_semantic_class() {
+        // Resource management
+        assert_eq!(
+            cwe_to_semantic_class(400),
+            Some(SemanticPatternClass::ResourceLeak)
+        );
+        assert_eq!(
+            cwe_to_semantic_class(404),
+            Some(SemanticPatternClass::ResourceLeak)
+        );
+        assert_eq!(
+            cwe_to_semantic_class(773),
+            Some(SemanticPatternClass::ResourceLeak)
+        );
+
+        // Crypto
+        assert_eq!(
+            cwe_to_semantic_class(319),
+            Some(SemanticPatternClass::CryptoWeakness)
+        );
+        assert_eq!(
+            cwe_to_semantic_class(321),
+            Some(SemanticPatternClass::CryptoWeakness)
+        );
+        assert_eq!(
+            cwe_to_semantic_class(256),
+            Some(SemanticPatternClass::CryptoWeakness)
+        );
+        assert_eq!(
+            cwe_to_semantic_class(259),
+            Some(SemanticPatternClass::CryptoWeakness)
+        );
+
+        // Init
+        assert_eq!(
+            cwe_to_semantic_class(665),
+            Some(SemanticPatternClass::UninitializedVar)
+        );
+
+        // Path
+        assert_eq!(
+            cwe_to_semantic_class(426),
+            Some(SemanticPatternClass::PathTraversal)
+        );
+        assert_eq!(
+            cwe_to_semantic_class(427),
+            Some(SemanticPatternClass::PathTraversal)
+        );
+    }
+
+    #[test]
+    fn test_score_case_expanded_family_matches() {
+        // CWE-400 ground truth should match CWE-401 resource leak finding
+        let case = TestCase {
+            id: "resource_test".to_string(),
+            path: "test.c".to_string(),
+            binary_path: None,
+            expected_cwes: vec![400],
+            is_negative: false,
+            language: "c".to_string(),
+        };
+        let findings = vec![make_finding("resource_leak", vec![401])];
+        let outcome = score_case(&case, &findings, &|f| f.cwes.clone());
+        assert!(outcome.cwe_hits[&400]);
+
+        // CWE-319 ground truth should match CWE-327 crypto finding
+        let case2 = TestCase {
+            id: "crypto_test".to_string(),
+            path: "test.c".to_string(),
+            binary_path: None,
+            expected_cwes: vec![319],
+            is_negative: false,
+            language: "c".to_string(),
+        };
+        let findings2 = vec![make_finding("crypto", vec![327])];
+        let outcome2 = score_case(&case2, &findings2, &|f| f.cwes.clone());
+        assert!(outcome2.cwe_hits[&319]);
     }
 
     #[test]
