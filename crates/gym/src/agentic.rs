@@ -94,7 +94,6 @@ static SYNTHESIS_STATS: std::sync::LazyLock<SynthesisStats> =
     std::sync::LazyLock::new(SynthesisStats::new);
 
 const GHIDRA_ANALYSIS_TIMEOUT_SECS: u64 = 300;
-const SYNTHESIS_REFINEMENT_TIMEOUT_FLOOR_SECS: u64 = 5;
 const SYNTHESIS_REFINEMENT_MAX_BUDGET: u64 = 10_000;
 
 /// Get the global synthesis stats. Call [`SynthesisStats::report`] at end of run.
@@ -536,6 +535,10 @@ async fn llm_synthesize(
         .await
         .context("LLM synthesis requires a working LLM client")?;
 
+    if timeout_secs == 0 {
+        anyhow::bail!("LLM synthesis requires a positive timeout budget");
+    }
+
     // Build the synthesis prompt
     let mut prompt = String::from(
         "You are a lead security reviewer evaluating vulnerability findings from two sources:\n\
@@ -585,8 +588,8 @@ async fn llm_synthesize(
     );
 
     if !review_findings.is_empty() {
-        let elapsed = synthesis_started.elapsed().as_secs();
-        let remaining_timeout = timeout_secs.saturating_sub(elapsed);
+        let remaining_timeout =
+            remaining_refinement_timeout(timeout_secs, synthesis_started.elapsed());
         if remaining_timeout == 0 {
             tracing::warn!(
                 "Skipping synthesis refinement for {} finding(s): no timeout budget remained after first pass",
@@ -602,15 +605,29 @@ async fn llm_synthesize(
             let mut refinement_budget = skwaq_core::llm::TokenBudget::new(
                 (budget_amount / 4).clamp(2_000, SYNTHESIS_REFINEMENT_MAX_BUDGET),
             );
-            let refinement_text = execute_synthesis_completion(
+            let refinement_text = match execute_synthesis_completion(
                 &client,
                 model,
                 "You are a lead security reviewer performing a stricter second-pass review.",
                 &refinement_prompt,
-                remaining_timeout.max(SYNTHESIS_REFINEMENT_TIMEOUT_FLOOR_SECS),
+                remaining_timeout,
                 &mut refinement_budget,
             )
-            .await?;
+            .await
+            {
+                Ok(text) => text,
+                Err(error) => {
+                    tracing::warn!(
+                        "LLM synthesis refinement failed after successful initial synthesis; using initial decisions: {}",
+                        error
+                    );
+                    return Ok(apply_rejected_synthesis_decisions(
+                        pattern_findings,
+                        llm_findings,
+                        &rejected_ids,
+                    ));
+                }
+            };
             let refinement = parse_synthesis_decisions(&refinement_text);
             let refined_rejections: HashSet<String> = refinement
                 .rejected_ids
@@ -633,6 +650,9 @@ async fn llm_synthesize(
     Ok(synthesized)
 }
 
+fn remaining_refinement_timeout(timeout_secs: u64, elapsed: Duration) -> u64 {
+    timeout_secs.saturating_sub(elapsed.as_secs())
+}
 fn append_findings_for_prompt(prompt: &mut String, heading: &str, findings: &[DetectedFinding]) {
     prompt.push_str(heading);
     for finding in findings {
@@ -1522,6 +1542,22 @@ mod tests {
             result.is_empty(),
             "Rejected findings should not be re-reviewed"
         );
+    }
+
+    #[test]
+    fn test_remaining_refinement_timeout_stays_within_budget() {
+        for (timeout_secs, elapsed_secs, expected) in [
+            (0_u64, 0_u64, 0_u64),
+            (1, 0, 1),
+            (1, 1, 0),
+            (2, 1, 1),
+            (30, 12, 18),
+        ] {
+            let remaining =
+                remaining_refinement_timeout(timeout_secs, Duration::from_secs(elapsed_secs));
+            assert_eq!(remaining, expected);
+            assert!(remaining <= timeout_secs);
+        }
     }
 
     #[test]
