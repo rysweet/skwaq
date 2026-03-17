@@ -33,6 +33,7 @@ use std::time::{Duration, Instant};
 /// Call [`SynthesisStats::report`] at end of a gym run to log the summary.
 pub struct SynthesisStats {
     pattern_confidence_early_exit_count: AtomicU32,
+    semantic_confidence_fast_path_count: AtomicU32,
     llm_synthesis_count: AtomicU32,
     consensus_early_exit_count: AtomicU32,
     failed_count: AtomicU32,
@@ -42,6 +43,7 @@ impl Default for SynthesisStats {
     fn default() -> Self {
         Self {
             pattern_confidence_early_exit_count: AtomicU32::new(0),
+            semantic_confidence_fast_path_count: AtomicU32::new(0),
             llm_synthesis_count: AtomicU32::new(0),
             consensus_early_exit_count: AtomicU32::new(0),
             failed_count: AtomicU32::new(0),
@@ -56,6 +58,11 @@ impl SynthesisStats {
 
     fn record_pattern_confidence_early_exit(&self) {
         self.pattern_confidence_early_exit_count
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn record_semantic_confidence_fast_path(&self) {
+        self.semantic_confidence_fast_path_count
             .fetch_add(1, Ordering::Relaxed);
     }
 
@@ -77,18 +84,23 @@ impl SynthesisStats {
         let pattern_confidence = self
             .pattern_confidence_early_exit_count
             .load(Ordering::Relaxed);
+        let semantic_confidence = self
+            .semantic_confidence_fast_path_count
+            .load(Ordering::Relaxed);
         let llm = self.llm_synthesis_count.load(Ordering::Relaxed);
         let consensus = self.consensus_early_exit_count.load(Ordering::Relaxed);
         let failed = self.failed_count.load(Ordering::Relaxed);
-        let total = pattern_confidence + llm + consensus + failed;
+        let total = pattern_confidence + semantic_confidence + llm + consensus + failed;
         if total == 0 {
             tracing::info!("Synthesis: no dual-source cases (nothing to synthesize)");
             return;
         }
         if failed > 0 {
             tracing::warn!(
-                "Synthesis summary: {}/{} pattern-confidence early-exit, {}/{} LLM synthesis, {}/{} consensus early-exit, {} failed loudly",
+                "Synthesis summary: {}/{} pattern-confidence early-exit, {}/{} semantic-confidence fast-path, {}/{} LLM synthesis, {}/{} consensus early-exit, {} failed loudly",
                 pattern_confidence,
+                total,
+                semantic_confidence,
                 total,
                 llm,
                 total,
@@ -103,8 +115,10 @@ impl SynthesisStats {
             );
         } else {
             tracing::info!(
-                "Synthesis summary: {}/{} pattern-confidence early-exit, {}/{} LLM synthesis, {}/{} consensus early-exit (all successful)",
+                "Synthesis summary: {}/{} pattern-confidence early-exit, {}/{} semantic-confidence fast-path, {}/{} LLM synthesis, {}/{} consensus early-exit (all successful)",
                 pattern_confidence,
+                total,
+                semantic_confidence,
                 total,
                 llm,
                 total,
@@ -610,6 +624,98 @@ fn findings_have_consensus(
     llm_fp.iter().all(|fp| pattern_fp.contains(fp))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SynthesisRoute {
+    ConsensusEarlyExit,
+    SemanticConfidenceFastPath,
+    FullSynthesis,
+}
+
+fn semantic_confidence_clusters(finding: &DetectedFinding) -> HashSet<&'static str> {
+    semantic_classes_for_finding(finding)
+        .into_iter()
+        .map(|class| class.confidence_cluster())
+        .collect()
+}
+
+fn same_function_and_category(pattern: &DetectedFinding, llm: &DetectedFinding) -> bool {
+    normalize_function_key(&pattern.function) == normalize_function_key(&llm.function)
+        && pattern.category.eq_ignore_ascii_case(&llm.category)
+}
+
+fn same_function_and_semantic_cluster(pattern: &DetectedFinding, llm: &DetectedFinding) -> bool {
+    if normalize_function_key(&pattern.function) != normalize_function_key(&llm.function) {
+        return false;
+    }
+
+    let pattern_clusters = semantic_confidence_clusters(pattern);
+    let llm_clusters = semantic_confidence_clusters(llm);
+
+    !pattern_clusters.is_empty()
+        && !llm_clusters.is_empty()
+        && pattern_clusters
+            .iter()
+            .any(|cluster| llm_clusters.contains(cluster))
+}
+
+fn cwe_families_for_finding(finding: &DetectedFinding) -> HashSet<u32> {
+    scoring::category_to_cwes(&finding.category)
+        .into_iter()
+        .map(scoring::cwe_family)
+        .collect()
+}
+
+/// Two findings overlap when they share at least one CWE family root.
+///
+/// This catches cases like pattern="memory" (CWE-119 family) and
+/// LLM="integer_overflow" (CWE-190 family) where both map to distinct
+/// families — those do NOT overlap, preserving accuracy.  But
+/// pattern="memory" and LLM="memory" sharing CWE-119 DO overlap.
+fn same_cwe_family_overlap(a: &DetectedFinding, b: &DetectedFinding) -> bool {
+    let a_families = cwe_families_for_finding(a);
+    let b_families = cwe_families_for_finding(b);
+    !a_families.is_empty()
+        && !b_families.is_empty()
+        && a_families.iter().any(|f| b_families.contains(f))
+}
+
+fn findings_have_semantic_confidence(
+    pattern_findings: &[DetectedFinding],
+    llm_findings: &[DetectedFinding],
+) -> bool {
+    if pattern_findings.is_empty() || llm_findings.is_empty() {
+        return false;
+    }
+
+    let is_related = |pattern: &DetectedFinding, llm: &DetectedFinding| -> bool {
+        same_function_and_category(pattern, llm)
+            || same_function_and_semantic_cluster(pattern, llm)
+            || same_cwe_family_overlap(pattern, llm)
+    };
+
+    pattern_findings
+        .iter()
+        .all(|pattern| llm_findings.iter().any(|llm| is_related(pattern, llm)))
+        && llm_findings.iter().all(|llm| {
+            pattern_findings
+                .iter()
+                .any(|pattern| is_related(pattern, llm))
+        })
+}
+
+fn select_synthesis_route(
+    pattern_findings: &[DetectedFinding],
+    llm_findings: &[DetectedFinding],
+) -> SynthesisRoute {
+    if findings_have_consensus(pattern_findings, llm_findings) {
+        return SynthesisRoute::ConsensusEarlyExit;
+    }
+    if findings_have_semantic_confidence(pattern_findings, llm_findings) {
+        return SynthesisRoute::SemanticConfidenceFastPath;
+    }
+    SynthesisRoute::FullSynthesis
+}
+
 /// Synthesize findings from both pattern detection and LLM agents.
 ///
 /// Models how a human security team works:
@@ -646,19 +752,37 @@ async fn synthesize_findings(
         return Ok(all_findings);
     }
 
-    // Both sources have findings — check for consensus before paying LLM cost.
-    if findings_have_consensus(&pattern_findings, &llm_findings) {
-        SYNTHESIS_STATS.record_consensus_early_exit();
-        tracing::info!(
-            "Consensus early-exit: {} pattern + {} LLM findings agree, skipping LLM synthesis",
-            pattern_findings.len(),
-            llm_findings.len(),
-        );
-        return Ok(all_findings);
-    }
+    let synthesis_result = match select_synthesis_route(&pattern_findings, &llm_findings) {
+        SynthesisRoute::ConsensusEarlyExit => {
+            SYNTHESIS_STATS.record_consensus_early_exit();
+            tracing::info!(
+                "Consensus early-exit: {} pattern + {} LLM findings agree, skipping LLM synthesis",
+                pattern_findings.len(),
+                llm_findings.len(),
+            );
+            return Ok(all_findings);
+        }
+        SynthesisRoute::SemanticConfidenceFastPath => {
+            SYNTHESIS_STATS.record_semantic_confidence_fast_path();
+            tracing::info!(
+                "Semantic-confidence fast-path: {} pattern + {} LLM findings share same-function alignment",
+                pattern_findings.len(),
+                llm_findings.len(),
+            );
+            llm_synthesize_with_limits(
+                &pattern_findings,
+                &llm_findings,
+                timeout_secs.min(10),
+                Some(6_000),
+            )
+            .await
+        }
+        SynthesisRoute::FullSynthesis => {
+            llm_synthesize(&pattern_findings, &llm_findings, timeout_secs).await
+        }
+    };
 
-    // Disagreement — full LLM synthesis required.
-    match llm_synthesize(&pattern_findings, &llm_findings, timeout_secs).await {
+    match synthesis_result {
         Ok(synthesized) => {
             SYNTHESIS_STATS.record_llm_synthesis();
             Ok(synthesized)
@@ -675,6 +799,15 @@ async fn llm_synthesize(
     pattern_findings: &[DetectedFinding],
     llm_findings: &[DetectedFinding],
     timeout_secs: u64,
+) -> anyhow::Result<Vec<DetectedFinding>> {
+    llm_synthesize_with_limits(pattern_findings, llm_findings, timeout_secs, None).await
+}
+
+async fn llm_synthesize_with_limits(
+    pattern_findings: &[DetectedFinding],
+    llm_findings: &[DetectedFinding],
+    timeout_secs: u64,
+    max_budget_override: Option<u64>,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
     let config = Config::load().context("LLM synthesis requires a valid skwaq configuration")?;
     skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm)
@@ -709,10 +842,10 @@ async fn llm_synthesize(
     prompt.push_str("\nEvaluate each finding. Respond with CONFIRM or REJECT for each ID.\n");
 
     // Budget scales with number of findings to evaluate
-    let budget_amount = config
-        .analysis
-        .default_token_budget
-        .min(10_000 + (pattern_findings.len() + llm_findings.len()) as u64 * 500);
+    let budget_amount = config.analysis.default_token_budget.min(
+        max_budget_override
+            .unwrap_or(10_000 + (pattern_findings.len() + llm_findings.len()) as u64 * 500),
+    );
     let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
     let model = &config.llm.copilot.model;
     let synthesis_started = Instant::now();
@@ -1840,6 +1973,7 @@ mod tests {
     fn test_synthesis_stats_report() {
         let stats = SynthesisStats::new();
         stats.record_pattern_confidence_early_exit();
+        stats.record_semantic_confidence_fast_path();
         stats.record_llm_synthesis();
         stats.record_llm_synthesis();
         stats.record_consensus_early_exit();
@@ -2160,5 +2294,249 @@ mod tests {
             &pattern_hits,
             &supporting,
         ));
+    }
+
+    #[test]
+    fn test_consensus_takes_precedence_over_semantic_confidence() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "copy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: copy".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "copy".into(),
+            line: Some(11),
+            title: "LLM: memory corruption in copy".into(),
+        }];
+
+        assert!(findings_have_semantic_confidence(&pattern, &llm));
+        assert_eq!(
+            select_synthesis_route(&pattern, &llm),
+            SynthesisRoute::ConsensusEarlyExit
+        );
+    }
+
+    #[test]
+    fn test_semantic_confidence_matches_related_clusters() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "strcpy".into(),
+            line: Some(11),
+            title: "LLM: use-after-free in strcpy wrapper".into(),
+        }];
+
+        assert!(findings_have_semantic_confidence(&pattern, &llm));
+        assert_eq!(
+            select_synthesis_route(&pattern, &llm),
+            SynthesisRoute::SemanticConfidenceFastPath
+        );
+    }
+
+    #[test]
+    fn test_semantic_confidence_matches_same_cwe_family_different_functions() {
+        // Both "memory" → same CWE-119 family, even with different functions.
+        // This qualifies for cheap synthesis (fast path), not full synthesis.
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "copy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: copy".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "parse".into(),
+            line: Some(11),
+            title: "LLM: memory corruption in parse".into(),
+        }];
+
+        assert!(findings_have_semantic_confidence(&pattern, &llm));
+        assert_eq!(
+            select_synthesis_route(&pattern, &llm),
+            SynthesisRoute::SemanticConfidenceFastPath
+        );
+    }
+
+    #[test]
+    fn test_semantic_confidence_rejects_different_cwe_families() {
+        // "memory" (CWE-119 family) vs "injection" (CWE-74 family) — no overlap.
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "copy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: copy".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "injection".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "exec".into(),
+            line: Some(20),
+            title: "LLM: command injection in exec".into(),
+        }];
+
+        assert!(!findings_have_semantic_confidence(&pattern, &llm));
+        assert_eq!(
+            select_synthesis_route(&pattern, &llm),
+            SynthesisRoute::FullSynthesis
+        );
+    }
+
+    #[test]
+    fn test_semantic_confidence_rejects_unknown_categories() {
+        // Categories not in category_to_cwes produce empty CWE sets → no overlap.
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "custom-category".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "handler".into(),
+            line: Some(10),
+            title: "Dangerous pattern: handler".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "other-unknown".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "dispatch".into(),
+            line: Some(20),
+            title: "LLM: suspicious dispatch".into(),
+        }];
+
+        assert!(!findings_have_semantic_confidence(&pattern, &llm));
+        assert_eq!(
+            select_synthesis_route(&pattern, &llm),
+            SynthesisRoute::FullSynthesis
+        );
+    }
+
+    #[test]
+    fn test_cwe_family_overlap_same_category() {
+        let a = DetectedFinding {
+            id: "a".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "f".into(),
+            line: Some(1),
+            title: "x".into(),
+        };
+        let b = DetectedFinding {
+            id: "b".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "g".into(),
+            line: Some(2),
+            title: "y".into(),
+        };
+        assert!(same_cwe_family_overlap(&a, &b));
+    }
+
+    #[test]
+    fn test_cwe_family_overlap_different_families() {
+        let a = DetectedFinding {
+            id: "a".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "f".into(),
+            line: Some(1),
+            title: "x".into(),
+        };
+        let b = DetectedFinding {
+            id: "b".into(),
+            category: "crypto".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "g".into(),
+            line: Some(2),
+            title: "y".into(),
+        };
+        assert!(!same_cwe_family_overlap(&a, &b));
+    }
+
+    #[test]
+    fn test_semantic_confidence_partial_coverage_rejects() {
+        // Pattern has 2 findings, LLM only covers 1 family → not all covered.
+        let pattern = vec![
+            DetectedFinding {
+                id: "p1".into(),
+                category: "memory".into(),
+                severity: "critical".into(),
+                cwes: vec![],
+                file: "test.c".into(),
+                function: "strcpy".into(),
+                line: Some(10),
+                title: "Dangerous pattern: strcpy".into(),
+            },
+            DetectedFinding {
+                id: "p2".into(),
+                category: "crypto".into(),
+                severity: "high".into(),
+                cwes: vec![],
+                file: "test.c".into(),
+                function: "md5_init".into(),
+                line: Some(20),
+                title: "Dangerous pattern: md5_init".into(),
+            },
+        ];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "copy".into(),
+            line: Some(11),
+            title: "LLM: buffer overflow".into(),
+        }];
+
+        // p2 (crypto) has no LLM match → not fully covered
+        assert!(!findings_have_semantic_confidence(&pattern, &llm));
     }
 }
