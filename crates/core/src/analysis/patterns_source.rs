@@ -1086,6 +1086,53 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::Medium,
             reason: "Array declared without initialization; contents are indeterminate in C",
         },
+        // --- Resource exhaustion (CWE-400) ---
+        SourcePattern {
+            regex: r"\bwhile\s*\(\s*1\s*\)",
+            category: DangerCategory::ResourceExhaustion,
+            severity: Severity::Medium,
+            reason: "Infinite loop: while(1) without break may cause resource exhaustion",
+        },
+        SourcePattern {
+            regex: r"\bfor\s*\(\s*;\s*;\s*\)",
+            category: DangerCategory::ResourceExhaustion,
+            severity: Severity::Medium,
+            reason: "Infinite loop: for(;;) without break may cause resource exhaustion",
+        },
+        // --- Invalid free (CWE-590) ---
+        SourcePattern {
+            regex: r"\bfree\s*\(\s*&\w+\s*\)",
+            category: DangerCategory::InvalidFree,
+            severity: Severity::High,
+            reason: "free() on address-of stack variable; only heap-allocated memory should be freed",
+        },
+        // --- Access control (CWE-272/284) ---
+        SourcePattern {
+            regex: r"\bsetuid\s*\(\s*0\s*\)",
+            category: DangerCategory::AccessControl,
+            severity: Severity::Critical,
+            reason: "setuid(0) escalates to root; verify privilege dropping is intentional and authorized",
+        },
+        SourcePattern {
+            regex: r"\bseteuid\s*\(\s*0\s*\)",
+            category: DangerCategory::AccessControl,
+            severity: Severity::Critical,
+            reason: "seteuid(0) escalates effective UID to root; verify this is intentional",
+        },
+        // --- Information exposure (CWE-226/534/535) ---
+        SourcePattern {
+            regex: r#"(?i)\b(?:password|passwd|secret|token|api_key|apikey)\s*=\s*["']"#,
+            category: DangerCategory::InformationExposure,
+            severity: Severity::High,
+            reason: "Hardcoded credential or secret in source code",
+        },
+        // --- Error handling (CWE-390/391/666) ---
+        SourcePattern {
+            regex: r"\bcatch\s*\([^)]*\)\s*\{\s*\}",
+            category: DangerCategory::ErrorHandling,
+            severity: Severity::Medium,
+            reason: "Empty catch block swallows exceptions silently (CWE-390)",
+        },
     ]
 }
 
