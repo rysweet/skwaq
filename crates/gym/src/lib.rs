@@ -94,6 +94,12 @@ impl Gym {
                     Box::new(adapters::binmetric::BinMetricAdapter::new(p))
                 }) as Box<dyn Fn(PathBuf) -> Box<dyn BenchmarkAdapter>>,
             ),
+            (
+                "cybergym",
+                Box::new(|p: PathBuf| -> Box<dyn BenchmarkAdapter> {
+                    Box::new(adapters::cybergym::CyberGymAdapter::new(p))
+                }) as Box<dyn Fn(PathBuf) -> Box<dyn BenchmarkAdapter>>,
+            ),
         ] {
             let manifest = gt_dir.join(format!("{}.toml", name));
             if manifest.exists() {

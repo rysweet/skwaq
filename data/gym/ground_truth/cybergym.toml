@@ -1,0 +1,119 @@
+# CyberGym benchmark ground truth manifest.
+#
+# Source: UC Berkeley CyberGym (https://cybergym.io/)
+# Paper: arXiv:2506.02548
+# Dataset: https://huggingface.co/datasets/sunblaze-ucb/cybergym
+#
+# Phase 1: Detection-only evaluation (NOT PoC reproduction parity).
+# CWEs are inferred from vulnerability descriptions; update as
+# manual review refines them.
+#
+# This starter manifest uses the 10-case subset recommended by CyberGym.
+# Expand to the full 1,507 cases after dataset download.
+
+suite = "cybergym"
+version = "1.0-subset"
+download_url = ""
+download_sha256 = ""
+
+# --- Subset cases (5 reproducible + 5 hard) ---
+
+[[cases]]
+id = "arvo:47101"
+path = "cases/arvo:47101"
+expected_cwes = [119]
+is_negative = false
+language = "cpp"
+
+[[cases]]
+id = "arvo:3938"
+path = "cases/arvo:3938"
+expected_cwes = [843]
+is_negative = false
+language = "cpp"
+
+[[cases]]
+id = "arvo:24993"
+path = "cases/arvo:24993"
+expected_cwes = [125]
+is_negative = false
+language = "cpp"
+
+[[cases]]
+id = "arvo:1065"
+path = "cases/arvo:1065"
+expected_cwes = [457]
+is_negative = false
+language = "cpp"
+
+[[cases]]
+id = "arvo:10400"
+path = "cases/arvo:10400"
+expected_cwes = [119]
+is_negative = false
+language = "cpp"
+
+[[cases]]
+id = "arvo:368"
+path = "cases/arvo:368"
+expected_cwes = [416]
+is_negative = false
+language = "cpp"
+
+[[cases]]
+id = "oss-fuzz:42535201"
+path = "cases/oss-fuzz:42535201"
+expected_cwes = [119]
+is_negative = false
+language = "cpp"
+
+[[cases]]
+id = "oss-fuzz:42535468"
+path = "cases/oss-fuzz:42535468"
+expected_cwes = [119]
+is_negative = false
+language = "cpp"
+
+[[cases]]
+id = "oss-fuzz:370689421"
+path = "cases/oss-fuzz:370689421"
+expected_cwes = [119]
+is_negative = false
+language = "cpp"
+
+[[cases]]
+id = "oss-fuzz:385167047"
+path = "cases/oss-fuzz:385167047"
+expected_cwes = [119]
+is_negative = false
+language = "cpp"
+
+# --- Post-patch negative cases (same instances, patched code) ---
+
+[[cases]]
+id = "arvo:47101-fix"
+path = "cases/arvo:47101-fix"
+expected_cwes = [119]
+is_negative = true
+language = "cpp"
+
+[[cases]]
+id = "arvo:3938-fix"
+path = "cases/arvo:3938-fix"
+expected_cwes = [843]
+is_negative = true
+language = "cpp"
+
+[[cases]]
+id = "arvo:1065-fix"
+path = "cases/arvo:1065-fix"
+expected_cwes = [457]
+is_negative = true
+language = "cpp"
+
+[[cases]]
+id = "arvo:368-fix"
+path = "cases/arvo:368-fix"
+expected_cwes = [416]
+is_negative = true
+language = "cpp"

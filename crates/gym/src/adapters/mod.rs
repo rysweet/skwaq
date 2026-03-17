@@ -3,6 +3,7 @@
 pub mod binmetric;
 pub mod binpool;
 pub mod cgc;
+pub mod cybergym;
 pub mod cyberseceval;
 pub mod fixtures;
 pub mod juliet;
