@@ -34,6 +34,7 @@ use std::time::{Duration, Instant};
 pub struct SynthesisStats {
     pattern_confidence_early_exit_count: AtomicU32,
     semantic_confidence_fast_path_count: AtomicU32,
+    expert_routed_count: AtomicU32,
     llm_synthesis_count: AtomicU32,
     consensus_early_exit_count: AtomicU32,
     fallback_count: AtomicU32,
@@ -45,6 +46,7 @@ impl Default for SynthesisStats {
         Self {
             pattern_confidence_early_exit_count: AtomicU32::new(0),
             semantic_confidence_fast_path_count: AtomicU32::new(0),
+            expert_routed_count: AtomicU32::new(0),
             llm_synthesis_count: AtomicU32::new(0),
             consensus_early_exit_count: AtomicU32::new(0),
             fallback_count: AtomicU32::new(0),
@@ -66,6 +68,10 @@ impl SynthesisStats {
     fn record_semantic_confidence_fast_path(&self) {
         self.semantic_confidence_fast_path_count
             .fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn record_expert_routed(&self) {
+        self.expert_routed_count.fetch_add(1, Ordering::Relaxed);
     }
 
     fn record_llm_synthesis(&self) {
@@ -94,24 +100,37 @@ impl SynthesisStats {
         let semantic_confidence = self
             .semantic_confidence_fast_path_count
             .load(Ordering::Relaxed);
+        let expert_routed = self.expert_routed_count.load(Ordering::Relaxed);
         let llm = self.llm_synthesis_count.load(Ordering::Relaxed);
         let consensus = self.consensus_early_exit_count.load(Ordering::Relaxed);
         let fallback = self.fallback_count.load(Ordering::Relaxed);
         let failed = self.failed_count.load(Ordering::Relaxed);
-        let total = pattern_confidence + semantic_confidence + llm + consensus + fallback + failed;
+        let total = pattern_confidence
+            + semantic_confidence
+            + expert_routed
+            + llm
+            + consensus
+            + fallback
+            + failed;
         if total == 0 {
             tracing::info!("Synthesis: no dual-source cases (nothing to synthesize)");
             return;
         }
         if fallback > 0 || failed > 0 {
             tracing::warn!(
-                "Synthesis summary: {}/{} pattern-confidence early-exit, {}/{} semantic-confidence fast-path, \
-                 {}/{} LLM synthesis, {}/{} consensus early-exit, {}/{} fallback (kept all findings), {} failed",
-                pattern_confidence, total,
-                semantic_confidence, total,
-                llm, total,
-                consensus, total,
-                fallback, total,
+                "Synthesis summary: {}/{} pattern-confidence early-exit, {}/{} semantic-confidence fast-path, {}/{} expert-routed, {}/{} LLM synthesis, {}/{} consensus early-exit, {}/{} fallback (kept all findings), {} failed",
+                pattern_confidence,
+                total,
+                semantic_confidence,
+                total,
+                expert_routed,
+                total,
+                llm,
+                total,
+                consensus,
+                total,
+                fallback,
+                total,
                 failed,
             );
             if fallback > 0 {
@@ -130,12 +149,17 @@ impl SynthesisStats {
             }
         } else {
             tracing::info!(
-                "Synthesis summary: {}/{} pattern-confidence early-exit, {}/{} semantic-confidence fast-path, \
-                 {}/{} LLM synthesis, {}/{} consensus early-exit (all successful)",
-                pattern_confidence, total,
-                semantic_confidence, total,
-                llm, total,
-                consensus, total,
+                "Synthesis summary: {}/{} pattern-confidence early-exit, {}/{} semantic-confidence fast-path, {}/{} expert-routed, {}/{} LLM synthesis, {}/{} consensus early-exit (all successful)",
+                pattern_confidence,
+                total,
+                semantic_confidence,
+                total,
+                expert_routed,
+                total,
+                llm,
+                total,
+                consensus,
+                total,
             );
         }
     }
@@ -619,10 +643,133 @@ fn findings_have_consensus(
     llm_fp.iter().all(|fp| pattern_fp.contains(fp))
 }
 
+/// Domain expertise areas for specialized synthesis prompts.
+///
+/// When all dual-source findings fall into a single semantic cluster,
+/// the synthesis prompt is tailored with domain-specific guidance that
+/// helps the LLM reviewer make more precise CONFIRM/REJECT decisions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExpertDomain {
+    MemorySafety,
+    CodeExecution,
+    WebDataFlow,
+    FilesystemSafety,
+    ArithmeticSafety,
+    Crypto,
+}
+
+impl ExpertDomain {
+    /// Map a semantic confidence cluster name to an expert domain.
+    fn from_cluster(cluster: &str) -> Option<Self> {
+        match cluster {
+            "memory_safety" => Some(Self::MemorySafety),
+            "code_execution" => Some(Self::CodeExecution),
+            "web_data_flow" => Some(Self::WebDataFlow),
+            "filesystem_safety" => Some(Self::FilesystemSafety),
+            "arithmetic_safety" => Some(Self::ArithmeticSafety),
+            "crypto" => Some(Self::Crypto),
+            _ => None,
+        }
+    }
+
+    /// Domain-specific system prompt for the synthesis reviewer.
+    fn system_prompt(&self) -> &'static str {
+        match self {
+            Self::MemorySafety => {
+                "You are a memory-safety expert reviewing vulnerability findings. \
+                 You have deep knowledge of buffer overflows, use-after-free, null pointer \
+                 dereferences, and heap corruption. Evaluate each finding based on whether \
+                 the code path can actually reach the vulnerable operation with attacker-controlled \
+                 data sizes or dangling pointers."
+            }
+            Self::CodeExecution => {
+                "You are a code-execution security expert reviewing vulnerability findings. \
+                 You specialize in command injection, deserialization attacks, and code evaluation \
+                 vulnerabilities. Evaluate whether user-controlled input can actually reach the \
+                 dangerous sink without adequate sanitization or type constraints."
+            }
+            Self::WebDataFlow => {
+                "You are a web-security expert reviewing vulnerability findings. \
+                 You specialize in cross-site scripting (XSS), prototype pollution, and \
+                 data-flow attacks in web applications. Evaluate whether the taint path from \
+                 user input to output is real and whether encoding or sanitization is missing."
+            }
+            Self::FilesystemSafety => {
+                "You are a filesystem-security expert reviewing vulnerability findings. \
+                 You specialize in path traversal, insecure temporary files, and race conditions \
+                 (TOCTOU). Evaluate whether the file operations use attacker-controlled paths \
+                 without canonicalization or whether race windows are exploitable."
+            }
+            Self::ArithmeticSafety => {
+                "You are a numeric-safety expert reviewing vulnerability findings. \
+                 You specialize in integer overflows, underflows, and divide-by-zero conditions. \
+                 Evaluate whether arithmetic operations on attacker-influenced values can actually \
+                 overflow or produce division by zero in the given context."
+            }
+            Self::Crypto => {
+                "You are a cryptography expert reviewing vulnerability findings. \
+                 You specialize in weak algorithms, hardcoded credentials, insufficient key \
+                 lengths, and missing integrity checks. Evaluate whether the cryptographic \
+                 weakness is real and exploitable in the deployment context."
+            }
+        }
+    }
+
+    /// Domain-specific preamble injected into the synthesis prompt body.
+    fn prompt_preamble(&self) -> &'static str {
+        match self {
+            Self::MemorySafety => {
+                "All findings below relate to MEMORY SAFETY vulnerabilities.\n\
+                 Focus on: buffer bounds, allocation lifetimes, pointer validity, and \
+                 whether attacker-controlled sizes reach vulnerable operations.\n\
+                 CONFIRM findings where a concrete overflow, UAF, or null-deref path exists.\n\
+                 REJECT findings where bounds checks, safe wrappers, or allocator guards prevent exploitation.\n\n"
+            }
+            Self::CodeExecution => {
+                "All findings below relate to CODE EXECUTION vulnerabilities.\n\
+                 Focus on: injection sinks, deserialization gadgets, eval-like constructs, and \
+                 whether unsanitized input reaches dangerous APIs.\n\
+                 CONFIRM findings where attacker input flows to execution sinks without filtering.\n\
+                 REJECT findings where input is validated, typed, or sandboxed before reaching the sink.\n\n"
+            }
+            Self::WebDataFlow => {
+                "All findings below relate to WEB DATA-FLOW vulnerabilities.\n\
+                 Focus on: output encoding, DOM manipulation, prototype chains, and \
+                 whether user input reaches browser-rendered output unescaped.\n\
+                 CONFIRM findings where taint flows from input to output without encoding.\n\
+                 REJECT findings where framework auto-escaping or CSP prevents exploitation.\n\n"
+            }
+            Self::FilesystemSafety => {
+                "All findings below relate to FILESYSTEM SAFETY vulnerabilities.\n\
+                 Focus on: path canonicalization, temporary file predictability, symlink attacks, \
+                 and TOCTOU race windows.\n\
+                 CONFIRM findings where attacker-controlled paths bypass validation or races are exploitable.\n\
+                 REJECT findings where paths are resolved, permissions restrict access, or atomicity is ensured.\n\n"
+            }
+            Self::ArithmeticSafety => {
+                "All findings below relate to ARITHMETIC SAFETY vulnerabilities.\n\
+                 Focus on: integer width, signedness, overflow wrapping behavior, and \
+                 divisor validation.\n\
+                 CONFIRM findings where attacker-influenced arithmetic can wrap or divide by zero.\n\
+                 REJECT findings where range checks, saturating arithmetic, or type constraints prevent overflow.\n\n"
+            }
+            Self::Crypto => {
+                "All findings below relate to CRYPTOGRAPHIC vulnerabilities.\n\
+                 Focus on: algorithm strength, key management, randomness sources, and \
+                 integrity verification.\n\
+                 CONFIRM findings where weak algorithms, hardcoded keys, or missing MAC checks are used.\n\
+                 REJECT findings where the cryptographic choice is appropriate for the threat model.\n\n"
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SynthesisRoute {
     ConsensusEarlyExit,
     SemanticConfidenceFastPath,
+    /// All findings share a single semantic cluster — use domain-expert prompt.
+    ExpertRouted(ExpertDomain),
     FullSynthesis,
 }
 
@@ -704,12 +851,44 @@ fn findings_have_semantic_confidence(
         })
 }
 
+/// Determine the dominant semantic cluster when ALL findings share exactly one.
+///
+/// Returns `Some(ExpertDomain)` when every pattern and LLM finding maps to the
+/// same single cluster. Returns `None` if findings span multiple clusters or
+/// any finding has no cluster.
+fn dominant_expert_domain(
+    pattern_findings: &[DetectedFinding],
+    llm_findings: &[DetectedFinding],
+) -> Option<ExpertDomain> {
+    let mut clusters: HashSet<&'static str> = HashSet::new();
+
+    for finding in pattern_findings.iter().chain(llm_findings.iter()) {
+        let finding_clusters = semantic_confidence_clusters(finding);
+        if finding_clusters.is_empty() {
+            return None; // Unclassifiable finding — cannot route to expert
+        }
+        clusters.extend(finding_clusters);
+    }
+
+    if clusters.len() == 1 {
+        clusters
+            .into_iter()
+            .next()
+            .and_then(ExpertDomain::from_cluster)
+    } else {
+        None
+    }
+}
+
 fn select_synthesis_route(
     pattern_findings: &[DetectedFinding],
     llm_findings: &[DetectedFinding],
 ) -> SynthesisRoute {
     if findings_have_consensus(pattern_findings, llm_findings) {
         return SynthesisRoute::ConsensusEarlyExit;
+    }
+    if let Some(domain) = dominant_expert_domain(pattern_findings, llm_findings) {
+        return SynthesisRoute::ExpertRouted(domain);
     }
     if findings_have_semantic_confidence(pattern_findings, llm_findings) {
         return SynthesisRoute::SemanticConfidenceFastPath;
@@ -778,6 +957,16 @@ async fn synthesize_findings(
             )
             .await
         }
+        SynthesisRoute::ExpertRouted(domain) => {
+            SYNTHESIS_STATS.record_expert_routed();
+            tracing::info!(
+                "Expert-routed synthesis ({:?}): {} pattern + {} LLM findings in same domain",
+                domain,
+                pattern_findings.len(),
+                llm_findings.len(),
+            );
+            llm_synthesize_expert(&pattern_findings, &llm_findings, timeout_secs, domain).await
+        }
         SynthesisRoute::FullSynthesis => {
             llm_synthesize(&pattern_findings, &llm_findings, timeout_secs).await
         }
@@ -811,6 +1000,74 @@ async fn llm_synthesize(
     timeout_secs: u64,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
     llm_synthesize_with_limits(pattern_findings, llm_findings, timeout_secs, None).await
+}
+
+/// Call the LLM with a domain-expert synthesis prompt.
+///
+/// Uses the same synthesis pipeline as [`llm_synthesize_with_limits`] but
+/// swaps the generic system prompt and preamble for domain-specific ones.
+/// The expert prompt gives the LLM reviewer focused guidance on what
+/// constitutes a real vs. false-positive finding in the given domain.
+async fn llm_synthesize_expert(
+    pattern_findings: &[DetectedFinding],
+    llm_findings: &[DetectedFinding],
+    timeout_secs: u64,
+    domain: ExpertDomain,
+) -> anyhow::Result<Vec<DetectedFinding>> {
+    let config = Config::load().context("LLM synthesis requires a valid skwaq configuration")?;
+    skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm)
+        .await
+        .context("LLM synthesis requires explicit Copilot benchmark readiness")?;
+    let client = skwaq_core::llm::create_client(&config.llm)
+        .await
+        .context("LLM synthesis requires a working LLM client")?;
+
+    if timeout_secs == 0 {
+        anyhow::bail!("LLM synthesis requires a positive timeout budget");
+    }
+
+    // Build domain-expert synthesis prompt
+    let mut prompt = String::from(
+        "You are evaluating vulnerability findings from two sources:\n\
+         1. PATTERN DETECTION (automated regex-based, high precision, limited understanding)\n\
+         2. LLM AGENTS (AI-powered deep analysis, better understanding, may hallucinate)\n\n\
+         Your job: decide which findings are REAL vulnerabilities.\n\n",
+    );
+    prompt.push_str(domain.prompt_preamble());
+    prompt.push_str(
+        "For each finding, respond with one line:\n\
+         CONFIRM <id> — strong evidence from one or both sources\n\
+         REJECT <id> — insufficient evidence, likely false positive\n\n",
+    );
+
+    append_findings_for_prompt(&mut prompt, "=== PATTERN FINDINGS ===\n", pattern_findings);
+    append_findings_for_prompt(&mut prompt, "\n=== LLM AGENT FINDINGS ===\n", llm_findings);
+    prompt.push_str("\nEvaluate each finding. Respond with CONFIRM or REJECT for each ID.\n");
+
+    let budget_amount = config
+        .analysis
+        .default_token_budget
+        .min(10_000 + (pattern_findings.len() + llm_findings.len()) as u64 * 500);
+    let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
+    let model = &config.llm.copilot.model;
+
+    let response_text = execute_synthesis_completion(
+        &client,
+        model,
+        domain.system_prompt(),
+        &prompt,
+        timeout_secs,
+        &mut budget,
+    )
+    .await?;
+    let decisions = parse_synthesis_decisions(&response_text);
+
+    // Expert-routed synthesis skips REVIEW refinement — the domain-specific
+    // prompt is precise enough that findings are either CONFIRM or REJECT.
+    let synthesized =
+        apply_rejected_synthesis_decisions(pattern_findings, llm_findings, &decisions.rejected_ids);
+
+    Ok(synthesized)
 }
 
 async fn llm_synthesize_with_limits(
@@ -2474,7 +2731,7 @@ mod tests {
         assert!(findings_have_semantic_confidence(&pattern, &llm));
         assert_eq!(
             select_synthesis_route(&pattern, &llm),
-            SynthesisRoute::SemanticConfidenceFastPath
+            SynthesisRoute::ExpertRouted(ExpertDomain::ArithmeticSafety)
         );
     }
 
@@ -2731,7 +2988,223 @@ mod tests {
         stats.record_fallback();
         stats.record_fallback();
         assert_eq!(stats.fallback_count.load(Ordering::Relaxed), 2);
-        // Verify report includes fallback count without panicking
         stats.report();
+    }
+
+    #[test]
+    fn test_expert_domain_from_cluster() {
+        assert_eq!(
+            ExpertDomain::from_cluster("memory_safety"),
+            Some(ExpertDomain::MemorySafety)
+        );
+        assert_eq!(
+            ExpertDomain::from_cluster("code_execution"),
+            Some(ExpertDomain::CodeExecution)
+        );
+        assert_eq!(
+            ExpertDomain::from_cluster("crypto"),
+            Some(ExpertDomain::Crypto)
+        );
+        assert_eq!(ExpertDomain::from_cluster("unknown_cluster"), None);
+        assert_eq!(ExpertDomain::from_cluster("resource_management"), None);
+    }
+
+    #[test]
+    fn test_dominant_expert_domain_single_cluster() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "integer_overflow".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "scale".into(),
+            line: Some(10),
+            title: "Dangerous pattern: integer overflow in scale".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "divide_by_zero".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "normalize".into(),
+            line: Some(20),
+            title: "LLM: division by zero in normalize".into(),
+        }];
+
+        assert_eq!(
+            dominant_expert_domain(&pattern, &llm),
+            Some(ExpertDomain::ArithmeticSafety)
+        );
+    }
+
+    #[test]
+    fn test_dominant_expert_domain_mixed_clusters_returns_none() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "crypto".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "md5".into(),
+            line: Some(20),
+            title: "LLM: weak hash algorithm".into(),
+        }];
+
+        assert_eq!(dominant_expert_domain(&pattern, &llm), None);
+    }
+
+    #[test]
+    fn test_dominant_expert_domain_unclassifiable_returns_none() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "totally_unknown".into(),
+            severity: "low".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "foo".into(),
+            line: Some(1),
+            title: "Dangerous pattern: foo".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "totally_unknown".into(),
+            severity: "low".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "bar".into(),
+            line: Some(2),
+            title: "LLM: something".into(),
+        }];
+
+        assert_eq!(dominant_expert_domain(&pattern, &llm), None);
+    }
+
+    #[test]
+    fn test_expert_routing_wins_over_semantic_confidence_for_single_domain() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "injection".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.py".into(),
+            function: "system".into(),
+            line: Some(10),
+            title: "Dangerous pattern: system".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "injection".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.py".into(),
+            function: "run_command".into(),
+            line: Some(30),
+            title: "LLM: command injection in run_command".into(),
+        }];
+
+        assert!(!findings_have_consensus(&pattern, &llm));
+        assert!(findings_have_semantic_confidence(&pattern, &llm));
+        assert_eq!(
+            select_synthesis_route(&pattern, &llm),
+            SynthesisRoute::ExpertRouted(ExpertDomain::CodeExecution)
+        );
+    }
+
+    #[test]
+    fn test_expert_domain_prompt_preamble_not_empty() {
+        let domains = [
+            ExpertDomain::MemorySafety,
+            ExpertDomain::CodeExecution,
+            ExpertDomain::WebDataFlow,
+            ExpertDomain::FilesystemSafety,
+            ExpertDomain::ArithmeticSafety,
+            ExpertDomain::Crypto,
+        ];
+        for domain in &domains {
+            assert!(
+                !domain.system_prompt().is_empty(),
+                "{:?} has empty system prompt",
+                domain
+            );
+            assert!(
+                !domain.prompt_preamble().is_empty(),
+                "{:?} has empty preamble",
+                domain
+            );
+        }
+    }
+
+    #[test]
+    fn test_consensus_beats_expert_routing() {
+        // Consensus (exact fingerprint match) is the highest-priority route
+        // and beats expert routing even when a single domain exists.
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+
+        assert!(findings_have_consensus(&pattern, &llm));
+        assert_eq!(
+            select_synthesis_route(&pattern, &llm),
+            SynthesisRoute::ConsensusEarlyExit
+        );
+    }
+
+    #[test]
+    fn test_unknown_findings_fall_through_to_full_synthesis() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "totally_unknown".into(),
+            severity: "medium".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "open_file".into(),
+            line: Some(10),
+            title: "Dangerous pattern: open_file".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "different_unknown".into(),
+            severity: "medium".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "create_socket".into(),
+            line: Some(20),
+            title: "LLM: suspicious create_socket behavior".into(),
+        }];
+
+        assert!(!findings_have_consensus(&pattern, &llm));
+        assert!(!findings_have_semantic_confidence(&pattern, &llm));
+        assert_eq!(
+            select_synthesis_route(&pattern, &llm),
+            SynthesisRoute::FullSynthesis
+        );
     }
 }
