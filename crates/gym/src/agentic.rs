@@ -638,8 +638,14 @@ fn semantic_confidence_clusters(finding: &DetectedFinding) -> HashSet<&'static s
         .collect()
 }
 
+fn has_semantic_specificity(finding: &DetectedFinding) -> bool {
+    !semantic_classes_for_finding(finding).is_empty()
+}
+
 fn same_function_and_category(pattern: &DetectedFinding, llm: &DetectedFinding) -> bool {
     normalize_function_key(&pattern.function) == normalize_function_key(&llm.function)
+        && !has_semantic_specificity(pattern)
+        && !has_semantic_specificity(llm)
         && pattern.category.eq_ignore_ascii_case(&llm.category)
 }
 
@@ -659,7 +665,7 @@ fn same_function_and_semantic_cluster(pattern: &DetectedFinding, llm: &DetectedF
 }
 
 fn cwe_families_for_finding(finding: &DetectedFinding) -> HashSet<u32> {
-    scoring::category_to_cwes(&finding.category)
+    scoring::inferred_finding_cwes(finding)
         .into_iter()
         .map(scoring::cwe_family)
         .collect()
@@ -2327,14 +2333,77 @@ mod tests {
     }
 
     #[test]
-    fn test_semantic_confidence_matches_related_clusters() {
+    fn test_semantic_confidence_rejects_different_memory_subclusters_same_function() {
         let pattern = vec![DetectedFinding {
             id: "p1".into(),
             category: "memory".into(),
             severity: "critical".into(),
             cwes: vec![],
             file: "test.c".into(),
-            function: "strcpy".into(),
+            function: "copy_wrapper".into(),
+            line: Some(10),
+            title: "Dangerous pattern: buffer overflow in copy wrapper".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "copy_wrapper".into(),
+            line: Some(11),
+            title: "LLM: use-after-free in copy wrapper".into(),
+        }];
+
+        assert!(!same_function_and_category(&pattern[0], &llm[0]));
+        assert!(!same_function_and_semantic_cluster(&pattern[0], &llm[0]));
+        assert!(!same_cwe_family_overlap(&pattern[0], &llm[0]));
+        assert!(!findings_have_semantic_confidence(&pattern, &llm));
+        assert_eq!(
+            select_synthesis_route(&pattern, &llm),
+            SynthesisRoute::FullSynthesis
+        );
+    }
+
+    #[test]
+    fn test_semantic_confidence_matches_same_arithmetic_cluster_same_function() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "integer_overflow".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "scale".into(),
+            line: Some(10),
+            title: "Dangerous pattern: integer overflow in scale".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "divide_by_zero".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "scale".into(),
+            line: Some(11),
+            title: "LLM: division by zero in scale".into(),
+        }];
+
+        assert!(findings_have_semantic_confidence(&pattern, &llm));
+        assert_eq!(
+            select_synthesis_route(&pattern, &llm),
+            SynthesisRoute::SemanticConfidenceFastPath
+        );
+    }
+
+    #[test]
+    fn test_semantic_confidence_rejects_same_function_memory_category_when_semantics_differ() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "handler".into(),
             line: Some(10),
             title: "Dangerous pattern: strcpy".into(),
         }];
@@ -2344,15 +2413,16 @@ mod tests {
             severity: "critical".into(),
             cwes: vec![],
             file: "test.c".into(),
-            function: "strcpy".into(),
+            function: "handler".into(),
             line: Some(11),
-            title: "LLM: use-after-free in strcpy wrapper".into(),
+            title: "LLM: null pointer dereference after unchecked malloc".into(),
         }];
 
-        assert!(findings_have_semantic_confidence(&pattern, &llm));
+        assert!(!same_function_and_category(&pattern[0], &llm[0]));
+        assert!(!findings_have_semantic_confidence(&pattern, &llm));
         assert_eq!(
             select_synthesis_route(&pattern, &llm),
-            SynthesisRoute::SemanticConfidenceFastPath
+            SynthesisRoute::FullSynthesis
         );
     }
 
@@ -2385,6 +2455,37 @@ mod tests {
         assert_eq!(
             select_synthesis_route(&pattern, &llm),
             SynthesisRoute::SemanticConfidenceFastPath
+        );
+    }
+
+    #[test]
+    fn test_semantic_confidence_rejects_different_memory_families_across_functions() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "copy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "alloc".into(),
+            line: Some(11),
+            title: "LLM: null pointer dereference after unchecked malloc".into(),
+        }];
+
+        assert!(!same_cwe_family_overlap(&pattern[0], &llm[0]));
+        assert!(!findings_have_semantic_confidence(&pattern, &llm));
+        assert_eq!(
+            select_synthesis_route(&pattern, &llm),
+            SynthesisRoute::FullSynthesis
         );
     }
 
