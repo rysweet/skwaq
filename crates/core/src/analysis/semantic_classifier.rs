@@ -17,6 +17,7 @@ pub enum SemanticPatternClass {
     Deserialization,
     FormatString,
     InsecureTempFile,
+    InvalidFree,
     PathTraversal,
     UntrustedSearchPath,
     UncheckedLoopCondition,
@@ -42,6 +43,7 @@ impl SemanticPatternClass {
             Self::Deserialization => "deserialization",
             Self::FormatString => "format_string",
             Self::InsecureTempFile => "insecure_temp_file",
+            Self::InvalidFree => "invalid_free",
             Self::PathTraversal => "path_traversal",
             Self::UntrustedSearchPath => "untrusted_search_path",
             Self::UncheckedLoopCondition => "unchecked_loop_condition",
@@ -61,7 +63,7 @@ impl SemanticPatternClass {
     pub fn confidence_cluster(&self) -> &'static str {
         match self {
             Self::BufferOverflow => "memory_bounds",
-            Self::UseAfterFree => "memory_lifecycle",
+            Self::UseAfterFree | Self::InvalidFree => "memory_lifecycle",
             Self::NullDeref => "memory_allocation",
             Self::CommandInjection | Self::Deserialization => "code_execution",
             Self::CrossSiteScripting | Self::PrototypePollution => "web_data_flow",
@@ -143,6 +145,9 @@ impl SemanticPatternClassifier {
         }
         if is_insecure_temp_file(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::InsecureTempFile);
+        }
+        if is_invalid_free(&category, &title) {
+            classes.insert(SemanticPatternClass::InvalidFree);
         }
         if is_null_deref(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::NullDeref);
@@ -324,6 +329,25 @@ fn is_insecure_temp_file(category: &str, title: &str, function_name: &str) -> bo
         || contains_any(
             title,
             &["temporary file", "temp file", "insecure temporary file"],
+        )
+}
+
+fn is_invalid_free(category: &str, title: &str) -> bool {
+    category == "invalid_free"
+        || contains_any(
+            title,
+            &[
+                "free of memory not on the heap",
+                "free memory not on heap",
+                "invalid free",
+                "free non-heap",
+                "free stack memory",
+                "free of pointer not on the heap",
+                "free of non-heap memory",
+                "freeing stack",
+                "freeing non-heap",
+                "free on stack",
+            ],
         )
 }
 
@@ -936,5 +960,39 @@ mod tests {
                 "{api} should classify as FormatString"
             );
         }
+    }
+
+    #[test]
+    fn classifies_invalid_free_from_title() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify(
+            "memory",
+            "free of memory not on the heap in process_data",
+            "free",
+        );
+        assert!(classes.contains(&SemanticPatternClass::InvalidFree));
+    }
+
+    #[test]
+    fn classifies_invalid_free_from_category() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify("invalid_free", "Dangerous pattern: free", "free");
+        assert!(classes.contains(&SemanticPatternClass::InvalidFree));
+    }
+
+    #[test]
+    fn invalid_free_does_not_trigger_on_use_after_free() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify("memory", "use-after-free in handler", "handler");
+        assert!(classes.contains(&SemanticPatternClass::UseAfterFree));
+        assert!(!classes.contains(&SemanticPatternClass::InvalidFree));
+    }
+
+    #[test]
+    fn invalid_free_clusters_with_memory_lifecycle() {
+        assert_eq!(
+            SemanticPatternClass::InvalidFree.confidence_cluster(),
+            "memory_lifecycle"
+        );
     }
 }

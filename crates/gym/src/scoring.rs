@@ -257,6 +257,7 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         SemanticPatternClass::Deserialization => &[502],
         SemanticPatternClass::FormatString => &[134],
         SemanticPatternClass::InsecureTempFile => &[377],
+        SemanticPatternClass::InvalidFree => &[590],
         SemanticPatternClass::PathTraversal => &[22, 23, 36, 426],
         SemanticPatternClass::UntrustedSearchPath => &[114, 427],
         SemanticPatternClass::UncheckedLoopCondition => &[606],
@@ -316,6 +317,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         | 780 | 798 | 1240 => Some(SemanticPatternClass::CryptoWeakness),
         502 => Some(SemanticPatternClass::Deserialization),
         134 => Some(SemanticPatternClass::FormatString),
+        590 => Some(SemanticPatternClass::InvalidFree),
         22 | 23 | 36 | 426 => Some(SemanticPatternClass::PathTraversal),
         114 | 427 => Some(SemanticPatternClass::UntrustedSearchPath),
         606 => Some(SemanticPatternClass::UncheckedLoopCondition),
@@ -1257,6 +1259,9 @@ mod tests {
         assert!(memory_lifecycle.contains(&761));
         assert!(memory_lifecycle.contains(&763));
 
+        let invalid_free = semantic_class_to_cwes(SemanticPatternClass::InvalidFree);
+        assert_eq!(invalid_free, &[590]);
+
         let buffer_overflow = semantic_class_to_cwes(SemanticPatternClass::BufferOverflow);
         assert!(buffer_overflow.contains(&118));
         assert!(buffer_overflow.contains(&135));
@@ -1323,6 +1328,7 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(114), Some(UntrustedSearchPath));
         assert_eq!(cwe_to_semantic_class(426), Some(PathTraversal));
         assert_eq!(cwe_to_semantic_class(427), Some(UntrustedSearchPath));
+        assert_eq!(cwe_to_semantic_class(590), Some(InvalidFree));
         assert_eq!(cwe_to_semantic_class(606), Some(UncheckedLoopCondition));
     }
 
