@@ -56,7 +56,9 @@ impl SemanticPatternClass {
     /// Coarse semantic cluster for routing closely related findings.
     pub fn confidence_cluster(&self) -> &'static str {
         match self {
-            Self::BufferOverflow | Self::UseAfterFree | Self::NullDeref => "memory_safety",
+            Self::BufferOverflow => "memory_bounds",
+            Self::UseAfterFree => "memory_lifecycle",
+            Self::NullDeref => "memory_allocation",
             Self::CommandInjection | Self::Deserialization => "code_execution",
             Self::CrossSiteScripting | Self::PrototypePollution => "web_data_flow",
             Self::InsecureTempFile | Self::PathTraversal | Self::RaceCondition => {
@@ -468,6 +470,22 @@ mod tests {
         );
 
         assert!(classes.contains(&SemanticPatternClass::UseAfterFree));
+    }
+
+    #[test]
+    fn confidence_clusters_split_memory_classes() {
+        assert_eq!(
+            SemanticPatternClass::BufferOverflow.confidence_cluster(),
+            "memory_bounds"
+        );
+        assert_eq!(
+            SemanticPatternClass::NullDeref.confidence_cluster(),
+            "memory_allocation"
+        );
+        assert_eq!(
+            SemanticPatternClass::UseAfterFree.confidence_cluster(),
+            "memory_lifecycle"
+        );
     }
 
     #[test]
