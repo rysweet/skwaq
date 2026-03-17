@@ -200,6 +200,8 @@ fn is_function(function_name: &str, names: &[&str]) -> bool {
 fn is_buffer_overflow(category: &str, title: &str, function_name: &str) -> bool {
     const BUFFER_APIS: &[&str] = &[
         "strcpy", "strcat", "gets", "memcpy", "memmove", "strncpy", "strncat",
+        // Wide-string equivalents (wchar_t)
+        "wcscpy", "wcscat", "wmemcpy", "wmemmove", "wcsncpy", "wcsncat", "swprintf",
     ];
     const BUFFER_TERMS: &[&str] = &[
         "buffer overflow",
@@ -747,5 +749,36 @@ mod tests {
             "loop_body",
         );
         assert!(classes.contains(&SemanticPatternClass::UninitializedVar));
+    }
+
+    #[test]
+    fn classifies_buffer_overflow_from_wide_string_apis() {
+        let classifier = SemanticPatternClassifier::new();
+
+        for api in &[
+            "wcscpy", "wcscat", "wmemcpy", "wmemmove", "wcsncpy", "wcsncat", "swprintf",
+        ] {
+            let classes = classifier.classify(
+                "memory",
+                &format!("Dangerous pattern: {} (test.c:10)", api),
+                api,
+            );
+            assert!(
+                classes.contains(&SemanticPatternClass::BufferOverflow),
+                "Expected BufferOverflow for wide-string API '{}', got {:?}",
+                api,
+                classes
+            );
+        }
+    }
+
+    #[test]
+    fn wide_string_apis_do_not_misclassify() {
+        let classifier = SemanticPatternClassifier::new();
+
+        let classes = classifier.classify("memory", "Dangerous pattern: wcscpy", "wcscpy");
+        assert!(classes.contains(&SemanticPatternClass::BufferOverflow));
+        assert!(!classes.contains(&SemanticPatternClass::CommandInjection));
+        assert!(!classes.contains(&SemanticPatternClass::FormatString));
     }
 }
