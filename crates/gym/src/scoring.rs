@@ -152,9 +152,9 @@ pub fn cwe_family(cwe: u32) -> u32 {
         // Use-after-free family -> CWE-416
         415 => 416,
         // Injection family -> CWE-74
-        15 | 77 | 78 | 79 | 80 | 89 | 90 | 94 | 95 | 96 | 114 => 74,
+        15 | 77 | 78 | 79 | 80 | 89 | 90 | 94 | 95 | 96 | 114 | 643 => 74,
         // Race condition family -> CWE-362
-        367 => 362,
+        364 | 366 | 367 => 362,
         // Integer overflow family -> CWE-190
         128 | 191 | 192 | 193 | 194 | 195 | 196 | 197 | 680 | 681 => 190,
         // free-of-non-heap -> Buffer overflow family
@@ -164,11 +164,11 @@ pub fn cwe_family(cwe: u32) -> u32 {
         // Out-of-bounds read/write -> Buffer overflow family
         129 | 131 | 170 | 805 => 119,
         // Path traversal family -> CWE-22
-        23 | 36 => 22,
+        23 | 36 | 59 | 61 => 22,
         // Untrusted search path is the closest current semantic fit.
         426 => 22,
         // Crypto weakness family -> CWE-327
-        326 | 328 | 330 | 338 | 310 | 295 => 327,
+        295 | 310 | 323 | 325 | 326 | 328 | 330 | 338 | 347 | 780 => 327,
         // Cleartext transmission / hard-coded key -> crypto family
         319 | 321 => 327,
         // Hardcoded password / plaintext password storage -> credentials family
@@ -189,8 +189,6 @@ pub fn cwe_family(cwe: u32) -> u32 {
         // Uninitialized variable family -> CWE-457
         // Includes: improper initialization (665), missing init (908)
         665 | 908 => 457,
-        // Race in thread / signal handler race -> race condition family
-        364 | 366 => 362,
         // sizeof() on pointer / path manipulation w/o max-size buffer -> buffer overflow family
         467 | 785 => 119,
         // Return of stack variable address -> temporal memory safety family
@@ -211,10 +209,11 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
         "format_string" => vec![134],
         "race" => vec![362, 364, 366, 367],
         "temp_file" => vec![377],
-        "path_traversal" => vec![22, 23, 36, 426],
+        "path_traversal" => vec![22, 23, 36, 59, 61, 426],
         "deserialization" => vec![502],
         "crypto" => vec![
-            256, 259, 295, 310, 312, 319, 321, 326, 327, 328, 330, 338, 347, 614, 798, 1240,
+            256, 259, 295, 310, 312, 319, 321, 323, 325, 326, 327, 328, 330, 338, 347, 614, 780,
+            798, 1240,
         ],
         "unsafe_code" => vec![676, 242],
         "prototype_pollution" => vec![1321],
@@ -234,15 +233,16 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         SemanticPatternClass::BufferOverflow => &[
             119, 120, 121, 122, 123, 124, 125, 126, 127, 129, 131, 170, 467, 785, 787, 788, 805,
         ],
-        SemanticPatternClass::CommandInjection => &[77, 78],
+        SemanticPatternClass::CommandInjection => &[77, 78, 643],
         SemanticPatternClass::CrossSiteScripting => &[79, 80],
         SemanticPatternClass::CryptoWeakness => &[
-            256, 259, 295, 310, 312, 319, 321, 326, 327, 328, 330, 338, 798, 1240,
+            256, 259, 295, 310, 312, 319, 321, 323, 325, 326, 327, 328, 330, 338, 347, 780, 798,
+            1240,
         ],
         SemanticPatternClass::Deserialization => &[502],
         SemanticPatternClass::FormatString => &[134],
         SemanticPatternClass::InsecureTempFile => &[377],
-        SemanticPatternClass::PathTraversal => &[22, 23, 36, 426],
+        SemanticPatternClass::PathTraversal => &[22, 23, 36, 59, 61, 426],
         SemanticPatternClass::PrototypePollution => &[1321],
         SemanticPatternClass::RaceCondition => &[362, 364, 366, 367],
         SemanticPatternClass::UnsafeApiUsage => &[242, 676],
@@ -291,14 +291,13 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
     match cwe {
         119 | 120 | 121 | 122 | 123 | 124 | 125 | 126 | 127 | 129 | 131 | 170 | 467 | 785 | 787
         | 788 | 805 => Some(SemanticPatternClass::BufferOverflow),
-        77 | 78 => Some(SemanticPatternClass::CommandInjection),
+        77 | 78 | 643 => Some(SemanticPatternClass::CommandInjection),
         79 | 80 => Some(SemanticPatternClass::CrossSiteScripting),
-        256 | 259 | 295 | 310 | 312 | 319 | 321 | 326 | 327 | 328 | 330 | 338 | 798 | 1240 => {
-            Some(SemanticPatternClass::CryptoWeakness)
-        }
+        256 | 259 | 295 | 310 | 312 | 319 | 321 | 323 | 325 | 326 | 327 | 328 | 330 | 338 | 347
+        | 780 | 798 | 1240 => Some(SemanticPatternClass::CryptoWeakness),
         502 => Some(SemanticPatternClass::Deserialization),
         134 => Some(SemanticPatternClass::FormatString),
-        22 | 23 | 36 | 426 => Some(SemanticPatternClass::PathTraversal),
+        22 | 23 | 36 | 59 | 61 | 426 => Some(SemanticPatternClass::PathTraversal),
         1321 => Some(SemanticPatternClass::PrototypePollution),
         362 | 364 | 366 | 367 => Some(SemanticPatternClass::RaceCondition),
         377 => Some(SemanticPatternClass::InsecureTempFile),
@@ -890,7 +889,10 @@ mod tests {
         let crypto = category_to_cwes("crypto");
         assert!(crypto.contains(&798));
         assert!(crypto.contains(&312));
+        assert!(crypto.contains(&323));
+        assert!(crypto.contains(&325));
         assert!(crypto.contains(&347));
+        assert!(crypto.contains(&780));
         assert!(crypto.contains(&1240));
 
         let memory = category_to_cwes("memory");
@@ -904,6 +906,17 @@ mod tests {
         let unsafe_code = category_to_cwes("unsafe_code");
         assert!(unsafe_code.contains(&676));
         assert!(unsafe_code.contains(&242));
+
+        let race = category_to_cwes("race");
+        assert!(race.contains(&364));
+        assert!(race.contains(&366));
+
+        let path = category_to_cwes("path_traversal");
+        assert!(path.contains(&59));
+        assert!(path.contains(&61));
+
+        let injection = category_to_cwes("injection");
+        assert!(injection.contains(&643));
     }
 
     #[test]
@@ -991,8 +1004,14 @@ mod tests {
         assert!(crypto.contains(&259));
         assert!(crypto.contains(&312));
         assert!(crypto.contains(&327));
+        assert!(crypto.contains(&323));
+        assert!(crypto.contains(&325));
         assert!(crypto.contains(&338));
         assert!(crypto.contains(&798));
+        assert!(crypto.contains(&323));
+        assert!(crypto.contains(&325));
+        assert!(crypto.contains(&347));
+        assert!(crypto.contains(&780));
         assert!(crypto.contains(&1240));
 
         let deser = semantic_class_to_cwes(SemanticPatternClass::Deserialization);
@@ -1009,6 +1028,17 @@ mod tests {
 
         let proto = semantic_class_to_cwes(SemanticPatternClass::PrototypePollution);
         assert!(proto.contains(&1321));
+
+        let injection = semantic_class_to_cwes(SemanticPatternClass::CommandInjection);
+        assert!(injection.contains(&643));
+
+        let path = semantic_class_to_cwes(SemanticPatternClass::PathTraversal);
+        assert!(path.contains(&59));
+        assert!(path.contains(&61));
+
+        let race = semantic_class_to_cwes(SemanticPatternClass::RaceCondition);
+        assert!(race.contains(&364));
+        assert!(race.contains(&366));
 
         let leak = semantic_class_to_cwes(SemanticPatternClass::ResourceLeak);
         assert!(leak.contains(&401));
@@ -1045,7 +1075,11 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(327), Some(CryptoWeakness));
         assert_eq!(cwe_to_semantic_class(312), Some(CryptoWeakness));
         assert_eq!(cwe_to_semantic_class(798), Some(CryptoWeakness));
+        assert_eq!(cwe_to_semantic_class(323), Some(CryptoWeakness));
+        assert_eq!(cwe_to_semantic_class(325), Some(CryptoWeakness));
         assert_eq!(cwe_to_semantic_class(338), Some(CryptoWeakness));
+        assert_eq!(cwe_to_semantic_class(347), Some(CryptoWeakness));
+        assert_eq!(cwe_to_semantic_class(780), Some(CryptoWeakness));
         assert_eq!(cwe_to_semantic_class(1240), Some(CryptoWeakness));
         assert_eq!(cwe_to_semantic_class(502), Some(Deserialization));
         assert_eq!(cwe_to_semantic_class(128), Some(IntegerOverflow));
@@ -1053,6 +1087,11 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(476), Some(NullDeref));
         assert_eq!(cwe_to_semantic_class(690), Some(NullDeref));
         assert_eq!(cwe_to_semantic_class(1321), Some(PrototypePollution));
+        assert_eq!(cwe_to_semantic_class(643), Some(CommandInjection));
+        assert_eq!(cwe_to_semantic_class(59), Some(PathTraversal));
+        assert_eq!(cwe_to_semantic_class(61), Some(PathTraversal));
+        assert_eq!(cwe_to_semantic_class(364), Some(RaceCondition));
+        assert_eq!(cwe_to_semantic_class(366), Some(RaceCondition));
         assert_eq!(cwe_to_semantic_class(401), Some(ResourceLeak));
         assert_eq!(cwe_to_semantic_class(675), Some(ResourceLeak));
         assert_eq!(cwe_to_semantic_class(400), None);
@@ -1188,6 +1227,19 @@ mod tests {
     }
 
     #[test]
+    fn test_cwe_family_safe_subset_expansions() {
+        assert_eq!(cwe_family(643), 74);
+        assert_eq!(cwe_family(59), 22);
+        assert_eq!(cwe_family(61), 22);
+        assert_eq!(cwe_family(323), 327);
+        assert_eq!(cwe_family(325), 327);
+        assert_eq!(cwe_family(347), 327);
+        assert_eq!(cwe_family(780), 327);
+        assert_eq!(cwe_family(364), 362);
+        assert_eq!(cwe_family(366), 362);
+    }
+
+    #[test]
     fn test_category_to_cwes_new_categories() {
         let null = category_to_cwes("null_deref");
         assert!(null.contains(&476));
@@ -1217,5 +1269,15 @@ mod tests {
 
         let uaf = category_to_cwes("use_after_free");
         assert!(uaf.contains(&562));
+        let race = category_to_cwes("race");
+        assert!(race.contains(&364));
+        assert!(race.contains(&366));
+
+        let path = category_to_cwes("path_traversal");
+        assert!(path.contains(&59));
+        assert!(path.contains(&61));
+
+        let injection = category_to_cwes("injection");
+        assert!(injection.contains(&643));
     }
 }
