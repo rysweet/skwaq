@@ -28,6 +28,7 @@ pub enum SemanticPatternClass {
     PrototypePollution,
     RaceCondition,
     ReachableAssertion,
+    UndefinedBehavior,
     UnsafeApiUsage,
     UseAfterFree,
     NullDeref,
@@ -60,6 +61,7 @@ impl SemanticPatternClass {
             Self::PrototypePollution => "prototype_pollution",
             Self::RaceCondition => "race_condition",
             Self::ReachableAssertion => "reachable_assertion",
+            Self::UndefinedBehavior => "undefined_behavior",
             Self::UnsafeApiUsage => "unsafe_api_usage",
             Self::UseAfterFree => "use_after_free",
             Self::NullDeref => "null_deref",
@@ -93,7 +95,9 @@ impl SemanticPatternClass {
             Self::UninitializedVar | Self::DeadStore => "initialization_safety",
             Self::FormatString => "format_string",
             Self::CryptoWeakness => "crypto",
-            Self::UnsafeApiUsage | Self::ImproperAccessControl => "unsafe_api",
+            Self::UnsafeApiUsage | Self::ImproperAccessControl | Self::UndefinedBehavior => {
+                "unsafe_api"
+            }
         }
     }
 }
@@ -166,6 +170,9 @@ impl SemanticPatternClassifier {
         }
         if is_reachable_assertion(&category, &title) {
             classes.insert(SemanticPatternClass::ReachableAssertion);
+        }
+        if is_undefined_behavior(&category, &title) {
+            classes.insert(SemanticPatternClass::UndefinedBehavior);
         }
         if is_unsafe_api_usage(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::UnsafeApiUsage);
@@ -410,6 +417,23 @@ fn is_reachable_assertion(category: &str, title: &str) -> bool {
                 "assertion reachable",
                 "abort reachable",
                 "assert reachable from untrusted input",
+            ],
+        )
+}
+
+fn is_undefined_behavior(category: &str, title: &str) -> bool {
+    category == "undefined_behavior"
+        || category == "poor_code_quality"
+        || contains_any(
+            title,
+            &[
+                "undefined behavior",
+                "unspecified behavior",
+                "implementation-defined",
+                "implementation defined",
+                "poor code quality",
+                "code quality indicator",
+                "reliance on undefined",
             ],
         )
 }
@@ -1325,6 +1349,36 @@ mod tests {
         assert_eq!(
             SemanticPatternClass::TypeConfusion.confidence_cluster(),
             "memory_lifecycle"
+        );
+    }
+
+    #[test]
+    fn classifies_undefined_behavior_from_title() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify(
+            "code_quality",
+            "reliance on undefined behavior in pointer arithmetic",
+            "ptr_add",
+        );
+        assert!(classes.contains(&SemanticPatternClass::UndefinedBehavior));
+    }
+
+    #[test]
+    fn classifies_undefined_behavior_from_category() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify(
+            "poor_code_quality",
+            "suspicious arithmetic operation",
+            "add",
+        );
+        assert!(classes.contains(&SemanticPatternClass::UndefinedBehavior));
+    }
+
+    #[test]
+    fn undefined_behavior_clusters_with_unsafe_api() {
+        assert_eq!(
+            SemanticPatternClass::UndefinedBehavior.confidence_cluster(),
+            "unsafe_api"
         );
     }
 }

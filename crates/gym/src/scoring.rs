@@ -268,6 +268,7 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         SemanticPatternClass::RaceCondition => &[362, 364, 366, 367, 832],
         SemanticPatternClass::ReachableAssertion => &[617],
         SemanticPatternClass::TypeConfusion => &[843, 591],
+        SemanticPatternClass::UndefinedBehavior => &[758, 398],
         SemanticPatternClass::UnsafeApiUsage => &[222, 223, 242, 244, 247, 676],
         SemanticPatternClass::UseAfterFree => &[415, 416, 562, 761, 763],
         SemanticPatternClass::NullDeref => &[252, 253, 476, 690],
@@ -333,6 +334,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         1321 => Some(SemanticPatternClass::PrototypePollution),
         362 | 364 | 366 | 367 | 832 => Some(SemanticPatternClass::RaceCondition),
         617 => Some(SemanticPatternClass::ReachableAssertion),
+        758 | 398 => Some(SemanticPatternClass::UndefinedBehavior),
         843 | 591 => Some(SemanticPatternClass::TypeConfusion),
         377 => Some(SemanticPatternClass::InsecureTempFile),
         222 | 223 | 242 | 244 | 247 | 676 => Some(SemanticPatternClass::UnsafeApiUsage),
@@ -1326,6 +1328,8 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(272), Some(ImproperAccessControl));
         assert_eq!(cwe_to_semantic_class(284), Some(ImproperAccessControl));
         assert_eq!(cwe_to_semantic_class(843), Some(TypeConfusion));
+        assert_eq!(cwe_to_semantic_class(758), Some(UndefinedBehavior));
+        assert_eq!(cwe_to_semantic_class(398), Some(UndefinedBehavior));
         assert_eq!(cwe_to_semantic_class(591), Some(TypeConfusion));
         assert_eq!(cwe_to_semantic_class(563), Some(DeadStore));
         assert_eq!(cwe_to_semantic_class(617), Some(ReachableAssertion));
