@@ -117,6 +117,8 @@ mod tests {
             skip: 0,
             concurrency: 1,
             timeout_secs: 30,
+            holdout_fraction: 0.0,
+            max_improvements_per_cycle: 0,
         }
     }
 

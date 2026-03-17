@@ -120,6 +120,8 @@ impl Gym {
             skip: 0,
             concurrency: 1,
             timeout_secs: 1800,
+            holdout_fraction: 0.2,
+            max_improvements_per_cycle: 5,
         };
 
         Ok(Self {

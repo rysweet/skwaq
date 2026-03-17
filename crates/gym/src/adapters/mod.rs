@@ -37,6 +37,15 @@ pub struct BenchmarkConfig {
     pub concurrency: usize,
     /// Per-case timeout in seconds.
     pub timeout_secs: u64,
+    /// Fraction of cases to hold out for validation (0.0–1.0).
+    /// During improvement cycles, holdout cases are NOT used for failure
+    /// analysis — only for validating that proposals generalize.
+    /// Set to 0.0 to disable holdout (legacy behavior).
+    pub holdout_fraction: f64,
+    /// Maximum number of improvements to accept per cycle.
+    /// Prevents unbounded acceptance that could compound overfitting.
+    /// 0 means unlimited (legacy behavior).
+    pub max_improvements_per_cycle: usize,
 }
 
 /// Every benchmark suite implements this trait.
