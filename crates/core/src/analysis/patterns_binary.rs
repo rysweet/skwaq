@@ -213,7 +213,7 @@ mod tests {
         let detector = DangerousApiDetector::new();
         let imports = vec![
             ImportInfo {
-                name: "printf".into(),
+                name: "exit".into(),
                 library: "libc.so.6".into(),
             },
             ImportInfo {
@@ -223,6 +223,48 @@ mod tests {
         ];
         let hits = detector.check_imports(&imports);
         assert!(hits.is_empty());
+    }
+
+    #[test]
+    fn test_printf_detected_as_format_string() {
+        let detector = DangerousApiDetector::new();
+        let imports = vec![ImportInfo {
+            name: "printf".into(),
+            library: "libc.so.6".into(),
+        }];
+        let hits = detector.check_imports(&imports);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].danger_category, DangerCategory::FormatString);
+    }
+
+    #[test]
+    fn test_fprintf_detected_as_format_string() {
+        let detector = DangerousApiDetector::new();
+        let imports = vec![ImportInfo {
+            name: "fprintf".into(),
+            library: "libc.so.6".into(),
+        }];
+        let hits = detector.check_imports(&imports);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].danger_category, DangerCategory::FormatString);
+    }
+
+    #[test]
+    fn test_vprintf_family_detected_as_format_string() {
+        let detector = DangerousApiDetector::new();
+        for api in &["vprintf", "vfprintf", "snprintf", "vsnprintf"] {
+            let imports = vec![ImportInfo {
+                name: (*api).into(),
+                library: "libc.so.6".into(),
+            }];
+            let hits = detector.check_imports(&imports);
+            assert_eq!(hits.len(), 1, "{api} should be detected");
+            assert_eq!(
+                hits[0].danger_category,
+                DangerCategory::FormatString,
+                "{api} should be FormatString"
+            );
+        }
     }
 
     #[test]
