@@ -33,6 +33,7 @@ use std::time::{Duration, Instant};
 /// Call [`SynthesisStats::report`] at end of a gym run to log the summary.
 pub struct SynthesisStats {
     llm_synthesis_count: AtomicU32,
+    consensus_early_exit_count: AtomicU32,
     failed_count: AtomicU32,
 }
 
@@ -40,6 +41,7 @@ impl Default for SynthesisStats {
     fn default() -> Self {
         Self {
             llm_synthesis_count: AtomicU32::new(0),
+            consensus_early_exit_count: AtomicU32::new(0),
             failed_count: AtomicU32::new(0),
         }
     }
@@ -54,6 +56,11 @@ impl SynthesisStats {
         self.llm_synthesis_count.fetch_add(1, Ordering::Relaxed);
     }
 
+    fn record_consensus_early_exit(&self) {
+        self.consensus_early_exit_count
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
     fn record_failure(&self) {
         self.failed_count.fetch_add(1, Ordering::Relaxed);
     }
@@ -61,18 +68,17 @@ impl SynthesisStats {
     /// Log end-of-run synthesis summary. Call after all cases complete.
     pub fn report(&self) {
         let llm = self.llm_synthesis_count.load(Ordering::Relaxed);
+        let consensus = self.consensus_early_exit_count.load(Ordering::Relaxed);
         let failed = self.failed_count.load(Ordering::Relaxed);
-        let total = llm + failed;
+        let total = llm + consensus + failed;
         if total == 0 {
             tracing::info!("Synthesis: no dual-source cases (nothing to synthesize)");
             return;
         }
         if failed > 0 {
             tracing::warn!(
-                "Synthesis summary: {}/{} cases used LLM synthesis, {} failed loudly",
-                llm,
-                total,
-                failed,
+                "Synthesis summary: {}/{} LLM synthesis, {}/{} consensus early-exit, {} failed loudly",
+                llm, total, consensus, total, failed,
             );
             eprintln!(
                 "\n  WARNING: {}/{} synthesis cases failed loudly.\n  \
@@ -81,9 +87,8 @@ impl SynthesisStats {
             );
         } else {
             tracing::info!(
-                "Synthesis summary: {}/{} cases used LLM synthesis (all successful)",
-                llm,
-                total,
+                "Synthesis summary: {}/{} LLM synthesis, {}/{} consensus early-exit (all successful)",
+                llm, total, consensus, total,
             );
         }
     }
@@ -465,6 +470,52 @@ fn store_ghidra_results(
     }
 }
 
+/// Check whether pattern and LLM findings have consensus.
+///
+/// Consensus means both sources identified vulnerabilities in the same
+/// functions (by normalized name) AND the same semantic pattern classes.
+/// When they agree, there is no ambiguity for an LLM reviewer to resolve
+/// — we can skip the expensive synthesis call entirely.
+///
+/// Returns `true` when every LLM finding's function+category+semantic-class
+/// fingerprint is also covered by at least one pattern finding.
+fn findings_have_consensus(
+    pattern_findings: &[DetectedFinding],
+    llm_findings: &[DetectedFinding],
+) -> bool {
+    // Build semantic fingerprints: (normalized_function, raw_category, semantic_class) tuples.
+    // Keeping the raw category prevents unrelated findings that share a dangerous API
+    // signature from being treated as consensus.
+    let fingerprint = |findings: &[DetectedFinding]| -> HashSet<(String, String, String)> {
+        let mut set = HashSet::new();
+        for f in findings {
+            let func = normalize_function_key(&f.function);
+            let category = f.category.to_ascii_lowercase();
+            let classes = semantic_classes_for_finding(f);
+            if classes.is_empty() {
+                set.insert((func, category.clone(), category));
+            } else {
+                for class in classes {
+                    set.insert((func.clone(), category.clone(), class.as_str().to_string()));
+                }
+            }
+        }
+        set
+    };
+
+    let pattern_fp = fingerprint(pattern_findings);
+    let llm_fp = fingerprint(llm_findings);
+
+    if pattern_fp.is_empty() || llm_fp.is_empty() {
+        return false;
+    }
+
+    // Consensus: every LLM fingerprint is covered by patterns.
+    // We intentionally do NOT require patterns ⊆ LLM — pattern detectors
+    // are high-precision and may flag things the LLM missed, which is fine.
+    llm_fp.iter().all(|fp| pattern_fp.contains(fp))
+}
+
 /// Synthesize findings from both pattern detection and LLM agents.
 ///
 /// Models how a human security team works:
@@ -472,15 +523,8 @@ fn store_ghidra_results(
 /// - Senior researchers (LLM agents) investigate deeply
 /// - Lead reviewer (this function) makes final call, weighing all evidence
 ///
-/// Synthesize findings from pattern detection and LLM agents.
-///
-/// Models how a lead security reviewer works:
-/// - Receives reports from junior analysts (pattern detection) and
-///   senior researchers (LLM agents)
-/// - Uses judgment to CONFIRM or REJECT each finding
-///
-/// When both pattern and LLM findings exist, the analysis must be synthesized
-/// by an LLM reviewer. Fail loudly if that synthesis cannot run.
+/// When both sources agree (consensus), findings pass through without an
+/// LLM synthesis call. Only disagreement cases pay the synthesis cost.
 async fn synthesize_findings(
     all_findings: Vec<DetectedFinding>,
     _pattern_categories: &HashSet<String>,
@@ -508,7 +552,18 @@ async fn synthesize_findings(
         return Ok(all_findings);
     }
 
-    // Both sources have findings — synthesis is mandatory.
+    // Both sources have findings — check for consensus before paying LLM cost.
+    if findings_have_consensus(&pattern_findings, &llm_findings) {
+        SYNTHESIS_STATS.record_consensus_early_exit();
+        tracing::info!(
+            "Consensus early-exit: {} pattern + {} LLM findings agree, skipping LLM synthesis",
+            pattern_findings.len(),
+            llm_findings.len(),
+        );
+        return Ok(all_findings);
+    }
+
+    // Disagreement — full LLM synthesis required.
     match llm_synthesize(&pattern_findings, &llm_findings, timeout_secs).await {
         Ok(synthesized) => {
             SYNTHESIS_STATS.record_llm_synthesis();
@@ -1627,11 +1682,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_synthesis_is_tracked() {
-        // When both sources have findings, synthesis must either succeed
-        // or fail loudly and track that failure. It must NOT silently degrade.
+        // When both sources have findings, synthesis must track its outcome
+        // via one of: llm_synthesis, consensus_early_exit, or failed counter.
         let db = GraphDb::in_memory().unwrap();
         let cats = HashSet::new();
 
+        // Deliberately use DIFFERENT categories/functions so there is NO consensus
+        // and the code falls through to full LLM synthesis.
         let findings = vec![
             DetectedFinding {
                 id: "p1".into(),
@@ -1657,6 +1714,7 @@ mod tests {
 
         let stats = synthesis_stats();
         let before_llm = stats.llm_synthesis_count.load(Ordering::Relaxed);
+        let before_consensus = stats.consensus_early_exit_count.load(Ordering::Relaxed);
         let before_failed = stats.failed_count.load(Ordering::Relaxed);
 
         let result = synthesize_findings(findings, &cats, &db, 30).await;
@@ -1668,14 +1726,18 @@ mod tests {
         }
 
         let after_llm = stats.llm_synthesis_count.load(Ordering::Relaxed);
+        let after_consensus = stats.consensus_early_exit_count.load(Ordering::Relaxed);
         let after_failed = stats.failed_count.load(Ordering::Relaxed);
 
-        // Either LLM synthesis succeeded or it failed loudly — one counter must increase.
-        let total_increase = (after_llm - before_llm) + (after_failed - before_failed);
+        // One of the three counters must increase.
+        let total_increase = (after_llm - before_llm)
+            + (after_consensus - before_consensus)
+            + (after_failed - before_failed);
         assert!(
             total_increase > 0,
-            "Synthesis must track its outcome: llm_delta={}, failed_delta={} (neither changed!)",
+            "Synthesis must track its outcome: llm_delta={}, consensus_delta={}, failed_delta={} (none changed!)",
             after_llm - before_llm,
+            after_consensus - before_consensus,
             after_failed - before_failed,
         );
     }
@@ -1685,8 +1747,157 @@ mod tests {
         let stats = SynthesisStats::new();
         stats.record_llm_synthesis();
         stats.record_llm_synthesis();
+        stats.record_consensus_early_exit();
         stats.record_failure();
         // Just verify it doesn't panic — the output goes to tracing/eprintln
         stats.report();
+    }
+
+    #[test]
+    fn test_consensus_same_function_same_class() {
+        // Both sources find buffer overflow in strcpy → consensus
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "LLM: buffer overflow in strcpy".into(),
+        }];
+        assert!(
+            findings_have_consensus(&pattern, &llm),
+            "Same function + same semantic class should be consensus"
+        );
+    }
+
+    #[test]
+    fn test_no_consensus_different_functions() {
+        // Pattern finds strcpy, LLM finds injection in exec → no consensus
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "injection".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "exec".into(),
+            line: Some(20),
+            title: "LLM: command injection in exec".into(),
+        }];
+        assert!(
+            !findings_have_consensus(&pattern, &llm),
+            "Different functions and categories should NOT be consensus"
+        );
+    }
+
+    #[test]
+    fn test_no_consensus_same_function_different_class() {
+        // Both target the same generic function but with different vulnerability classes
+        // that don't share a semantic classification (no well-known API name).
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "race-condition".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "process_request".into(),
+            line: Some(10),
+            title: "Dangerous pattern: process_request".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "auth-bypass".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "process_request".into(),
+            line: Some(10),
+            title: "LLM: auth bypass in process_request".into(),
+        }];
+        assert!(
+            !findings_have_consensus(&pattern, &llm),
+            "Same function but different classes should NOT be consensus"
+        );
+    }
+
+    #[test]
+    fn test_no_consensus_empty_findings() {
+        let pattern: Vec<DetectedFinding> = vec![];
+        let llm: Vec<DetectedFinding> = vec![];
+        assert!(
+            !findings_have_consensus(&pattern, &llm),
+            "Empty findings should NOT be consensus"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_consensus_early_exit_returns_all_findings() {
+        // When consensus is detected, ALL original findings should be returned
+        // (no LLM filtering).
+        let db = GraphDb::in_memory().unwrap();
+        let cats = HashSet::new();
+
+        let findings = vec![
+            DetectedFinding {
+                id: "p1".into(),
+                category: "memory".into(),
+                severity: "high".into(),
+                cwes: vec![],
+                file: "t.c".into(),
+                function: "strcpy".into(),
+                line: Some(10),
+                title: "Dangerous pattern: strcpy".into(),
+            },
+            DetectedFinding {
+                id: "l1".into(),
+                category: "memory".into(),
+                severity: "critical".into(),
+                cwes: vec![],
+                file: "t.c".into(),
+                function: "strcpy".into(),
+                line: Some(10),
+                title: "LLM: buffer overflow in strcpy".into(),
+            },
+        ];
+
+        let stats = synthesis_stats();
+        let before = stats.consensus_early_exit_count.load(Ordering::Relaxed);
+
+        let result = synthesize_findings(findings, &cats, &db, 30).await.unwrap();
+
+        let after = stats.consensus_early_exit_count.load(Ordering::Relaxed);
+
+        // These two findings have the same function and semantic class (memory/strcpy)
+        // so consensus should fire.
+        assert!(
+            after > before,
+            "Consensus counter should increase for agreeing findings"
+        );
+        assert_eq!(
+            result.len(),
+            2,
+            "Consensus early-exit should return all original findings"
+        );
     }
 }
