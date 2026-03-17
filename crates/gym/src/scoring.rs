@@ -164,7 +164,7 @@ pub fn cwe_family(cwe: u32) -> u32 {
         // Out-of-bounds read/write -> Buffer overflow family
         129 | 131 | 170 | 805 => 119,
         // Path traversal family -> CWE-22
-        23 | 36 | 59 | 61 => 22,
+        23 | 36 => 22,
         // Untrusted search path is the closest current semantic fit.
         426 => 22,
         // Crypto weakness family -> CWE-327
@@ -209,7 +209,7 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
         "format_string" => vec![134],
         "race" => vec![362, 364, 366, 367],
         "temp_file" => vec![377],
-        "path_traversal" => vec![22, 23, 36, 59, 61, 426],
+        "path_traversal" => vec![22, 23, 36, 426],
         "deserialization" => vec![502],
         "crypto" => vec![
             256, 259, 295, 310, 312, 319, 321, 323, 325, 326, 327, 328, 330, 338, 347, 614, 780,
@@ -242,7 +242,7 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         SemanticPatternClass::Deserialization => &[502],
         SemanticPatternClass::FormatString => &[134],
         SemanticPatternClass::InsecureTempFile => &[377],
-        SemanticPatternClass::PathTraversal => &[22, 23, 36, 59, 61, 426],
+        SemanticPatternClass::PathTraversal => &[22, 23, 36, 426],
         SemanticPatternClass::PrototypePollution => &[1321],
         SemanticPatternClass::RaceCondition => &[362, 364, 366, 367],
         SemanticPatternClass::UnsafeApiUsage => &[242, 676],
@@ -297,7 +297,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         | 780 | 798 | 1240 => Some(SemanticPatternClass::CryptoWeakness),
         502 => Some(SemanticPatternClass::Deserialization),
         134 => Some(SemanticPatternClass::FormatString),
-        22 | 23 | 36 | 59 | 61 | 426 => Some(SemanticPatternClass::PathTraversal),
+        22 | 23 | 36 | 426 => Some(SemanticPatternClass::PathTraversal),
         1321 => Some(SemanticPatternClass::PrototypePollution),
         362 | 364 | 366 | 367 => Some(SemanticPatternClass::RaceCondition),
         377 => Some(SemanticPatternClass::InsecureTempFile),
@@ -912,8 +912,8 @@ mod tests {
         assert!(race.contains(&366));
 
         let path = category_to_cwes("path_traversal");
-        assert!(path.contains(&59));
-        assert!(path.contains(&61));
+        assert!(!path.contains(&59));
+        assert!(!path.contains(&61));
 
         let injection = category_to_cwes("injection");
         assert!(injection.contains(&643));
@@ -1008,8 +1008,6 @@ mod tests {
         assert!(crypto.contains(&325));
         assert!(crypto.contains(&338));
         assert!(crypto.contains(&798));
-        assert!(crypto.contains(&323));
-        assert!(crypto.contains(&325));
         assert!(crypto.contains(&347));
         assert!(crypto.contains(&780));
         assert!(crypto.contains(&1240));
@@ -1033,8 +1031,8 @@ mod tests {
         assert!(injection.contains(&643));
 
         let path = semantic_class_to_cwes(SemanticPatternClass::PathTraversal);
-        assert!(path.contains(&59));
-        assert!(path.contains(&61));
+        assert!(!path.contains(&59));
+        assert!(!path.contains(&61));
 
         let race = semantic_class_to_cwes(SemanticPatternClass::RaceCondition);
         assert!(race.contains(&364));
@@ -1088,8 +1086,8 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(690), Some(NullDeref));
         assert_eq!(cwe_to_semantic_class(1321), Some(PrototypePollution));
         assert_eq!(cwe_to_semantic_class(643), Some(CommandInjection));
-        assert_eq!(cwe_to_semantic_class(59), Some(PathTraversal));
-        assert_eq!(cwe_to_semantic_class(61), Some(PathTraversal));
+        assert_eq!(cwe_to_semantic_class(59), None);
+        assert_eq!(cwe_to_semantic_class(61), None);
         assert_eq!(cwe_to_semantic_class(364), Some(RaceCondition));
         assert_eq!(cwe_to_semantic_class(366), Some(RaceCondition));
         assert_eq!(cwe_to_semantic_class(401), Some(ResourceLeak));
@@ -1229,8 +1227,8 @@ mod tests {
     #[test]
     fn test_cwe_family_safe_subset_expansions() {
         assert_eq!(cwe_family(643), 74);
-        assert_eq!(cwe_family(59), 22);
-        assert_eq!(cwe_family(61), 22);
+        assert_eq!(cwe_family(59), 59);
+        assert_eq!(cwe_family(61), 61);
         assert_eq!(cwe_family(323), 327);
         assert_eq!(cwe_family(325), 327);
         assert_eq!(cwe_family(347), 327);
@@ -1274,8 +1272,8 @@ mod tests {
         assert!(race.contains(&366));
 
         let path = category_to_cwes("path_traversal");
-        assert!(path.contains(&59));
-        assert!(path.contains(&61));
+        assert!(!path.contains(&59));
+        assert!(!path.contains(&61));
 
         let injection = category_to_cwes("injection");
         assert!(injection.contains(&643));
