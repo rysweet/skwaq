@@ -22,6 +22,11 @@ pub enum SemanticPatternClass {
     RaceCondition,
     UnsafeApiUsage,
     UseAfterFree,
+    NullDeref,
+    IntegerOverflow,
+    DivideByZero,
+    ResourceLeak,
+    UninitializedVar,
 }
 
 impl SemanticPatternClass {
@@ -40,6 +45,11 @@ impl SemanticPatternClass {
             Self::RaceCondition => "race_condition",
             Self::UnsafeApiUsage => "unsafe_api_usage",
             Self::UseAfterFree => "use_after_free",
+            Self::NullDeref => "null_deref",
+            Self::IntegerOverflow => "integer_overflow",
+            Self::DivideByZero => "divide_by_zero",
+            Self::ResourceLeak => "resource_leak",
+            Self::UninitializedVar => "uninitialized_var",
         }
     }
 }
@@ -100,6 +110,21 @@ impl SemanticPatternClassifier {
         }
         if is_insecure_temp_file(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::InsecureTempFile);
+        }
+        if is_null_deref(&category, &title, &function_name) {
+            classes.insert(SemanticPatternClass::NullDeref);
+        }
+        if is_integer_overflow(&category, &title) {
+            classes.insert(SemanticPatternClass::IntegerOverflow);
+        }
+        if is_divide_by_zero(&category, &title) {
+            classes.insert(SemanticPatternClass::DivideByZero);
+        }
+        if is_resource_leak(&category, &title, &function_name) {
+            classes.insert(SemanticPatternClass::ResourceLeak);
+        }
+        if is_uninitialized_var(&category, &title) {
+            classes.insert(SemanticPatternClass::UninitializedVar);
         }
 
         classes
@@ -290,6 +315,94 @@ fn is_unsafe_api_usage(category: &str, title: &str, function_name: &str) -> bool
                 "unsafe api",
                 "deprecated api",
                 "banned function",
+            ],
+        )
+}
+
+fn is_null_deref(category: &str, title: &str, function_name: &str) -> bool {
+    category == "null_deref"
+        || contains_any(
+            title,
+            &[
+                "null dereference",
+                "null pointer",
+                "null deref",
+                "nullptr",
+                "null check",
+                "unchecked return",
+            ],
+        )
+        || (contains_any(title, &["malloc", "calloc", "realloc"])
+            && contains_any(title, &["null", "check", "unchecked"]))
+        || is_function(function_name, &["malloc", "calloc", "realloc"])
+            && contains_any(title, &["null", "unchecked"])
+}
+
+fn is_integer_overflow(category: &str, title: &str) -> bool {
+    category == "integer_overflow"
+        || contains_any(
+            title,
+            &[
+                "integer overflow",
+                "integer underflow",
+                "integer wrap",
+                "int overflow",
+                "numeric overflow",
+                "arithmetic overflow",
+                "truncation",
+                "integer coercion",
+            ],
+        )
+}
+
+fn is_divide_by_zero(category: &str, title: &str) -> bool {
+    category == "divide_by_zero"
+        || contains_any(
+            title,
+            &[
+                "divide by zero",
+                "division by zero",
+                "divide-by-zero",
+                "div by zero",
+                "modulo by zero",
+                "zero divisor",
+            ],
+        )
+}
+
+fn is_resource_leak(category: &str, title: &str, function_name: &str) -> bool {
+    const RESOURCE_APIS: &[&str] = &[
+        "fopen", "open", "socket", "accept", "dup", "dup2", "pipe", "creat",
+    ];
+
+    category == "resource_leak"
+        || contains_any(
+            title,
+            &[
+                "resource leak",
+                "memory leak",
+                "file descriptor leak",
+                "handle leak",
+                "fd leak",
+                "unclosed",
+                "not freed",
+                "not closed",
+            ],
+        )
+        || (is_function(function_name, RESOURCE_APIS)
+            && contains_any(title, &["leak", "unclosed", "not closed"]))
+}
+
+fn is_uninitialized_var(category: &str, title: &str) -> bool {
+    category == "uninitialized_var"
+        || contains_any(
+            title,
+            &[
+                "uninitialized",
+                "uninitialised",
+                "not initialized",
+                "use of uninitialized",
+                "indeterminate value",
             ],
         )
 }
@@ -498,5 +611,105 @@ mod tests {
             extract_line_from_title("Dangerous pattern: strcpy (foo.c:10)"),
             Some(10)
         );
+    }
+
+    #[test]
+    fn classifies_null_deref_from_category() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "null_deref",
+            "Pattern: pointer dereference",
+            "parse",
+        );
+        assert!(classes.contains(&SemanticPatternClass::NullDeref));
+    }
+
+    #[test]
+    fn classifies_null_deref_from_title() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "memory",
+            "LLM: null pointer dereference in parse_input",
+            "parse_input",
+        );
+        assert!(classes.contains(&SemanticPatternClass::NullDeref));
+    }
+
+    #[test]
+    fn classifies_integer_overflow_from_category() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "integer_overflow",
+            "Pattern: increment without check",
+            "counter",
+        );
+        assert!(classes.contains(&SemanticPatternClass::IntegerOverflow));
+    }
+
+    #[test]
+    fn classifies_integer_overflow_from_title() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "arithmetic",
+            "LLM: integer overflow in size calculation",
+            "calc_size",
+        );
+        assert!(classes.contains(&SemanticPatternClass::IntegerOverflow));
+    }
+
+    #[test]
+    fn classifies_divide_by_zero_from_category() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "divide_by_zero",
+            "Pattern: division without check",
+            "compute",
+        );
+        assert!(classes.contains(&SemanticPatternClass::DivideByZero));
+    }
+
+    #[test]
+    fn classifies_divide_by_zero_from_title() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "arithmetic",
+            "LLM: division by zero in normalize",
+            "normalize",
+        );
+        assert!(classes.contains(&SemanticPatternClass::DivideByZero));
+    }
+
+    #[test]
+    fn classifies_resource_leak_from_category() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "resource_leak",
+            "Pattern: file opened",
+            "init",
+        );
+        assert!(classes.contains(&SemanticPatternClass::ResourceLeak));
+    }
+
+    #[test]
+    fn classifies_resource_leak_from_title() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "io",
+            "LLM: resource leak — file descriptor not closed",
+            "open_file",
+        );
+        assert!(classes.contains(&SemanticPatternClass::ResourceLeak));
+    }
+
+    #[test]
+    fn classifies_uninitialized_var_from_category() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "uninitialized_var",
+            "Pattern: variable declared without init",
+            "process",
+        );
+        assert!(classes.contains(&SemanticPatternClass::UninitializedVar));
+    }
+
+    #[test]
+    fn classifies_uninitialized_var_from_title() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "memory",
+            "LLM: use of uninitialized variable in loop",
+            "loop_body",
+        );
+        assert!(classes.contains(&SemanticPatternClass::UninitializedVar));
     }
 }
