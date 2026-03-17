@@ -17,38 +17,45 @@ from pathlib import Path
 
 # CWE inference from vulnerability descriptions.
 # Maps keywords/phrases to CWE numbers.
+# Ordered by specificity: more specific patterns first so they match before generic ones.
 CWE_PATTERNS = [
-    # Memory safety
-    (r"buffer.overflow|heap.overflow|stack.overflow|out.of.bounds.write", [787]),
-    (r"out.of.bounds.read|oob.read|read.out.of.bounds", [125]),
-    (r"use.after.free|uaf|use-after-free", [416]),
-    (r"null.pointer|null.deref|nullptr|null pointer dereference", [476]),
-    (r"double.free", [415]),
-    (r"memory.leak|leak.memory", [401]),
-    (r"integer.overflow|integer.underflow|int.overflow", [190]),
-    (r"type.confusion|type.error|wrong.type|cast", [843]),
-    (r"uninitialized|uninitialised|not.initialized", [457]),
+    # Specific memory safety patterns (match before generic buffer/overflow)
+    (r"stack.buffer.overflow|stack.based.buffer", [121]),
+    (r"heap.buffer.overflow|heap.based.buffer", [122]),
+    (r"out.of.bounds.read|oob.read|read.out.of.bounds|reads?.beyond|read.*past", [125]),
+    (r"out.of.bounds.write|oob.write|write.out.of.bounds|writes?.beyond", [787]),
+    (r"buffer.overflow|heap.overflow|stack.overflow", [787]),
+    (r"use.after.free|uaf|use-after-free|access.*freed|dangling.pointer", [416]),
+    (r"double.free|double-free", [415]),
+    (r"null.pointer|null.deref|nullptr|null pointer dereference|null.check|dereference.*null", [476]),
+    (r"uninitialized|uninitialised|not.initialized|indeterminate.value|uninitialized.memory|msan", [457]),
     (r"free.*not.*heap|invalid.free|free.*stack", [590]),
-    (r"divide.by.zero|division.by.zero", [369]),
-    (r"off.by.one", [193]),
-    (r"stack.buffer", [121]),
-    (r"heap.buffer", [122]),
+    (r"type.confusion|type.error|wrong.type|incorrect.*cast|bad.*cast|casts?.*to.*wrong", [843]),
+    (r"integer.overflow|integer.underflow|int.overflow|integer.truncation|signed.integer", [190]),
+    (r"divide.by.zero|division.by.zero|modulo.by.zero", [369]),
+    (r"off.by.one|off-by-one|fence.post", [193]),
+    (r"negative.size|negative.length|negative.index|negative.value.*size|size.*negative", [190]),
+    (r"shift.*exponent|shift.*amount|undefined.*shift|shift.*negative|shift.*overflow", [758]),
+    (r"memory.leak|leak.memory|resource.leak", [401]),
     # Format/injection
     (r"format.string", [134]),
     (r"command.injection|os.command", [78]),
     (r"sql.injection", [89]),
     # Resource/robustness
-    (r"infinite.loop|infinite.recursion|uncontrolled.recursion", [835]),
-    (r"denial.of.service|resource.exhaustion|excessive", [400]),
-    (r"assertion|abort|assert.*fail", [617]),
+    (r"infinite.loop|infinite.recursion|uncontrolled.recursion|stack.exhaustion", [835]),
+    (r"denial.of.service|resource.exhaustion|excessive|algorithmic.complexity", [400]),
+    (r"assertion.*fail|abort.*reachable|reachable.*assertion|assert.*fail", [617]),
+    (r"hang|timeout|non.terminating|does.not.terminate", [835]),
     # Code quality
-    (r"undefined.behavior|ubsan|undefined behaviour", [758]),
-    # Generic memory
+    (r"undefined.behavior|ubsan|undefined behaviour|implementation.defined", [758]),
+    # Generic memory (last resort — only match if nothing more specific matched)
     (r"memory.corruption|heap.corruption", [119]),
+    (r"out.of.bounds|bounds.check|index.out.of", [119]),
     (r"buffer", [119]),
     (r"overflow", [119]),
     (r"underflow", [191]),
-    (r"segfault|segmentation.fault|sigsegv|crash", [119]),
+    (r"segfault|segmentation.fault|sigsegv", [119]),
+    (r"crash", [119]),
 ]
 
 # Default CWE when no pattern matches

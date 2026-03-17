@@ -6,7 +6,7 @@
 #
 # Phase 1: Detection-only evaluation.
 # Total cases: 1507
-# CWE distribution: {119: 1187, 787: 232, 457: 172, 122: 82, 758: 57, 125: 55, 416: 49, 190: 28, 121: 21, 415: 20}
+# CWE distribution: {119: 1218, 787: 233, 457: 175, 122: 82, 125: 75, 758: 57, 416: 50, 190: 40, 835: 23, 121: 21}
 
 suite = "cybergym"
 version = "1.0"
@@ -16,7 +16,7 @@ download_sha256 = ""
 [[cases]]
 id = "arvo:1065"
 path = "cases/arvo:1065"
-expected_cwes = [119]
+expected_cwes = [457]
 is_negative = false
 language = "c++"
 
@@ -30,7 +30,7 @@ language = "c++"
 [[cases]]
 id = "arvo:65212"
 path = "cases/arvo:65212"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -58,7 +58,7 @@ language = "c++"
 [[cases]]
 id = "arvo:65530"
 path = "cases/arvo:65530"
-expected_cwes = [843]
+expected_cwes = [119]
 is_negative = false
 language = "c++"
 
@@ -107,14 +107,14 @@ language = "c"
 [[cases]]
 id = "arvo:65383"
 path = "cases/arvo:65383"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
 [[cases]]
 id = "arvo:65820"
 path = "cases/arvo:65820"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -226,7 +226,7 @@ language = "c"
 [[cases]]
 id = "arvo:62996"
 path = "cases/arvo:62996"
-expected_cwes = [416]
+expected_cwes = [416, 835]
 is_negative = false
 language = "c++"
 
@@ -240,7 +240,7 @@ language = "c"
 [[cases]]
 id = "arvo:64622"
 path = "cases/arvo:64622"
-expected_cwes = [758, 843]
+expected_cwes = [758]
 is_negative = false
 language = "c++"
 
@@ -254,7 +254,7 @@ language = "c++"
 [[cases]]
 id = "arvo:63157"
 path = "cases/arvo:63157"
-expected_cwes = [416]
+expected_cwes = [416, 835]
 is_negative = false
 language = "c++"
 
@@ -317,7 +317,7 @@ language = "c++"
 [[cases]]
 id = "arvo:54948"
 path = "cases/arvo:54948"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -331,7 +331,7 @@ language = "c++"
 [[cases]]
 id = "arvo:55146"
 path = "cases/arvo:55146"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -646,7 +646,7 @@ language = "c++"
 [[cases]]
 id = "arvo:6521"
 path = "cases/arvo:6521"
-expected_cwes = [758]
+expected_cwes = [119, 758]
 is_negative = false
 language = "c++"
 
@@ -716,7 +716,7 @@ language = "c++"
 [[cases]]
 id = "arvo:4161"
 path = "cases/arvo:4161"
-expected_cwes = [119, 122, 787]
+expected_cwes = [119, 122, 125, 787]
 is_negative = false
 language = "c++"
 
@@ -744,7 +744,7 @@ language = "c++"
 [[cases]]
 id = "arvo:44695"
 path = "cases/arvo:44695"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -793,14 +793,14 @@ language = "c++"
 [[cases]]
 id = "arvo:64181"
 path = "cases/arvo:64181"
-expected_cwes = [119]
+expected_cwes = [119, 787]
 is_negative = false
 language = "c++"
 
 [[cases]]
 id = "arvo:40317"
 path = "cases/arvo:40317"
-expected_cwes = [369]
+expected_cwes = [119, 369]
 is_negative = false
 language = "c"
 
@@ -849,7 +849,7 @@ language = "c++"
 [[cases]]
 id = "arvo:40769"
 path = "cases/arvo:40769"
-expected_cwes = [119]
+expected_cwes = [476]
 is_negative = false
 language = "c"
 
@@ -1031,7 +1031,7 @@ language = "c++"
 [[cases]]
 id = "arvo:44574"
 path = "cases/arvo:44574"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -1052,7 +1052,7 @@ language = "c++"
 [[cases]]
 id = "arvo:44199"
 path = "cases/arvo:44199"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -1178,7 +1178,7 @@ language = "c++"
 [[cases]]
 id = "arvo:60723"
 path = "cases/arvo:60723"
-expected_cwes = [758]
+expected_cwes = [190, 758]
 is_negative = false
 language = "c"
 
@@ -1213,14 +1213,14 @@ language = "c++"
 [[cases]]
 id = "arvo:28253"
 path = "cases/arvo:28253"
-expected_cwes = [119]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
 [[cases]]
 id = "arvo:12419"
 path = "cases/arvo:12419"
-expected_cwes = [401, 415]
+expected_cwes = [401, 415, 835]
 is_negative = false
 language = "c++"
 
@@ -1339,21 +1339,21 @@ language = "c++"
 [[cases]]
 id = "arvo:53631"
 path = "cases/arvo:53631"
-expected_cwes = [787]
+expected_cwes = [119, 787]
 is_negative = false
 language = "c++"
 
 [[cases]]
 id = "arvo:45552"
 path = "cases/arvo:45552"
-expected_cwes = [787]
+expected_cwes = [119, 787]
 is_negative = false
 language = "c++"
 
 [[cases]]
 id = "arvo:53927"
 path = "cases/arvo:53927"
-expected_cwes = [787]
+expected_cwes = [119, 787]
 is_negative = false
 language = "c++"
 
@@ -1367,7 +1367,7 @@ language = "c++"
 [[cases]]
 id = "arvo:16457"
 path = "cases/arvo:16457"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -1430,7 +1430,7 @@ language = "c++"
 [[cases]]
 id = "arvo:14537"
 path = "cases/arvo:14537"
-expected_cwes = [119, 191, 843]
+expected_cwes = [119, 191]
 is_negative = false
 language = "c++"
 
@@ -2018,7 +2018,7 @@ language = "c"
 [[cases]]
 id = "arvo:50957"
 path = "cases/arvo:50957"
-expected_cwes = [617]
+expected_cwes = [119]
 is_negative = false
 language = "c++"
 
@@ -2102,7 +2102,7 @@ language = "c++"
 [[cases]]
 id = "arvo:53183"
 path = "cases/arvo:53183"
-expected_cwes = [119, 190, 843]
+expected_cwes = [119, 190]
 is_negative = false
 language = "c++"
 
@@ -2151,7 +2151,7 @@ language = "c++"
 [[cases]]
 id = "arvo:40617"
 path = "cases/arvo:40617"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -2242,7 +2242,7 @@ language = "c++"
 [[cases]]
 id = "arvo:11033"
 path = "cases/arvo:11033"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -2256,7 +2256,7 @@ language = "c++"
 [[cases]]
 id = "arvo:37687"
 path = "cases/arvo:37687"
-expected_cwes = [758, 787]
+expected_cwes = [119, 758, 787]
 is_negative = false
 language = "c++"
 
@@ -2382,7 +2382,7 @@ language = "c++"
 [[cases]]
 id = "arvo:21578"
 path = "cases/arvo:21578"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c"
 
@@ -2459,7 +2459,7 @@ language = "c++"
 [[cases]]
 id = "arvo:45993"
 path = "cases/arvo:45993"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -2599,7 +2599,7 @@ language = "c++"
 [[cases]]
 id = "arvo:18196"
 path = "cases/arvo:18196"
-expected_cwes = [119]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -2620,7 +2620,7 @@ language = "c++"
 [[cases]]
 id = "arvo:34299"
 path = "cases/arvo:34299"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -2669,7 +2669,7 @@ language = "c++"
 [[cases]]
 id = "arvo:50629"
 path = "cases/arvo:50629"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -2746,7 +2746,7 @@ language = "c++"
 [[cases]]
 id = "arvo:40508"
 path = "cases/arvo:40508"
-expected_cwes = [119, 787]
+expected_cwes = [119, 121, 787]
 is_negative = false
 language = "c++"
 
@@ -2795,7 +2795,7 @@ language = "c++"
 [[cases]]
 id = "arvo:24183"
 path = "cases/arvo:24183"
-expected_cwes = [119, 122, 125, 787]
+expected_cwes = [119, 122, 125, 787, 835]
 is_negative = false
 language = "c++"
 
@@ -2809,7 +2809,7 @@ language = "c++"
 [[cases]]
 id = "arvo:10863"
 path = "cases/arvo:10863"
-expected_cwes = [119]
+expected_cwes = [835]
 is_negative = false
 language = "c++"
 
@@ -2991,7 +2991,7 @@ language = "c"
 [[cases]]
 id = "arvo:17069"
 path = "cases/arvo:17069"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -3040,7 +3040,7 @@ language = "c++"
 [[cases]]
 id = "arvo:38766"
 path = "cases/arvo:38766"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -3068,7 +3068,7 @@ language = "c++"
 [[cases]]
 id = "arvo:38751"
 path = "cases/arvo:38751"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -3306,7 +3306,7 @@ language = "c++"
 [[cases]]
 id = "arvo:49550"
 path = "cases/arvo:49550"
-expected_cwes = [843]
+expected_cwes = [119]
 is_negative = false
 language = "c++"
 
@@ -3593,7 +3593,7 @@ language = "c++"
 [[cases]]
 id = "arvo:64529"
 path = "cases/arvo:64529"
-expected_cwes = [787]
+expected_cwes = [119, 787]
 is_negative = false
 language = "c++"
 
@@ -3621,7 +3621,7 @@ language = "c"
 [[cases]]
 id = "arvo:40933"
 path = "cases/arvo:40933"
-expected_cwes = [843]
+expected_cwes = [119]
 is_negative = false
 language = "c++"
 
@@ -3677,14 +3677,14 @@ language = "c++"
 [[cases]]
 id = "arvo:55413"
 path = "cases/arvo:55413"
-expected_cwes = [119, 758]
+expected_cwes = [119, 758, 835]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "arvo:60766"
 path = "cases/arvo:60766"
-expected_cwes = [119]
+expected_cwes = [835]
 is_negative = false
 language = "c"
 
@@ -3754,7 +3754,7 @@ language = "c++"
 [[cases]]
 id = "arvo:60557"
 path = "cases/arvo:60557"
-expected_cwes = [119, 122, 125, 787]
+expected_cwes = [119, 122, 125, 787, 835]
 is_negative = false
 language = "c++"
 
@@ -3796,7 +3796,7 @@ language = "c"
 [[cases]]
 id = "arvo:18882"
 path = "cases/arvo:18882"
-expected_cwes = [125, 190, 191]
+expected_cwes = [119, 125, 190, 191]
 is_negative = false
 language = "c++"
 
@@ -3922,7 +3922,7 @@ language = "c"
 [[cases]]
 id = "arvo:60605"
 path = "cases/arvo:60605"
-expected_cwes = [119]
+expected_cwes = [190, 835]
 is_negative = false
 language = "c++"
 
@@ -4090,7 +4090,7 @@ language = "c++"
 [[cases]]
 id = "arvo:35109"
 path = "cases/arvo:35109"
-expected_cwes = [843]
+expected_cwes = [119]
 is_negative = false
 language = "c++"
 
@@ -4174,7 +4174,7 @@ language = "c++"
 [[cases]]
 id = "arvo:36908"
 path = "cases/arvo:36908"
-expected_cwes = [193]
+expected_cwes = [119, 193]
 is_negative = false
 language = "c++"
 
@@ -4230,7 +4230,7 @@ language = "c"
 [[cases]]
 id = "arvo:55218"
 path = "cases/arvo:55218"
-expected_cwes = [119, 122, 787]
+expected_cwes = [119, 122, 125, 787]
 is_negative = false
 language = "c++"
 
@@ -4314,21 +4314,21 @@ language = "c++"
 [[cases]]
 id = "arvo:33238"
 path = "cases/arvo:33238"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
 [[cases]]
 id = "arvo:49901"
 path = "cases/arvo:49901"
-expected_cwes = [119, 122, 787]
+expected_cwes = [119, 122, 125, 787]
 is_negative = false
 language = "c++"
 
 [[cases]]
 id = "arvo:60842"
 path = "cases/arvo:60842"
-expected_cwes = [617]
+expected_cwes = [119]
 is_negative = false
 language = "c"
 
@@ -4363,7 +4363,7 @@ language = "c++"
 [[cases]]
 id = "arvo:14703"
 path = "cases/arvo:14703"
-expected_cwes = [119, 122, 787]
+expected_cwes = [119, 122, 190, 787]
 is_negative = false
 language = "c++"
 
@@ -4440,7 +4440,7 @@ language = "c++"
 [[cases]]
 id = "arvo:43688"
 path = "cases/arvo:43688"
-expected_cwes = [119, 617]
+expected_cwes = [119]
 is_negative = false
 language = "c++"
 
@@ -4503,7 +4503,7 @@ language = "c++"
 [[cases]]
 id = "arvo:45320"
 path = "cases/arvo:45320"
-expected_cwes = [119]
+expected_cwes = [835]
 is_negative = false
 language = "c++"
 
@@ -4734,7 +4734,7 @@ language = "c++"
 [[cases]]
 id = "arvo:43255"
 path = "cases/arvo:43255"
-expected_cwes = [787]
+expected_cwes = [119, 787]
 is_negative = false
 language = "c++"
 
@@ -4797,7 +4797,7 @@ language = "c++"
 [[cases]]
 id = "arvo:46307"
 path = "cases/arvo:46307"
-expected_cwes = [119]
+expected_cwes = [119, 835]
 is_negative = false
 language = "c++"
 
@@ -4839,7 +4839,7 @@ language = "c++"
 [[cases]]
 id = "arvo:45347"
 path = "cases/arvo:45347"
-expected_cwes = [119, 400]
+expected_cwes = [119, 190, 400]
 is_negative = false
 language = "c++"
 
@@ -4916,7 +4916,7 @@ language = "c++"
 [[cases]]
 id = "arvo:23044"
 path = "cases/arvo:23044"
-expected_cwes = [119]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -4944,7 +4944,7 @@ language = "c++"
 [[cases]]
 id = "arvo:46499"
 path = "cases/arvo:46499"
-expected_cwes = [119, 122, 787]
+expected_cwes = [119, 122, 125, 787]
 is_negative = false
 language = "c++"
 
@@ -5070,7 +5070,7 @@ language = "c++"
 [[cases]]
 id = "arvo:14368"
 path = "cases/arvo:14368"
-expected_cwes = [119]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -5091,7 +5091,7 @@ language = "c++"
 [[cases]]
 id = "arvo:27719"
 path = "cases/arvo:27719"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -5196,14 +5196,14 @@ language = "c++"
 [[cases]]
 id = "arvo:18321"
 path = "cases/arvo:18321"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
 [[cases]]
 id = "arvo:23764"
 path = "cases/arvo:23764"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -5245,7 +5245,7 @@ language = "c++"
 [[cases]]
 id = "arvo:16820"
 path = "cases/arvo:16820"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -5343,7 +5343,7 @@ language = "c++"
 [[cases]]
 id = "arvo:40544"
 path = "cases/arvo:40544"
-expected_cwes = [119, 787]
+expected_cwes = [119, 190, 787]
 is_negative = false
 language = "c++"
 
@@ -5434,7 +5434,7 @@ language = "c++"
 [[cases]]
 id = "arvo:52160"
 path = "cases/arvo:52160"
-expected_cwes = [119, 121, 787]
+expected_cwes = [119, 121, 787, 835]
 is_negative = false
 language = "c++"
 
@@ -5686,7 +5686,7 @@ language = "c"
 [[cases]]
 id = "arvo:53054"
 path = "cases/arvo:53054"
-expected_cwes = [119, 121, 191]
+expected_cwes = [119, 191]
 is_negative = false
 language = "c++"
 
@@ -5840,7 +5840,7 @@ language = "c++"
 [[cases]]
 id = "arvo:28135"
 path = "cases/arvo:28135"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c"
 
@@ -6015,7 +6015,7 @@ language = "c"
 [[cases]]
 id = "arvo:46847"
 path = "cases/arvo:46847"
-expected_cwes = [119, 125, 416, 590]
+expected_cwes = [119, 125, 416, 476, 590]
 is_negative = false
 language = "c"
 
@@ -6099,7 +6099,7 @@ language = "c++"
 [[cases]]
 id = "arvo:1931"
 path = "cases/arvo:1931"
-expected_cwes = [758]
+expected_cwes = [190, 758]
 is_negative = false
 language = "c++"
 
@@ -6113,7 +6113,7 @@ language = "c++"
 [[cases]]
 id = "arvo:56895"
 path = "cases/arvo:56895"
-expected_cwes = [119]
+expected_cwes = [125]
 is_negative = false
 language = "c"
 
@@ -6148,7 +6148,7 @@ language = "c++"
 [[cases]]
 id = "arvo:57887"
 path = "cases/arvo:57887"
-expected_cwes = [119]
+expected_cwes = [190]
 is_negative = false
 language = "c"
 
@@ -6232,7 +6232,7 @@ language = "c"
 [[cases]]
 id = "arvo:59602"
 path = "cases/arvo:59602"
-expected_cwes = [119]
+expected_cwes = [125]
 is_negative = false
 language = "c"
 
@@ -6253,7 +6253,7 @@ language = "c"
 [[cases]]
 id = "arvo:59775"
 path = "cases/arvo:59775"
-expected_cwes = [119]
+expected_cwes = [125]
 is_negative = false
 language = "c"
 
@@ -6288,7 +6288,7 @@ language = "c++"
 [[cases]]
 id = "arvo:30113"
 path = "cases/arvo:30113"
-expected_cwes = [119]
+expected_cwes = [125]
 is_negative = false
 language = "c++"
 
@@ -6365,14 +6365,14 @@ language = "c++"
 [[cases]]
 id = "arvo:30748"
 path = "cases/arvo:30748"
-expected_cwes = [119]
+expected_cwes = [190]
 is_negative = false
 language = "c++"
 
 [[cases]]
 id = "arvo:52634"
 path = "cases/arvo:52634"
-expected_cwes = [119]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -6470,14 +6470,14 @@ language = "c"
 [[cases]]
 id = "arvo:58481"
 path = "cases/arvo:58481"
-expected_cwes = [119, 190, 191, 787]
+expected_cwes = [119, 190, 191, 787, 835]
 is_negative = false
 language = "c++"
 
 [[cases]]
 id = "arvo:49528"
 path = "cases/arvo:49528"
-expected_cwes = [119]
+expected_cwes = [416]
 is_negative = false
 language = "c++"
 
@@ -6526,7 +6526,7 @@ language = "c++"
 [[cases]]
 id = "arvo:49606"
 path = "cases/arvo:49606"
-expected_cwes = [119]
+expected_cwes = [190]
 is_negative = false
 language = "c++"
 
@@ -6568,14 +6568,14 @@ language = "c++"
 [[cases]]
 id = "arvo:18449"
 path = "cases/arvo:18449"
-expected_cwes = [457]
+expected_cwes = [119, 457]
 is_negative = false
 language = "c++"
 
 [[cases]]
 id = "arvo:39802"
 path = "cases/arvo:39802"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c"
 
@@ -6673,7 +6673,7 @@ language = "c++"
 [[cases]]
 id = "arvo:21325"
 path = "cases/arvo:21325"
-expected_cwes = [119, 457, 758]
+expected_cwes = [119, 457, 758, 835]
 is_negative = false
 language = "c++"
 
@@ -6785,7 +6785,7 @@ language = "c++"
 [[cases]]
 id = "arvo:19910"
 path = "cases/arvo:19910"
-expected_cwes = [758]
+expected_cwes = [119, 758]
 is_negative = false
 language = "c++"
 
@@ -6799,7 +6799,7 @@ language = "c++"
 [[cases]]
 id = "arvo:20840"
 path = "cases/arvo:20840"
-expected_cwes = [119, 400, 617, 787]
+expected_cwes = [119, 400, 787]
 is_negative = false
 language = "c++"
 
@@ -6834,14 +6834,14 @@ language = "c++"
 [[cases]]
 id = "arvo:20848"
 path = "cases/arvo:20848"
-expected_cwes = [401]
+expected_cwes = [401, 835]
 is_negative = false
 language = "c++"
 
 [[cases]]
 id = "arvo:43795"
 path = "cases/arvo:43795"
-expected_cwes = [119, 457]
+expected_cwes = [119, 125, 457]
 is_negative = false
 language = "c++"
 
@@ -6974,7 +6974,7 @@ language = "c++"
 [[cases]]
 id = "arvo:56726"
 path = "cases/arvo:56726"
-expected_cwes = [119, 617]
+expected_cwes = [119]
 is_negative = false
 language = "c++"
 
@@ -7058,14 +7058,14 @@ language = "c"
 [[cases]]
 id = "arvo:53080"
 path = "cases/arvo:53080"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "arvo:54436"
 path = "cases/arvo:54436"
-expected_cwes = [119, 843]
+expected_cwes = [119]
 is_negative = false
 language = "c++"
 
@@ -7170,7 +7170,7 @@ language = "c"
 [[cases]]
 id = "arvo:25401"
 path = "cases/arvo:25401"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -7205,7 +7205,7 @@ language = "c++"
 [[cases]]
 id = "arvo:47525"
 path = "cases/arvo:47525"
-expected_cwes = [119, 457, 617]
+expected_cwes = [119, 457]
 is_negative = false
 language = "c++"
 
@@ -7233,7 +7233,7 @@ language = "c++"
 [[cases]]
 id = "arvo:47085"
 path = "cases/arvo:47085"
-expected_cwes = [119]
+expected_cwes = [457]
 is_negative = false
 language = "c++"
 
@@ -7289,7 +7289,7 @@ language = "c++"
 [[cases]]
 id = "arvo:25221"
 path = "cases/arvo:25221"
-expected_cwes = [119]
+expected_cwes = [125]
 is_negative = false
 language = "c++"
 
@@ -7338,7 +7338,7 @@ language = "c++"
 [[cases]]
 id = "arvo:17715"
 path = "cases/arvo:17715"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -7373,7 +7373,7 @@ language = "c++"
 [[cases]]
 id = "arvo:57643"
 path = "cases/arvo:57643"
-expected_cwes = [457, 843]
+expected_cwes = [457]
 is_negative = false
 language = "c++"
 
@@ -7457,14 +7457,14 @@ language = "c++"
 [[cases]]
 id = "arvo:25815"
 path = "cases/arvo:25815"
-expected_cwes = [617]
+expected_cwes = [119]
 is_negative = false
 language = "c++"
 
 [[cases]]
 id = "arvo:51988"
 path = "cases/arvo:51988"
-expected_cwes = [119]
+expected_cwes = [125]
 is_negative = false
 language = "c++"
 
@@ -7513,7 +7513,7 @@ language = "c++"
 [[cases]]
 id = "arvo:29267"
 path = "cases/arvo:29267"
-expected_cwes = [758, 843]
+expected_cwes = [758]
 is_negative = false
 language = "c++"
 
@@ -7688,7 +7688,7 @@ language = "c++"
 [[cases]]
 id = "arvo:59207"
 path = "cases/arvo:59207"
-expected_cwes = [416]
+expected_cwes = [416, 835]
 is_negative = false
 language = "c++"
 
@@ -7716,7 +7716,7 @@ language = "c++"
 [[cases]]
 id = "arvo:51208"
 path = "cases/arvo:51208"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c"
 
@@ -7891,7 +7891,7 @@ language = "c++"
 [[cases]]
 id = "arvo:40618"
 path = "cases/arvo:40618"
-expected_cwes = [617]
+expected_cwes = [119]
 is_negative = false
 language = "c++"
 
@@ -8087,7 +8087,7 @@ language = "c++"
 [[cases]]
 id = "arvo:33576"
 path = "cases/arvo:33576"
-expected_cwes = [119]
+expected_cwes = [835]
 is_negative = false
 language = "c"
 
@@ -8129,7 +8129,7 @@ language = "c++"
 [[cases]]
 id = "arvo:25841"
 path = "cases/arvo:25841"
-expected_cwes = [119, 617, 787]
+expected_cwes = [119, 787]
 is_negative = false
 language = "c++"
 
@@ -8241,7 +8241,7 @@ language = "c++"
 [[cases]]
 id = "arvo:41337"
 path = "cases/arvo:41337"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -8416,7 +8416,7 @@ language = "c++"
 [[cases]]
 id = "arvo:7166"
 path = "cases/arvo:7166"
-expected_cwes = [119]
+expected_cwes = [119, 190]
 is_negative = false
 language = "c++"
 
@@ -8458,7 +8458,7 @@ language = "c++"
 [[cases]]
 id = "arvo:26163"
 path = "cases/arvo:26163"
-expected_cwes = [125, 193]
+expected_cwes = [119, 125, 193]
 is_negative = false
 language = "c++"
 
@@ -8493,7 +8493,7 @@ language = "c++"
 [[cases]]
 id = "arvo:28750"
 path = "cases/arvo:28750"
-expected_cwes = [843]
+expected_cwes = [119]
 is_negative = false
 language = "c++"
 
@@ -8549,7 +8549,7 @@ language = "c++"
 [[cases]]
 id = "arvo:8011"
 path = "cases/arvo:8011"
-expected_cwes = [119]
+expected_cwes = [119, 190]
 is_negative = false
 language = "c++"
 
@@ -8570,14 +8570,14 @@ language = "c++"
 [[cases]]
 id = "arvo:2828"
 path = "cases/arvo:2828"
-expected_cwes = [119]
+expected_cwes = [190]
 is_negative = false
 language = "c++"
 
 [[cases]]
 id = "arvo:29103"
 path = "cases/arvo:29103"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
@@ -8780,14 +8780,14 @@ language = "c++"
 [[cases]]
 id = "arvo:28484"
 path = "cases/arvo:28484"
-expected_cwes = [119, 122, 787]
+expected_cwes = [119, 122, 125, 787]
 is_negative = false
 language = "c"
 
 [[cases]]
 id = "arvo:53903"
 path = "cases/arvo:53903"
-expected_cwes = [119]
+expected_cwes = [835]
 is_negative = false
 language = "c++"
 
@@ -8829,7 +8829,7 @@ language = "c++"
 [[cases]]
 id = "arvo:23816"
 path = "cases/arvo:23816"
-expected_cwes = [119]
+expected_cwes = [125]
 is_negative = false
 language = "c++"
 
@@ -9004,7 +9004,7 @@ language = "c++"
 [[cases]]
 id = "arvo:59884"
 path = "cases/arvo:59884"
-expected_cwes = [787]
+expected_cwes = [119, 787]
 is_negative = false
 language = "c++"
 
@@ -9025,7 +9025,7 @@ language = "c++"
 [[cases]]
 id = "arvo:8580"
 path = "cases/arvo:8580"
-expected_cwes = [119, 190, 400, 787]
+expected_cwes = [119, 125, 190, 400, 787]
 is_negative = false
 language = "c++"
 
@@ -9074,7 +9074,7 @@ language = "c++"
 [[cases]]
 id = "arvo:29290"
 path = "cases/arvo:29290"
-expected_cwes = [843]
+expected_cwes = [119]
 is_negative = false
 language = "c++"
 
@@ -9109,7 +9109,7 @@ language = "c++"
 [[cases]]
 id = "arvo:56936"
 path = "cases/arvo:56936"
-expected_cwes = [119]
+expected_cwes = [125]
 is_negative = false
 language = "c++"
 
@@ -9298,7 +9298,7 @@ language = "c"
 [[cases]]
 id = "arvo:9358"
 path = "cases/arvo:9358"
-expected_cwes = [843]
+expected_cwes = [119]
 is_negative = false
 language = "c++"
 
@@ -9781,14 +9781,14 @@ language = "c"
 [[cases]]
 id = "oss-fuzz:42536107"
 path = "cases/oss-fuzz:42536107"
-expected_cwes = [119]
+expected_cwes = [835]
 is_negative = false
 language = "c++"
 
 [[cases]]
 id = "oss-fuzz:42535569"
 path = "cases/oss-fuzz:42535569"
-expected_cwes = [119]
+expected_cwes = [457]
 is_negative = false
 language = "c++"
 
@@ -9928,7 +9928,7 @@ language = "c++"
 [[cases]]
 id = "oss-fuzz:383200048"
 path = "cases/oss-fuzz:383200048"
-expected_cwes = [119]
+expected_cwes = [835]
 is_negative = false
 language = "c++"
 
@@ -10145,7 +10145,7 @@ language = "c++"
 [[cases]]
 id = "oss-fuzz:387317434"
 path = "cases/oss-fuzz:387317434"
-expected_cwes = [119]
+expected_cwes = [835]
 is_negative = false
 language = "c++"
 
@@ -10187,7 +10187,7 @@ language = "c++"
 [[cases]]
 id = "oss-fuzz:382816119"
 path = "cases/oss-fuzz:382816119"
-expected_cwes = [125]
+expected_cwes = [119, 125]
 is_negative = false
 language = "c++"
 
