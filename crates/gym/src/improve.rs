@@ -189,6 +189,8 @@ pub struct ImprovementCycle {
     pub holdout_case_count: usize,
     /// Number of training cases used for failure analysis.
     pub training_case_count: usize,
+    /// Suites that SHOULD be cross-validated but were not (logged for visibility).
+    pub cross_validation_pending: Vec<String>,
 }
 
 fn review_proposal_id(index: usize) -> String {
@@ -344,6 +346,24 @@ pub async fn run_improvement_cycle(
     // Step 4: Store insights as knowledge for future agents to reference
     store_fn_insights(&false_negatives, &reviewed_proposals, &suite_name, data_dir);
 
+    // Step 5: Log cross-validation warning for accepted proposals
+    let cross_validation_pending = if !proposals.is_empty() {
+        let other_suites = cross_validation_targets(&suite_name);
+        if !other_suites.is_empty() {
+            tracing::warn!(
+                "CROSS-VALIDATION NEEDED: {} accepted proposals from {} should be \
+                 validated on: {:?}. Run `skwaq gym run` on those suites to check \
+                 for generalization before deploying.",
+                proposals.len(),
+                suite_name,
+                other_suites
+            );
+        }
+        other_suites
+    } else {
+        vec![]
+    };
+
     Ok(ImprovementCycle {
         suite: suite_name,
         baseline_score: score,
@@ -352,6 +372,7 @@ pub async fn run_improvement_cycle(
         proposals,
         holdout_case_count: holdout_cases.len(),
         training_case_count: training_cases.len(),
+        cross_validation_pending,
     })
 }
 
@@ -1756,6 +1777,29 @@ pub fn has_any_regression(baseline: &AggregateScore, new: &AggregateScore) -> bo
     has_cwe_regression(baseline, new) || has_precision_regression(baseline, new)
 }
 
+/// Determine which suites should be cross-validated after improvements on a given suite.
+///
+/// Returns a list of suite names that share CWE overlap with the source suite
+/// and should be checked to verify improvements generalize.
+fn cross_validation_targets(source_suite: &str) -> Vec<String> {
+    // All known suites except the source
+    let all_suites = [
+        "fixtures",
+        "juliet",
+        "owasp",
+        "cyberseceval",
+        "cgc",
+        "cybergym",
+        "binpool",
+    ];
+
+    all_suites
+        .iter()
+        .filter(|&&s| s != source_suite)
+        .map(|s| s.to_string())
+        .collect()
+}
+
 /// Append successful patterns from improvement proposals to the knowledge pack.
 ///
 /// Writes accepted NewPattern proposals to `data/knowledge/learned-patterns.md`
@@ -2265,6 +2309,7 @@ mod tests {
             ],
             holdout_case_count: 0,
             training_case_count: 0,
+            cross_validation_pending: vec![],
         };
 
         // Verify filtering logic: only NewPattern with non-empty patch.replace
