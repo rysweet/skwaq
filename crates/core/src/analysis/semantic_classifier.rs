@@ -17,10 +17,12 @@ pub enum SemanticPatternClass {
     DeadStore,
     Deserialization,
     FormatString,
+    ImproperAccessControl,
     InsecureTempFile,
     InvalidFree,
     LdapInjection,
     PathTraversal,
+    TypeConfusion,
     UntrustedSearchPath,
     UncheckedLoopCondition,
     PrototypePollution,
@@ -47,10 +49,12 @@ impl SemanticPatternClass {
             Self::DeadStore => "dead_store",
             Self::Deserialization => "deserialization",
             Self::FormatString => "format_string",
+            Self::ImproperAccessControl => "improper_access_control",
             Self::InsecureTempFile => "insecure_temp_file",
             Self::InvalidFree => "invalid_free",
             Self::LdapInjection => "ldap_injection",
             Self::PathTraversal => "path_traversal",
+            Self::TypeConfusion => "type_confusion",
             Self::UntrustedSearchPath => "untrusted_search_path",
             Self::UncheckedLoopCondition => "unchecked_loop_condition",
             Self::PrototypePollution => "prototype_pollution",
@@ -71,7 +75,7 @@ impl SemanticPatternClass {
     pub fn confidence_cluster(&self) -> &'static str {
         match self {
             Self::BufferOverflow => "memory_bounds",
-            Self::UseAfterFree | Self::InvalidFree => "memory_lifecycle",
+            Self::UseAfterFree | Self::InvalidFree | Self::TypeConfusion => "memory_lifecycle",
             Self::NullDeref => "memory_allocation",
             Self::CommandInjection | Self::Deserialization | Self::LdapInjection => {
                 "code_execution"
@@ -89,7 +93,7 @@ impl SemanticPatternClass {
             Self::UninitializedVar | Self::DeadStore => "initialization_safety",
             Self::FormatString => "format_string",
             Self::CryptoWeakness => "crypto",
-            Self::UnsafeApiUsage => "unsafe_api",
+            Self::UnsafeApiUsage | Self::ImproperAccessControl => "unsafe_api",
         }
     }
 }
@@ -136,6 +140,9 @@ impl SemanticPatternClassifier {
         if is_format_string(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::FormatString);
         }
+        if is_improper_access_control(&category, &title, &function_name) {
+            classes.insert(SemanticPatternClass::ImproperAccessControl);
+        }
         if is_path_traversal(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::PathTraversal);
         }
@@ -150,6 +157,9 @@ impl SemanticPatternClassifier {
         }
         if is_use_after_free(&category, &title) {
             classes.insert(SemanticPatternClass::UseAfterFree);
+        }
+        if is_type_confusion(&category, &title) {
+            classes.insert(SemanticPatternClass::TypeConfusion);
         }
         if is_race_condition(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::RaceCondition);
@@ -294,6 +304,33 @@ fn is_format_string(category: &str, title: &str, function_name: &str) -> bool {
         || contains_any(title, FORMAT_TERMS)
 }
 
+fn is_improper_access_control(category: &str, title: &str, function_name: &str) -> bool {
+    const PRIVILEGE_APIS: &[&str] = &[
+        "setuid",
+        "seteuid",
+        "setreuid",
+        "setgid",
+        "setegid",
+        "setregid",
+        "createprocessasuser",
+    ];
+    const ACCESS_TERMS: &[&str] = &[
+        "privilege violation",
+        "least privilege",
+        "improper access control",
+        "improper authorization",
+        "privilege escalation",
+        "missing authorization",
+        "access control",
+        "permission check",
+    ];
+
+    category == "access_control"
+        || category == "privilege"
+        || is_function(function_name, PRIVILEGE_APIS)
+        || contains_any(title, ACCESS_TERMS)
+}
+
 fn is_path_traversal(category: &str, title: &str, function_name: &str) -> bool {
     !is_untrusted_search_path(category, title, function_name)
         && (category == "path_traversal"
@@ -322,6 +359,22 @@ fn is_untrusted_search_path(category: &str, title: &str, function_name: &str) ->
 fn is_use_after_free(category: &str, title: &str) -> bool {
     category == "use_after_free"
         || contains_any(title, &["use-after-free", "use after free", "uaf"])
+}
+
+fn is_type_confusion(category: &str, title: &str) -> bool {
+    category == "type_confusion"
+        || contains_any(
+            title,
+            &[
+                "type confusion",
+                "type mismatch",
+                "type error",
+                "wrong type",
+                "incorrect type",
+                "cast to wrong type",
+                "improper type",
+            ],
+        )
 }
 
 fn is_unchecked_loop_condition(category: &str, title: &str) -> bool {
@@ -1220,6 +1273,58 @@ mod tests {
         assert_eq!(
             SemanticPatternClass::ReachableAssertion.confidence_cluster(),
             "arithmetic_safety"
+        );
+    }
+
+    #[test]
+    fn classifies_access_control_from_title() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify(
+            "security",
+            "privilege violation in createprocessasuser call",
+            "createprocessasuser",
+        );
+        assert!(classes.contains(&SemanticPatternClass::ImproperAccessControl));
+    }
+
+    #[test]
+    fn classifies_access_control_from_category() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify("access_control", "missing permission check", "handler");
+        assert!(classes.contains(&SemanticPatternClass::ImproperAccessControl));
+    }
+
+    #[test]
+    fn access_control_clusters_with_unsafe_api() {
+        assert_eq!(
+            SemanticPatternClass::ImproperAccessControl.confidence_cluster(),
+            "unsafe_api"
+        );
+    }
+
+    #[test]
+    fn classifies_type_confusion_from_title() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify(
+            "memory",
+            "type confusion in xmlValidateOneNamespace",
+            "xmlValidateOneNamespace",
+        );
+        assert!(classes.contains(&SemanticPatternClass::TypeConfusion));
+    }
+
+    #[test]
+    fn classifies_type_confusion_from_category() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify("type_confusion", "cast to wrong type", "process");
+        assert!(classes.contains(&SemanticPatternClass::TypeConfusion));
+    }
+
+    #[test]
+    fn type_confusion_clusters_with_memory_lifecycle() {
+        assert_eq!(
+            SemanticPatternClass::TypeConfusion.confidence_cluster(),
+            "memory_lifecycle"
         );
     }
 }

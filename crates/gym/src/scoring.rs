@@ -257,6 +257,7 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         SemanticPatternClass::Deserialization => &[502],
         SemanticPatternClass::DeadStore => &[563],
         SemanticPatternClass::FormatString => &[134],
+        SemanticPatternClass::ImproperAccessControl => &[272, 284],
         SemanticPatternClass::InsecureTempFile => &[377],
         SemanticPatternClass::InvalidFree => &[590],
         SemanticPatternClass::LdapInjection => &[90],
@@ -266,6 +267,7 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         SemanticPatternClass::PrototypePollution => &[1321],
         SemanticPatternClass::RaceCondition => &[362, 364, 366, 367, 832],
         SemanticPatternClass::ReachableAssertion => &[617],
+        SemanticPatternClass::TypeConfusion => &[843, 591],
         SemanticPatternClass::UnsafeApiUsage => &[222, 223, 242, 244, 247, 676],
         SemanticPatternClass::UseAfterFree => &[415, 416, 562, 761, 763],
         SemanticPatternClass::NullDeref => &[252, 253, 476, 690],
@@ -322,6 +324,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         502 => Some(SemanticPatternClass::Deserialization),
         563 => Some(SemanticPatternClass::DeadStore),
         134 => Some(SemanticPatternClass::FormatString),
+        272 | 284 => Some(SemanticPatternClass::ImproperAccessControl),
         590 => Some(SemanticPatternClass::InvalidFree),
         90 => Some(SemanticPatternClass::LdapInjection),
         22 | 23 | 36 | 426 => Some(SemanticPatternClass::PathTraversal),
@@ -330,6 +333,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         1321 => Some(SemanticPatternClass::PrototypePollution),
         362 | 364 | 366 | 367 | 832 => Some(SemanticPatternClass::RaceCondition),
         617 => Some(SemanticPatternClass::ReachableAssertion),
+        843 | 591 => Some(SemanticPatternClass::TypeConfusion),
         377 => Some(SemanticPatternClass::InsecureTempFile),
         222 | 223 | 242 | 244 | 247 | 676 => Some(SemanticPatternClass::UnsafeApiUsage),
         415 | 416 | 562 | 761 | 763 => Some(SemanticPatternClass::UseAfterFree),
@@ -1319,6 +1323,10 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(780), Some(CryptoWeakness));
         assert_eq!(cwe_to_semantic_class(1240), Some(CryptoWeakness));
         assert_eq!(cwe_to_semantic_class(502), Some(Deserialization));
+        assert_eq!(cwe_to_semantic_class(272), Some(ImproperAccessControl));
+        assert_eq!(cwe_to_semantic_class(284), Some(ImproperAccessControl));
+        assert_eq!(cwe_to_semantic_class(843), Some(TypeConfusion));
+        assert_eq!(cwe_to_semantic_class(591), Some(TypeConfusion));
         assert_eq!(cwe_to_semantic_class(563), Some(DeadStore));
         assert_eq!(cwe_to_semantic_class(617), Some(ReachableAssertion));
         assert_eq!(cwe_to_semantic_class(90), Some(LdapInjection));

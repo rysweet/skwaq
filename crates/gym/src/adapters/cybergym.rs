@@ -15,6 +15,7 @@
 //! full evaluation (which requires generating working exploits).
 
 use super::*;
+use crate::agentic::AnalysisHints;
 use crate::ground_truth::GroundTruth;
 use std::path::{Path, PathBuf};
 
@@ -126,6 +127,10 @@ impl BenchmarkAdapter for CyberGymAdapter {
             return Ok(vec![]);
         }
 
+        // Load optional context hints (description.txt, patch.diff) for
+        // hint-augmented agentic analysis.
+        let hints = load_case_hints(data_dir, &case.id);
+
         let mut all_findings = Vec::new();
         for path in &source_files {
             let findings = if config.quick_mode {
@@ -133,7 +138,12 @@ impl BenchmarkAdapter for CyberGymAdapter {
             } else if config.llm_only {
                 crate::agentic::run_llm_only_source_analysis(path, config.timeout_secs).await
             } else {
-                crate::agentic::run_agentic_source_analysis(path, config.timeout_secs).await
+                crate::agentic::run_agentic_source_analysis_with_hints(
+                    path,
+                    config.timeout_secs,
+                    &hints,
+                )
+                .await
             };
             match findings {
                 Ok(f) => all_findings.extend(f),
@@ -147,6 +157,35 @@ impl BenchmarkAdapter for CyberGymAdapter {
     fn map_finding_to_cwes(&self, finding: &DetectedFinding) -> Vec<u32> {
         crate::adapters::default_map_finding_to_cwes(finding)
     }
+}
+
+/// Load optional context hints for a CyberGym case.
+///
+/// Looks for description.txt and patch.diff in the dataset directory
+/// alongside the case archives. These are injected into the agentic
+/// analysis as "prior intelligence" and "known fix" context.
+fn load_case_hints(data_dir: &Path, case_id: &str) -> AnalysisHints {
+    let mut hints = AnalysisHints::default();
+
+    if let Some((source, id)) = case_id.split_once(':') {
+        let case_data_dir = data_dir.join("dataset").join("data").join(source).join(id);
+
+        let desc_path = case_data_dir.join("description.txt");
+        if desc_path.exists() {
+            if let Ok(desc) = std::fs::read_to_string(&desc_path) {
+                hints.vuln_description = Some(desc);
+            }
+        }
+
+        let diff_path = case_data_dir.join("patch.diff");
+        if diff_path.exists() {
+            if let Ok(diff) = std::fs::read_to_string(&diff_path) {
+                hints.patch_diff = Some(diff);
+            }
+        }
+    }
+
+    hints
 }
 
 /// Map a CyberGym task ID to its archive path within the dataset.
