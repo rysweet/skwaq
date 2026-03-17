@@ -71,7 +71,8 @@ impl BenchmarkAdapter for CyberGymAdapter {
         std::fs::create_dir_all(&cases_dir)?;
 
         for case in &gt.cases {
-            let case_dir = cases_dir.join(&case.id);
+            let safe_id = sanitize_case_id(&case.id);
+            let case_dir = cases_dir.join(&safe_id);
             if case_dir.exists() {
                 continue;
             }
@@ -111,7 +112,7 @@ impl BenchmarkAdapter for CyberGymAdapter {
         data_dir: &Path,
         config: &BenchmarkConfig,
     ) -> anyhow::Result<Vec<DetectedFinding>> {
-        let case_dir = data_dir.join("cases").join(&case.id);
+        let case_dir = data_dir.join("cases").join(sanitize_case_id(&case.id));
         if !case_dir.exists() {
             anyhow::bail!(
                 "CyberGym case directory not found: {}. Run `skwaq gym setup` first.",
@@ -200,6 +201,12 @@ fn load_case_hints(data_dir: &Path, case_id: &str) -> AnalysisHints {
     }
 
     hints
+}
+
+/// Sanitize a CyberGym case ID for use as a filesystem path component.
+/// Replaces colons with underscores (colons are invalid on Windows/macOS).
+fn sanitize_case_id(case_id: &str) -> String {
+    case_id.replace(':', "_")
 }
 
 /// Map a CyberGym task ID to its archive path within the dataset.
@@ -356,5 +363,13 @@ mod tests {
         let files = collect_source_files(&dir);
         assert!(files.is_empty());
         let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn test_sanitize_case_id() {
+        assert_eq!(sanitize_case_id("arvo:1065"), "arvo_1065");
+        assert_eq!(sanitize_case_id("oss-fuzz:42535201"), "oss-fuzz_42535201");
+        assert_eq!(sanitize_case_id("arvo:1065-fix"), "arvo_1065-fix");
+        assert_eq!(sanitize_case_id("simple_id"), "simple_id");
     }
 }
