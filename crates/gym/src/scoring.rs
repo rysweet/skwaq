@@ -228,6 +228,13 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         SemanticPatternClass::RaceCondition => &[362, 367],
         SemanticPatternClass::UnsafeApiUsage => &[242, 676],
         SemanticPatternClass::UseAfterFree => &[415, 416],
+        SemanticPatternClass::NullDeref => &[252, 253, 476, 690],
+        SemanticPatternClass::IntegerOverflow => {
+            &[190, 191, 192, 193, 194, 195, 196, 197, 680, 681]
+        }
+        SemanticPatternClass::DivideByZero => &[369],
+        SemanticPatternClass::ResourceLeak => &[401, 459, 761, 772, 775, 789],
+        SemanticPatternClass::UninitializedVar => &[457, 908],
     }
 }
 
@@ -279,6 +286,13 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         377 => Some(SemanticPatternClass::InsecureTempFile),
         242 | 676 => Some(SemanticPatternClass::UnsafeApiUsage),
         415 | 416 => Some(SemanticPatternClass::UseAfterFree),
+        252 | 253 | 476 | 690 => Some(SemanticPatternClass::NullDeref),
+        190 | 191 | 192 | 193 | 194 | 195 | 196 | 197 | 680 | 681 => {
+            Some(SemanticPatternClass::IntegerOverflow)
+        }
+        369 => Some(SemanticPatternClass::DivideByZero),
+        401 | 459 | 761 | 772 | 775 | 789 => Some(SemanticPatternClass::ResourceLeak),
+        457 | 908 => Some(SemanticPatternClass::UninitializedVar),
         _ => None,
     }
 }
