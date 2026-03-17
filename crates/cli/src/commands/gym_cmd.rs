@@ -118,6 +118,13 @@ pub enum GymSub {
         max_cases: usize,
     },
 
+    /// Compare per-case outcomes between the latest two finished runs for a suite
+    CaseDiff {
+        /// Suite to diff (defaults to the suite from the most recent finished run)
+        #[arg(long)]
+        suite: Option<String>,
+    },
+
     /// Generate dashboard: mermaid charts + scores table from run history
     Dashboard,
 
@@ -242,6 +249,80 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
         }
         GymSub::History { limit } => {
             gym.history(*limit)?;
+        }
+        GymSub::CaseDiff { suite } => {
+            let suite = if let Some(suite) = suite {
+                suite.clone()
+            } else {
+                gym.history_db
+                    .recent_finished_runs(1)?
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("No finished runs yet. Run `skwaq gym run` first.")
+                    })?
+                    .suite
+            };
+            let runs = gym.history_db.recent_finished_runs_for_suite(&suite, 2)?;
+            if runs.len() < 2 {
+                anyhow::bail!(
+                    "Need at least 2 finished runs for suite `{}` to diff. Run `skwaq gym run {}` twice.",
+                    suite,
+                    suite
+                );
+            }
+
+            let deltas = gym
+                .history_db
+                .compare_case_outcomes(&runs[1].id, &runs[0].id)?;
+            if deltas.is_empty() {
+                println!("No per-case changes between the last two runs.");
+                println!(
+                    "(Hint: per-case outcomes are recorded during `gym run`; identical runs simply produce no deltas.)"
+                );
+            } else {
+                println!(
+                    "\nPer-case diff for suite `{}`: {} -> {}",
+                    suite,
+                    &runs[1].skwaq_commit[..6.min(runs[1].skwaq_commit.len())],
+                    &runs[0].skwaq_commit[..6.min(runs[0].skwaq_commit.len())]
+                );
+                println!("{}", "-".repeat(60));
+                for delta in &deltas {
+                    match delta {
+                        skwaq_gym::history::CaseDelta::Improved { case_id, cwe } => {
+                            println!("  [+] IMPROVED  {} (CWE-{}): FN -> TP", case_id, cwe);
+                        }
+                        skwaq_gym::history::CaseDelta::Regressed { case_id, cwe } => {
+                            println!("  [-] REGRESSED {} (CWE-{}): TP -> FN", case_id, cwe);
+                        }
+                        skwaq_gym::history::CaseDelta::NewFalsePositive { case_id, cwe } => {
+                            println!("  [!] NEW FP    {} (CWE-{})", case_id, cwe);
+                        }
+                        skwaq_gym::history::CaseDelta::FixedFalsePositive { case_id, cwe } => {
+                            println!("  [*] FIXED FP  {} (CWE-{})", case_id, cwe);
+                        }
+                    }
+                }
+
+                let improved = deltas
+                    .iter()
+                    .filter(|delta| matches!(delta, skwaq_gym::history::CaseDelta::Improved { .. }))
+                    .count();
+                let regressed = deltas
+                    .iter()
+                    .filter(|delta| {
+                        matches!(delta, skwaq_gym::history::CaseDelta::Regressed { .. })
+                    })
+                    .count();
+                println!();
+                println!(
+                    "  Summary: {} improved, {} regressed, {} total changes",
+                    improved,
+                    regressed,
+                    deltas.len()
+                );
+            }
         }
         GymSub::Eval {
             suites,

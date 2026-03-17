@@ -431,20 +431,8 @@ impl Gym {
 
             // Store per-case results for regression tracking.
             for outcome in &outcomes {
-                let classification = if outcome.expected_cwes.is_empty() {
-                    if outcome.detected_cwes.is_empty() {
-                        "TN"
-                    } else {
-                        "FP"
-                    }
-                } else if outcome.cwe_hits.values().all(|&hit| hit) {
-                    "TP"
-                } else if outcome.cwe_hits.values().any(|&hit| hit) {
-                    "PARTIAL"
-                } else {
-                    "FN"
-                };
-                let _ = self.history_db.insert_case_result(&history::CaseResult {
+                let classification = classify_case_result(outcome);
+                if let Err(err) = self.history_db.insert_case_result(&history::CaseResult {
                     run_id: run_id.clone(),
                     suite: suite_name.clone(),
                     case_id: outcome.case_id.clone(),
@@ -453,7 +441,27 @@ impl Gym {
                     matched_finding_ids: outcome.matched_finding_ids.clone(),
                     unmatched_finding_ids: outcome.unmatched_finding_ids.clone(),
                     classification: classification.to_string(),
-                });
+                }) {
+                    if let Err(cleanup_err) = self.history_db.abandon_run(&run_id) {
+                        return Err(err.context(format!(
+                            "failed to store per-case results and failed to clean up unfinished run {}: {}",
+                            run_id, cleanup_err
+                        )));
+                    }
+                    return Err(err);
+                }
+
+                for case_outcome in case_outcomes_for_history(&run_id, outcome) {
+                    if let Err(err) = self.history_db.insert_case_outcome(&case_outcome) {
+                        if let Err(cleanup_err) = self.history_db.abandon_run(&run_id) {
+                            return Err(err.context(format!(
+                                "failed to store per-case outcomes and failed to clean up unfinished run {}: {}",
+                                run_id, cleanup_err
+                            )));
+                        }
+                        return Err(err);
+                    }
+                }
             }
 
             for cwe_score in score.per_cwe.values() {
@@ -671,6 +679,59 @@ fn build_run_metadata(repo: &std::path::Path, config: &BenchmarkConfig) -> histo
     }
 }
 
+fn classify_case_result(outcome: &scoring::CaseOutcome) -> &'static str {
+    if outcome.expected_cwes.is_empty() {
+        if outcome.detected_cwes.is_empty() {
+            "TN"
+        } else {
+            "FP"
+        }
+    } else if outcome.cwe_hits.values().all(|&hit| hit) {
+        "TP"
+    } else if outcome.cwe_hits.values().any(|&hit| hit) {
+        "PARTIAL"
+    } else {
+        "FN"
+    }
+}
+
+fn case_outcomes_for_history(
+    run_id: &str,
+    outcome: &scoring::CaseOutcome,
+) -> Vec<history::CaseOutcome> {
+    if outcome.expected_cwes.is_empty() {
+        return outcome
+            .detected_cwes
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .map(|cwe| history::CaseOutcome {
+                run_id: run_id.to_string(),
+                case_id: outcome.case_id.clone(),
+                outcome: history::CaseOutcomeKind::FalsePositive,
+                cwe,
+            })
+            .collect();
+    }
+
+    outcome
+        .expected_cwes
+        .iter()
+        .copied()
+        .map(|cwe| history::CaseOutcome {
+            run_id: run_id.to_string(),
+            case_id: outcome.case_id.clone(),
+            outcome: if outcome.cwe_hits.get(&cwe).copied().unwrap_or(false) {
+                history::CaseOutcomeKind::TruePositive
+            } else {
+                history::CaseOutcomeKind::FalseNegative
+            },
+            cwe,
+        })
+        .collect()
+}
+
 fn reconstruct_score(
     run: &history::BenchmarkRun,
     cwe_results: &[history::CweResult],
@@ -721,8 +782,9 @@ fn reconstruct_score(
 
 #[cfg(test)]
 mod tests {
-    use super::{reconstruct_score, Gym};
+    use super::{case_outcomes_for_history, classify_case_result, reconstruct_score, Gym};
     use crate::history;
+    use crate::scoring;
 
     fn write_manifest(path: &std::path::Path, suite: &str) {
         std::fs::write(
@@ -839,5 +901,56 @@ language = "c"
             score.per_semantic["buffer_overflow"].class_name,
             "buffer_overflow"
         );
+    }
+
+    #[test]
+    fn test_classify_case_result_handles_partial_hits() {
+        let outcome = scoring::CaseOutcome {
+            case_id: "case-1".to_string(),
+            suite: "fixtures".to_string(),
+            expected_cwes: vec![121, 134],
+            detected_cwes: vec![119],
+            matched_finding_ids: vec!["f1".to_string()],
+            unmatched_finding_ids: vec![],
+            cwe_hits: [(121, true), (134, false)].into_iter().collect(),
+        };
+
+        assert_eq!(classify_case_result(&outcome), "PARTIAL");
+    }
+
+    #[test]
+    fn test_case_outcomes_for_history_records_positive_and_negative_rows() {
+        let positive = scoring::CaseOutcome {
+            case_id: "case-1".to_string(),
+            suite: "fixtures".to_string(),
+            expected_cwes: vec![121, 134],
+            detected_cwes: vec![119],
+            matched_finding_ids: vec!["f1".to_string()],
+            unmatched_finding_ids: vec![],
+            cwe_hits: [(121, true), (134, false)].into_iter().collect(),
+        };
+        let positive_rows = case_outcomes_for_history("run-1", &positive);
+        assert_eq!(positive_rows.len(), 2);
+        assert!(positive_rows.iter().any(|row| {
+            row.cwe == 121 && row.outcome == history::CaseOutcomeKind::TruePositive
+        }));
+        assert!(positive_rows.iter().any(|row| {
+            row.cwe == 134 && row.outcome == history::CaseOutcomeKind::FalseNegative
+        }));
+
+        let negative = scoring::CaseOutcome {
+            case_id: "case-2".to_string(),
+            suite: "fixtures".to_string(),
+            expected_cwes: vec![],
+            detected_cwes: vec![78, 78, 89],
+            matched_finding_ids: vec![],
+            unmatched_finding_ids: vec!["f2".to_string()],
+            cwe_hits: std::collections::HashMap::new(),
+        };
+        let negative_rows = case_outcomes_for_history("run-1", &negative);
+        assert_eq!(negative_rows.len(), 2);
+        assert!(negative_rows
+            .iter()
+            .all(|row| { row.outcome == history::CaseOutcomeKind::FalsePositive }));
     }
 }
