@@ -243,9 +243,9 @@ pub fn cwe_family(cwe: u32) -> u32 {
 pub fn category_to_cwes(category: &str) -> Vec<u32> {
     match category {
         "memory" => vec![
-            118, 119, 120, 121, 122, 125, 126, 135, 176, 188, 467, 562, 785, 787, 806, 824, 839,
-            416, 415, 189, 190, 191, 192, 193, 194, 195, 196, 197, 680, 681, 682, 128, 590, 761,
-            763, 822, 823, 825, 843,
+            118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 129, 131, 135, 170, 176, 188, 467,
+            562, 785, 787, 788, 805, 806, 824, 839, 416, 415, 189, 190, 191, 192, 193, 194, 195,
+            196, 197, 680, 681, 682, 128, 590, 761, 763, 822, 823, 825, 843,
         ],
         "injection" => vec![15, 77, 78, 89, 90, 94, 114, 116, 501, 643, 917],
         "format_string" => vec![134],
@@ -266,7 +266,7 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
         ],
         "divide_by_zero" => vec![369],
         "resource_leak" => vec![401, 404, 459, 675, 772, 773, 775, 789],
-        "uninitialized_var" => vec![457, 665, 908],
+        "uninitialized_var" => vec![457, 563, 665, 908],
         "use_after_free" => vec![415, 416, 562, 761, 763],
         "resource_exhaustion" => vec![400],
         "invalid_free" => vec![590],
@@ -1802,5 +1802,78 @@ mod tests {
 
         let injection = category_to_cwes("injection");
         assert!(injection.contains(&643));
+    }
+
+    #[test]
+    fn test_semantic_and_category_cwe_consistency() {
+        // Every CWE mapped by semantic_class_to_cwes should be reachable
+        // from at least one category_to_cwes entry. This prevents drift
+        // between the two mapping systems.
+        use skwaq_core::analysis::SemanticPatternClass;
+
+        let all_classes = [
+            SemanticPatternClass::BufferOverflow,
+            SemanticPatternClass::CommandInjection,
+            SemanticPatternClass::CrossSiteScripting,
+            SemanticPatternClass::CryptoWeakness,
+            SemanticPatternClass::DeadStore,
+            SemanticPatternClass::Deserialization,
+            SemanticPatternClass::FormatString,
+            SemanticPatternClass::InsecureTempFile,
+            SemanticPatternClass::InvalidFree,
+            SemanticPatternClass::LdapInjection,
+            SemanticPatternClass::NullDeref,
+            SemanticPatternClass::IntegerOverflow,
+            SemanticPatternClass::DivideByZero,
+            SemanticPatternClass::RaceCondition,
+            SemanticPatternClass::ResourceLeak,
+            SemanticPatternClass::ResourceExhaustion,
+            SemanticPatternClass::UninitializedVar,
+            SemanticPatternClass::UseAfterFree,
+            SemanticPatternClass::UnsafeApiUsage,
+            SemanticPatternClass::PathTraversal,
+        ];
+
+        let all_categories = [
+            "memory",
+            "injection",
+            "format_string",
+            "race",
+            "temp_file",
+            "path_traversal",
+            "deserialization",
+            "crypto",
+            "unsafe_code",
+            "prototype_pollution",
+            "xss",
+            "null_deref",
+            "integer_overflow",
+            "divide_by_zero",
+            "resource_leak",
+            "resource_exhaustion",
+            "uninitialized_var",
+            "use_after_free",
+            "invalid_free",
+            "type_confusion",
+            "access_control",
+            "information_exposure",
+            "error_handling",
+        ];
+
+        let category_cwes: std::collections::HashSet<u32> = all_categories
+            .iter()
+            .flat_map(|c| category_to_cwes(c))
+            .collect();
+
+        for class in &all_classes {
+            for &cwe in semantic_class_to_cwes(*class) {
+                assert!(
+                    category_cwes.contains(&cwe),
+                    "CWE-{} from semantic class {:?} not reachable from any category_to_cwes entry",
+                    cwe,
+                    class
+                );
+            }
+        }
     }
 }
