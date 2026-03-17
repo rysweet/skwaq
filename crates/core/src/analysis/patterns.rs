@@ -25,8 +25,14 @@ pub enum DangerCategory {
     IntegerOverflow,
     DivideByZero,
     ResourceLeak,
+    ResourceExhaustion,
     UninitializedVar,
     UseAfterFree,
+    InvalidFree,
+    TypeConfusion,
+    AccessControl,
+    InformationExposure,
+    ErrorHandling,
 }
 
 impl std::fmt::Display for DangerCategory {
@@ -47,8 +53,14 @@ impl std::fmt::Display for DangerCategory {
             Self::IntegerOverflow => write!(f, "integer_overflow"),
             Self::DivideByZero => write!(f, "divide_by_zero"),
             Self::ResourceLeak => write!(f, "resource_leak"),
+            Self::ResourceExhaustion => write!(f, "resource_exhaustion"),
             Self::UninitializedVar => write!(f, "uninitialized_var"),
             Self::UseAfterFree => write!(f, "use_after_free"),
+            Self::InvalidFree => write!(f, "invalid_free"),
+            Self::TypeConfusion => write!(f, "type_confusion"),
+            Self::AccessControl => write!(f, "access_control"),
+            Self::InformationExposure => write!(f, "information_exposure"),
+            Self::ErrorHandling => write!(f, "error_handling"),
         }
     }
 }
