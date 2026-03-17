@@ -88,6 +88,36 @@ pub fn print_summary(score: &AggregateScore, suite: &str) {
         }
         println!();
     }
+
+    // Print negative case calibration if any negative cases were evaluated
+    if score.negative_calibration.total_negative_cases > 0 {
+        let cal = &score.negative_calibration;
+        let fp_color = if cal.false_positive_rate == 0.0 {
+            "\x1b[32m"
+        } else if cal.false_positive_rate < 0.1 {
+            "\x1b[33m"
+        } else {
+            "\x1b[31m"
+        };
+        println!("  NEGATIVE CASE CALIBRATION (patched/safe code):");
+        println!(
+            "  Negative cases: {}  TN: {}  FP: {}  FP rate: {}{:.1}%\x1b[0m",
+            cal.total_negative_cases,
+            cal.true_negatives,
+            cal.false_positives,
+            fp_color,
+            cal.false_positive_rate * 100.0
+        );
+        if !cal.per_semantic_fps.is_empty() {
+            let mut fps: Vec<_> = cal.per_semantic_fps.iter().collect();
+            fps.sort_by(|a, b| b.1.cmp(a.1));
+            println!("  FP by semantic class:");
+            for (class, count) in fps {
+                println!("    {}: {}", class, count);
+            }
+        }
+        println!();
+    }
 }
 
 /// Print a comparison between two runs.

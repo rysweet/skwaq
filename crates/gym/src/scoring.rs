@@ -32,6 +32,28 @@ pub struct AggregateScore {
     pub f1: f64,
     pub per_cwe: HashMap<u32, CweScore>,
     pub per_semantic: HashMap<String, SemanticScore>,
+    /// Calibration metrics from negative/patched cases only.
+    pub negative_calibration: NegativeCaseCalibration,
+}
+
+/// Tracks false positive rates on known-negative (patched) cases.
+///
+/// These metrics measure precision honesty: on cases where we KNOW
+/// the vulnerability was fixed, how often does skwaq still flag it?
+/// A high false_positive_rate here indicates the detector is not
+/// sensitive to patches and is pattern-matching superficially.
+#[derive(Debug, Clone, Default)]
+pub struct NegativeCaseCalibration {
+    /// Total negative cases evaluated.
+    pub total_negative_cases: u32,
+    /// Negative cases where skwaq correctly found nothing.
+    pub true_negatives: u32,
+    /// Negative cases where skwaq incorrectly flagged a finding.
+    pub false_positives: u32,
+    /// FP rate: false_positives / total_negative_cases.
+    pub false_positive_rate: f64,
+    /// Per-semantic-class FP counts on negative cases.
+    pub per_semantic_fps: HashMap<String, u32>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -442,18 +464,26 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
 
     for outcome in &deduped {
         if outcome.expected_cwes.is_empty() {
-            // Negative test case.
+            // Negative test case — track calibration metrics.
+            score.negative_calibration.total_negative_cases += 1;
             if outcome.detected_cwes.is_empty() {
                 score.true_negatives += 1;
+                score.negative_calibration.true_negatives += 1;
             } else {
                 score.false_positives += outcome.unmatched_finding_ids.len() as u32;
+                score.negative_calibration.false_positives += 1;
                 let detected_semantic_classes: HashSet<_> = outcome
                     .detected_cwes
                     .iter()
                     .filter_map(|&cwe| cwe_to_semantic_class(cwe))
                     .collect();
-                for class in detected_semantic_classes {
+                for class in &detected_semantic_classes {
                     let class_name = class.as_str().to_string();
+                    *score
+                        .negative_calibration
+                        .per_semantic_fps
+                        .entry(class_name.clone())
+                        .or_insert(0) += 1;
                     let entry =
                         per_semantic
                             .entry(class_name.clone())
@@ -549,6 +579,15 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
     score.recall = if tp + fn_ > 0.0 { tp / (tp + fn_) } else { 0.0 };
     score.f1 = if score.precision + score.recall > 0.0 {
         2.0 * score.precision * score.recall / (score.precision + score.recall)
+    } else {
+        0.0
+    };
+
+    // Compute negative case calibration rate
+    let neg_total = score.negative_calibration.total_negative_cases as f64;
+    let neg_fp = score.negative_calibration.false_positives as f64;
+    score.negative_calibration.false_positive_rate = if neg_total > 0.0 {
+        neg_fp / neg_total
     } else {
         0.0
     };
@@ -1476,6 +1515,51 @@ mod tests {
         assert_eq!(overflow.false_positives, 1);
         assert_eq!(overflow.true_positives, 0);
         assert_eq!(overflow.precision, 0.0);
+
+        // Verify negative calibration tracking
+        assert_eq!(score.negative_calibration.total_negative_cases, 1);
+        assert_eq!(score.negative_calibration.false_positives, 1);
+        assert_eq!(score.negative_calibration.true_negatives, 0);
+        assert!((score.negative_calibration.false_positive_rate - 1.0).abs() < 1e-9);
+        assert_eq!(
+            *score
+                .negative_calibration
+                .per_semantic_fps
+                .get("buffer_overflow")
+                .unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn test_negative_calibration_clean_cases() {
+        let outcomes = vec![
+            CaseOutcome {
+                case_id: "neg-clean-1".to_string(),
+                suite: "test".to_string(),
+                expected_cwes: vec![],
+                detected_cwes: vec![],
+                matched_finding_ids: vec![],
+                unmatched_finding_ids: vec![],
+                cwe_hits: HashMap::new(),
+            },
+            CaseOutcome {
+                case_id: "neg-clean-2".to_string(),
+                suite: "test".to_string(),
+                expected_cwes: vec![],
+                detected_cwes: vec![],
+                matched_finding_ids: vec![],
+                unmatched_finding_ids: vec![],
+                cwe_hits: HashMap::new(),
+            },
+        ];
+
+        let score = aggregate(&outcomes);
+        assert_eq!(score.negative_calibration.total_negative_cases, 2);
+        assert_eq!(score.negative_calibration.true_negatives, 2);
+        assert_eq!(score.negative_calibration.false_positives, 0);
+        assert_eq!(score.negative_calibration.false_positive_rate, 0.0);
+        assert!(score.negative_calibration.per_semantic_fps.is_empty());
     }
 
     fn make_score(per_cwe: Vec<(u32, f64)>) -> AggregateScore {
