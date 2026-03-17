@@ -656,18 +656,28 @@ enum ExpertDomain {
     FilesystemSafety,
     ArithmeticSafety,
     Crypto,
+    ResourceManagement,
 }
 
 impl ExpertDomain {
     /// Map a semantic confidence cluster name to an expert domain.
     fn from_cluster(cluster: &str) -> Option<Self> {
         match cluster {
-            "memory_safety" => Some(Self::MemorySafety),
-            "code_execution" => Some(Self::CodeExecution),
+            // The semantic classifier returns fine-grained cluster names
+            // (e.g. "memory_bounds") while expert routing needs coarser
+            // domain groupings. Map all sub-clusters to their parent domain.
+            "memory_safety"
+            | "memory_bounds"
+            | "memory_lifecycle"
+            | "memory_allocation"
+            | "initialization_safety"
+            | "unsafe_api" => Some(Self::MemorySafety),
+            "code_execution" | "format_string" => Some(Self::CodeExecution),
             "web_data_flow" => Some(Self::WebDataFlow),
             "filesystem_safety" => Some(Self::FilesystemSafety),
             "arithmetic_safety" => Some(Self::ArithmeticSafety),
             "crypto" => Some(Self::Crypto),
+            "resource_management" => Some(Self::ResourceManagement),
             _ => None,
         }
     }
@@ -713,6 +723,13 @@ impl ExpertDomain {
                  You specialize in weak algorithms, hardcoded credentials, insufficient key \
                  lengths, and missing integrity checks. Evaluate whether the cryptographic \
                  weakness is real and exploitable in the deployment context."
+            }
+            Self::ResourceManagement => {
+                "You are a resource-management expert reviewing vulnerability findings. \
+                 You specialize in resource leaks, file descriptor exhaustion, unclosed handles, \
+                 and improper cleanup in error paths. Evaluate whether allocated resources \
+                 (memory, handles, connections) are released on all code paths including \
+                 error and exception paths."
             }
         }
     }
@@ -763,6 +780,13 @@ impl ExpertDomain {
                  integrity verification.\n\
                  CONFIRM findings where weak algorithms, hardcoded keys, or missing MAC checks are used.\n\
                  REJECT findings where the cryptographic choice is appropriate for the threat model.\n\n"
+            }
+            Self::ResourceManagement => {
+                "All findings below relate to RESOURCE MANAGEMENT vulnerabilities.\n\
+                 Focus on: resource allocation/deallocation symmetry, error-path cleanup, \
+                 handle lifetime tracking, and leak-on-exception scenarios.\n\
+                 CONFIRM findings where resources are allocated but not freed on all exit paths.\n\
+                 REJECT findings where RAII, try-finally, defer, or other cleanup mechanisms ensure release.\n\n"
             }
         }
     }
@@ -3101,6 +3125,7 @@ mod tests {
 
     #[test]
     fn test_expert_domain_from_cluster() {
+        // Coarse cluster names (legacy)
         assert_eq!(
             ExpertDomain::from_cluster("memory_safety"),
             Some(ExpertDomain::MemorySafety)
@@ -3114,7 +3139,42 @@ mod tests {
             Some(ExpertDomain::Crypto)
         );
         assert_eq!(ExpertDomain::from_cluster("unknown_cluster"), None);
-        assert_eq!(ExpertDomain::from_cluster("resource_management"), None);
+
+        // Fine-grained memory sub-clusters all route to MemorySafety
+        assert_eq!(
+            ExpertDomain::from_cluster("memory_bounds"),
+            Some(ExpertDomain::MemorySafety)
+        );
+        assert_eq!(
+            ExpertDomain::from_cluster("memory_lifecycle"),
+            Some(ExpertDomain::MemorySafety)
+        );
+        assert_eq!(
+            ExpertDomain::from_cluster("memory_allocation"),
+            Some(ExpertDomain::MemorySafety)
+        );
+
+        // Memory-adjacent clusters route to MemorySafety
+        assert_eq!(
+            ExpertDomain::from_cluster("initialization_safety"),
+            Some(ExpertDomain::MemorySafety)
+        );
+        assert_eq!(
+            ExpertDomain::from_cluster("unsafe_api"),
+            Some(ExpertDomain::MemorySafety)
+        );
+
+        // Format string exploits route to CodeExecution
+        assert_eq!(
+            ExpertDomain::from_cluster("format_string"),
+            Some(ExpertDomain::CodeExecution)
+        );
+
+        // Resource management has its own domain
+        assert_eq!(
+            ExpertDomain::from_cluster("resource_management"),
+            Some(ExpertDomain::ResourceManagement)
+        );
     }
 
     #[test]
@@ -3143,6 +3203,96 @@ mod tests {
         assert_eq!(
             dominant_expert_domain(&pattern, &llm),
             Some(ExpertDomain::ArithmeticSafety)
+        );
+    }
+
+    #[test]
+    fn test_memory_findings_route_to_expert_domain() {
+        // Previously, memory findings used sub-clusters (memory_bounds,
+        // memory_lifecycle) that did not match ExpertDomain::from_cluster,
+        // making expert routing dead for all memory classes.
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: strcpy buffer overflow".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "memcpy".into(),
+            line: Some(20),
+            title: "LLM: heap buffer overflow in memcpy".into(),
+        }];
+
+        assert_eq!(
+            dominant_expert_domain(&pattern, &llm),
+            Some(ExpertDomain::MemorySafety)
+        );
+    }
+
+    #[test]
+    fn test_resource_leak_routes_to_expert_domain() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "resource_leak".into(),
+            severity: "medium".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "open_file".into(),
+            line: Some(10),
+            title: "Dangerous pattern: file handle leak".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "resource_leak".into(),
+            severity: "medium".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "connect".into(),
+            line: Some(20),
+            title: "LLM: socket handle not closed on error".into(),
+        }];
+
+        assert_eq!(
+            dominant_expert_domain(&pattern, &llm),
+            Some(ExpertDomain::ResourceManagement)
+        );
+    }
+
+    #[test]
+    fn test_format_string_routes_to_code_execution() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "format_string".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "printf".into(),
+            line: Some(10),
+            title: "Dangerous pattern: format string in printf".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "format_string".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "sprintf".into(),
+            line: Some(20),
+            title: "LLM: user-controlled format string".into(),
+        }];
+
+        assert_eq!(
+            dominant_expert_domain(&pattern, &llm),
+            Some(ExpertDomain::CodeExecution)
         );
     }
 
@@ -3238,6 +3388,7 @@ mod tests {
             ExpertDomain::FilesystemSafety,
             ExpertDomain::ArithmeticSafety,
             ExpertDomain::Crypto,
+            ExpertDomain::ResourceManagement,
         ];
         for domain in &domains {
             assert!(
