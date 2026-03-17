@@ -252,8 +252,9 @@ fn dedup_cwes(cwes: impl IntoIterator<Item = u32>) -> Vec<u32> {
 
 fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
     match cwe {
-        119 | 120 | 121 | 122 | 123 | 124 | 125 | 126 | 127 | 129 | 131 | 170 | 787 | 788
-        | 805 => Some(SemanticPatternClass::BufferOverflow),
+        119 | 120 | 121 | 122 | 123 | 124 | 125 | 126 | 127 | 129 | 131 | 170 | 787 | 788 | 805 => {
+            Some(SemanticPatternClass::BufferOverflow)
+        }
         77 | 78 => Some(SemanticPatternClass::CommandInjection),
         79 | 80 => Some(SemanticPatternClass::CrossSiteScripting),
         295 | 310 | 326 | 327 | 328 | 330 | 338 | 1240 => {
@@ -822,8 +823,7 @@ mod tests {
 
     #[test]
     fn test_inferred_cwes_for_crypto_finding() {
-        let finding =
-            make_semantic_finding("crypto", "md5_init", "Pattern: weak hash MD5 usage");
+        let finding = make_semantic_finding("crypto", "md5_init", "Pattern: weak hash MD5 usage");
         let inferred = inferred_finding_cwes(&finding);
         assert!(inferred.contains(&327));
     }
