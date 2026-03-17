@@ -192,6 +192,9 @@ pub struct AnalysisHints {
     /// Patch diff (e.g. from CyberGym patch.diff).
     /// Injected as "known fix" context for offense/defense analysts.
     pub patch_diff: Option<String>,
+    /// Sanitizer/crash output (e.g. from CyberGym error.txt).
+    /// Shows the exact crash location and error type from ASan/MSan/UBSan.
+    pub error_output: Option<String>,
 }
 
 /// Run full agentic analysis on a source file.
@@ -338,15 +341,27 @@ pub async fn run_agentic_source_analysis_with_hints(
 
     // If we have context hints, store them as investigation metadata
     // so LLM agents can reference them during analysis.
-    if hints.vuln_description.is_some() || hints.patch_diff.is_some() {
+    if hints.vuln_description.is_some()
+        || hints.patch_diff.is_some()
+        || hints.error_output.is_some()
+    {
         let mut hint_text = String::new();
         if let Some(desc) = &hints.vuln_description {
             hint_text.push_str("PRIOR INTELLIGENCE (vulnerability description):\n");
-            // Cap at 2000 chars to avoid overwhelming context
             let capped = if desc.len() > 2000 {
                 &desc[..2000]
             } else {
                 desc
+            };
+            hint_text.push_str(capped);
+            hint_text.push_str("\n\n");
+        }
+        if let Some(error) = &hints.error_output {
+            hint_text.push_str("CRASH EVIDENCE (sanitizer output — shows exact crash location):\n");
+            let capped = if error.len() > 3000 {
+                &error[..3000]
+            } else {
+                error
             };
             hint_text.push_str(capped);
             hint_text.push_str("\n\n");
