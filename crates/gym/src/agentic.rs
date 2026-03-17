@@ -14,8 +14,8 @@ use crate::adapters::DetectedFinding;
 use crate::scoring;
 use anyhow::Context;
 use skwaq_core::analysis::{
-    extract_function_from_title, extract_line_from_title, DangerousApiDetector,
-    SemanticPatternClass, SemanticPatternClassifier,
+    extract_function_from_title, extract_line_from_title, DangerousApiDetector, DangerousApiHit,
+    SemanticPatternClass, SemanticPatternClassifier, Severity,
 };
 use skwaq_core::binary::ghidra::{load_cached_or_analyze, GhidraLoadOutcome};
 use skwaq_core::config::Config;
@@ -27,11 +27,12 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
-/// Tracks how many cases used LLM synthesis vs. encountered errors.
+/// Tracks how dual-source cases were resolved across gym execution.
 ///
 /// Thread-safe counters for use across concurrent gym case execution.
 /// Call [`SynthesisStats::report`] at end of a gym run to log the summary.
 pub struct SynthesisStats {
+    pattern_confidence_early_exit_count: AtomicU32,
     llm_synthesis_count: AtomicU32,
     consensus_early_exit_count: AtomicU32,
     failed_count: AtomicU32,
@@ -40,6 +41,7 @@ pub struct SynthesisStats {
 impl Default for SynthesisStats {
     fn default() -> Self {
         Self {
+            pattern_confidence_early_exit_count: AtomicU32::new(0),
             llm_synthesis_count: AtomicU32::new(0),
             consensus_early_exit_count: AtomicU32::new(0),
             failed_count: AtomicU32::new(0),
@@ -50,6 +52,11 @@ impl Default for SynthesisStats {
 impl SynthesisStats {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    fn record_pattern_confidence_early_exit(&self) {
+        self.pattern_confidence_early_exit_count
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     fn record_llm_synthesis(&self) {
@@ -67,18 +74,27 @@ impl SynthesisStats {
 
     /// Log end-of-run synthesis summary. Call after all cases complete.
     pub fn report(&self) {
+        let pattern_confidence = self
+            .pattern_confidence_early_exit_count
+            .load(Ordering::Relaxed);
         let llm = self.llm_synthesis_count.load(Ordering::Relaxed);
         let consensus = self.consensus_early_exit_count.load(Ordering::Relaxed);
         let failed = self.failed_count.load(Ordering::Relaxed);
-        let total = llm + consensus + failed;
+        let total = pattern_confidence + llm + consensus + failed;
         if total == 0 {
             tracing::info!("Synthesis: no dual-source cases (nothing to synthesize)");
             return;
         }
         if failed > 0 {
             tracing::warn!(
-                "Synthesis summary: {}/{} LLM synthesis, {}/{} consensus early-exit, {} failed loudly",
-                llm, total, consensus, total, failed,
+                "Synthesis summary: {}/{} pattern-confidence early-exit, {}/{} LLM synthesis, {}/{} consensus early-exit, {} failed loudly",
+                pattern_confidence,
+                total,
+                llm,
+                total,
+                consensus,
+                total,
+                failed,
             );
             eprintln!(
                 "\n  WARNING: {}/{} synthesis cases failed loudly.\n  \
@@ -87,8 +103,13 @@ impl SynthesisStats {
             );
         } else {
             tracing::info!(
-                "Synthesis summary: {}/{} LLM synthesis, {}/{} consensus early-exit (all successful)",
-                llm, total, consensus, total,
+                "Synthesis summary: {}/{} pattern-confidence early-exit, {}/{} LLM synthesis, {}/{} consensus early-exit (all successful)",
+                pattern_confidence,
+                total,
+                llm,
+                total,
+                consensus,
+                total,
             );
         }
     }
@@ -140,8 +161,10 @@ pub async fn run_agentic_source_analysis(
     // --- Layer 2: Pattern detection → collect pattern-detected categories ---
     let mut pattern_categories: HashSet<String> = HashSet::new();
     let detector = DangerousApiDetector::new();
+    let mut pattern_hits = Vec::new();
     if let Ok(hits) = detector.detect_in_source(path, &parsed.language) {
-        for hit in &hits {
+        pattern_hits = hits;
+        for hit in &pattern_hits {
             let category = hit.danger_category.to_string();
             pattern_categories.insert(category.clone());
 
@@ -191,7 +214,17 @@ pub async fn run_agentic_source_analysis(
     }
 
     // --- Layer 4: LLM agent pipeline ---
-    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+    if should_skip_llm_pipeline_for_pattern_confidence(&pattern_hits, &orchestrator_findings) {
+        SYNTHESIS_STATS.record_pattern_confidence_early_exit();
+        tracing::info!(
+            "Pattern-confidence early-exit: {} source pattern hit(s) covered {} supporting graph finding(s); skipping LLM pipeline for {}",
+            pattern_hits.len(),
+            orchestrator_findings.len(),
+            file_str,
+        );
+    } else {
+        run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+    }
 
     // --- Layer 5: Synthesis — weigh all evidence ---
     // Collect ALL findings from DB (pattern + orchestrator + LLM)
@@ -295,7 +328,17 @@ pub async fn run_agentic_binary_analysis(
     }
 
     // LLM agent pipeline
-    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+    if should_skip_llm_pipeline_for_pattern_confidence(&import_hits, &orchestrator_findings) {
+        SYNTHESIS_STATS.record_pattern_confidence_early_exit();
+        tracing::info!(
+            "Pattern-confidence early-exit: {} binary pattern hit(s) covered {} supporting graph finding(s); skipping LLM pipeline for {}",
+            import_hits.len(),
+            orchestrator_findings.len(),
+            file_str,
+        );
+    } else {
+        run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+    }
 
     // Synthesis — weigh all evidence
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
@@ -468,6 +511,63 @@ fn store_ghidra_results(
             );
         }
     }
+}
+
+fn should_skip_llm_pipeline_for_pattern_confidence(
+    pattern_hits: &[DangerousApiHit],
+    supporting_findings: &[DetectedFinding],
+) -> bool {
+    if pattern_hits.is_empty() {
+        return false;
+    }
+
+    if pattern_hits
+        .iter()
+        .any(|hit| !matches!(hit.severity, Severity::Critical | Severity::High))
+    {
+        return false;
+    }
+
+    let categories: HashSet<String> = pattern_hits
+        .iter()
+        .map(|hit| hit.danger_category.to_string())
+        .collect();
+    if categories.len() != 1 {
+        return false;
+    }
+
+    let pattern_functions: HashSet<String> = pattern_hits
+        .iter()
+        .map(|hit| normalize_function_key(&hit.function_name))
+        .filter(|function| !function.is_empty())
+        .collect();
+
+    let supporting_is_aligned = supporting_findings.iter().all(|finding| {
+        let finding_category = finding.category.to_ascii_lowercase();
+        if !categories.contains(&finding_category) {
+            return false;
+        }
+
+        if pattern_functions.is_empty() {
+            return true;
+        }
+
+        let finding_function = normalize_function_key(&finding.function);
+        finding_function.is_empty() || pattern_functions.contains(&finding_function)
+    });
+    if !supporting_is_aligned {
+        return false;
+    }
+
+    let critical_hits = pattern_hits
+        .iter()
+        .filter(|hit| matches!(hit.severity, Severity::Critical))
+        .count();
+    if critical_hits > 0 {
+        return true;
+    }
+
+    pattern_hits.len() >= 2 && !supporting_findings.is_empty()
 }
 
 /// Check whether pattern and LLM findings have consensus.
@@ -1745,6 +1845,7 @@ mod tests {
     #[test]
     fn test_synthesis_stats_report() {
         let stats = SynthesisStats::new();
+        stats.record_pattern_confidence_early_exit();
         stats.record_llm_synthesis();
         stats.record_llm_synthesis();
         stats.record_consensus_early_exit();
@@ -1899,5 +2000,96 @@ mod tests {
             2,
             "Consensus early-exit should return all original findings"
         );
+    }
+
+    fn dangerous_hit(function_name: &str, category: &str, severity: Severity) -> DangerousApiHit {
+        DangerousApiHit {
+            function_name: function_name.into(),
+            library: "test".into(),
+            reason: "test hit".into(),
+            danger_category: match category {
+                "memory" => skwaq_core::analysis::DangerCategory::Memory,
+                "injection" => skwaq_core::analysis::DangerCategory::Injection,
+                "format_string" => skwaq_core::analysis::DangerCategory::FormatString,
+                "crypto" => skwaq_core::analysis::DangerCategory::Crypto,
+                other => panic!("unsupported test category: {other}"),
+            },
+            severity,
+            file: "test.c".into(),
+            line: 10,
+        }
+    }
+
+    #[test]
+    fn test_pattern_confidence_allows_critical_pattern_without_support() {
+        let pattern_hits = vec![dangerous_hit("strcpy", "memory", Severity::Critical)];
+
+        assert!(should_skip_llm_pipeline_for_pattern_confidence(
+            &pattern_hits,
+            &[],
+        ));
+    }
+
+    #[test]
+    fn test_pattern_confidence_requires_support_for_high_only_hits() {
+        let pattern_hits = vec![dangerous_hit("sprintf", "format_string", Severity::High)];
+
+        assert!(!should_skip_llm_pipeline_for_pattern_confidence(
+            &pattern_hits,
+            &[],
+        ));
+    }
+
+    #[test]
+    fn test_pattern_confidence_allows_multiple_high_hits_with_aligned_support() {
+        let pattern_hits = vec![
+            dangerous_hit("render", "format_string", Severity::High),
+            dangerous_hit("render", "format_string", Severity::High),
+        ];
+        let supporting = vec![DetectedFinding {
+            id: "o1".into(),
+            category: "format_string".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "render".into(),
+            line: Some(42),
+            title: "Orchestrator: format string risk".into(),
+        }];
+
+        assert!(should_skip_llm_pipeline_for_pattern_confidence(
+            &pattern_hits,
+            &supporting,
+        ));
+    }
+
+    #[test]
+    fn test_pattern_confidence_rejects_supporting_mismatch() {
+        let pattern_hits = vec![dangerous_hit("strcpy", "memory", Severity::Critical)];
+        let supporting = vec![DetectedFinding {
+            id: "o1".into(),
+            category: "injection".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "exec".into(),
+            line: Some(42),
+            title: "Orchestrator: command injection risk".into(),
+        }];
+
+        assert!(!should_skip_llm_pipeline_for_pattern_confidence(
+            &pattern_hits,
+            &supporting,
+        ));
+    }
+
+    #[test]
+    fn test_pattern_confidence_rejects_medium_hits() {
+        let pattern_hits = vec![dangerous_hit("memcpy", "memory", Severity::Medium)];
+
+        assert!(!should_skip_llm_pipeline_for_pattern_confidence(
+            &pattern_hits,
+            &[],
+        ));
     }
 }
