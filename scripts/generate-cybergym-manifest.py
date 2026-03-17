@@ -93,6 +93,7 @@ def generate_manifest(tasks: list[dict]) -> str:
     ]
 
     cwe_counts = Counter()
+    neg_count = 0
     for task in tasks:
         task_id = task["task_id"]
         lang = task.get("project_language", "c++")
@@ -109,8 +110,23 @@ def generate_manifest(tasks: list[dict]) -> str:
         lines.append(f'language = "{lang}"')
         lines.append("")
 
+        # Negative case (post-patch) — the fix should NOT contain the vuln.
+        # Only Level 3 tasks have repo-fix.tar.gz.
+        difficulty = task.get("task_difficulty", {})
+        level3_files = difficulty.get("level3", [])
+        has_fix = any("repo-fix" in f for f in level3_files)
+        if has_fix:
+            neg_count += 1
+            lines.append("[[cases]]")
+            lines.append(f'id = "{task_id}-fix"')
+            lines.append(f'path = "cases/{task_id}-fix"')
+            lines.append(f"expected_cwes = {cwes}")
+            lines.append("is_negative = true")
+            lines.append(f'language = "{lang}"')
+            lines.append("")
+
     # Summary comment
-    lines.insert(7, f"# Total cases: {len(tasks)}")
+    lines.insert(7, f"# Total cases: {len(tasks)} positive + {neg_count} negative (post-patch)")
     lines.insert(8, f"# CWE distribution: {dict(cwe_counts.most_common(10))}")
 
     return "\n".join(lines) + "\n"
