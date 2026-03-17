@@ -683,22 +683,22 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             reason: "snprintf with variable format string; format string vulnerability even with bounded output",
         },
         SourcePattern {
-            regex: r"\bvprintf\s*\(",
+            regex: r"\bvprintf\s*\(\s*[a-zA-Z_]\w*\s*,",
             category: DangerCategory::FormatString,
             severity: Severity::High,
-            reason: "vprintf always uses variable format from caller; validate format origin",
+            reason: "vprintf with variable format string; validate format origin",
         },
         SourcePattern {
-            regex: r"\bvfprintf\s*\(",
+            regex: r"\bvfprintf\s*\([^,]+,\s*[a-zA-Z_]\w*\s*,",
             category: DangerCategory::FormatString,
             severity: Severity::High,
-            reason: "vfprintf always uses variable format from caller; validate format origin",
+            reason: "vfprintf with variable format string; validate format origin",
         },
         SourcePattern {
-            regex: r"\bvsnprintf\s*\(",
+            regex: r"\bvsnprintf\s*\([^,]+,\s*[^,]+,\s*[a-zA-Z_]\w*\s*,",
             category: DangerCategory::FormatString,
             severity: Severity::Medium,
-            reason: "vsnprintf uses variable format from caller; validate format origin",
+            reason: "vsnprintf with variable format string; validate format origin",
         },
         SourcePattern {
             regex: r"\batoi\s*\(",
@@ -1431,6 +1431,9 @@ void vuln(FILE *fp, char *data, char *fmt, va_list args) {
     vprintf(fmt, args);
     vfprintf(fp, fmt, args);
     vsnprintf(buf, sizeof(buf), fmt, args);
+    vprintf("%s\n", args);
+    vfprintf(fp, "%s\n", args);
+    vsnprintf(buf, sizeof(buf), "%s\n", args);
 }
 "#;
         let hits = detector
@@ -1440,6 +1443,11 @@ void vuln(FILE *fp, char *data, char *fmt, va_list args) {
             .iter()
             .filter(|h| h.danger_category == DangerCategory::FormatString)
             .collect();
+        assert_eq!(
+            fmt_hits.len(),
+            5,
+            "Literal-format vprintf-family calls should not be flagged"
+        );
         assert!(
             fmt_hits.iter().any(|h| h.function_name.contains("fprintf")),
             "Should detect fprintf with variable format"
