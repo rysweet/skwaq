@@ -209,7 +209,7 @@ mod tests {
     }
 
     #[test]
-    fn test_no_false_positives() {
+    fn test_no_false_positives_for_safe_apis() {
         let detector = DangerousApiDetector::new();
         let imports = vec![
             ImportInfo {

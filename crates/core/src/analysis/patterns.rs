@@ -238,7 +238,7 @@ pub(crate) const DANGEROUS_APIS: &[DangerousEntry] = &[
         severity: Severity::Low,
         reason: "buffer overflow in some implementations; check buffer size",
     },
-    // Allocation — return NULL on failure (CWE-476 null-deref)
+    // Null dereference (CWE-476/690) — allocation APIs that can return NULL
     DangerousEntry {
         name: "malloc",
         category: DangerCategory::NullDeref,
@@ -257,14 +257,14 @@ pub(crate) const DANGEROUS_APIS: &[DangerousEntry] = &[
         severity: Severity::Medium,
         reason: "returns NULL on failure and may free original pointer; check return value",
     },
-    // Deallocation — use-after-free (CWE-416)
+    // Use-after-free (CWE-416) — free can lead to UAF if pointer reused
     DangerousEntry {
         name: "free",
         category: DangerCategory::UseAfterFree,
         severity: Severity::High,
         reason: "accessing freed memory causes use-after-free; nullify pointer after free",
     },
-    // File/socket — resource leak (CWE-772)
+    // Resource leak (CWE-401/772/775) — resource-acquiring APIs
     DangerousEntry {
         name: "fopen",
         category: DangerCategory::ResourceLeak,
