@@ -183,6 +183,43 @@ pub(crate) const DANGEROUS_APIS: &[DangerousEntry] = &[
         reason: "unbounded format output; use vsnprintf",
     },
     DangerousEntry {
+        name: "printf",
+        category: DangerCategory::FormatString,
+        severity: Severity::High,
+        reason: "format string vulnerability if format is user-controlled; use printf(\"%s\", var)",
+    },
+    DangerousEntry {
+        name: "fprintf",
+        category: DangerCategory::FormatString,
+        severity: Severity::High,
+        reason:
+            "format string vulnerability if format is user-controlled; use fprintf(f, \"%s\", var)",
+    },
+    DangerousEntry {
+        name: "vprintf",
+        category: DangerCategory::FormatString,
+        severity: Severity::High,
+        reason: "variadic format always uses variable format string; validate format origin",
+    },
+    DangerousEntry {
+        name: "vfprintf",
+        category: DangerCategory::FormatString,
+        severity: Severity::High,
+        reason: "variadic format always uses variable format string; validate format origin",
+    },
+    DangerousEntry {
+        name: "snprintf",
+        category: DangerCategory::FormatString,
+        severity: Severity::Medium,
+        reason: "bounded output but format string vulnerability if format is user-controlled",
+    },
+    DangerousEntry {
+        name: "vsnprintf",
+        category: DangerCategory::FormatString,
+        severity: Severity::Medium,
+        reason: "bounded variadic format; validate format string origin",
+    },
+    DangerousEntry {
         name: "scanf",
         category: DangerCategory::FormatString,
         severity: Severity::High,

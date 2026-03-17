@@ -225,7 +225,7 @@ mod tests {
         assert_eq!(counts.imports, 3);
         assert_eq!(counts.strings, 1);
         assert_eq!(counts.sources, 1); // recv
-        assert_eq!(counts.sinks, 1); // strcpy
+        assert_eq!(counts.sinks, 2); // strcpy + printf
 
         // Verify data in DB
         let func_count: i64 = db

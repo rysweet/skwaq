@@ -233,7 +233,19 @@ fn is_command_injection(_category: &str, title: &str, function_name: &str) -> bo
 }
 
 fn is_format_string(category: &str, title: &str, function_name: &str) -> bool {
-    const FORMAT_APIS: &[&str] = &["sprintf", "vsprintf", "scanf", "fscanf", "sscanf"];
+    const FORMAT_APIS: &[&str] = &[
+        "sprintf",
+        "vsprintf",
+        "printf",
+        "fprintf",
+        "vprintf",
+        "vfprintf",
+        "snprintf",
+        "vsnprintf",
+        "scanf",
+        "fscanf",
+        "sscanf",
+    ];
     const FORMAT_TERMS: &[&str] = &["format string", "uncontrolled format string"];
 
     category == "format_string"
@@ -780,5 +792,25 @@ mod tests {
         assert!(classes.contains(&SemanticPatternClass::BufferOverflow));
         assert!(!classes.contains(&SemanticPatternClass::CommandInjection));
         assert!(!classes.contains(&SemanticPatternClass::FormatString));
+    }
+
+    #[test]
+    fn classifies_printf_family_as_format_string() {
+        let classifier = SemanticPatternClassifier::new();
+        for api in &[
+            "printf",
+            "fprintf",
+            "vprintf",
+            "vfprintf",
+            "snprintf",
+            "vsnprintf",
+        ] {
+            let classes =
+                classifier.classify("format_string", &format!("Dangerous pattern: {api}"), api);
+            assert!(
+                classes.contains(&SemanticPatternClass::FormatString),
+                "{api} should classify as FormatString"
+            );
+        }
     }
 }

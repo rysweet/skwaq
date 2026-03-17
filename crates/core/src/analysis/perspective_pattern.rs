@@ -190,6 +190,16 @@ pub(crate) fn dangerous_api_info(name: &str) -> Option<(&'static str, &'static s
             "medium",
             "potential buffer overflow with %s",
         )),
+        "printf" | "fprintf" | "vprintf" | "vfprintf" => Some((
+            "format_string",
+            "high",
+            "format string vulnerability if format is user-controlled",
+        )),
+        "snprintf" | "vsnprintf" => Some((
+            "format_string",
+            "medium",
+            "format string vulnerability if format is user-controlled",
+        )),
         "system" => Some((
             "injection",
             "critical",
@@ -258,7 +268,7 @@ mod tests {
     fn test_dangerous_api_info() {
         assert!(dangerous_api_info("strcpy").is_some());
         assert!(dangerous_api_info("system").is_some());
-        assert!(dangerous_api_info("printf").is_none());
+        assert!(dangerous_api_info("printf").is_some());
         assert!(dangerous_api_info("malloc").is_none());
     }
 }

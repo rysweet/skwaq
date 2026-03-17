@@ -669,6 +669,37 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "printf with variable as format string; use printf(\"%s\", var) instead",
         },
+        // fprintf/snprintf/vprintf/vfprintf/vsnprintf format string sinks (CWE-134)
+        SourcePattern {
+            regex: r"\bfprintf\s*\([^,]+,\s*[a-zA-Z_]\w*\s*\)",
+            category: DangerCategory::FormatString,
+            severity: Severity::High,
+            reason: "fprintf with variable format string; use fprintf(f, \"%s\", var) instead",
+        },
+        SourcePattern {
+            regex: r"\bsnprintf\s*\([^,]+,[^,]+,\s*[a-zA-Z_]\w*\s*\)",
+            category: DangerCategory::FormatString,
+            severity: Severity::Medium,
+            reason: "snprintf with variable format string; format string vulnerability even with bounded output",
+        },
+        SourcePattern {
+            regex: r"\bvprintf\s*\(",
+            category: DangerCategory::FormatString,
+            severity: Severity::High,
+            reason: "vprintf always uses variable format from caller; validate format origin",
+        },
+        SourcePattern {
+            regex: r"\bvfprintf\s*\(",
+            category: DangerCategory::FormatString,
+            severity: Severity::High,
+            reason: "vfprintf always uses variable format from caller; validate format origin",
+        },
+        SourcePattern {
+            regex: r"\bvsnprintf\s*\(",
+            category: DangerCategory::FormatString,
+            severity: Severity::Medium,
+            reason: "vsnprintf uses variable format from caller; validate format origin",
+        },
         SourcePattern {
             regex: r"\batoi\s*\(",
             category: DangerCategory::Memory,
@@ -1387,6 +1418,53 @@ void safe(const char *msg) {
                 .iter()
                 .map(|h| &h.function_name)
                 .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_detect_fprintf_vprintf_snprintf_format_strings() {
+        let detector = DangerousApiDetector::new();
+        let src = r#"
+void vuln(FILE *fp, char *data, char *fmt, va_list args) {
+    fprintf(fp, data);
+    snprintf(buf, sizeof(buf), data);
+    vprintf(fmt, args);
+    vfprintf(fp, fmt, args);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+}
+"#;
+        let hits = detector
+            .detect_in_source_content(src, "c", "fmt.c")
+            .unwrap();
+        let fmt_hits: Vec<_> = hits
+            .iter()
+            .filter(|h| h.danger_category == DangerCategory::FormatString)
+            .collect();
+        assert!(
+            fmt_hits.iter().any(|h| h.function_name.contains("fprintf")),
+            "Should detect fprintf with variable format"
+        );
+        assert!(
+            fmt_hits
+                .iter()
+                .any(|h| h.function_name.contains("snprintf")),
+            "Should detect snprintf with variable format"
+        );
+        assert!(
+            fmt_hits.iter().any(|h| h.function_name.contains("vprintf")),
+            "Should detect vprintf"
+        );
+        assert!(
+            fmt_hits
+                .iter()
+                .any(|h| h.function_name.contains("vfprintf")),
+            "Should detect vfprintf"
+        );
+        assert!(
+            fmt_hits
+                .iter()
+                .any(|h| h.function_name.contains("vsnprintf")),
+            "Should detect vsnprintf"
         );
     }
 

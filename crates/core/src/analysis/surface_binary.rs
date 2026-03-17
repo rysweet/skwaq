@@ -63,8 +63,28 @@ pub const SOURCE_PATTERNS: &[&str] = &[
 
 /// Sink patterns: dangerous functions that consume tainted data.
 pub const SINK_PATTERNS: &[&str] = &[
-    "strcpy", "strncpy", "sprintf", "snprintf", "strcat", "strncat", "system", "exec", "execve",
-    "execvp", "popen", "memcpy", "memmove", "gets", "free", "realloc", "malloc",
+    "strcpy",
+    "strncpy",
+    "sprintf",
+    "snprintf",
+    "strcat",
+    "strncat",
+    "system",
+    "exec",
+    "execve",
+    "execvp",
+    "popen",
+    "memcpy",
+    "memmove",
+    "gets",
+    "free",
+    "realloc",
+    "malloc",
+    "printf",
+    "fprintf",
+    "vprintf",
+    "vfprintf",
+    "vsnprintf",
 ];
 
 /// Analyze the attack surface of a binary by categorizing its imports.
