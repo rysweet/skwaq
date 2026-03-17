@@ -3035,7 +3035,7 @@ mod tests {
     }
 
     #[test]
-    fn test_expert_routing_wins_for_single_domain_without_consensus() {
+    fn test_expert_routing_wins_over_semantic_confidence_for_single_domain() {
         let pattern = vec![DetectedFinding {
             id: "p1".into(),
             category: "injection".into(),
@@ -3087,6 +3087,38 @@ mod tests {
                 domain
             );
         }
+    }
+
+    #[test]
+    fn test_consensus_beats_expert_routing() {
+        // Consensus (exact fingerprint match) is the highest-priority route
+        // and beats expert routing even when a single domain exists.
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+
+        assert!(findings_have_consensus(&pattern, &llm));
+        assert_eq!(
+            select_synthesis_route(&pattern, &llm),
+            SynthesisRoute::ConsensusEarlyExit
+        );
     }
 
     #[test]
