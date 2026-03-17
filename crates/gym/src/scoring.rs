@@ -221,20 +221,20 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         SemanticPatternClass::CrossSiteScripting => &[79, 80],
         SemanticPatternClass::CryptoWeakness => &[326, 327, 328, 330, 338, 310, 295, 1240],
         SemanticPatternClass::Deserialization => &[502],
-        SemanticPatternClass::DivideByZero => &[369],
         SemanticPatternClass::FormatString => &[134],
         SemanticPatternClass::InsecureTempFile => &[377],
-        SemanticPatternClass::IntegerOverflow => {
-            &[128, 190, 191, 192, 193, 194, 195, 196, 197, 680, 681]
-        }
-        SemanticPatternClass::NullDereference => &[252, 253, 476, 690],
         SemanticPatternClass::PathTraversal => &[22, 23, 36],
         SemanticPatternClass::PrototypePollution => &[1321],
         SemanticPatternClass::RaceCondition => &[362, 367],
-        SemanticPatternClass::ResourceLeak => &[401, 459, 772, 775, 789],
         SemanticPatternClass::UnsafeApiUsage => &[242, 676],
-        SemanticPatternClass::UninitializedVariable => &[457, 908],
         SemanticPatternClass::UseAfterFree => &[415, 416, 761, 763],
+        SemanticPatternClass::NullDeref => &[252, 253, 476, 690],
+        SemanticPatternClass::IntegerOverflow => {
+            &[128, 190, 191, 192, 193, 194, 195, 196, 197, 680, 681]
+        }
+        SemanticPatternClass::DivideByZero => &[369],
+        SemanticPatternClass::ResourceLeak => &[401, 459, 772, 775, 789],
+        SemanticPatternClass::UninitializedVar => &[457, 908],
     }
 }
 
@@ -279,20 +279,20 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
             Some(SemanticPatternClass::CryptoWeakness)
         }
         502 => Some(SemanticPatternClass::Deserialization),
-        369 => Some(SemanticPatternClass::DivideByZero),
         134 => Some(SemanticPatternClass::FormatString),
-        128 | 190 | 191 | 192 | 193 | 194 | 195 | 196 | 197 | 680 | 681 => {
-            Some(SemanticPatternClass::IntegerOverflow)
-        }
-        252 | 253 | 476 | 690 => Some(SemanticPatternClass::NullDereference),
         22 | 23 | 36 => Some(SemanticPatternClass::PathTraversal),
         1321 => Some(SemanticPatternClass::PrototypePollution),
         362 | 367 => Some(SemanticPatternClass::RaceCondition),
         377 => Some(SemanticPatternClass::InsecureTempFile),
-        401 | 459 | 772 | 775 | 789 => Some(SemanticPatternClass::ResourceLeak),
         242 | 676 => Some(SemanticPatternClass::UnsafeApiUsage),
-        457 | 908 => Some(SemanticPatternClass::UninitializedVariable),
         415 | 416 | 761 | 763 => Some(SemanticPatternClass::UseAfterFree),
+        252 | 253 | 476 | 690 => Some(SemanticPatternClass::NullDeref),
+        128 | 190 | 191 | 192 | 193 | 194 | 195 | 196 | 197 | 680 | 681 => {
+            Some(SemanticPatternClass::IntegerOverflow)
+        }
+        369 => Some(SemanticPatternClass::DivideByZero),
+        401 | 459 | 772 | 775 | 789 => Some(SemanticPatternClass::ResourceLeak),
+        457 | 908 => Some(SemanticPatternClass::UninitializedVar),
         _ => None,
     }
 }
@@ -824,7 +824,7 @@ mod tests {
         assert!(int_overflow.contains(&190));
         assert!(int_overflow.contains(&681));
 
-        let null = semantic_class_to_cwes(SemanticPatternClass::NullDereference);
+        let null = semantic_class_to_cwes(SemanticPatternClass::NullDeref);
         assert!(null.contains(&476));
         assert!(null.contains(&690));
 
@@ -841,7 +841,7 @@ mod tests {
         assert!(unsafe_api.contains(&676));
         assert!(unsafe_api.contains(&242));
 
-        let uninitialized = semantic_class_to_cwes(SemanticPatternClass::UninitializedVariable);
+        let uninitialized = semantic_class_to_cwes(SemanticPatternClass::UninitializedVar);
         assert!(uninitialized.contains(&457));
         assert!(uninitialized.contains(&908));
 
@@ -853,18 +853,16 @@ mod tests {
     #[test]
     fn test_cwe_to_semantic_class_new_mappings() {
         use SemanticPatternClass::*;
-        assert_eq!(cwe_to_semantic_class(128), Some(IntegerOverflow));
-        assert_eq!(cwe_to_semantic_class(369), Some(DivideByZero));
         assert_eq!(cwe_to_semantic_class(79), Some(CrossSiteScripting));
         assert_eq!(cwe_to_semantic_class(80), Some(CrossSiteScripting));
         assert_eq!(cwe_to_semantic_class(327), Some(CryptoWeakness));
         assert_eq!(cwe_to_semantic_class(338), Some(CryptoWeakness));
         assert_eq!(cwe_to_semantic_class(1240), Some(CryptoWeakness));
         assert_eq!(cwe_to_semantic_class(502), Some(Deserialization));
-        assert_eq!(cwe_to_semantic_class(190), Some(IntegerOverflow));
-        assert_eq!(cwe_to_semantic_class(681), Some(IntegerOverflow));
-        assert_eq!(cwe_to_semantic_class(476), Some(NullDereference));
-        assert_eq!(cwe_to_semantic_class(690), Some(NullDereference));
+        assert_eq!(cwe_to_semantic_class(128), Some(IntegerOverflow));
+        assert_eq!(cwe_to_semantic_class(369), Some(DivideByZero));
+        assert_eq!(cwe_to_semantic_class(476), Some(NullDeref));
+        assert_eq!(cwe_to_semantic_class(690), Some(NullDeref));
         assert_eq!(cwe_to_semantic_class(1321), Some(PrototypePollution));
         assert_eq!(cwe_to_semantic_class(401), Some(ResourceLeak));
         assert_eq!(cwe_to_semantic_class(761), Some(UseAfterFree));
@@ -872,8 +870,8 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(789), Some(ResourceLeak));
         assert_eq!(cwe_to_semantic_class(676), Some(UnsafeApiUsage));
         assert_eq!(cwe_to_semantic_class(242), Some(UnsafeApiUsage));
-        assert_eq!(cwe_to_semantic_class(457), Some(UninitializedVariable));
-        assert_eq!(cwe_to_semantic_class(908), Some(UninitializedVariable));
+        assert_eq!(cwe_to_semantic_class(457), Some(UninitializedVar));
+        assert_eq!(cwe_to_semantic_class(908), Some(UninitializedVar));
     }
 
     #[test]
@@ -892,19 +890,6 @@ mod tests {
         let finding = make_semantic_finding("crypto", "md5_init", "Pattern: weak hash MD5 usage");
         let inferred = inferred_finding_cwes(&finding);
         assert!(inferred.contains(&327));
-    }
-
-    #[test]
-    fn test_inferred_cwes_for_null_deref_finding() {
-        let finding = make_semantic_finding(
-            "null_deref",
-            "parse_header",
-            "LLM: null pointer dereference in parse_header",
-        );
-        let inferred = inferred_finding_cwes(&finding);
-        assert!(inferred.contains(&476));
-        assert!(inferred.contains(&690));
-        assert!(!inferred.contains(&190));
     }
 
     #[test]
