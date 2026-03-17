@@ -255,6 +255,7 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
             1240,
         ],
         SemanticPatternClass::Deserialization => &[502],
+        SemanticPatternClass::DeadStore => &[563],
         SemanticPatternClass::FormatString => &[134],
         SemanticPatternClass::InsecureTempFile => &[377],
         SemanticPatternClass::InvalidFree => &[590],
@@ -264,6 +265,7 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         SemanticPatternClass::UncheckedLoopCondition => &[606],
         SemanticPatternClass::PrototypePollution => &[1321],
         SemanticPatternClass::RaceCondition => &[362, 364, 366, 367, 832],
+        SemanticPatternClass::ReachableAssertion => &[617],
         SemanticPatternClass::UnsafeApiUsage => &[222, 223, 242, 244, 247, 676],
         SemanticPatternClass::UseAfterFree => &[415, 416, 562, 761, 763],
         SemanticPatternClass::NullDeref => &[252, 253, 476, 690],
@@ -318,6 +320,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         256 | 259 | 295 | 310 | 312 | 319 | 321 | 323 | 325 | 326 | 327 | 328 | 330 | 338 | 347
         | 780 | 798 | 1240 => Some(SemanticPatternClass::CryptoWeakness),
         502 => Some(SemanticPatternClass::Deserialization),
+        563 => Some(SemanticPatternClass::DeadStore),
         134 => Some(SemanticPatternClass::FormatString),
         590 => Some(SemanticPatternClass::InvalidFree),
         90 => Some(SemanticPatternClass::LdapInjection),
@@ -326,6 +329,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         606 => Some(SemanticPatternClass::UncheckedLoopCondition),
         1321 => Some(SemanticPatternClass::PrototypePollution),
         362 | 364 | 366 | 367 | 832 => Some(SemanticPatternClass::RaceCondition),
+        617 => Some(SemanticPatternClass::ReachableAssertion),
         377 => Some(SemanticPatternClass::InsecureTempFile),
         222 | 223 | 242 | 244 | 247 | 676 => Some(SemanticPatternClass::UnsafeApiUsage),
         415 | 416 | 562 | 761 | 763 => Some(SemanticPatternClass::UseAfterFree),
@@ -1206,6 +1210,12 @@ mod tests {
         let deser = semantic_class_to_cwes(SemanticPatternClass::Deserialization);
         assert!(deser.contains(&502));
 
+        let dead_store = semantic_class_to_cwes(SemanticPatternClass::DeadStore);
+        assert_eq!(dead_store, &[563]);
+
+        let reachable = semantic_class_to_cwes(SemanticPatternClass::ReachableAssertion);
+        assert_eq!(reachable, &[617]);
+
         let ldap = semantic_class_to_cwes(SemanticPatternClass::LdapInjection);
         assert_eq!(ldap, &[90]);
 
@@ -1309,6 +1319,8 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(780), Some(CryptoWeakness));
         assert_eq!(cwe_to_semantic_class(1240), Some(CryptoWeakness));
         assert_eq!(cwe_to_semantic_class(502), Some(Deserialization));
+        assert_eq!(cwe_to_semantic_class(563), Some(DeadStore));
+        assert_eq!(cwe_to_semantic_class(617), Some(ReachableAssertion));
         assert_eq!(cwe_to_semantic_class(90), Some(LdapInjection));
         assert_eq!(cwe_to_semantic_class(128), Some(IntegerOverflow));
         assert_eq!(cwe_to_semantic_class(369), Some(DivideByZero));

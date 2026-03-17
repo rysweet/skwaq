@@ -14,6 +14,7 @@ pub enum SemanticPatternClass {
     CommandInjection,
     CrossSiteScripting,
     CryptoWeakness,
+    DeadStore,
     Deserialization,
     FormatString,
     InsecureTempFile,
@@ -24,6 +25,7 @@ pub enum SemanticPatternClass {
     UncheckedLoopCondition,
     PrototypePollution,
     RaceCondition,
+    ReachableAssertion,
     UnsafeApiUsage,
     UseAfterFree,
     NullDeref,
@@ -42,6 +44,7 @@ impl SemanticPatternClass {
             Self::CommandInjection => "command_injection",
             Self::CrossSiteScripting => "cross_site_scripting",
             Self::CryptoWeakness => "crypto_weakness",
+            Self::DeadStore => "dead_store",
             Self::Deserialization => "deserialization",
             Self::FormatString => "format_string",
             Self::InsecureTempFile => "insecure_temp_file",
@@ -52,6 +55,7 @@ impl SemanticPatternClass {
             Self::UncheckedLoopCondition => "unchecked_loop_condition",
             Self::PrototypePollution => "prototype_pollution",
             Self::RaceCondition => "race_condition",
+            Self::ReachableAssertion => "reachable_assertion",
             Self::UnsafeApiUsage => "unsafe_api_usage",
             Self::UseAfterFree => "use_after_free",
             Self::NullDeref => "null_deref",
@@ -77,11 +81,12 @@ impl SemanticPatternClass {
             | Self::PathTraversal
             | Self::UntrustedSearchPath
             | Self::RaceCondition => "filesystem_safety",
-            Self::UncheckedLoopCondition | Self::IntegerOverflow | Self::DivideByZero => {
-                "arithmetic_safety"
-            }
+            Self::UncheckedLoopCondition
+            | Self::IntegerOverflow
+            | Self::DivideByZero
+            | Self::ReachableAssertion => "arithmetic_safety",
             Self::ResourceExhaustion | Self::ResourceLeak => "resource_management",
-            Self::UninitializedVar => "initialization_safety",
+            Self::UninitializedVar | Self::DeadStore => "initialization_safety",
             Self::FormatString => "format_string",
             Self::CryptoWeakness => "crypto",
             Self::UnsafeApiUsage => "unsafe_api",
@@ -122,6 +127,9 @@ impl SemanticPatternClassifier {
         if is_crypto_weakness(&category, &title) {
             classes.insert(SemanticPatternClass::CryptoWeakness);
         }
+        if is_dead_store(&category, &title) {
+            classes.insert(SemanticPatternClass::DeadStore);
+        }
         if is_deserialization(&category, &title) {
             classes.insert(SemanticPatternClass::Deserialization);
         }
@@ -145,6 +153,9 @@ impl SemanticPatternClassifier {
         }
         if is_race_condition(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::RaceCondition);
+        }
+        if is_reachable_assertion(&category, &title) {
+            classes.insert(SemanticPatternClass::ReachableAssertion);
         }
         if is_unsafe_api_usage(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::UnsafeApiUsage);
@@ -335,6 +346,21 @@ fn is_race_condition(category: &str, title: &str, function_name: &str) -> bool {
         || contains_any(title, &["race condition", "toctou", "time-of-check"])
 }
 
+fn is_reachable_assertion(category: &str, title: &str) -> bool {
+    category == "reachable_assertion"
+        || contains_any(
+            title,
+            &[
+                "reachable assertion",
+                "reachable assert",
+                "assertion failure",
+                "assertion reachable",
+                "abort reachable",
+                "assert reachable from untrusted input",
+            ],
+        )
+}
+
 fn is_insecure_temp_file(category: &str, title: &str, function_name: &str) -> bool {
     category == "temp_file"
         || is_function(function_name, &["mktemp", "tmpnam"])
@@ -408,6 +434,22 @@ fn is_crypto_weakness(category: &str, title: &str) -> bool {
                 "rc4",
                 "weak key",
                 "insufficient key",
+            ],
+        )
+}
+
+fn is_dead_store(category: &str, title: &str) -> bool {
+    category == "dead_store"
+        || category == "unused_variable"
+        || contains_any(
+            title,
+            &[
+                "dead store",
+                "unused variable",
+                "unused assignment",
+                "assignment to variable without use",
+                "value assigned is never used",
+                "value written is never read",
             ],
         )
 }
@@ -1125,6 +1167,59 @@ mod tests {
         assert_eq!(
             SemanticPatternClass::ResourceExhaustion.confidence_cluster(),
             "resource_management"
+        );
+    }
+
+    #[test]
+    fn classifies_dead_store_from_title() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify(
+            "code_quality",
+            "dead store: value assigned is never used",
+            "foo",
+        );
+        assert!(classes.contains(&SemanticPatternClass::DeadStore));
+    }
+
+    #[test]
+    fn classifies_dead_store_from_category() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify("unused_variable", "unused global value", "global_var");
+        assert!(classes.contains(&SemanticPatternClass::DeadStore));
+    }
+
+    #[test]
+    fn dead_store_clusters_with_initialization_safety() {
+        assert_eq!(
+            SemanticPatternClass::DeadStore.confidence_cluster(),
+            "initialization_safety"
+        );
+    }
+
+    #[test]
+    fn classifies_reachable_assertion_from_title() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify(
+            "robustness",
+            "reachable assertion in input handler",
+            "assert",
+        );
+        assert!(classes.contains(&SemanticPatternClass::ReachableAssertion));
+    }
+
+    #[test]
+    fn classifies_reachable_assertion_from_category() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes =
+            classifier.classify("reachable_assertion", "Dangerous pattern: assert", "assert");
+        assert!(classes.contains(&SemanticPatternClass::ReachableAssertion));
+    }
+
+    #[test]
+    fn reachable_assertion_clusters_with_arithmetic_safety() {
+        assert_eq!(
+            SemanticPatternClass::ReachableAssertion.confidence_cluster(),
+            "arithmetic_safety"
         );
     }
 }
