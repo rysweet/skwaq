@@ -236,6 +236,51 @@ pub(crate) const DANGEROUS_APIS: &[DangerousEntry] = &[
         severity: Severity::Low,
         reason: "buffer overflow in some implementations; check buffer size",
     },
+    // Null dereference (CWE-476/690) — allocation APIs that can return NULL
+    DangerousEntry {
+        name: "malloc",
+        category: DangerCategory::NullDeref,
+        severity: Severity::Medium,
+        reason: "returns NULL on failure; check return value before use",
+    },
+    DangerousEntry {
+        name: "calloc",
+        category: DangerCategory::NullDeref,
+        severity: Severity::Medium,
+        reason: "returns NULL on failure; check return value before use",
+    },
+    DangerousEntry {
+        name: "realloc",
+        category: DangerCategory::NullDeref,
+        severity: Severity::Medium,
+        reason: "returns NULL on failure; check return value before use",
+    },
+    // Use-after-free (CWE-416) — free can lead to UAF if pointer reused
+    DangerousEntry {
+        name: "free",
+        category: DangerCategory::Memory,
+        severity: Severity::Medium,
+        reason: "pointer must not be used after free; set to NULL after freeing",
+    },
+    // Resource leak (CWE-401/772/775) — resource-acquiring APIs
+    DangerousEntry {
+        name: "fopen",
+        category: DangerCategory::ResourceLeak,
+        severity: Severity::Medium,
+        reason: "file must be closed with fclose on all paths including error paths",
+    },
+    DangerousEntry {
+        name: "open",
+        category: DangerCategory::ResourceLeak,
+        severity: Severity::Medium,
+        reason: "file descriptor must be closed on all paths including error paths",
+    },
+    DangerousEntry {
+        name: "socket",
+        category: DangerCategory::ResourceLeak,
+        severity: Severity::Medium,
+        reason: "socket must be closed on all paths including error paths",
+    },
 ];
 
 /// A detected use of a dangerous API.
