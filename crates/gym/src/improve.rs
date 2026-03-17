@@ -185,6 +185,10 @@ pub struct ImprovementCycle {
     pub false_negatives: Vec<FalseNegativeCase>,
     pub reviewed_proposals: Vec<Improvement>,
     pub proposals: Vec<Improvement>,
+    /// Number of cases held out for validation (not used for failure analysis).
+    pub holdout_case_count: usize,
+    /// Number of training cases used for failure analysis.
+    pub training_case_count: usize,
 }
 
 fn review_proposal_id(index: usize) -> String {
@@ -218,7 +222,7 @@ pub async fn run_improvement_cycle(
 
     // Step 1: Run benchmark and collect outcomes
     let gt = adapter.ground_truth()?;
-    let cases: Vec<_> = gt
+    let all_cases: Vec<_> = gt
         .cases
         .iter()
         .filter(|c| {
@@ -229,8 +233,30 @@ pub async fn run_improvement_cycle(
         .take(config.max_cases.unwrap_or(usize::MAX))
         .collect();
 
+    // Split into training and holdout sets for overfitting prevention.
+    // Training cases are used for failure analysis; holdout cases are
+    // reserved for validating that proposals generalize.
+    let holdout_count = if config.holdout_fraction > 0.0 {
+        (all_cases.len() as f64 * config.holdout_fraction).ceil() as usize
+    } else {
+        0
+    };
+    let training_end = all_cases.len().saturating_sub(holdout_count);
+    let training_cases = &all_cases[..training_end];
+    let holdout_cases = &all_cases[training_end..];
+
+    if holdout_count > 0 {
+        tracing::info!(
+            "{}: {} training cases, {} holdout cases ({:.0}% holdout)",
+            suite_name,
+            training_cases.len(),
+            holdout_cases.len(),
+            config.holdout_fraction * 100.0
+        );
+    }
+
     let mut outcomes = Vec::new();
-    for case in &cases {
+    for case in training_cases {
         match adapter.run_case(case, data_dir, config).await {
             Ok(findings) => {
                 let mut outcome =
@@ -293,7 +319,7 @@ pub async fn run_improvement_cycle(
 
     // Step 3: Analyze false negatives and generate proposals
     let reviewed_proposals = analyze_false_negatives(&false_negatives, &suite_name).await?;
-    let proposals = reviewed_proposals
+    let mut proposals: Vec<_> = reviewed_proposals
         .iter()
         .filter(|proposal| {
             !matches!(
@@ -302,7 +328,18 @@ pub async fn run_improvement_cycle(
             )
         })
         .cloned()
-        .collect::<Vec<_>>();
+        .collect();
+
+    // Apply max-improvements-per-cycle cap to prevent compound overfitting
+    if config.max_improvements_per_cycle > 0 && proposals.len() > config.max_improvements_per_cycle
+    {
+        tracing::warn!(
+            "Capping accepted proposals from {} to {} (max_improvements_per_cycle)",
+            proposals.len(),
+            config.max_improvements_per_cycle
+        );
+        proposals.truncate(config.max_improvements_per_cycle);
+    }
 
     // Step 4: Store insights as knowledge for future agents to reference
     store_fn_insights(&false_negatives, &reviewed_proposals, &suite_name, data_dir);
@@ -313,6 +350,8 @@ pub async fn run_improvement_cycle(
         false_negatives,
         reviewed_proposals,
         proposals,
+        holdout_case_count: holdout_cases.len(),
+        training_case_count: training_cases.len(),
     })
 }
 
@@ -2224,6 +2263,8 @@ mod tests {
                     review: None,
                 },
             ],
+            holdout_case_count: 0,
+            training_case_count: 0,
         };
 
         // Verify filtering logic: only NewPattern with non-empty patch.replace

@@ -589,6 +589,8 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 skip: 0,
                 concurrency: 1,
                 timeout_secs: 30,
+                holdout_fraction: 0.2,
+                max_improvements_per_cycle: 5,
             };
 
             // Find the matching adapter
