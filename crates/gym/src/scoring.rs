@@ -258,6 +258,7 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         SemanticPatternClass::FormatString => &[134],
         SemanticPatternClass::InsecureTempFile => &[377],
         SemanticPatternClass::PathTraversal => &[22, 23, 36, 426],
+        SemanticPatternClass::UntrustedSearchPath => &[114, 427],
         SemanticPatternClass::PrototypePollution => &[1321],
         SemanticPatternClass::RaceCondition => &[362, 364, 366, 367, 832],
         SemanticPatternClass::UnsafeApiUsage => &[222, 223, 242, 244, 247, 676],
@@ -315,6 +316,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         502 => Some(SemanticPatternClass::Deserialization),
         134 => Some(SemanticPatternClass::FormatString),
         22 | 23 | 36 | 426 => Some(SemanticPatternClass::PathTraversal),
+        114 | 427 => Some(SemanticPatternClass::UntrustedSearchPath),
         1321 => Some(SemanticPatternClass::PrototypePollution),
         362 | 364 | 366 | 367 | 832 => Some(SemanticPatternClass::RaceCondition),
         377 => Some(SemanticPatternClass::InsecureTempFile),
@@ -862,7 +864,10 @@ mod tests {
             cwe_to_semantic_class(426),
             Some(SemanticPatternClass::PathTraversal)
         );
-        assert_eq!(cwe_to_semantic_class(427), None);
+        assert_eq!(
+            cwe_to_semantic_class(427),
+            Some(SemanticPatternClass::UntrustedSearchPath)
+        );
 
         // Temporal memory safety
         assert_eq!(
@@ -1102,6 +1107,21 @@ mod tests {
     }
 
     #[test]
+    fn test_inferred_finding_cwes_for_untrusted_search_path_preserves_legacy_114() {
+        let finding = make_semantic_finding(
+            "path_traversal",
+            "dlopen",
+            "Pattern: dlopen with untrusted path allows uncontrolled search path loading",
+        );
+
+        let inferred = inferred_finding_cwes(&finding);
+        assert!(inferred.contains(&114));
+        assert!(inferred.contains(&427));
+        assert!(!inferred.contains(&22));
+        assert!(!inferred.contains(&426));
+    }
+
+    #[test]
     fn test_aggregate_tracks_per_semantic_scores() {
         let outcomes = vec![
             CaseOutcome {
@@ -1181,6 +1201,11 @@ mod tests {
         let path = semantic_class_to_cwes(SemanticPatternClass::PathTraversal);
         assert!(!path.contains(&59));
         assert!(!path.contains(&61));
+        assert!(!path.contains(&427));
+
+        let search_path = semantic_class_to_cwes(SemanticPatternClass::UntrustedSearchPath);
+        assert!(search_path.contains(&114));
+        assert!(search_path.contains(&427));
 
         let race = semantic_class_to_cwes(SemanticPatternClass::RaceCondition);
         assert!(race.contains(&364));
@@ -1276,8 +1301,9 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(242), Some(UnsafeApiUsage));
         assert_eq!(cwe_to_semantic_class(457), Some(UninitializedVar));
         assert_eq!(cwe_to_semantic_class(908), Some(UninitializedVar));
+        assert_eq!(cwe_to_semantic_class(114), Some(UntrustedSearchPath));
         assert_eq!(cwe_to_semantic_class(426), Some(PathTraversal));
-        assert_eq!(cwe_to_semantic_class(427), None);
+        assert_eq!(cwe_to_semantic_class(427), Some(UntrustedSearchPath));
     }
 
     #[test]
@@ -1289,6 +1315,7 @@ mod tests {
         assert_eq!(cwe_family(404), 401);
         assert_eq!(cwe_family(675), 401);
         assert_eq!(cwe_family(426), 22);
+        assert_eq!(cwe_family(427), 427);
     }
 
     #[test]

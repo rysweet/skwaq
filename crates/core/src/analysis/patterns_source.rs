@@ -849,15 +849,15 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
         // Process control (CWE-114) — from self-improvement iteration 5
         SourcePattern {
             regex: r"(?i)\bLoadLibrary[AW]?(Ex[AW]?)?\s*\(",
-            category: DangerCategory::Injection,
+            category: DangerCategory::PathTraversal,
             severity: Severity::High,
-            reason: "LoadLibrary with untrusted input allows DLL injection (CWE-114); validate library path",
+            reason: "LoadLibrary with untrusted input allows uncontrolled search path loading (CWE-427); validate library path",
         },
         SourcePattern {
             regex: r"\bdlopen\s*\(",
-            category: DangerCategory::Injection,
+            category: DangerCategory::PathTraversal,
             severity: Severity::High,
-            reason: "dlopen loads shared libraries dynamically; validate library path to prevent code injection",
+            reason: "dlopen with untrusted path allows uncontrolled search path loading (CWE-427); validate library path",
         },
         // Windows-specific patterns (from self-improvement iteration 4)
         SourcePattern {
