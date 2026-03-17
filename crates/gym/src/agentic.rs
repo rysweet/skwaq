@@ -653,7 +653,6 @@ async fn llm_synthesize(
 fn remaining_refinement_timeout(timeout_secs: u64, elapsed: Duration) -> u64 {
     timeout_secs.saturating_sub(elapsed.as_secs())
 }
-
 fn append_findings_for_prompt(prompt: &mut String, heading: &str, findings: &[DetectedFinding]) {
     prompt.push_str(heading);
     for finding in findings {
