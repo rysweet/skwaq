@@ -213,8 +213,11 @@ pub async fn run_agentic_source_analysis(
         pattern_categories.insert(f.category.clone());
     }
 
+    let skip_llm_pipeline =
+        should_skip_llm_pipeline_for_pattern_confidence(&pattern_hits, &orchestrator_findings);
+
     // --- Layer 4: LLM agent pipeline ---
-    if should_skip_llm_pipeline_for_pattern_confidence(&pattern_hits, &orchestrator_findings) {
+    if skip_llm_pipeline {
         SYNTHESIS_STATS.record_pattern_confidence_early_exit();
         tracing::info!(
             "Pattern-confidence early-exit: {} source pattern hit(s) covered {} supporting graph finding(s); skipping LLM pipeline for {}",
@@ -234,8 +237,11 @@ pub async fn run_agentic_source_analysis(
     // Unlike the old intersection filter, this preserves LLM-only findings that
     // demonstrate real understanding of the code, but it fails loudly if synthesis
     // cannot run instead of silently downgrading analysis quality.
-    let synthesized =
-        synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await?;
+    let synthesized = if skip_llm_pipeline {
+        all_findings
+    } else {
+        synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await?
+    };
 
     let mut seen_categories: HashSet<String> = HashSet::new();
     let deduped: Vec<DetectedFinding> = synthesized
@@ -327,8 +333,11 @@ pub async fn run_agentic_binary_analysis(
         pattern_categories.insert(f.category.clone());
     }
 
+    let skip_llm_pipeline =
+        should_skip_llm_pipeline_for_pattern_confidence(&import_hits, &orchestrator_findings);
+
     // LLM agent pipeline
-    if should_skip_llm_pipeline_for_pattern_confidence(&import_hits, &orchestrator_findings) {
+    if skip_llm_pipeline {
         SYNTHESIS_STATS.record_pattern_confidence_early_exit();
         tracing::info!(
             "Pattern-confidence early-exit: {} binary pattern hit(s) covered {} supporting graph finding(s); skipping LLM pipeline for {}",
@@ -343,8 +352,11 @@ pub async fn run_agentic_binary_analysis(
     // Synthesis — weigh all evidence
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
 
-    let synthesized =
-        synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await?;
+    let synthesized = if skip_llm_pipeline {
+        all_findings
+    } else {
+        synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await?
+    };
 
     let mut seen_categories: HashSet<String> = HashSet::new();
     let deduped: Vec<DetectedFinding> = synthesized
@@ -517,7 +529,7 @@ fn should_skip_llm_pipeline_for_pattern_confidence(
     pattern_hits: &[DangerousApiHit],
     supporting_findings: &[DetectedFinding],
 ) -> bool {
-    if pattern_hits.is_empty() {
+    if pattern_hits.is_empty() || supporting_findings.is_empty() {
         return false;
     }
 
@@ -528,46 +540,28 @@ fn should_skip_llm_pipeline_for_pattern_confidence(
         return false;
     }
 
-    let categories: HashSet<String> = pattern_hits
+    let pattern_findings: Vec<DetectedFinding> = pattern_hits
         .iter()
-        .map(|hit| hit.danger_category.to_string())
+        .map(|hit| DetectedFinding {
+            id: format!(
+                "pattern-confidence:{}:{}:{}",
+                hit.danger_category, hit.function_name, hit.line
+            ),
+            category: hit.danger_category.to_string(),
+            severity: hit.severity.to_string().to_ascii_lowercase(),
+            cwes: vec![],
+            file: hit.file.clone(),
+            function: hit.function_name.clone(),
+            line: Some(hit.line as u32),
+            title: format!(
+                "Dangerous pattern: {} ({}:{})",
+                hit.function_name, hit.file, hit.line
+            ),
+        })
         .collect();
-    if categories.len() != 1 {
-        return false;
-    }
 
-    let pattern_functions: HashSet<String> = pattern_hits
-        .iter()
-        .map(|hit| normalize_function_key(&hit.function_name))
-        .filter(|function| !function.is_empty())
-        .collect();
-
-    let supporting_is_aligned = supporting_findings.iter().all(|finding| {
-        let finding_category = finding.category.to_ascii_lowercase();
-        if !categories.contains(&finding_category) {
-            return false;
-        }
-
-        if pattern_functions.is_empty() {
-            return true;
-        }
-
-        let finding_function = normalize_function_key(&finding.function);
-        finding_function.is_empty() || pattern_functions.contains(&finding_function)
-    });
-    if !supporting_is_aligned {
-        return false;
-    }
-
-    let critical_hits = pattern_hits
-        .iter()
-        .filter(|hit| matches!(hit.severity, Severity::Critical))
-        .count();
-    if critical_hits > 0 {
-        return true;
-    }
-
-    pattern_hits.len() >= 2 && !supporting_findings.is_empty()
+    findings_have_consensus(&pattern_findings, supporting_findings)
+        && findings_have_consensus(supporting_findings, &pattern_findings)
 }
 
 /// Check whether pattern and LLM findings have consensus.
@@ -2021,10 +2015,10 @@ mod tests {
     }
 
     #[test]
-    fn test_pattern_confidence_allows_critical_pattern_without_support() {
+    fn test_pattern_confidence_requires_support_for_critical_hits() {
         let pattern_hits = vec![dangerous_hit("strcpy", "memory", Severity::Critical)];
 
-        assert!(should_skip_llm_pipeline_for_pattern_confidence(
+        assert!(!should_skip_llm_pipeline_for_pattern_confidence(
             &pattern_hits,
             &[],
         ));
@@ -2064,6 +2058,26 @@ mod tests {
     }
 
     #[test]
+    fn test_pattern_confidence_allows_critical_hits_with_aligned_support() {
+        let pattern_hits = vec![dangerous_hit("strcpy", "memory", Severity::Critical)];
+        let supporting = vec![DetectedFinding {
+            id: "o1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "strcpy".into(),
+            line: Some(42),
+            title: "Orchestrator: buffer overflow risk".into(),
+        }];
+
+        assert!(should_skip_llm_pipeline_for_pattern_confidence(
+            &pattern_hits,
+            &supporting,
+        ));
+    }
+
+    #[test]
     fn test_pattern_confidence_rejects_supporting_mismatch() {
         let pattern_hits = vec![dangerous_hit("strcpy", "memory", Severity::Critical)];
         let supporting = vec![DetectedFinding {
@@ -2090,6 +2104,61 @@ mod tests {
         assert!(!should_skip_llm_pipeline_for_pattern_confidence(
             &pattern_hits,
             &[],
+        ));
+    }
+
+    #[test]
+    fn test_pattern_confidence_requires_all_patterns_to_be_corroborated() {
+        let pattern_hits = vec![
+            dangerous_hit("strcpy", "memory", Severity::Critical),
+            dangerous_hit("printf", "format_string", Severity::High),
+        ];
+        let supporting = vec![DetectedFinding {
+            id: "o1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "strcpy".into(),
+            line: Some(42),
+            title: "Orchestrator: buffer overflow risk".into(),
+        }];
+
+        assert!(!should_skip_llm_pipeline_for_pattern_confidence(
+            &pattern_hits,
+            &supporting,
+        ));
+    }
+
+    #[test]
+    fn test_pattern_confidence_rejects_extra_uncorroborated_local_findings() {
+        let pattern_hits = vec![dangerous_hit("strcpy", "memory", Severity::Critical)];
+        let supporting = vec![
+            DetectedFinding {
+                id: "o1".into(),
+                category: "memory".into(),
+                severity: "high".into(),
+                cwes: vec![],
+                file: "test.c".into(),
+                function: "strcpy".into(),
+                line: Some(42),
+                title: "Orchestrator: buffer overflow risk".into(),
+            },
+            DetectedFinding {
+                id: "o2".into(),
+                category: "injection".into(),
+                severity: "high".into(),
+                cwes: vec![],
+                file: "test.c".into(),
+                function: "system".into(),
+                line: Some(7),
+                title: "Orchestrator: shell injection risk".into(),
+            },
+        ];
+
+        assert!(!should_skip_llm_pipeline_for_pattern_confidence(
+            &pattern_hits,
+            &supporting,
         ));
     }
 }
