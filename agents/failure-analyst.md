@@ -38,6 +38,12 @@ Do not narrate your plan or say that you are about to analyze the case. Use tool
    - **NEW_AGENT_CAPABILITY**: A new type of analysis is needed (e.g., interprocedural analysis, loop analysis, type tracking).
    - **GROUND_TRUTH_ERROR**: The expected CWE in the ground truth doesn't match the actual vulnerability.
 
+**ANTI-OVERFITTING RULES — you MUST follow these:**
+- Proposals must target GENERAL vulnerability patterns, not benchmark-specific naming conventions (e.g., do NOT match `CWE121_Stack_Based_` or `CADET_00001` or other test-case identifiers).
+- NEW_PATTERN proposals must be SPECIFIC enough to avoid false positives on safe code. A pattern like `\w+_read` is too broad; `\brecv\s*\(` is appropriately specific.
+- Before proposing, ask yourself: "Would this help detect this vulnerability class in REAL production code, or only in this benchmark?" If only in the benchmark, do NOT propose it.
+- Favor precision over recall. It is better to miss a vulnerability than to flood users with false positives.
+
 **Output format:**
 
 ```
