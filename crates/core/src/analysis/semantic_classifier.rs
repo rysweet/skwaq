@@ -18,6 +18,7 @@ pub enum SemanticPatternClass {
     FormatString,
     InsecureTempFile,
     InvalidFree,
+    LdapInjection,
     PathTraversal,
     UntrustedSearchPath,
     UncheckedLoopCondition,
@@ -44,6 +45,7 @@ impl SemanticPatternClass {
             Self::FormatString => "format_string",
             Self::InsecureTempFile => "insecure_temp_file",
             Self::InvalidFree => "invalid_free",
+            Self::LdapInjection => "ldap_injection",
             Self::PathTraversal => "path_traversal",
             Self::UntrustedSearchPath => "untrusted_search_path",
             Self::UncheckedLoopCondition => "unchecked_loop_condition",
@@ -65,7 +67,9 @@ impl SemanticPatternClass {
             Self::BufferOverflow => "memory_bounds",
             Self::UseAfterFree | Self::InvalidFree => "memory_lifecycle",
             Self::NullDeref => "memory_allocation",
-            Self::CommandInjection | Self::Deserialization => "code_execution",
+            Self::CommandInjection | Self::Deserialization | Self::LdapInjection => {
+                "code_execution"
+            }
             Self::CrossSiteScripting | Self::PrototypePollution => "web_data_flow",
             Self::InsecureTempFile
             | Self::PathTraversal
@@ -148,6 +152,9 @@ impl SemanticPatternClassifier {
         }
         if is_invalid_free(&category, &title) {
             classes.insert(SemanticPatternClass::InvalidFree);
+        }
+        if is_ldap_injection(&category, &title, &function_name) {
+            classes.insert(SemanticPatternClass::LdapInjection);
         }
         if is_null_deref(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::NullDeref);
@@ -349,6 +356,21 @@ fn is_invalid_free(category: &str, title: &str) -> bool {
                 "free on stack",
             ],
         )
+}
+
+fn is_ldap_injection(category: &str, title: &str, function_name: &str) -> bool {
+    const LDAP_APIS: &[&str] = &["ldap_search", "ldap_search_s", "ldap_search_ext_s"];
+    const LDAP_TERMS: &[&str] = &[
+        "ldap injection",
+        "ldap query injection",
+        "ldap filter injection",
+        "unsanitized ldap",
+        "ldap search injection",
+    ];
+
+    category == "ldap_injection"
+        || is_function(function_name, LDAP_APIS)
+        || contains_any(title, LDAP_TERMS)
 }
 
 fn is_cross_site_scripting(category: &str, title: &str) -> bool {
@@ -993,6 +1015,51 @@ mod tests {
         assert_eq!(
             SemanticPatternClass::InvalidFree.confidence_cluster(),
             "memory_lifecycle"
+        );
+    }
+
+    #[test]
+    fn classifies_ldap_injection_from_title() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify(
+            "injection",
+            "ldap injection in search_users",
+            "search_users",
+        );
+        assert!(classes.contains(&SemanticPatternClass::LdapInjection));
+    }
+
+    #[test]
+    fn classifies_ldap_injection_from_api() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify(
+            "injection",
+            "Dangerous pattern: ldap_search_s",
+            "ldap_search_s",
+        );
+        assert!(classes.contains(&SemanticPatternClass::LdapInjection));
+    }
+
+    #[test]
+    fn classifies_ldap_injection_from_category() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify("ldap_injection", "unsanitized user input", "query");
+        assert!(classes.contains(&SemanticPatternClass::LdapInjection));
+    }
+
+    #[test]
+    fn ldap_injection_does_not_trigger_on_command_injection() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify("injection", "command injection in run", "system");
+        assert!(classes.contains(&SemanticPatternClass::CommandInjection));
+        assert!(!classes.contains(&SemanticPatternClass::LdapInjection));
+    }
+
+    #[test]
+    fn ldap_injection_clusters_with_code_execution() {
+        assert_eq!(
+            SemanticPatternClass::LdapInjection.confidence_cluster(),
+            "code_execution"
         );
     }
 }
