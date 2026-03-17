@@ -258,6 +258,7 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         SemanticPatternClass::FormatString => &[134],
         SemanticPatternClass::InsecureTempFile => &[377],
         SemanticPatternClass::InvalidFree => &[590],
+        SemanticPatternClass::LdapInjection => &[90],
         SemanticPatternClass::PathTraversal => &[22, 23, 36, 426],
         SemanticPatternClass::UntrustedSearchPath => &[114, 427],
         SemanticPatternClass::UncheckedLoopCondition => &[606],
@@ -318,6 +319,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         502 => Some(SemanticPatternClass::Deserialization),
         134 => Some(SemanticPatternClass::FormatString),
         590 => Some(SemanticPatternClass::InvalidFree),
+        90 => Some(SemanticPatternClass::LdapInjection),
         22 | 23 | 36 | 426 => Some(SemanticPatternClass::PathTraversal),
         114 | 427 => Some(SemanticPatternClass::UntrustedSearchPath),
         606 => Some(SemanticPatternClass::UncheckedLoopCondition),
@@ -1199,6 +1201,9 @@ mod tests {
         let deser = semantic_class_to_cwes(SemanticPatternClass::Deserialization);
         assert!(deser.contains(&502));
 
+        let ldap = semantic_class_to_cwes(SemanticPatternClass::LdapInjection);
+        assert_eq!(ldap, &[90]);
+
         let int_overflow = semantic_class_to_cwes(SemanticPatternClass::IntegerOverflow);
         assert!(int_overflow.contains(&128));
         assert!(int_overflow.contains(&189));
@@ -1296,6 +1301,7 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(780), Some(CryptoWeakness));
         assert_eq!(cwe_to_semantic_class(1240), Some(CryptoWeakness));
         assert_eq!(cwe_to_semantic_class(502), Some(Deserialization));
+        assert_eq!(cwe_to_semantic_class(90), Some(LdapInjection));
         assert_eq!(cwe_to_semantic_class(128), Some(IntegerOverflow));
         assert_eq!(cwe_to_semantic_class(369), Some(DivideByZero));
         assert_eq!(cwe_to_semantic_class(476), Some(NullDeref));
