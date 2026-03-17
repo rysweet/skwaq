@@ -86,6 +86,14 @@ pub struct CweRegressionDelta {
     pub delta_detection_rate: f64,
 }
 
+/// Precision regression: FP rate on negative cases increased.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PrecisionRegressionDelta {
+    pub previous_fp_rate: f64,
+    pub current_fp_rate: f64,
+    pub delta_fp_rate: f64,
+}
+
 /// Score a single test case against ground truth.
 ///
 /// Only findings whose CWE family overlaps with the expected CWE families
@@ -260,6 +268,12 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
         "resource_leak" => vec![401, 404, 459, 675, 772, 773, 775, 789],
         "uninitialized_var" => vec![457, 665, 908],
         "use_after_free" => vec![415, 416, 562, 761, 763],
+        "resource_exhaustion" => vec![400],
+        "invalid_free" => vec![590],
+        "type_confusion" => vec![843, 591],
+        "access_control" => vec![272, 273, 284],
+        "information_exposure" => vec![226, 534, 535, 526],
+        "error_handling" => vec![666, 390, 391, 667],
         _ => vec![],
     }
 }
@@ -644,6 +658,40 @@ pub fn cwe_regressions(baseline: &AggregateScore, new: &AggregateScore) -> Vec<C
             .then_with(|| a.cwe_id.cmp(&b.cwe_id))
     });
     regressions
+}
+
+/// Check if an improvement caused a precision regression on negative cases.
+///
+/// Returns `Some(delta)` if the false positive rate on negative cases
+/// increased by more than the noise margin. This catches improvements
+/// that help recall but hurt precision — a key overfitting signal.
+pub fn precision_regression(
+    baseline: &AggregateScore,
+    new: &AggregateScore,
+) -> Option<PrecisionRegressionDelta> {
+    let b = &baseline.negative_calibration;
+    let n = &new.negative_calibration;
+
+    // Only check if both have negative cases
+    if b.total_negative_cases == 0 || n.total_negative_cases == 0 {
+        return None;
+    }
+
+    let delta = n.false_positive_rate - b.false_positive_rate;
+    if delta > CWE_REGRESSION_NOISE_MARGIN {
+        Some(PrecisionRegressionDelta {
+            previous_fp_rate: b.false_positive_rate,
+            current_fp_rate: n.false_positive_rate,
+            delta_fp_rate: delta,
+        })
+    } else {
+        None
+    }
+}
+
+/// Combined regression check: recall regression OR precision regression.
+pub fn has_any_regression(baseline: &AggregateScore, new: &AggregateScore) -> bool {
+    !cwe_regressions(baseline, new).is_empty() || precision_regression(baseline, new).is_some()
 }
 
 #[cfg(test)]
@@ -1602,6 +1650,59 @@ mod tests {
         let regressions = cwe_regressions(&baseline, &new);
 
         assert!(regressions.is_empty());
+    }
+
+    #[test]
+    fn test_precision_regression_detects_fp_increase() {
+        let mut baseline = AggregateScore::default();
+        baseline.negative_calibration.total_negative_cases = 10;
+        baseline.negative_calibration.false_positives = 1;
+        baseline.negative_calibration.false_positive_rate = 0.10;
+
+        let mut new = AggregateScore::default();
+        new.negative_calibration.total_negative_cases = 10;
+        new.negative_calibration.false_positives = 4;
+        new.negative_calibration.false_positive_rate = 0.40;
+
+        let delta = precision_regression(&baseline, &new);
+        assert!(
+            delta.is_some(),
+            "Should detect 0.10 → 0.40 FP rate increase"
+        );
+        let d = delta.unwrap();
+        assert!((d.delta_fp_rate - 0.30).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_precision_regression_ignores_small_change() {
+        let mut baseline = AggregateScore::default();
+        baseline.negative_calibration.total_negative_cases = 10;
+        baseline.negative_calibration.false_positive_rate = 0.10;
+
+        let mut new = AggregateScore::default();
+        new.negative_calibration.total_negative_cases = 10;
+        new.negative_calibration.false_positive_rate = 0.11;
+
+        assert!(
+            precision_regression(&baseline, &new).is_none(),
+            "0.01 increase should be within noise margin"
+        );
+    }
+
+    #[test]
+    fn test_has_any_regression_combines_checks() {
+        let mut baseline = make_score(vec![(119, 0.75)]);
+        baseline.negative_calibration.total_negative_cases = 5;
+        baseline.negative_calibration.false_positive_rate = 0.0;
+
+        // No regression at all
+        let same = baseline.clone();
+        assert!(!has_any_regression(&baseline, &same));
+
+        // Only precision regression (FP increase but recall stable)
+        let mut fp_worse = baseline.clone();
+        fp_worse.negative_calibration.false_positive_rate = 0.50;
+        assert!(has_any_regression(&baseline, &fp_worse));
     }
 
     #[test]

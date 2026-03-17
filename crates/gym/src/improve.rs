@@ -1705,6 +1705,18 @@ pub fn has_cwe_regression(baseline: &AggregateScore, new: &AggregateScore) -> bo
     !crate::scoring::cwe_regressions(baseline, new).is_empty()
 }
 
+/// Check for precision regression on negative cases.
+/// Returns true if the false positive rate on patched/safe code increased
+/// beyond the noise margin — a key overfitting signal.
+pub fn has_precision_regression(baseline: &AggregateScore, new: &AggregateScore) -> bool {
+    crate::scoring::precision_regression(baseline, new).is_some()
+}
+
+/// Combined check: either recall regression OR precision regression.
+pub fn has_any_regression(baseline: &AggregateScore, new: &AggregateScore) -> bool {
+    has_cwe_regression(baseline, new) || has_precision_regression(baseline, new)
+}
+
 /// Append successful patterns from improvement proposals to the knowledge pack.
 ///
 /// Writes accepted NewPattern proposals to `data/knowledge/learned-patterns.md`
