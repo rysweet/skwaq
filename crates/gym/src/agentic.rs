@@ -34,6 +34,7 @@ use std::time::{Duration, Instant};
 pub struct SynthesisStats {
     llm_synthesis_count: AtomicU32,
     failed_count: AtomicU32,
+    early_exit_count: AtomicU32,
 }
 
 impl Default for SynthesisStats {
@@ -41,6 +42,7 @@ impl Default for SynthesisStats {
         Self {
             llm_synthesis_count: AtomicU32::new(0),
             failed_count: AtomicU32::new(0),
+            early_exit_count: AtomicU32::new(0),
         }
     }
 }
@@ -58,14 +60,25 @@ impl SynthesisStats {
         self.failed_count.fetch_add(1, Ordering::Relaxed);
     }
 
+    fn record_early_exit(&self, count: u32) {
+        self.early_exit_count.fetch_add(count, Ordering::Relaxed);
+    }
+
     /// Log end-of-run synthesis summary. Call after all cases complete.
     pub fn report(&self) {
         let llm = self.llm_synthesis_count.load(Ordering::Relaxed);
         let failed = self.failed_count.load(Ordering::Relaxed);
+        let early = self.early_exit_count.load(Ordering::Relaxed);
         let total = llm + failed;
-        if total == 0 {
+        if total == 0 && early == 0 {
             tracing::info!("Synthesis: no dual-source cases (nothing to synthesize)");
             return;
+        }
+        if early > 0 {
+            tracing::info!(
+                "Synthesis: {} high-confidence findings bypassed LLM synthesis (early exit)",
+                early,
+            );
         }
         if failed > 0 {
             tracing::warn!(
@@ -79,7 +92,7 @@ impl SynthesisStats {
                  Check the logged LLM synthesis errors above.\n",
                 failed, total,
             );
-        } else {
+        } else if total > 0 {
             tracing::info!(
                 "Synthesis summary: {}/{} cases used LLM synthesis (all successful)",
                 llm,
@@ -465,19 +478,27 @@ fn store_ghidra_results(
     }
 }
 
+/// Returns `true` when a pattern finding is high-confidence enough to skip
+/// LLM synthesis. Requires both critical severity AND a recognized semantic
+/// pattern class (e.g. `buffer_overflow`, `use_after_free`).
+fn is_high_confidence_pattern(finding: &DetectedFinding) -> bool {
+    if finding.severity != "critical" {
+        return false;
+    }
+    !semantic_classes_for_finding(finding).is_empty()
+}
+
 /// Synthesize findings from both pattern detection and LLM agents.
 ///
 /// Models how a human security team works:
 /// - Junior analysts (patterns) flag potential issues
 /// - Senior researchers (LLM agents) investigate deeply
 /// - Lead reviewer (this function) makes final call, weighing all evidence
-///
-/// Synthesize findings from pattern detection and LLM agents.
-///
-/// Models how a lead security reviewer works:
-/// - Receives reports from junior analysts (pattern detection) and
-///   senior researchers (LLM agents)
 /// - Uses judgment to CONFIRM or REJECT each finding
+///
+/// High-confidence pattern findings (critical severity + recognized semantic
+/// class) bypass LLM synthesis via early exit. Remaining findings go through
+/// the full dual-source synthesis pipeline.
 ///
 /// When both pattern and LLM findings exist, the analysis must be synthesized
 /// by an LLM reviewer. Fail loudly if that synthesis cannot run.
@@ -508,10 +529,38 @@ async fn synthesize_findings(
         return Ok(all_findings);
     }
 
-    // Both sources have findings — synthesis is mandatory.
-    match llm_synthesize(&pattern_findings, &llm_findings, timeout_secs).await {
-        Ok(synthesized) => {
+    // Partition pattern findings into high-confidence (early exit) and remaining
+    let mut early_exit_findings = Vec::new();
+    let mut remaining_pattern_findings = Vec::new();
+    for f in &pattern_findings {
+        if is_high_confidence_pattern(f) {
+            early_exit_findings.push(f.clone());
+        } else {
+            remaining_pattern_findings.push(f.clone());
+        }
+    }
+
+    if !early_exit_findings.is_empty() {
+        SYNTHESIS_STATS.record_early_exit(early_exit_findings.len() as u32);
+        tracing::info!(
+            "Early exit: {} high-confidence pattern findings bypass LLM synthesis",
+            early_exit_findings.len(),
+        );
+    }
+
+    // If all pattern findings are high-confidence, LLM findings pass through
+    // as single-source (no synthesis needed)
+    if remaining_pattern_findings.is_empty() {
+        early_exit_findings.extend(llm_findings);
+        return Ok(early_exit_findings);
+    }
+
+    // Remaining non-high-confidence pattern findings + LLM findings go through synthesis
+    match llm_synthesize(&remaining_pattern_findings, &llm_findings, timeout_secs).await {
+        Ok(mut synthesized) => {
             SYNTHESIS_STATS.record_llm_synthesis();
+            // Merge early-exit findings back with synthesis results
+            synthesized.extend(early_exit_findings);
             Ok(synthesized)
         }
         Err(e) => {
@@ -1686,7 +1735,250 @@ mod tests {
         stats.record_llm_synthesis();
         stats.record_llm_synthesis();
         stats.record_failure();
+        stats.record_early_exit(3);
         // Just verify it doesn't panic — the output goes to tracing/eprintln
         stats.report();
+    }
+
+    #[test]
+    fn test_is_high_confidence_critical_with_semantic_class() {
+        // Critical severity + recognized semantic class → high confidence
+        let finding = DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: strcpy (test.c:10)".into(),
+        };
+        assert!(
+            is_high_confidence_pattern(&finding),
+            "Critical severity + buffer_overflow semantic class should be high confidence"
+        );
+    }
+
+    #[test]
+    fn test_is_high_confidence_non_critical_rejected() {
+        // High severity (not critical) → not high confidence even with semantic class
+        let finding = DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: strcpy (test.c:10)".into(),
+        };
+        assert!(
+            !is_high_confidence_pattern(&finding),
+            "Non-critical severity should not be high confidence"
+        );
+    }
+
+    #[test]
+    fn test_is_high_confidence_critical_no_semantic_class() {
+        // Critical severity but no recognized semantic class → not high confidence
+        let finding = DetectedFinding {
+            id: "p1".into(),
+            category: "unknown_category".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "some_unknown_func".into(),
+            line: Some(10),
+            title: "Dangerous pattern: some_unknown_func (test.c:10)".into(),
+        };
+        assert!(
+            !is_high_confidence_pattern(&finding),
+            "Critical without semantic class should not be high confidence"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_early_exit_skips_synthesis_for_all_high_confidence() {
+        // When ALL pattern findings are high-confidence and LLM findings exist,
+        // no LLM synthesis call is needed — early exit + LLM passthrough.
+        let db = GraphDb::in_memory().unwrap();
+        let cats = HashSet::new();
+
+        let findings = vec![
+            DetectedFinding {
+                id: "p1".into(),
+                category: "memory".into(),
+                severity: "critical".into(),
+                cwes: vec![],
+                file: "test.c".into(),
+                function: "strcpy".into(),
+                line: Some(10),
+                title: "Dangerous pattern: strcpy (test.c:10)".into(),
+            },
+            DetectedFinding {
+                id: "l1".into(),
+                category: "injection".into(),
+                severity: "high".into(),
+                cwes: vec![],
+                file: "test.c".into(),
+                function: "system".into(),
+                line: Some(20),
+                title: "LLM: command injection via system()".into(),
+            },
+        ];
+
+        let stats = synthesis_stats();
+        let before_early = stats.early_exit_count.load(Ordering::Relaxed);
+        let before_llm = stats.llm_synthesis_count.load(Ordering::Relaxed);
+
+        let result = synthesize_findings(findings, &cats, &db, 30).await.unwrap();
+
+        let after_early = stats.early_exit_count.load(Ordering::Relaxed);
+        let after_llm = stats.llm_synthesis_count.load(Ordering::Relaxed);
+
+        // Early exit should have been recorded
+        assert!(
+            after_early > before_early,
+            "Early exit count should increase for high-confidence pattern"
+        );
+        // No LLM synthesis needed (all patterns were high-confidence)
+        assert_eq!(
+            after_llm, before_llm,
+            "LLM synthesis should NOT run when all pattern findings are high-confidence"
+        );
+        // Both findings should be returned (early-exit pattern + LLM passthrough)
+        assert_eq!(
+            result.len(),
+            2,
+            "Should return both early-exit and LLM findings"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_early_exit_mixed_confidence_still_synthesizes() {
+        // When some pattern findings are high-confidence and some are not,
+        // the non-high-confidence ones still go through synthesis.
+        let db = GraphDb::in_memory().unwrap();
+        let cats = HashSet::new();
+
+        let findings = vec![
+            // High-confidence: critical + recognized semantic class
+            DetectedFinding {
+                id: "p1".into(),
+                category: "memory".into(),
+                severity: "critical".into(),
+                cwes: vec![],
+                file: "test.c".into(),
+                function: "strcpy".into(),
+                line: Some(10),
+                title: "Dangerous pattern: strcpy (test.c:10)".into(),
+            },
+            // Low-confidence: high severity (not critical)
+            DetectedFinding {
+                id: "p2".into(),
+                category: "memory".into(),
+                severity: "high".into(),
+                cwes: vec![],
+                file: "test.c".into(),
+                function: "memcpy".into(),
+                line: Some(20),
+                title: "Dangerous pattern: memcpy (test.c:20)".into(),
+            },
+            // LLM finding
+            DetectedFinding {
+                id: "l1".into(),
+                category: "injection".into(),
+                severity: "critical".into(),
+                cwes: vec![],
+                file: "test.c".into(),
+                function: "system".into(),
+                line: Some(30),
+                title: "LLM: command injection".into(),
+            },
+        ];
+
+        let stats = synthesis_stats();
+        let before_early = stats.early_exit_count.load(Ordering::Relaxed);
+
+        // This will attempt LLM synthesis for the remaining findings, which
+        // may fail (no LLM configured in tests), but early exit should still track
+        let _result = synthesize_findings(findings, &cats, &db, 30).await;
+
+        let after_early = stats.early_exit_count.load(Ordering::Relaxed);
+        assert!(
+            after_early > before_early,
+            "Early exit count should increase for the one high-confidence finding"
+        );
+    }
+
+    #[test]
+    fn test_early_exit_stats_tracking() {
+        let stats = SynthesisStats::new();
+        assert_eq!(stats.early_exit_count.load(Ordering::Relaxed), 0);
+
+        stats.record_early_exit(5);
+        assert_eq!(stats.early_exit_count.load(Ordering::Relaxed), 5);
+
+        stats.record_early_exit(3);
+        assert_eq!(stats.early_exit_count.load(Ordering::Relaxed), 8);
+    }
+
+    #[tokio::test]
+    async fn test_early_exit_no_high_confidence_unchanged() {
+        // When no pattern findings are high-confidence, behavior is unchanged
+        // (proceeds to dual-source synthesis as before).
+        let db = GraphDb::in_memory().unwrap();
+        let cats = HashSet::new();
+
+        let findings = vec![
+            DetectedFinding {
+                id: "p1".into(),
+                category: "memory".into(),
+                severity: "high".into(), // not critical → not high confidence
+                cwes: vec![],
+                file: "t.c".into(),
+                function: "f".into(),
+                line: Some(1),
+                title: "Dangerous pattern: strcpy".into(),
+            },
+            DetectedFinding {
+                id: "l1".into(),
+                category: "injection".into(),
+                severity: "critical".into(),
+                cwes: vec![],
+                file: "t.c".into(),
+                function: "g".into(),
+                line: Some(2),
+                title: "LLM: command injection".into(),
+            },
+        ];
+
+        let stats = synthesis_stats();
+        let before_early = stats.early_exit_count.load(Ordering::Relaxed);
+        let before_llm = stats.llm_synthesis_count.load(Ordering::Relaxed);
+        let before_failed = stats.failed_count.load(Ordering::Relaxed);
+
+        let _result = synthesize_findings(findings, &cats, &db, 30).await;
+
+        let after_early = stats.early_exit_count.load(Ordering::Relaxed);
+        let synthesis_delta = (stats.llm_synthesis_count.load(Ordering::Relaxed) - before_llm)
+            + (stats.failed_count.load(Ordering::Relaxed) - before_failed);
+
+        assert_eq!(
+            after_early, before_early,
+            "No high-confidence findings → no early exits"
+        );
+        assert!(
+            synthesis_delta > 0,
+            "Non-high-confidence dual-source must go through LLM synthesis"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_early_exit_empty_findings() {
+        let db = GraphDb::in_memory().unwrap();
+        let cats = HashSet::new();
+        let result = synthesize_findings(vec![], &cats, &db, 30).await.unwrap();
+        assert!(result.is_empty(), "Empty input should return empty output");
     }
 }
