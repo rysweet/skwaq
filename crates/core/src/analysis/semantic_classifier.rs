@@ -228,7 +228,7 @@ impl SemanticPatternClassifier {
         if is_null_deref(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::NullDeref);
         }
-        if is_integer_overflow(&category, &title) {
+        if is_integer_overflow(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::IntegerOverflow);
         }
         if is_infinite_loop(&category, &title) {
@@ -631,8 +631,12 @@ fn is_null_deref(category: &str, title: &str, function_name: &str) -> bool {
             && contains_any(title, &["null", "unchecked"])
 }
 
-fn is_integer_overflow(category: &str, title: &str) -> bool {
+fn is_integer_overflow(category: &str, title: &str, function_name: &str) -> bool {
+    const OVERFLOW_APIS: &[&str] = &["atoi", "atol", "atoll", "atof"];
+
     category == "integer_overflow"
+        || is_function(function_name, OVERFLOW_APIS)
+        || (category == "memory" && is_function(function_name, OVERFLOW_APIS))
         || contains_any(
             title,
             &[
@@ -644,6 +648,8 @@ fn is_integer_overflow(category: &str, title: &str) -> bool {
                 "arithmetic overflow",
                 "truncation",
                 "integer coercion",
+                "atoi",
+                "atol",
             ],
         )
 }
@@ -1634,5 +1640,23 @@ mod tests {
             SemanticPatternClass::PointerArithmetic.confidence_cluster(),
             "memory_bounds"
         );
+    }
+
+    #[test]
+    fn classifies_atoi_as_integer_overflow() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify("memory", "Dangerous API: atoi", "atoi");
+        assert!(
+            classes.contains(&SemanticPatternClass::IntegerOverflow),
+            "atoi should classify as IntegerOverflow, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn classifies_atol_as_integer_overflow() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify("memory", "Dangerous API: atol", "atol");
+        assert!(classes.contains(&SemanticPatternClass::IntegerOverflow));
     }
 }
