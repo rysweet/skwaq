@@ -1139,16 +1139,30 @@ async fn synthesize_findings(
     let mut llm_findings = Vec::new();
 
     for f in &all_findings {
-        if f.title.starts_with("Dangerous pattern:") || f.title.starts_with("Binary import:") {
+        if f.title.starts_with("Dangerous pattern:")
+            || f.title.starts_with("Binary import:")
+            || f.title.starts_with("Cross-file graph:")
+        {
             pattern_findings.push(f.clone());
         } else {
             llm_findings.push(f.clone());
         }
     }
 
-    // If only one source produced findings, trust it directly
-    if pattern_findings.is_empty() || llm_findings.is_empty() {
+    // When only patterns found something, trust them (patterns are high-precision).
+    // When only LLM agents found something, those findings MUST still go through
+    // synthesis — LLM-only findings are lower precision and need validation.
+    // The old behavior of trusting LLM-only findings directly was a precision leak.
+    if llm_findings.is_empty() {
+        // Pattern-only: high precision, trust directly
         return Ok(all_findings);
+    }
+    if pattern_findings.is_empty() {
+        // LLM-only: run synthesis with empty pattern set to validate
+        tracing::info!(
+            "LLM-only findings ({} total): running synthesis validation",
+            llm_findings.len(),
+        );
     }
 
     let synthesis_result = match select_synthesis_route(&pattern_findings, &llm_findings) {
@@ -1197,17 +1211,19 @@ async fn synthesize_findings(
             Ok(synthesized)
         }
         Err(e) => {
-            // Graceful fallback: keep all findings instead of killing the case.
-            // This prevents transient LLM errors (rate limits, timeouts, token
-            // budget exhaustion) from aborting entire long-running benchmark
-            // suites. The fallback is transparent: WARN-level logging plus
-            // stats tracking ensures degraded quality is never hidden.
+            // Synthesis failed. Per the no-fallback design principle, we do NOT
+            // silently return all findings. Instead, return ONLY the pattern
+            // findings (high precision) and drop the unvalidated LLM findings.
+            // This preserves precision at the cost of recall when the LLM is
+            // unavailable, which is the correct trade-off.
             SYNTHESIS_STATS.record_fallback();
             tracing::warn!(
-                "LLM synthesis failed, falling back to all findings (pattern + LLM): {}",
+                "LLM synthesis failed — keeping {} pattern findings, dropping {} unvalidated LLM findings: {}",
+                pattern_findings.len(),
+                llm_findings.len(),
                 e,
             );
-            Ok(all_findings)
+            Ok(pattern_findings)
         }
     }
 }
@@ -2525,21 +2541,25 @@ mod tests {
         let db = GraphDb::in_memory().unwrap();
         let cats = HashSet::new();
 
-        // LLM-only findings should pass through directly
+        // Pattern-only findings should pass through directly (high precision)
         let findings = vec![DetectedFinding {
-            id: "l1".into(),
+            id: "p1".into(),
             category: "memory".into(),
             severity: "critical".into(),
             cwes: vec![],
             file: "test.c".into(),
-            function: "foo".into(),
+            function: "strcpy".into(),
             line: Some(1),
-            title: "LLM: something dangerous".into(),
+            title: "Dangerous pattern: strcpy".into(),
         }];
         let result = synthesize_findings(findings.clone(), &cats, &db, 30)
             .await
             .unwrap();
-        assert_eq!(result.len(), 1, "Single-source should pass through");
+        assert_eq!(
+            result.len(),
+            1,
+            "Pattern-only findings should pass through directly"
+        );
     }
 
     #[tokio::test]
