@@ -181,6 +181,13 @@ fn load_case_hints(data_dir: &Path, case_id: &str) -> AnalysisHints {
             }
         }
 
+        let error_path = case_data_dir.join("error.txt");
+        if error_path.exists() {
+            if let Ok(error) = std::fs::read_to_string(&error_path) {
+                hints.error_output = Some(error);
+            }
+        }
+
         let diff_path = case_data_dir.join("patch.diff");
         if diff_path.exists() {
             if let Ok(diff) = std::fs::read_to_string(&diff_path) {
