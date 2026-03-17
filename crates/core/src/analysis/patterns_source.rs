@@ -702,13 +702,13 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
         },
         SourcePattern {
             regex: r"\batoi\s*\(",
-            category: DangerCategory::Memory,
+            category: DangerCategory::IntegerOverflow,
             severity: Severity::High,
             reason: "atoi has no error checking and can cause integer overflow; use strtol with validation",
         },
         SourcePattern {
             regex: r"\batol\s*\(",
-            category: DangerCategory::Memory,
+            category: DangerCategory::IntegerOverflow,
             severity: Severity::High,
             reason: "atol has no error checking and can cause integer overflow; use strtol with validation",
         },
@@ -1367,6 +1367,11 @@ void vuln(char *msg, char *num_str) {
         assert!(
             hits.iter().any(|h| h.function_name.contains("atoi")),
             "Expected atoi detection"
+        );
+        assert!(
+            hits.iter().any(|h| h.function_name.contains("atoi")
+                && matches!(h.danger_category, DangerCategory::IntegerOverflow)),
+            "atoi should be categorized as IntegerOverflow"
         );
         assert!(
             hits.iter().any(|h| h.function_name.contains("atol")),
