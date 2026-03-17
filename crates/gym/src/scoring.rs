@@ -271,6 +271,7 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
             128, 189, 190, 191, 192, 193, 194, 195, 196, 197, 680, 681, 682,
         ],
         SemanticPatternClass::DivideByZero => &[369],
+        SemanticPatternClass::ResourceExhaustion => &[400],
         SemanticPatternClass::ResourceLeak => &[401, 404, 459, 675, 772, 773, 775, 789],
         SemanticPatternClass::UninitializedVar => &[457, 665, 908],
     }
@@ -333,6 +334,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
             Some(SemanticPatternClass::IntegerOverflow)
         }
         369 => Some(SemanticPatternClass::DivideByZero),
+        400 => Some(SemanticPatternClass::ResourceExhaustion),
         401 | 404 | 459 | 675 | 772 | 773 | 775 | 789 => Some(SemanticPatternClass::ResourceLeak),
         457 | 665 | 908 => Some(SemanticPatternClass::UninitializedVar),
         _ => None,
@@ -830,7 +832,10 @@ mod tests {
             cwe_to_semantic_class(773),
             Some(SemanticPatternClass::ResourceLeak)
         );
-        assert_eq!(cwe_to_semantic_class(400), None);
+        assert_eq!(
+            cwe_to_semantic_class(400),
+            Some(SemanticPatternClass::ResourceExhaustion)
+        );
         assert_eq!(cwe_to_semantic_class(666), None);
 
         // Crypto
@@ -1247,6 +1252,9 @@ mod tests {
         assert!(!leak.contains(&761));
         assert!(!leak.contains(&763));
 
+        let exhaustion = semantic_class_to_cwes(SemanticPatternClass::ResourceExhaustion);
+        assert_eq!(exhaustion, &[400]);
+
         let unsafe_api = semantic_class_to_cwes(SemanticPatternClass::UnsafeApiUsage);
         assert!(unsafe_api.contains(&222));
         assert!(unsafe_api.contains(&223));
@@ -1315,7 +1323,7 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(832), Some(RaceCondition));
         assert_eq!(cwe_to_semantic_class(401), Some(ResourceLeak));
         assert_eq!(cwe_to_semantic_class(675), Some(ResourceLeak));
-        assert_eq!(cwe_to_semantic_class(400), None);
+        assert_eq!(cwe_to_semantic_class(400), Some(ResourceExhaustion));
         assert_eq!(cwe_to_semantic_class(666), None);
         assert_eq!(cwe_to_semantic_class(189), Some(IntegerOverflow));
         assert_eq!(cwe_to_semantic_class(682), Some(IntegerOverflow));

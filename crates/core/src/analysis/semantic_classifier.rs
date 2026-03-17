@@ -29,6 +29,7 @@ pub enum SemanticPatternClass {
     NullDeref,
     IntegerOverflow,
     DivideByZero,
+    ResourceExhaustion,
     ResourceLeak,
     UninitializedVar,
 }
@@ -56,6 +57,7 @@ impl SemanticPatternClass {
             Self::NullDeref => "null_deref",
             Self::IntegerOverflow => "integer_overflow",
             Self::DivideByZero => "divide_by_zero",
+            Self::ResourceExhaustion => "resource_exhaustion",
             Self::ResourceLeak => "resource_leak",
             Self::UninitializedVar => "uninitialized_var",
         }
@@ -78,7 +80,7 @@ impl SemanticPatternClass {
             Self::UncheckedLoopCondition | Self::IntegerOverflow | Self::DivideByZero => {
                 "arithmetic_safety"
             }
-            Self::ResourceLeak => "resource_management",
+            Self::ResourceExhaustion | Self::ResourceLeak => "resource_management",
             Self::UninitializedVar => "initialization_safety",
             Self::FormatString => "format_string",
             Self::CryptoWeakness => "crypto",
@@ -167,6 +169,9 @@ impl SemanticPatternClassifier {
         }
         if is_resource_leak(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::ResourceLeak);
+        }
+        if is_resource_exhaustion(&category, &title) {
+            classes.insert(SemanticPatternClass::ResourceExhaustion);
         }
         if is_uninitialized_var(&category, &title) {
             classes.insert(SemanticPatternClass::UninitializedVar);
@@ -518,6 +523,27 @@ fn is_resource_leak(category: &str, title: &str, function_name: &str) -> bool {
         )
         || (is_function(function_name, RESOURCE_APIS)
             && contains_any(title, &["leak", "unclosed", "not closed"]))
+}
+
+fn is_resource_exhaustion(category: &str, title: &str) -> bool {
+    category == "resource_exhaustion"
+        || contains_any(
+            title,
+            &[
+                "resource exhaustion",
+                "resource consumption",
+                "uncontrolled resource",
+                "denial of service",
+                "excessive allocation",
+                "excessive iteration",
+                "excessive memory",
+                "excessive cpu",
+                "algorithmic complexity",
+                "billion laughs",
+                "zip bomb",
+                "decompression bomb",
+            ],
+        )
 }
 
 fn is_uninitialized_var(category: &str, title: &str) -> bool {
@@ -1060,6 +1086,45 @@ mod tests {
         assert_eq!(
             SemanticPatternClass::LdapInjection.confidence_cluster(),
             "code_execution"
+        );
+    }
+
+    #[test]
+    fn classifies_resource_exhaustion_from_title() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify(
+            "memory",
+            "resource exhaustion via unbounded allocation",
+            "malloc",
+        );
+        assert!(classes.contains(&SemanticPatternClass::ResourceExhaustion));
+    }
+
+    #[test]
+    fn classifies_resource_exhaustion_from_category() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify(
+            "resource_exhaustion",
+            "Dangerous pattern: connect loop",
+            "connect",
+        );
+        assert!(classes.contains(&SemanticPatternClass::ResourceExhaustion));
+    }
+
+    #[test]
+    fn resource_exhaustion_does_not_trigger_on_resource_leak() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes =
+            classifier.classify("resource_leak", "file descriptor leak in handler", "open");
+        assert!(classes.contains(&SemanticPatternClass::ResourceLeak));
+        assert!(!classes.contains(&SemanticPatternClass::ResourceExhaustion));
+    }
+
+    #[test]
+    fn resource_exhaustion_clusters_with_resource_management() {
+        assert_eq!(
+            SemanticPatternClass::ResourceExhaustion.confidence_cluster(),
+            "resource_management"
         );
     }
 }
