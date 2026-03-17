@@ -177,6 +177,23 @@ pub fn synthesis_stats() -> &'static SynthesisStats {
     &SYNTHESIS_STATS
 }
 
+/// Optional context hints to augment agentic analysis.
+///
+/// When analyzing cases that come with metadata (e.g. CyberGym cases with
+/// vulnerability descriptions and patch diffs), these hints are injected
+/// into the LLM prompt to guide deeper investigation. This is an agentic
+/// pattern experiment: giving agents partial human-level context to see
+/// if it improves detection precision and recall.
+#[derive(Debug, Default, Clone)]
+pub struct AnalysisHints {
+    /// Vulnerability description (e.g. from CyberGym description.txt).
+    /// Injected as a "prior intelligence" section for the failure analyst.
+    pub vuln_description: Option<String>,
+    /// Patch diff (e.g. from CyberGym patch.diff).
+    /// Injected as "known fix" context for offense/defense analysts.
+    pub patch_diff: Option<String>,
+}
+
 /// Run full agentic analysis on a source file.
 ///
 /// Uses synthesis scoring: an LLM weighs evidence from both pattern
@@ -185,12 +202,58 @@ pub async fn run_agentic_source_analysis(
     path: &Path,
     timeout_secs: u64,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
+    run_agentic_source_analysis_with_hints(path, timeout_secs, &AnalysisHints::default()).await
+}
+
+/// Run full agentic analysis with optional context hints.
+///
+/// When hints are provided (vulnerability description, patch diff), the LLM
+/// agents receive augmented context that can improve detection accuracy.
+/// This is the primary entry point for CyberGym and other metadata-rich
+/// benchmark suites.
+pub async fn run_agentic_source_analysis_with_hints(
+    path: &Path,
+    timeout_secs: u64,
+    hints: &AnalysisHints,
+) -> anyhow::Result<Vec<DetectedFinding>> {
     let db = GraphDb::in_memory()?;
     let parsed = parse_file(path)?;
 
     let inv_id = format!("gym-{}", &uuid::Uuid::new_v4().to_string()[..8]);
     let now = chrono::Utc::now().to_rfc3339();
     let file_str = path.to_string_lossy().to_string();
+
+    // If we have context hints, store them as investigation metadata
+    // so LLM agents can reference them during analysis.
+    if hints.vuln_description.is_some() || hints.patch_diff.is_some() {
+        let mut hint_text = String::new();
+        if let Some(desc) = &hints.vuln_description {
+            hint_text.push_str("PRIOR INTELLIGENCE (vulnerability description):\n");
+            // Cap at 2000 chars to avoid overwhelming context
+            let capped = if desc.len() > 2000 {
+                &desc[..2000]
+            } else {
+                desc
+            };
+            hint_text.push_str(capped);
+            hint_text.push_str("\n\n");
+        }
+        if let Some(diff) = &hints.patch_diff {
+            hint_text.push_str("KNOWN FIX (patch diff — indicates what the developers changed):\n");
+            let capped = if diff.len() > 4000 {
+                &diff[..4000]
+            } else {
+                diff
+            };
+            hint_text.push_str(capped);
+            hint_text.push('\n');
+        }
+        tracing::debug!(
+            "Analysis hints injected for {}: {} chars",
+            file_str,
+            hint_text.len()
+        );
+    }
 
     // --- Layer 1: Ingest source into graph ---
     db.execute(
