@@ -126,6 +126,49 @@ pub(crate) const DANGEROUS_APIS: &[DangerousEntry] = &[
         severity: Severity::Low,
         reason: "size semantics are error-prone; prefer strlcat",
     },
+    // Wide-string memory safety (wchar_t equivalents)
+    DangerousEntry {
+        name: "wcscpy",
+        category: DangerCategory::Memory,
+        severity: Severity::Critical,
+        reason: "unbounded wide-string copy; use wcsncpy or wcslcpy",
+    },
+    DangerousEntry {
+        name: "wcscat",
+        category: DangerCategory::Memory,
+        severity: Severity::Critical,
+        reason: "unbounded wide-string concatenation; use wcsncat or wcslcat",
+    },
+    DangerousEntry {
+        name: "wmemcpy",
+        category: DangerCategory::Memory,
+        severity: Severity::Medium,
+        reason: "no bounds checking on wide chars; verify size parameter",
+    },
+    DangerousEntry {
+        name: "wmemmove",
+        category: DangerCategory::Memory,
+        severity: Severity::Medium,
+        reason: "no bounds checking on wide chars; verify size parameter",
+    },
+    DangerousEntry {
+        name: "wcsncpy",
+        category: DangerCategory::Memory,
+        severity: Severity::Low,
+        reason: "may not null-terminate wide string; prefer wcslcpy",
+    },
+    DangerousEntry {
+        name: "wcsncat",
+        category: DangerCategory::Memory,
+        severity: Severity::Low,
+        reason: "size semantics are error-prone for wide strings; prefer wcslcat",
+    },
+    DangerousEntry {
+        name: "swprintf",
+        category: DangerCategory::Memory,
+        severity: Severity::Medium,
+        reason: "wide-string format output; verify buffer size parameter",
+    },
     // Format string
     DangerousEntry {
         name: "sprintf",

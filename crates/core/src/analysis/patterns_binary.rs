@@ -288,4 +288,32 @@ mod tests {
             assert_eq!(hit.danger_category, DangerCategory::ResourceLeak);
         }
     }
+
+    #[test]
+    fn test_wide_string_apis_detected_as_memory() {
+        let detector = DangerousApiDetector::new();
+        for api in &[
+            "wcscpy", "wcscat", "wmemcpy", "wmemmove", "wcsncpy", "wcsncat", "swprintf",
+        ] {
+            let imports = vec![ImportInfo {
+                name: (*api).into(),
+                library: "libc.so.6".into(),
+            }];
+            let hits = detector.check_imports(&imports);
+            assert_eq!(
+                hits.len(),
+                1,
+                "Expected 1 hit for wide-string API '{}', got {}",
+                api,
+                hits.len()
+            );
+            assert_eq!(
+                hits[0].danger_category,
+                DangerCategory::Memory,
+                "Expected Memory category for '{}', got {:?}",
+                api,
+                hits[0].danger_category
+            );
+        }
+    }
 }
