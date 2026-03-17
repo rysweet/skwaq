@@ -1328,14 +1328,22 @@ async fn llm_synthesize_with_limits(
         "You are a lead security reviewer evaluating vulnerability findings from two sources:\n\
          1. PATTERN DETECTION (automated regex-based, high precision, limited understanding)\n\
          2. LLM AGENTS (AI-powered deep analysis, better understanding, may hallucinate)\n\n\
-         Your job: decide which findings are REAL vulnerabilities.\n\n\
+         Your job: decide which findings are REAL vulnerabilities vs false positives.\n\
+         Your default stance is SKEPTICAL. Most automated findings are noise.\n\n\
          For each finding, respond with one line:\n\
-         CONFIRM <id> — strong evidence from one or both sources\n\
-         REVIEW <id> — plausible finding, but the evidence is conflicting or incomplete and needs a second pass\n\
-         REJECT <id> — insufficient evidence, likely false positive\n\n\
-         Only REJECT findings where you are confident they are false positives.\n\
-         Use REVIEW when the finding may be real but you need a stricter second-pass check.\n\
-         When evidence is strong enough, prefer CONFIRM over REVIEW.\n\n",
+         CONFIRM <id> — concrete evidence that the vulnerability is real and exploitable\n\
+         REVIEW <id> — plausible but evidence is incomplete; needs stricter second pass\n\
+         REJECT <id> — insufficient evidence, pattern matched safe code, or LLM hallucination\n\n\
+         REJECT a finding when:\n\
+         - The detected API is used safely (e.g. printf with a literal format string)\n\
+         - The finding is speculative without evidence of data flow to a dangerous sink\n\
+         - The LLM agent described a generic vulnerability class without pointing to specific code\n\
+         - Safe wrappers (strncpy, snprintf) are used correctly with proper bounds\n\n\
+         CONFIRM only when:\n\
+         - There is a clear path from untrusted input to a dangerous operation\n\
+         - The code lacks bounds checking, validation, or sanitization on that path\n\
+         - Both sources agree, or one source provides strong concrete evidence\n\n\
+         When in doubt, REJECT. False positives are worse than false negatives.\n\n",
     );
 
     append_findings_for_prompt(&mut prompt, "=== PATTERN FINDINGS ===\n", pattern_findings);
