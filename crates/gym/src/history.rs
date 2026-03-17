@@ -81,6 +81,55 @@ pub struct CaseResult {
     pub classification: String,
 }
 
+/// Per-case outcome classification persisted for per-CWE diffs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CaseOutcomeKind {
+    TruePositive,
+    FalsePositive,
+    FalseNegative,
+}
+
+impl std::fmt::Display for CaseOutcomeKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CaseOutcomeKind::TruePositive => write!(f, "TP"),
+            CaseOutcomeKind::FalsePositive => write!(f, "FP"),
+            CaseOutcomeKind::FalseNegative => write!(f, "FN"),
+        }
+    }
+}
+
+impl std::str::FromStr for CaseOutcomeKind {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "TP" => Ok(CaseOutcomeKind::TruePositive),
+            "FP" => Ok(CaseOutcomeKind::FalsePositive),
+            "FN" => Ok(CaseOutcomeKind::FalseNegative),
+            _ => anyhow::bail!("Unknown outcome kind: {}", s),
+        }
+    }
+}
+
+/// A single per-case outcome stored in the case_outcomes table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CaseOutcome {
+    pub run_id: String,
+    pub case_id: String,
+    pub outcome: CaseOutcomeKind,
+    pub cwe: u32,
+}
+
+/// Describes how a specific case changed between two runs.
+#[derive(Debug, Clone)]
+pub enum CaseDelta {
+    Improved { case_id: String, cwe: u32 },
+    Regressed { case_id: String, cwe: u32 },
+    NewFalsePositive { case_id: String, cwe: u32 },
+    FixedFalsePositive { case_id: String, cwe: u32 },
+}
+
 /// A regression where a case went from detected (TP) to missed (FN).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CaseRegression {
@@ -180,9 +229,18 @@ impl HistoryDb {
                 PRIMARY KEY (run_id, suite, case_id)
             );
 
+            CREATE TABLE IF NOT EXISTS case_outcomes (
+                run_id TEXT NOT NULL REFERENCES runs(id),
+                case_id TEXT NOT NULL,
+                outcome TEXT NOT NULL,
+                cwe INTEGER NOT NULL,
+                PRIMARY KEY (run_id, case_id, cwe)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_cwe_results_cwe ON cwe_results(cwe_id);
             CREATE INDEX IF NOT EXISTS idx_semantic_results_class ON semantic_results(class_name);
             CREATE INDEX IF NOT EXISTS idx_case_results_suite ON case_results(suite);
+            CREATE INDEX IF NOT EXISTS idx_case_outcomes_run ON case_outcomes(run_id);
             CREATE INDEX IF NOT EXISTS idx_runs_started ON runs(started_at);
             ",
         )?;
@@ -239,6 +297,10 @@ impl HistoryDb {
 
     /// Remove a run that failed before producing a usable result.
     pub fn abandon_run(&self, run_id: &str) -> anyhow::Result<()> {
+        self.conn.execute(
+            "DELETE FROM case_outcomes WHERE run_id = ?1",
+            rusqlite::params![run_id],
+        )?;
         self.conn.execute(
             "DELETE FROM case_results WHERE run_id = ?1",
             rusqlite::params![run_id],
@@ -311,6 +373,21 @@ impl HistoryDb {
                 serde_json::to_string(&result.matched_finding_ids)?,
                 serde_json::to_string(&result.unmatched_finding_ids)?,
                 result.classification
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Insert a per-case outcome (TP/FP/FN) for a specific CWE.
+    pub fn insert_case_outcome(&self, outcome: &CaseOutcome) -> anyhow::Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO case_outcomes (run_id, case_id, outcome, cwe)
+             VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![
+                outcome.run_id,
+                outcome.case_id,
+                outcome.outcome.to_string(),
+                outcome.cwe
             ],
         )?;
         Ok(())
@@ -496,6 +573,112 @@ impl HistoryDb {
             })
         })?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
+    /// Load all case outcomes for a run.
+    pub fn case_outcomes_for_run(&self, run_id: &str) -> anyhow::Result<Vec<CaseOutcome>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT run_id, case_id, outcome, cwe
+             FROM case_outcomes WHERE run_id = ?1 ORDER BY case_id, cwe",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![run_id], |row| {
+            let run_id: String = row.get(0)?;
+            let case_id: String = row.get(1)?;
+            let outcome_str: String = row.get(2)?;
+            let cwe: u32 = row.get(3)?;
+            let outcome = outcome_str.parse().unwrap_or_else(|err| {
+                tracing::warn!(
+                    "Invalid case outcome '{}' for run {} case {} CWE-{}: {}. Defaulting to FN.",
+                    outcome_str,
+                    run_id,
+                    case_id,
+                    cwe,
+                    err
+                );
+                CaseOutcomeKind::FalseNegative
+            });
+            Ok(CaseOutcome {
+                run_id,
+                case_id,
+                outcome,
+                cwe,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
+    /// Compare two runs and return per-case deltas (improvements and regressions).
+    pub fn compare_case_outcomes(
+        &self,
+        baseline_run_id: &str,
+        new_run_id: &str,
+    ) -> anyhow::Result<Vec<CaseDelta>> {
+        let baseline = self.case_outcomes_for_run(baseline_run_id)?;
+        let new = self.case_outcomes_for_run(new_run_id)?;
+
+        let baseline_map: std::collections::HashMap<(String, u32), CaseOutcomeKind> = baseline
+            .into_iter()
+            .map(|outcome| ((outcome.case_id, outcome.cwe), outcome.outcome))
+            .collect();
+        let new_map: std::collections::HashMap<(String, u32), CaseOutcomeKind> = new
+            .into_iter()
+            .map(|outcome| ((outcome.case_id, outcome.cwe), outcome.outcome))
+            .collect();
+
+        let mut deltas = Vec::new();
+        let mut all_keys: std::collections::HashSet<(String, u32)> =
+            baseline_map.keys().cloned().collect();
+        all_keys.extend(new_map.keys().cloned());
+
+        for key in all_keys {
+            let old = baseline_map.get(&key);
+            let new_outcome = new_map.get(&key);
+            match (old, new_outcome) {
+                (Some(CaseOutcomeKind::FalseNegative), Some(CaseOutcomeKind::TruePositive)) => {
+                    deltas.push(CaseDelta::Improved {
+                        case_id: key.0,
+                        cwe: key.1,
+                    });
+                }
+                (Some(CaseOutcomeKind::TruePositive), Some(CaseOutcomeKind::FalseNegative)) => {
+                    deltas.push(CaseDelta::Regressed {
+                        case_id: key.0,
+                        cwe: key.1,
+                    });
+                }
+                (None, Some(CaseOutcomeKind::FalsePositive)) => {
+                    deltas.push(CaseDelta::NewFalsePositive {
+                        case_id: key.0,
+                        cwe: key.1,
+                    });
+                }
+                (Some(CaseOutcomeKind::FalsePositive), None) => {
+                    deltas.push(CaseDelta::FixedFalsePositive {
+                        case_id: key.0,
+                        cwe: key.1,
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        deltas.sort_by(|a, b| {
+            let a_key = match a {
+                CaseDelta::Improved { case_id, cwe }
+                | CaseDelta::Regressed { case_id, cwe }
+                | CaseDelta::NewFalsePositive { case_id, cwe }
+                | CaseDelta::FixedFalsePositive { case_id, cwe } => (case_id.clone(), *cwe),
+            };
+            let b_key = match b {
+                CaseDelta::Improved { case_id, cwe }
+                | CaseDelta::Regressed { case_id, cwe }
+                | CaseDelta::NewFalsePositive { case_id, cwe }
+                | CaseDelta::FixedFalsePositive { case_id, cwe } => (case_id.clone(), *cwe),
+            };
+            a_key.cmp(&b_key)
+        });
+
+        Ok(deltas)
     }
 
     /// Find per-case regressions between two runs.
@@ -786,6 +969,119 @@ mod tests {
         assert_eq!(results[0].expected_cwes, vec![121, 134]);
         assert_eq!(results[0].detected_cwes, vec![119]);
         assert_eq!(results[0].classification, "TP");
+    }
+
+    #[test]
+    fn test_case_outcomes_roundtrip() {
+        let db = HistoryDb::in_memory().unwrap();
+        let run_id = db
+            .start_run("fixtures", "abc123", &RunMetadata::default())
+            .unwrap();
+
+        db.insert_case_outcome(&CaseOutcome {
+            run_id: run_id.clone(),
+            case_id: "case1".to_string(),
+            outcome: CaseOutcomeKind::TruePositive,
+            cwe: 121,
+        })
+        .unwrap();
+        db.insert_case_outcome(&CaseOutcome {
+            run_id: run_id.clone(),
+            case_id: "case2".to_string(),
+            outcome: CaseOutcomeKind::FalseNegative,
+            cwe: 78,
+        })
+        .unwrap();
+
+        let outcomes = db.case_outcomes_for_run(&run_id).unwrap();
+        assert_eq!(outcomes.len(), 2);
+        assert_eq!(outcomes[0].outcome, CaseOutcomeKind::TruePositive);
+        assert_eq!(outcomes[1].outcome, CaseOutcomeKind::FalseNegative);
+    }
+
+    #[test]
+    fn test_case_outcomes_invalid_kind_defaults_false_negative() {
+        let db = HistoryDb::in_memory().unwrap();
+        let run_id = db
+            .start_run("fixtures", "abc123", &RunMetadata::default())
+            .unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO case_outcomes (run_id, case_id, outcome, cwe) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![run_id, "case1", "BAD", 121],
+            )
+            .unwrap();
+
+        let outcomes = db.case_outcomes_for_run(&run_id).unwrap();
+        assert_eq!(outcomes.len(), 1);
+        assert_eq!(outcomes[0].outcome, CaseOutcomeKind::FalseNegative);
+    }
+
+    #[test]
+    fn test_compare_case_outcomes() {
+        let db = HistoryDb::in_memory().unwrap();
+        let meta = RunMetadata::default();
+        let run1 = db.start_run("fixtures", "aaa111", &meta).unwrap();
+        let run2 = db.start_run("fixtures", "bbb222", &meta).unwrap();
+
+        db.insert_case_outcome(&CaseOutcome {
+            run_id: run1.clone(),
+            case_id: "case1".to_string(),
+            outcome: CaseOutcomeKind::FalseNegative,
+            cwe: 121,
+        })
+        .unwrap();
+        db.insert_case_outcome(&CaseOutcome {
+            run_id: run1.clone(),
+            case_id: "case2".to_string(),
+            outcome: CaseOutcomeKind::TruePositive,
+            cwe: 78,
+        })
+        .unwrap();
+        db.insert_case_outcome(&CaseOutcome {
+            run_id: run1.clone(),
+            case_id: "case3".to_string(),
+            outcome: CaseOutcomeKind::FalsePositive,
+            cwe: 89,
+        })
+        .unwrap();
+
+        db.insert_case_outcome(&CaseOutcome {
+            run_id: run2.clone(),
+            case_id: "case1".to_string(),
+            outcome: CaseOutcomeKind::TruePositive,
+            cwe: 121,
+        })
+        .unwrap();
+        db.insert_case_outcome(&CaseOutcome {
+            run_id: run2.clone(),
+            case_id: "case2".to_string(),
+            outcome: CaseOutcomeKind::FalseNegative,
+            cwe: 78,
+        })
+        .unwrap();
+        db.insert_case_outcome(&CaseOutcome {
+            run_id: run2.clone(),
+            case_id: "case4".to_string(),
+            outcome: CaseOutcomeKind::FalsePositive,
+            cwe: 134,
+        })
+        .unwrap();
+
+        let deltas = db.compare_case_outcomes(&run1, &run2).unwrap();
+        assert_eq!(deltas.len(), 4);
+        assert!(deltas.iter().any(
+            |delta| matches!(delta, CaseDelta::Improved { case_id, .. } if case_id == "case1")
+        ));
+        assert!(deltas.iter().any(
+            |delta| matches!(delta, CaseDelta::Regressed { case_id, .. } if case_id == "case2")
+        ));
+        assert!(deltas
+            .iter()
+            .any(|delta| matches!(delta, CaseDelta::FixedFalsePositive { case_id, .. } if case_id == "case3")));
+        assert!(deltas
+            .iter()
+            .any(|delta| matches!(delta, CaseDelta::NewFalsePositive { case_id, .. } if case_id == "case4")));
     }
 
     #[test]
