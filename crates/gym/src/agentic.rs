@@ -1952,6 +1952,22 @@ mod tests {
     }
 
     #[test]
+    fn test_semantic_prompt_hint_uses_use_after_free_category() {
+        let finding = DetectedFinding {
+            id: "1".into(),
+            category: "use_after_free".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "test.c".into(),
+            function: "free".into(),
+            line: Some(10),
+            title: "Dangerous API: free".into(),
+        };
+
+        assert_eq!(semantic_prompt_hint(&finding), "use_after_free");
+    }
+
+    #[test]
     fn test_dedup_location_key_falls_back_to_id_for_empty_title() {
         let finding = DetectedFinding {
             id: "finding-1".into(),
