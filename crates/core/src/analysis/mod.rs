@@ -38,5 +38,7 @@ pub use surface::{
     identify_attack_surface, identify_source_sinks, identify_source_sinks_in_content,
     AttackSurface, AttackSurfaceAnalyzer, SourceSinkHit, SourceSinkKind,
 };
-pub use taint::{TaintAnalyzer, TaintPath};
+pub use taint::{
+    detect_stack_buffer_write_chains, StackBufferWriteChain, TaintAnalyzer, TaintPath,
+};
 pub use variant::VariantAnalyzer;

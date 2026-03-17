@@ -1100,6 +1100,28 @@ pub fn detect_in_source_content(
         }
     }
 
+    // For C/C++, also detect stack-buffer-to-write chains (CWE-121).
+    // These are higher-confidence findings than individual API matches
+    // because they prove both allocation AND unsafe write co-occur.
+    if matches!(language, "c" | "cpp") {
+        let chains = super::taint::detect_stack_buffer_write_chains(content);
+        for chain in chains {
+            hits.push(DangerousApiHit {
+                function_name: format!("{}({}, ...)", chain.write_api, chain.buffer_var),
+                library: format!("source:{}", language),
+                reason: format!(
+                    "CWE-121: stack buffer '{}[{}]' written by unbounded {}() \
+                     — confirm write size is not attacker-controlled",
+                    chain.buffer_var, chain.buffer_size, chain.write_api,
+                ),
+                danger_category: DangerCategory::Memory,
+                severity: Severity::Critical,
+                file: file_path.to_string(),
+                line: chain.write_line,
+            });
+        }
+    }
+
     // Sort by severity (Critical first)
     hits.sort_by(|a, b| a.severity.cmp(&b.severity));
     Ok(hits)
@@ -1498,6 +1520,67 @@ void vuln(int n) {
             hits.iter()
                 .any(|h| h.danger_category == DangerCategory::IntegerOverflow),
             "Should detect integer overflow risk"
+        );
+    }
+
+    #[test]
+    fn test_cwe121_chain_produces_critical_hit() {
+        let src = r#"
+void vuln(char *input) {
+    char buf[64];
+    strcpy(buf, input);
+}
+"#;
+        let hits = detect_in_source_content(src, "c", "overflow.c").unwrap();
+        let chain_hits: Vec<_> = hits
+            .iter()
+            .filter(|h| h.reason.contains("CWE-121"))
+            .collect();
+        assert!(
+            !chain_hits.is_empty(),
+            "Should produce CWE-121 chain finding for stack buffer + strcpy"
+        );
+        assert_eq!(chain_hits[0].severity, Severity::Critical);
+        assert!(chain_hits[0].function_name.contains("strcpy"));
+        assert!(chain_hits[0].function_name.contains("buf"));
+    }
+
+    #[test]
+    fn test_cwe121_no_chain_for_declaration_only() {
+        let src = r#"
+void safe_func() {
+    char buf[64];
+    buf[0] = '\0';
+}
+"#;
+        let hits = detect_in_source_content(src, "c", "safe.c").unwrap();
+        let chain_hits: Vec<_> = hits
+            .iter()
+            .filter(|h| h.reason.contains("CWE-121"))
+            .collect();
+        assert!(
+            chain_hits.is_empty(),
+            "Declaration-only should not produce CWE-121 chain, got: {:?}",
+            chain_hits.iter().map(|h| &h.reason).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_cwe121_chain_not_triggered_for_python() {
+        // Chain detection is C/C++ only
+        let src = r#"
+buf = bytearray(64)
+import ctypes
+ctypes.memmove(buf, data, len(data))
+"#;
+        let hits = detect_in_source_content(src, "python", "test.py").unwrap();
+        let chain_hits: Vec<_> = hits
+            .iter()
+            .filter(|h| h.reason.contains("CWE-121"))
+            .collect();
+        assert!(
+            chain_hits.is_empty(),
+            "CWE-121 chains should not trigger for Python"
         );
     }
 }
