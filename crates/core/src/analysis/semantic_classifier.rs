@@ -16,12 +16,16 @@ pub enum SemanticPatternClass {
     CryptoWeakness,
     DeadStore,
     Deserialization,
+    EmbeddedMaliciousCode,
     FormatString,
     ImproperAccessControl,
+    ImproperErrorHandling,
+    InformationExposure,
     InsecureTempFile,
     InvalidFree,
     LdapInjection,
     PathTraversal,
+    SuspiciousCodeConstruct,
     TypeConfusion,
     UntrustedSearchPath,
     UncheckedLoopCondition,
@@ -49,12 +53,16 @@ impl SemanticPatternClass {
             Self::CryptoWeakness => "crypto_weakness",
             Self::DeadStore => "dead_store",
             Self::Deserialization => "deserialization",
+            Self::EmbeddedMaliciousCode => "embedded_malicious_code",
             Self::FormatString => "format_string",
             Self::ImproperAccessControl => "improper_access_control",
+            Self::ImproperErrorHandling => "improper_error_handling",
+            Self::InformationExposure => "information_exposure",
             Self::InsecureTempFile => "insecure_temp_file",
             Self::InvalidFree => "invalid_free",
             Self::LdapInjection => "ldap_injection",
             Self::PathTraversal => "path_traversal",
+            Self::SuspiciousCodeConstruct => "suspicious_code_construct",
             Self::TypeConfusion => "type_confusion",
             Self::UntrustedSearchPath => "untrusted_search_path",
             Self::UncheckedLoopCondition => "unchecked_loop_condition",
@@ -79,9 +87,10 @@ impl SemanticPatternClass {
             Self::BufferOverflow => "memory_bounds",
             Self::UseAfterFree | Self::InvalidFree | Self::TypeConfusion => "memory_lifecycle",
             Self::NullDeref => "memory_allocation",
-            Self::CommandInjection | Self::Deserialization | Self::LdapInjection => {
-                "code_execution"
-            }
+            Self::CommandInjection
+            | Self::Deserialization
+            | Self::LdapInjection
+            | Self::EmbeddedMaliciousCode => "code_execution",
             Self::CrossSiteScripting | Self::PrototypePollution => "web_data_flow",
             Self::InsecureTempFile
             | Self::PathTraversal
@@ -91,10 +100,14 @@ impl SemanticPatternClass {
             | Self::IntegerOverflow
             | Self::DivideByZero
             | Self::ReachableAssertion => "arithmetic_safety",
-            Self::ResourceExhaustion | Self::ResourceLeak => "resource_management",
-            Self::UninitializedVar | Self::DeadStore => "initialization_safety",
+            Self::ResourceExhaustion | Self::ResourceLeak | Self::ImproperErrorHandling => {
+                "resource_management"
+            }
+            Self::UninitializedVar | Self::DeadStore | Self::SuspiciousCodeConstruct => {
+                "initialization_safety"
+            }
             Self::FormatString => "format_string",
-            Self::CryptoWeakness => "crypto",
+            Self::CryptoWeakness | Self::InformationExposure => "crypto",
             Self::UnsafeApiUsage | Self::ImproperAccessControl | Self::UndefinedBehavior => {
                 "unsafe_api"
             }
@@ -141,11 +154,20 @@ impl SemanticPatternClassifier {
         if is_deserialization(&category, &title) {
             classes.insert(SemanticPatternClass::Deserialization);
         }
+        if is_embedded_malicious_code(&category, &title) {
+            classes.insert(SemanticPatternClass::EmbeddedMaliciousCode);
+        }
         if is_format_string(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::FormatString);
         }
         if is_improper_access_control(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::ImproperAccessControl);
+        }
+        if is_improper_error_handling(&category, &title) {
+            classes.insert(SemanticPatternClass::ImproperErrorHandling);
+        }
+        if is_information_exposure(&category, &title) {
+            classes.insert(SemanticPatternClass::InformationExposure);
         }
         if is_path_traversal(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::PathTraversal);
@@ -164,6 +186,9 @@ impl SemanticPatternClassifier {
         }
         if is_type_confusion(&category, &title) {
             classes.insert(SemanticPatternClass::TypeConfusion);
+        }
+        if is_suspicious_code_construct(&category, &title) {
+            classes.insert(SemanticPatternClass::SuspiciousCodeConstruct);
         }
         if is_race_condition(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::RaceCondition);
@@ -675,6 +700,76 @@ fn is_uninitialized_var(category: &str, title: &str) -> bool {
                 "not initialized",
                 "use of uninitialized",
                 "indeterminate value",
+            ],
+        )
+}
+
+fn is_embedded_malicious_code(category: &str, title: &str) -> bool {
+    category == "malicious_code"
+        || category == "trojan"
+        || category == "backdoor"
+        || contains_any(
+            title,
+            &[
+                "trojan",
+                "backdoor",
+                "malicious code",
+                "embedded malicious",
+                "logic bomb",
+                "hidden functionality",
+                "covert channel",
+            ],
+        )
+}
+
+fn is_improper_error_handling(category: &str, title: &str) -> bool {
+    category == "error_handling"
+        || contains_any(
+            title,
+            &[
+                "empty catch",
+                "unchecked error",
+                "improper error handling",
+                "missing error check",
+                "error condition",
+                "improper locking",
+                "improper check for unusual",
+            ],
+        )
+}
+
+fn is_information_exposure(category: &str, title: &str) -> bool {
+    category == "information_exposure"
+        || category == "sensitive_data"
+        || contains_any(
+            title,
+            &[
+                "information exposure",
+                "sensitive data in log",
+                "sensitive data in debug",
+                "debug information",
+                "environment variable exposure",
+                "sensitive information in environment",
+                "password in log",
+                "credential in log",
+            ],
+        )
+}
+
+fn is_suspicious_code_construct(category: &str, title: &str) -> bool {
+    category == "suspicious_comment"
+        || category == "dead_code"
+        || contains_any(
+            title,
+            &[
+                "suspicious comment",
+                "dead code",
+                "unreachable code",
+                "always true",
+                "always false",
+                "expression is always",
+                "code never executed",
+                "obsolete code",
             ],
         )
 }
@@ -1379,6 +1474,54 @@ mod tests {
         assert_eq!(
             SemanticPatternClass::UndefinedBehavior.confidence_cluster(),
             "unsafe_api"
+        );
+    }
+
+    #[test]
+    fn classifies_embedded_malicious_code() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify("security", "trojan horse in network handler", "send");
+        assert!(classes.contains(&SemanticPatternClass::EmbeddedMaliciousCode));
+    }
+
+    #[test]
+    fn classifies_improper_error_handling() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify("error_handling", "empty catch block", "catch");
+        assert!(classes.contains(&SemanticPatternClass::ImproperErrorHandling));
+    }
+
+    #[test]
+    fn classifies_information_exposure() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify("security", "sensitive data in log output", "log");
+        assert!(classes.contains(&SemanticPatternClass::InformationExposure));
+    }
+
+    #[test]
+    fn classifies_suspicious_code_construct() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify("code_quality", "expression is always true", "check");
+        assert!(classes.contains(&SemanticPatternClass::SuspiciousCodeConstruct));
+    }
+
+    #[test]
+    fn new_classes_cluster_correctly() {
+        assert_eq!(
+            SemanticPatternClass::EmbeddedMaliciousCode.confidence_cluster(),
+            "code_execution"
+        );
+        assert_eq!(
+            SemanticPatternClass::ImproperErrorHandling.confidence_cluster(),
+            "resource_management"
+        );
+        assert_eq!(
+            SemanticPatternClass::InformationExposure.confidence_cluster(),
+            "crypto"
+        );
+        assert_eq!(
+            SemanticPatternClass::SuspiciousCodeConstruct.confidence_cluster(),
+            "initialization_safety"
         );
     }
 }
