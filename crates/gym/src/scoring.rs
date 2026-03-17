@@ -256,12 +256,16 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         ],
         SemanticPatternClass::Deserialization => &[502],
         SemanticPatternClass::DeadStore => &[563],
+        SemanticPatternClass::EmbeddedMaliciousCode => &[506, 511, 510],
         SemanticPatternClass::FormatString => &[134],
         SemanticPatternClass::ImproperAccessControl => &[272, 284],
+        SemanticPatternClass::ImproperErrorHandling => &[666, 390, 391],
+        SemanticPatternClass::InformationExposure => &[226, 534, 535, 526],
         SemanticPatternClass::InsecureTempFile => &[377],
         SemanticPatternClass::InvalidFree => &[590],
         SemanticPatternClass::LdapInjection => &[90],
         SemanticPatternClass::PathTraversal => &[22, 23, 36, 426],
+        SemanticPatternClass::SuspiciousCodeConstruct => &[546, 561, 570, 571],
         SemanticPatternClass::UntrustedSearchPath => &[114, 427],
         SemanticPatternClass::UncheckedLoopCondition => &[606],
         SemanticPatternClass::PrototypePollution => &[1321],
@@ -324,11 +328,15 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         | 780 | 798 | 1240 => Some(SemanticPatternClass::CryptoWeakness),
         502 => Some(SemanticPatternClass::Deserialization),
         563 => Some(SemanticPatternClass::DeadStore),
+        506 | 511 | 510 => Some(SemanticPatternClass::EmbeddedMaliciousCode),
         134 => Some(SemanticPatternClass::FormatString),
         272 | 284 => Some(SemanticPatternClass::ImproperAccessControl),
+        666 | 390 | 391 => Some(SemanticPatternClass::ImproperErrorHandling),
+        226 | 534 | 535 | 526 => Some(SemanticPatternClass::InformationExposure),
         590 => Some(SemanticPatternClass::InvalidFree),
         90 => Some(SemanticPatternClass::LdapInjection),
         22 | 23 | 36 | 426 => Some(SemanticPatternClass::PathTraversal),
+        546 | 561 | 570 | 571 => Some(SemanticPatternClass::SuspiciousCodeConstruct),
         114 | 427 => Some(SemanticPatternClass::UntrustedSearchPath),
         606 => Some(SemanticPatternClass::UncheckedLoopCondition),
         1321 => Some(SemanticPatternClass::PrototypePollution),
@@ -846,7 +854,10 @@ mod tests {
             cwe_to_semantic_class(400),
             Some(SemanticPatternClass::ResourceExhaustion)
         );
-        assert_eq!(cwe_to_semantic_class(666), None);
+        assert_eq!(
+            cwe_to_semantic_class(666),
+            Some(SemanticPatternClass::ImproperErrorHandling)
+        );
 
         // Crypto
         assert_eq!(
@@ -1333,6 +1344,14 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(591), Some(TypeConfusion));
         assert_eq!(cwe_to_semantic_class(563), Some(DeadStore));
         assert_eq!(cwe_to_semantic_class(617), Some(ReachableAssertion));
+        assert_eq!(cwe_to_semantic_class(506), Some(EmbeddedMaliciousCode));
+        assert_eq!(cwe_to_semantic_class(511), Some(EmbeddedMaliciousCode));
+        assert_eq!(cwe_to_semantic_class(666), Some(ImproperErrorHandling));
+        assert_eq!(cwe_to_semantic_class(390), Some(ImproperErrorHandling));
+        assert_eq!(cwe_to_semantic_class(226), Some(InformationExposure));
+        assert_eq!(cwe_to_semantic_class(534), Some(InformationExposure));
+        assert_eq!(cwe_to_semantic_class(546), Some(SuspiciousCodeConstruct));
+        assert_eq!(cwe_to_semantic_class(570), Some(SuspiciousCodeConstruct));
         assert_eq!(cwe_to_semantic_class(90), Some(LdapInjection));
         assert_eq!(cwe_to_semantic_class(128), Some(IntegerOverflow));
         assert_eq!(cwe_to_semantic_class(369), Some(DivideByZero));
@@ -1348,7 +1367,7 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(401), Some(ResourceLeak));
         assert_eq!(cwe_to_semantic_class(675), Some(ResourceLeak));
         assert_eq!(cwe_to_semantic_class(400), Some(ResourceExhaustion));
-        assert_eq!(cwe_to_semantic_class(666), None);
+        assert_eq!(cwe_to_semantic_class(666), Some(ImproperErrorHandling));
         assert_eq!(cwe_to_semantic_class(189), Some(IntegerOverflow));
         assert_eq!(cwe_to_semantic_class(682), Some(IntegerOverflow));
         assert_eq!(cwe_to_semantic_class(761), Some(UseAfterFree));
