@@ -314,25 +314,78 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
     }
 }
 
+/// Deduplicate outcomes by case ID, merging results when the same case
+/// appears in multiple shards/processes. When duplicates exist, findings
+/// are merged (union of matched/unmatched IDs, union of detected CWEs,
+/// and CWE hits use logical OR so a hit in any shard counts).
+pub fn deduplicate_outcomes(outcomes: Vec<CaseOutcome>) -> Vec<CaseOutcome> {
+    let mut by_case: HashMap<String, CaseOutcome> = HashMap::new();
+
+    for outcome in outcomes {
+        by_case
+            .entry(outcome.case_id.clone())
+            .and_modify(|existing| {
+                assert_eq!(
+                    existing.suite, outcome.suite,
+                    "duplicate case {} had inconsistent suites during deduplication",
+                    existing.case_id
+                );
+
+                let existing_expected: HashSet<u32> =
+                    existing.expected_cwes.iter().copied().collect();
+                let incoming_expected: HashSet<u32> =
+                    outcome.expected_cwes.iter().copied().collect();
+                assert_eq!(
+                    existing_expected, incoming_expected,
+                    "duplicate case {} had inconsistent expected CWEs during deduplication",
+                    existing.case_id
+                );
+
+                let mut detected_set: HashSet<u32> =
+                    existing.detected_cwes.iter().copied().collect();
+                for &cwe in &outcome.detected_cwes {
+                    detected_set.insert(cwe);
+                }
+                existing.detected_cwes = detected_set.into_iter().collect();
+
+                let mut matched_set: HashSet<String> =
+                    existing.matched_finding_ids.drain(..).collect();
+                for id in &outcome.matched_finding_ids {
+                    matched_set.insert(id.clone());
+                }
+                existing.matched_finding_ids = matched_set.into_iter().collect();
+
+                let mut unmatched_set: HashSet<String> =
+                    existing.unmatched_finding_ids.drain(..).collect();
+                for id in &outcome.unmatched_finding_ids {
+                    unmatched_set.insert(id.clone());
+                }
+                existing.unmatched_finding_ids = unmatched_set.into_iter().collect();
+
+                for (&cwe, &hit) in &outcome.cwe_hits {
+                    let entry = existing.cwe_hits.entry(cwe).or_insert(false);
+                    *entry = *entry || hit;
+                }
+            })
+            .or_insert(outcome);
+    }
+
+    by_case.into_values().collect()
+}
+
 /// Compute aggregate scores from a list of case outcomes.
 ///
-/// Deduplicates outcomes by `case_id` so that overlapping parallel shards
-/// do not double-count the same test case. When duplicates exist, the first
-/// occurrence is kept (arbitrary but deterministic for a given input order).
+/// Deduplicates outcomes by case ID before aggregation so that the same
+/// test case appearing in multiple shards/processes is only counted once.
 pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
+    // Deduplicate by case_id to handle cross-shard merging
+    let deduped = deduplicate_outcomes(outcomes.to_vec());
+
     let mut score = AggregateScore::default();
     let mut per_cwe: HashMap<u32, CweScore> = HashMap::new();
     let mut per_semantic: HashMap<String, SemanticScore> = HashMap::new();
-    let mut seen_case_ids: HashSet<String> = HashSet::new();
 
-    for outcome in outcomes {
-        if !seen_case_ids.insert(outcome.case_id.clone()) {
-            tracing::debug!(
-                "Dedup: skipping duplicate case_id={} (already aggregated)",
-                outcome.case_id
-            );
-            continue;
-        }
+    for outcome in &deduped {
         if outcome.expected_cwes.is_empty() {
             // Negative test case.
             if outcome.detected_cwes.is_empty() {
@@ -845,10 +898,10 @@ mod tests {
 
     #[test]
     fn test_aggregate_dedup_by_case_id() {
-        // Simulate overlapping shards: same case_id appears twice
+        // Simulate overlapping shards: the same case appears twice and must merge.
         let outcomes = vec![
             CaseOutcome {
-                case_id: "case1".to_string(),
+                case_id: "case-1".to_string(),
                 suite: "test".to_string(),
                 expected_cwes: vec![121],
                 detected_cwes: vec![119],
@@ -857,16 +910,16 @@ mod tests {
                 cwe_hits: [(121, true)].into_iter().collect(),
             },
             CaseOutcome {
-                case_id: "case1".to_string(), // duplicate
+                case_id: "case-1".to_string(), // duplicate case_id from another shard
                 suite: "test".to_string(),
                 expected_cwes: vec![121],
-                detected_cwes: vec![119],
-                matched_finding_ids: vec!["f1".to_string()],
+                detected_cwes: vec![122],
+                matched_finding_ids: vec!["f2".to_string()],
                 unmatched_finding_ids: vec![],
                 cwe_hits: [(121, true)].into_iter().collect(),
             },
             CaseOutcome {
-                case_id: "case2".to_string(),
+                case_id: "case-2".to_string(),
                 suite: "test".to_string(),
                 expected_cwes: vec![134],
                 detected_cwes: vec![],
@@ -882,6 +935,64 @@ mod tests {
         assert_eq!(score.false_negatives, 1);
         assert_eq!(score.precision, 1.0);
         assert_eq!(score.recall, 0.5);
+    }
+
+    #[test]
+    fn test_deduplicate_merges_findings() {
+        let outcomes = vec![
+            CaseOutcome {
+                case_id: "case-1".to_string(),
+                suite: "test".to_string(),
+                expected_cwes: vec![121],
+                detected_cwes: vec![119],
+                matched_finding_ids: vec!["f1".to_string()],
+                unmatched_finding_ids: vec![],
+                cwe_hits: [(121, false)].into_iter().collect(),
+            },
+            CaseOutcome {
+                case_id: "case-1".to_string(),
+                suite: "test".to_string(),
+                expected_cwes: vec![121],
+                detected_cwes: vec![122],
+                matched_finding_ids: vec!["f2".to_string()],
+                unmatched_finding_ids: vec![],
+                cwe_hits: [(121, true)].into_iter().collect(),
+            },
+        ];
+
+        let deduped = deduplicate_outcomes(outcomes);
+        assert_eq!(deduped.len(), 1);
+        let merged = &deduped[0];
+        assert!(merged.cwe_hits[&121], "CWE hit should be OR-merged");
+        assert!(merged.detected_cwes.len() >= 2);
+        assert_eq!(merged.matched_finding_ids.len(), 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "inconsistent expected CWEs")]
+    fn test_deduplicate_rejects_inconsistent_expected_cwes() {
+        let outcomes = vec![
+            CaseOutcome {
+                case_id: "case-1".to_string(),
+                suite: "test".to_string(),
+                expected_cwes: vec![121],
+                detected_cwes: vec![119],
+                matched_finding_ids: vec!["f1".to_string()],
+                unmatched_finding_ids: vec![],
+                cwe_hits: [(121, true)].into_iter().collect(),
+            },
+            CaseOutcome {
+                case_id: "case-1".to_string(),
+                suite: "test".to_string(),
+                expected_cwes: vec![134],
+                detected_cwes: vec![134],
+                matched_finding_ids: vec!["f2".to_string()],
+                unmatched_finding_ids: vec![],
+                cwe_hits: [(134, true)].into_iter().collect(),
+            },
+        ];
+
+        let _ = deduplicate_outcomes(outcomes);
     }
 
     #[test]
