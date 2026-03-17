@@ -341,6 +341,11 @@ fn dedup_cwes(cwes: impl IntoIterator<Item = u32>) -> Vec<u32> {
         .collect()
 }
 
+/// Public accessor for CWE-to-semantic-class mapping.
+pub fn cwe_to_semantic_class_public(cwe: u32) -> Option<SemanticPatternClass> {
+    cwe_to_semantic_class(cwe)
+}
+
 fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
     match cwe {
         118 | 119 | 120 | 121 | 122 | 123 | 124 | 125 | 126 | 127 | 129 | 131 | 135 | 170 | 176

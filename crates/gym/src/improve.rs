@@ -395,12 +395,49 @@ async fn run_failure_analyst_agent(
         }
         let kb_context = build_false_negative_knowledge_context(knowledge_db, fn_case)?;
 
-        // Build context with the missed case details
+        // Build context with the missed case details.
+        // Include which semantic classes WERE detected so the analyst
+        // can focus on the gap rather than re-analyzing what was found.
+        let detected_classes: Vec<String> = fn_case
+            .detected_cwes
+            .iter()
+            .filter_map(|&cwe| {
+                crate::scoring::cwe_to_semantic_class_public(cwe).map(|c| c.as_str().to_string())
+            })
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+        let expected_classes: Vec<String> = fn_case
+            .expected_cwes
+            .iter()
+            .filter_map(|&cwe| {
+                crate::scoring::cwe_to_semantic_class_public(cwe).map(|c| c.as_str().to_string())
+            })
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+        let gap_context = if detected_classes.is_empty() {
+            format!(
+                "Expected semantic classes: {:?}\n\
+                 Detected semantic classes: NONE (complete detection gap)\n",
+                expected_classes
+            )
+        } else {
+            format!(
+                "Expected semantic classes: {:?}\n\
+                 Detected semantic classes: {:?}\n\
+                 Semantic gap: expected but not detected classes should be \
+                 the primary investigation focus.\n",
+                expected_classes, detected_classes
+            )
+        };
+
         let context = format!(
             "Analyze this FALSE NEGATIVE from the {} benchmark.\n\n\
              Case: {}\n\
              Expected CWEs: {:?}\n\
              Detected CWEs: {:?}\n\
+             {}\n\
              File: {}\n\n\
              Source code:\n```\n{}\n```\n\n\
              Knowledge base guidance:\n{}\n\n\
@@ -428,6 +465,7 @@ async fn run_failure_analyst_agent(
             fn_case.case_id,
             fn_case.expected_cwes,
             fn_case.detected_cwes,
+            gap_context,
             fn_case.source_path.display(),
             &fn_case.source_content[..source_excerpt_len],
             kb_context,
