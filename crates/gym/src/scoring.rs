@@ -207,10 +207,15 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
             119, 120, 121, 122, 123, 124, 125, 126, 127, 129, 131, 170, 787, 788, 805,
         ],
         SemanticPatternClass::CommandInjection => &[77, 78],
+        SemanticPatternClass::CrossSiteScripting => &[79, 80],
+        SemanticPatternClass::CryptoWeakness => &[326, 327, 328, 330, 338, 310, 295, 1240],
+        SemanticPatternClass::Deserialization => &[502],
         SemanticPatternClass::FormatString => &[134],
         SemanticPatternClass::InsecureTempFile => &[377],
         SemanticPatternClass::PathTraversal => &[22, 23, 36],
+        SemanticPatternClass::PrototypePollution => &[1321],
         SemanticPatternClass::RaceCondition => &[362, 367],
+        SemanticPatternClass::UnsafeApiUsage => &[242, 676],
         SemanticPatternClass::UseAfterFree => &[415, 416],
     }
 }
@@ -247,14 +252,20 @@ fn dedup_cwes(cwes: impl IntoIterator<Item = u32>) -> Vec<u32> {
 
 fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
     match cwe {
-        119 | 120 | 121 | 122 | 123 | 124 | 125 | 126 | 127 | 129 | 131 | 170 | 787 | 788 | 805 => {
-            Some(SemanticPatternClass::BufferOverflow)
-        }
+        119 | 120 | 121 | 122 | 123 | 124 | 125 | 126 | 127 | 129 | 131 | 170 | 787 | 788
+        | 805 => Some(SemanticPatternClass::BufferOverflow),
         77 | 78 => Some(SemanticPatternClass::CommandInjection),
+        79 | 80 => Some(SemanticPatternClass::CrossSiteScripting),
+        295 | 310 | 326 | 327 | 328 | 330 | 338 | 1240 => {
+            Some(SemanticPatternClass::CryptoWeakness)
+        }
+        502 => Some(SemanticPatternClass::Deserialization),
         134 => Some(SemanticPatternClass::FormatString),
         22 | 23 | 36 => Some(SemanticPatternClass::PathTraversal),
+        1321 => Some(SemanticPatternClass::PrototypePollution),
         362 | 367 => Some(SemanticPatternClass::RaceCondition),
         377 => Some(SemanticPatternClass::InsecureTempFile),
+        242 | 676 => Some(SemanticPatternClass::UnsafeApiUsage),
         415 | 416 => Some(SemanticPatternClass::UseAfterFree),
         _ => None,
     }
@@ -760,6 +771,61 @@ mod tests {
         assert_eq!(format.total_cases, 1);
         assert_eq!(format.true_positives, 0);
         assert_eq!(format.false_negatives, 1);
+    }
+
+    #[test]
+    fn test_semantic_class_to_cwes_new_classes() {
+        let xss = semantic_class_to_cwes(SemanticPatternClass::CrossSiteScripting);
+        assert!(xss.contains(&79));
+        assert!(xss.contains(&80));
+
+        let crypto = semantic_class_to_cwes(SemanticPatternClass::CryptoWeakness);
+        assert!(crypto.contains(&327));
+        assert!(crypto.contains(&338));
+        assert!(crypto.contains(&1240));
+
+        let deser = semantic_class_to_cwes(SemanticPatternClass::Deserialization);
+        assert!(deser.contains(&502));
+
+        let proto = semantic_class_to_cwes(SemanticPatternClass::PrototypePollution);
+        assert!(proto.contains(&1321));
+
+        let unsafe_api = semantic_class_to_cwes(SemanticPatternClass::UnsafeApiUsage);
+        assert!(unsafe_api.contains(&676));
+        assert!(unsafe_api.contains(&242));
+    }
+
+    #[test]
+    fn test_cwe_to_semantic_class_new_mappings() {
+        use SemanticPatternClass::*;
+        assert_eq!(cwe_to_semantic_class(79), Some(CrossSiteScripting));
+        assert_eq!(cwe_to_semantic_class(80), Some(CrossSiteScripting));
+        assert_eq!(cwe_to_semantic_class(327), Some(CryptoWeakness));
+        assert_eq!(cwe_to_semantic_class(338), Some(CryptoWeakness));
+        assert_eq!(cwe_to_semantic_class(1240), Some(CryptoWeakness));
+        assert_eq!(cwe_to_semantic_class(502), Some(Deserialization));
+        assert_eq!(cwe_to_semantic_class(1321), Some(PrototypePollution));
+        assert_eq!(cwe_to_semantic_class(676), Some(UnsafeApiUsage));
+        assert_eq!(cwe_to_semantic_class(242), Some(UnsafeApiUsage));
+    }
+
+    #[test]
+    fn test_inferred_cwes_for_deserialization_finding() {
+        let finding = make_semantic_finding(
+            "deserialization",
+            "load_data",
+            "Pattern: insecure deserialization via pickle.loads",
+        );
+        let inferred = inferred_finding_cwes(&finding);
+        assert!(inferred.contains(&502));
+    }
+
+    #[test]
+    fn test_inferred_cwes_for_crypto_finding() {
+        let finding =
+            make_semantic_finding("crypto", "md5_init", "Pattern: weak hash MD5 usage");
+        let inferred = inferred_finding_cwes(&finding);
+        assert!(inferred.contains(&327));
     }
 
     #[test]
