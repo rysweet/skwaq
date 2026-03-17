@@ -217,11 +217,75 @@ mod tests {
                 library: "libc.so.6".into(),
             },
             ImportInfo {
-                name: "malloc".into(),
-                library: "libc.so.6".into(),
+                name: "my_custom_func".into(),
+                library: "libfoo.so".into(),
             },
         ];
         let hits = detector.check_imports(&imports);
         assert!(hits.is_empty());
+    }
+
+    #[test]
+    fn test_allocation_apis_detected_as_null_deref() {
+        let detector = DangerousApiDetector::new();
+        let imports = vec![
+            ImportInfo {
+                name: "malloc".into(),
+                library: "libc.so.6".into(),
+            },
+            ImportInfo {
+                name: "calloc".into(),
+                library: "libc.so.6".into(),
+            },
+            ImportInfo {
+                name: "realloc".into(),
+                library: "libc.so.6".into(),
+            },
+        ];
+        let hits = detector.check_imports(&imports);
+        assert_eq!(hits.len(), 3);
+        for hit in &hits {
+            assert_eq!(hit.danger_category, DangerCategory::NullDeref);
+        }
+    }
+
+    #[test]
+    fn test_free_detected_as_use_after_free() {
+        let detector = DangerousApiDetector::new();
+        let imports = vec![ImportInfo {
+            name: "free".into(),
+            library: "libc.so.6".into(),
+        }];
+        let hits = detector.check_imports(&imports);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].danger_category, DangerCategory::UseAfterFree);
+    }
+
+    #[test]
+    fn test_file_socket_apis_detected_as_resource_leak() {
+        let detector = DangerousApiDetector::new();
+        let imports = vec![
+            ImportInfo {
+                name: "fopen".into(),
+                library: "libc.so.6".into(),
+            },
+            ImportInfo {
+                name: "fdopen".into(),
+                library: "libc.so.6".into(),
+            },
+            ImportInfo {
+                name: "open".into(),
+                library: "libc.so.6".into(),
+            },
+            ImportInfo {
+                name: "socket".into(),
+                library: "libc.so.6".into(),
+            },
+        ];
+        let hits = detector.check_imports(&imports);
+        assert_eq!(hits.len(), 4);
+        for hit in &hits {
+            assert_eq!(hit.danger_category, DangerCategory::ResourceLeak);
+        }
     }
 }

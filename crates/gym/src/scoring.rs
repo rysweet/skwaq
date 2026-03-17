@@ -208,6 +208,7 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
         "divide_by_zero" => vec![369, 128],
         "resource_leak" => vec![401, 459, 761, 763, 772, 775, 789],
         "uninitialized_var" => vec![457, 908],
+        "use_after_free" => vec![415, 416],
         _ => vec![],
     }
 }
