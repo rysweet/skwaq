@@ -20,11 +20,14 @@ pub enum SemanticPatternClass {
     FormatString,
     ImproperAccessControl,
     ImproperErrorHandling,
+    InfiniteLoop,
     InformationExposure,
     InsecureTempFile,
     InvalidFree,
     LdapInjection,
+    OperatorMisuse,
     PathTraversal,
+    PointerArithmetic,
     SuspiciousCodeConstruct,
     TypeConfusion,
     UntrustedSearchPath,
@@ -57,11 +60,14 @@ impl SemanticPatternClass {
             Self::FormatString => "format_string",
             Self::ImproperAccessControl => "improper_access_control",
             Self::ImproperErrorHandling => "improper_error_handling",
+            Self::InfiniteLoop => "infinite_loop",
             Self::InformationExposure => "information_exposure",
             Self::InsecureTempFile => "insecure_temp_file",
             Self::InvalidFree => "invalid_free",
             Self::LdapInjection => "ldap_injection",
+            Self::OperatorMisuse => "operator_misuse",
             Self::PathTraversal => "path_traversal",
+            Self::PointerArithmetic => "pointer_arithmetic",
             Self::SuspiciousCodeConstruct => "suspicious_code_construct",
             Self::TypeConfusion => "type_confusion",
             Self::UntrustedSearchPath => "untrusted_search_path",
@@ -84,7 +90,7 @@ impl SemanticPatternClass {
     /// Coarse semantic cluster for routing closely related findings.
     pub fn confidence_cluster(&self) -> &'static str {
         match self {
-            Self::BufferOverflow => "memory_bounds",
+            Self::BufferOverflow | Self::PointerArithmetic => "memory_bounds",
             Self::UseAfterFree | Self::InvalidFree | Self::TypeConfusion => "memory_lifecycle",
             Self::NullDeref => "memory_allocation",
             Self::CommandInjection
@@ -99,13 +105,15 @@ impl SemanticPatternClass {
             Self::UncheckedLoopCondition
             | Self::IntegerOverflow
             | Self::DivideByZero
-            | Self::ReachableAssertion => "arithmetic_safety",
+            | Self::ReachableAssertion
+            | Self::InfiniteLoop => "arithmetic_safety",
             Self::ResourceExhaustion | Self::ResourceLeak | Self::ImproperErrorHandling => {
                 "resource_management"
             }
-            Self::UninitializedVar | Self::DeadStore | Self::SuspiciousCodeConstruct => {
-                "initialization_safety"
-            }
+            Self::UninitializedVar
+            | Self::DeadStore
+            | Self::SuspiciousCodeConstruct
+            | Self::OperatorMisuse => "initialization_safety",
             Self::FormatString => "format_string",
             Self::CryptoWeakness | Self::InformationExposure => "crypto",
             Self::UnsafeApiUsage | Self::ImproperAccessControl | Self::UndefinedBehavior => {
@@ -190,6 +198,12 @@ impl SemanticPatternClassifier {
         if is_suspicious_code_construct(&category, &title) {
             classes.insert(SemanticPatternClass::SuspiciousCodeConstruct);
         }
+        if is_operator_misuse(&category, &title) {
+            classes.insert(SemanticPatternClass::OperatorMisuse);
+        }
+        if is_pointer_arithmetic(&category, &title) {
+            classes.insert(SemanticPatternClass::PointerArithmetic);
+        }
         if is_race_condition(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::RaceCondition);
         }
@@ -216,6 +230,9 @@ impl SemanticPatternClassifier {
         }
         if is_integer_overflow(&category, &title) {
             classes.insert(SemanticPatternClass::IntegerOverflow);
+        }
+        if is_infinite_loop(&category, &title) {
+            classes.insert(SemanticPatternClass::InfiniteLoop);
         }
         if is_divide_by_zero(&category, &title) {
             classes.insert(SemanticPatternClass::DivideByZero);
@@ -770,6 +787,55 @@ fn is_suspicious_code_construct(category: &str, title: &str) -> bool {
                 "expression is always",
                 "code never executed",
                 "obsolete code",
+            ],
+        )
+}
+
+fn is_infinite_loop(category: &str, title: &str) -> bool {
+    category == "infinite_loop"
+        || contains_any(
+            title,
+            &[
+                "infinite loop",
+                "infinite recursion",
+                "uncontrolled recursion",
+                "excessive recursion",
+                "missing break",
+            ],
+        )
+}
+
+fn is_operator_misuse(category: &str, title: &str) -> bool {
+    category == "operator_misuse"
+        || contains_any(
+            title,
+            &[
+                "wrong operator",
+                "operator precedence",
+                "use of wrong operator",
+                "assignment instead of comparison",
+                "missing break in switch",
+                "missing default in switch",
+                "incorrect block delimitation",
+                "function call with wrong number",
+                "function call with incorrect argument",
+            ],
+        )
+}
+
+fn is_pointer_arithmetic(category: &str, title: &str) -> bool {
+    category == "pointer_arithmetic"
+        || contains_any(
+            title,
+            &[
+                "pointer scaling",
+                "pointer subtraction",
+                "wrong pointer",
+                "non-structure pointer",
+                "child of non-structure",
+                "addition to pointer",
+                "access child of non-structure",
+                "fixed address",
             ],
         )
 }
@@ -1522,6 +1588,51 @@ mod tests {
         assert_eq!(
             SemanticPatternClass::SuspiciousCodeConstruct.confidence_cluster(),
             "initialization_safety"
+        );
+    }
+
+    #[test]
+    fn classifies_infinite_loop() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify("robustness", "infinite loop in parser", "parse");
+        assert!(classes.contains(&SemanticPatternClass::InfiniteLoop));
+    }
+
+    #[test]
+    fn classifies_operator_misuse() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify(
+            "code_quality",
+            "use of wrong operator in comparison",
+            "compare",
+        );
+        assert!(classes.contains(&SemanticPatternClass::OperatorMisuse));
+    }
+
+    #[test]
+    fn classifies_pointer_arithmetic() {
+        let classifier = SemanticPatternClassifier::new();
+        let classes = classifier.classify(
+            "memory",
+            "wrong pointer scaling in array access",
+            "array_get",
+        );
+        assert!(classes.contains(&SemanticPatternClass::PointerArithmetic));
+    }
+
+    #[test]
+    fn new_sweep_classes_cluster_correctly() {
+        assert_eq!(
+            SemanticPatternClass::InfiniteLoop.confidence_cluster(),
+            "arithmetic_safety"
+        );
+        assert_eq!(
+            SemanticPatternClass::OperatorMisuse.confidence_cluster(),
+            "initialization_safety"
+        );
+        assert_eq!(
+            SemanticPatternClass::PointerArithmetic.confidence_cluster(),
+            "memory_bounds"
         );
     }
 }
