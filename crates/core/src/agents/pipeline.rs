@@ -33,12 +33,44 @@ pub struct AnalysisPipeline {
     pub stages: Vec<PipelineStage>,
 }
 
+/// Which client lane a pipeline stage should use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClientRole {
+    Reasoning,
+    Decompilation,
+}
+
+/// The client set used by the pipeline.
+#[derive(Clone)]
+pub struct PipelineClients {
+    pub reasoning: Option<Client>,
+    pub decompilation: Option<Client>,
+}
+
+impl PipelineClients {
+    pub fn new(reasoning: Client, decompilation: Client) -> Self {
+        Self {
+            reasoning: Some(reasoning),
+            decompilation: Some(decompilation),
+        }
+    }
+
+    pub fn from_optional(reasoning: Option<Client>, decompilation: Option<Client>) -> Self {
+        Self {
+            reasoning,
+            decompilation,
+        }
+    }
+}
+
 /// A single stage in the pipeline.
 pub struct PipelineStage {
     /// Agent name to load (must match a `.md` file).
     pub agent_name: String,
     /// How to build the user prompt for this stage.
     pub context_mode: ContextMode,
+    /// Which LLM lane this stage should use.
+    pub client_role: ClientRole,
 }
 
 /// How to build the initial context/user-prompt for an agent stage.
@@ -63,6 +95,18 @@ pub struct DebateGroup {
 }
 
 impl AnalysisPipeline {
+    pub fn requires_reasoning_client(&self) -> bool {
+        self.stages
+            .iter()
+            .any(|stage| stage.client_role == ClientRole::Reasoning)
+    }
+
+    pub fn requires_decompilation_client(&self) -> bool {
+        self.stages
+            .iter()
+            .any(|stage| stage.client_role == ClientRole::Decompilation)
+    }
+
     /// Run the pipeline against an investigation.
     ///
     /// Returns results from each stage in order.
@@ -71,10 +115,11 @@ impl AnalysisPipeline {
         target: &str,
         investigation_id: &str,
         db: &GraphDb,
-        llm: Client,
+        clients: PipelineClients,
         budget: &mut TokenBudget,
     ) -> anyhow::Result<Vec<AgentResult>> {
-        let runner = AgentRunner::new(llm);
+        let reasoning_runner = clients.reasoning.map(AgentRunner::new);
+        let decompilation_runner = clients.decompilation.map(AgentRunner::new);
         let mut results: Vec<AgentResult> = Vec::new();
 
         for stage in &self.stages {
@@ -103,9 +148,13 @@ impl AnalysisPipeline {
 
             eprintln!("  Running agent: {} ({})", agent.name, agent.description);
 
-            let result = runner
-                .run_agent_with_db(&agent, investigation_id, &context, db, budget)
-                .await?;
+            let result = runner_for_stage(
+                reasoning_runner.as_ref(),
+                decompilation_runner.as_ref(),
+                stage.client_role,
+            )?
+            .run_agent_with_db(&agent, investigation_id, &context, db, budget)
+            .await?;
 
             eprintln!(
                 "  Agent {} completed ({} tokens used)",
@@ -127,11 +176,12 @@ impl AnalysisPipeline {
         target: &str,
         investigation_id: &str,
         db: &GraphDb,
-        llm: Client,
+        clients: PipelineClients,
         budget: &mut TokenBudget,
         memory: &MemoryStore,
     ) -> anyhow::Result<Vec<AgentResult>> {
-        let runner = AgentRunner::new(llm);
+        let reasoning_runner = clients.reasoning.map(AgentRunner::new);
+        let decompilation_runner = clients.decompilation.map(AgentRunner::new);
         let mut results: Vec<AgentResult> = Vec::new();
 
         // Apply confidence decay at the start of each pipeline run
@@ -161,16 +211,13 @@ impl AnalysisPipeline {
 
             eprintln!("  Running agent: {} ({})", agent.name, agent.description);
 
-            let result = runner
-                .run_agent_with_db_and_memory(
-                    &agent,
-                    investigation_id,
-                    &context,
-                    db,
-                    memory,
-                    budget,
-                )
-                .await?;
+            let result = runner_for_stage(
+                reasoning_runner.as_ref(),
+                decompilation_runner.as_ref(),
+                stage.client_role,
+            )?
+            .run_agent_with_db_and_memory(&agent, investigation_id, &context, db, memory, budget)
+            .await?;
 
             eprintln!(
                 "  Agent {} completed ({} tokens used)",
@@ -208,12 +255,13 @@ impl AnalysisPipeline {
         target: &str,
         investigation_id: &str,
         db: &GraphDb,
-        llm: Client,
+        clients: PipelineClients,
         budget: &mut TokenBudget,
         debate: &DebateGroup,
         debate_after_stage: usize,
     ) -> anyhow::Result<Vec<AgentResult>> {
-        let runner = AgentRunner::new(llm);
+        let reasoning_runner = clients.reasoning.map(AgentRunner::new);
+        let decompilation_runner = clients.decompilation.map(AgentRunner::new);
         let mut results: Vec<AgentResult> = Vec::new();
 
         // Run stages before the debate point.
@@ -241,9 +289,13 @@ impl AnalysisPipeline {
             };
 
             eprintln!("  Running agent: {} ({})", agent.name, agent.description);
-            let result = runner
-                .run_agent_with_db(&agent, investigation_id, &context, db, budget)
-                .await?;
+            let result = runner_for_stage(
+                reasoning_runner.as_ref(),
+                decompilation_runner.as_ref(),
+                stage.client_role,
+            )?
+            .run_agent_with_db(&agent, investigation_id, &context, db, budget)
+            .await?;
             eprintln!(
                 "  Agent {} completed ({} tokens used)",
                 result.agent_name, result.tokens_used
@@ -266,7 +318,7 @@ impl AnalysisPipeline {
                 "  Running debate agent A: {} ({})",
                 agent_a.name, agent_a.description
             );
-            let result_a = runner
+            let result_a = missing_runner(reasoning_runner.as_ref(), ClientRole::Reasoning)?
                 .run_agent_with_db(&agent_a, investigation_id, &debate_context_a, db, budget)
                 .await?;
             eprintln!(
@@ -282,7 +334,7 @@ impl AnalysisPipeline {
                 "  Running debate agent B: {} ({})",
                 agent_b.name, agent_b.description
             );
-            let result_b = runner
+            let result_b = missing_runner(reasoning_runner.as_ref(), ClientRole::Reasoning)?
                 .run_agent_with_db(&agent_b, investigation_id, &debate_context_b, db, budget)
                 .await?;
             eprintln!(
@@ -335,9 +387,13 @@ impl AnalysisPipeline {
             };
 
             eprintln!("  Running agent: {} ({})", agent.name, agent.description);
-            let result = runner
-                .run_agent_with_db(&agent, investigation_id, &context, db, budget)
-                .await?;
+            let result = runner_for_stage(
+                reasoning_runner.as_ref(),
+                decompilation_runner.as_ref(),
+                stage.client_role,
+            )?
+            .run_agent_with_db(&agent, investigation_id, &context, db, budget)
+            .await?;
             eprintln!(
                 "  Agent {} completed ({} tokens used)",
                 result.agent_name, result.tokens_used
@@ -418,6 +474,44 @@ fn build_previous_results_context(preamble: &str, results: &[AgentResult]) -> St
     }
 
     ctx
+}
+
+fn runner_for_stage<'a>(
+    reasoning_runner: Option<&'a AgentRunner>,
+    decompilation_runner: Option<&'a AgentRunner>,
+    client_role: ClientRole,
+) -> anyhow::Result<&'a AgentRunner> {
+    match client_role {
+        ClientRole::Reasoning => missing_runner(reasoning_runner, client_role),
+        ClientRole::Decompilation => missing_runner(decompilation_runner, client_role),
+    }
+}
+
+fn missing_runner(
+    runner: Option<&AgentRunner>,
+    client_role: ClientRole,
+) -> anyhow::Result<&AgentRunner> {
+    runner.ok_or_else(|| {
+        anyhow::anyhow!(
+            "Pipeline stage requires [{}] {} client, but that lane was not configured for this run.",
+            field_name_for_role(client_role),
+            client_role_name(client_role)
+        )
+    })
+}
+
+fn field_name_for_role(client_role: ClientRole) -> &'static str {
+    match client_role {
+        ClientRole::Reasoning => "llm.reasoning",
+        ClientRole::Decompilation => "llm.decompilation",
+    }
+}
+
+fn client_role_name(client_role: ClientRole) -> &'static str {
+    match client_role {
+        ClientRole::Reasoning => "reasoning",
+        ClientRole::Decompilation => "decompilation",
+    }
 }
 
 fn truncate_to_char_boundary(text: &str, max_len: usize) -> String {
@@ -1193,12 +1287,38 @@ fn vuln_hunter_stage(agent_name: String, include_create_finding_preamble: bool) 
         context_mode: ContextMode::FromPreviousResults {
             preamble: preamble.into(),
         },
+        client_role: ClientRole::Reasoning,
     }
 }
 
 /// Build the default analysis pipeline: decompile-renamer -> attack-surface -> vuln-hunter -> critic.
 pub fn default_pipeline() -> AnalysisPipeline {
     default_pipeline_for_target("")
+}
+
+/// Build the default source-analysis pipeline: attack-surface -> vuln-hunter -> critic.
+pub fn source_pipeline_for_target(target: &str) -> AnalysisPipeline {
+    let hunter = select_vuln_hunter(target);
+    AnalysisPipeline {
+        stages: vec![
+            PipelineStage {
+                agent_name: "attack-surface".into(),
+                context_mode: ContextMode::FromGraph,
+                client_role: ClientRole::Reasoning,
+            },
+            vuln_hunter_stage(hunter, false),
+            PipelineStage {
+                agent_name: "critic".into(),
+                context_mode: ContextMode::FromPreviousResults {
+                    preamble: "Review the following vulnerability findings and validate each one. \
+                               For each finding, determine if it is a true positive or false \
+                               positive, and adjust severity if needed."
+                        .into(),
+                },
+                client_role: ClientRole::Reasoning,
+            },
+        ],
+    }
 }
 
 /// Build the default analysis pipeline with language-aware vuln-hunter selection.
@@ -1210,10 +1330,12 @@ pub fn default_pipeline_for_target(target: &str) -> AnalysisPipeline {
             PipelineStage {
                 agent_name: "decompile-renamer".into(),
                 context_mode: ContextMode::FromGraph,
+                client_role: ClientRole::Decompilation,
             },
             PipelineStage {
                 agent_name: "attack-surface".into(),
                 context_mode: ContextMode::FromGraph,
+                client_role: ClientRole::Reasoning,
             },
             vuln_hunter_stage(hunter, false),
             PipelineStage {
@@ -1224,6 +1346,7 @@ pub fn default_pipeline_for_target(target: &str) -> AnalysisPipeline {
                                positive, and adjust severity if needed."
                         .into(),
                 },
+                client_role: ClientRole::Reasoning,
             },
         ],
     }
@@ -1252,11 +1375,13 @@ pub fn deep_pipeline_for_target(target: &str) -> AnalysisPipeline {
             PipelineStage {
                 agent_name: "decompile-renamer".into(),
                 context_mode: ContextMode::FromGraph,
+                client_role: ClientRole::Decompilation,
             },
             // Discovery phase
             PipelineStage {
                 agent_name: "attack-surface".into(),
                 context_mode: ContextMode::FromGraph,
+                client_role: ClientRole::Reasoning,
             },
             vuln_hunter_stage(hunter, true),
             // NOTE: exploit-analyst and defense-analyst are NOT listed here.
@@ -1274,9 +1399,10 @@ pub fn deep_pipeline_for_target(target: &str) -> AnalysisPipeline {
                                For each finding that is genuinely exploitable (confirmed by exploit-analyst \
                                AND not fully mitigated per defense-analyst), use create_finding to record \
                                the confirmed vulnerability. Reject false positives and explain why. \
-                               Be decisive — false positives damage credibility more than false negatives."
+                                Be decisive — false positives damage credibility more than false negatives."
                         .into(),
                 },
+                client_role: ClientRole::Reasoning,
             },
         ],
     }
@@ -1312,7 +1438,7 @@ pub async fn run_deep_pipeline_with_debate(
     target: &str,
     investigation_id: &str,
     db: &GraphDb,
-    llm: Client,
+    clients: PipelineClients,
     budget: &mut TokenBudget,
 ) -> anyhow::Result<Vec<AgentResult>> {
     let pipeline = deep_pipeline_for_target(target);
@@ -1320,7 +1446,7 @@ pub async fn run_deep_pipeline_with_debate(
     // Debate runs after stage index 3 (after vuln-hunter, which is stages[2]),
     // before verdict-synthesizer (stages[3]).
     pipeline
-        .run_with_debate(target, investigation_id, db, llm, budget, &debate, 3)
+        .run_with_debate(target, investigation_id, db, clients, budget, &debate, 3)
         .await
 }
 
@@ -1375,6 +1501,7 @@ pub fn pipeline_from_names(names: &[String]) -> AnalysisPipeline {
             PipelineStage {
                 agent_name: name.clone(),
                 context_mode,
+                client_role: client_role_for_agent(name),
             }
         })
         .collect();
@@ -1388,6 +1515,14 @@ fn ordinal(n: usize) -> String {
         2 => "2nd".into(),
         3 => "3rd".into(),
         _ => format!("{n}th"),
+    }
+}
+
+fn client_role_for_agent(agent_name: &str) -> ClientRole {
+    if agent_name.starts_with("decompile-") {
+        ClientRole::Decompilation
+    } else {
+        ClientRole::Reasoning
     }
 }
 
@@ -2973,6 +3108,77 @@ mod tests {
             hunter_stage.is_some(),
             "Default pipeline must include a vuln-hunter variant"
         );
+    }
+
+    #[test]
+    fn test_binary_pipelines_route_decompile_stage_to_decompilation_client() {
+        let default_pipeline = default_pipeline();
+        assert_eq!(
+            default_pipeline
+                .stages
+                .first()
+                .map(|stage| stage.client_role),
+            Some(ClientRole::Decompilation)
+        );
+        assert!(default_pipeline
+            .stages
+            .iter()
+            .skip(1)
+            .all(|stage| stage.client_role == ClientRole::Reasoning));
+
+        let deep_pipeline = deep_pipeline();
+        assert_eq!(
+            deep_pipeline.stages.first().map(|stage| stage.client_role),
+            Some(ClientRole::Decompilation)
+        );
+        assert!(deep_pipeline
+            .stages
+            .iter()
+            .skip(1)
+            .all(|stage| stage.client_role == ClientRole::Reasoning));
+    }
+
+    #[test]
+    fn test_pipeline_from_names_routes_decompile_agents_to_decompilation_client() {
+        let pipeline = pipeline_from_names(&[
+            "decompile-analyst".to_string(),
+            "attack-surface".to_string(),
+        ]);
+
+        assert_eq!(pipeline.stages[0].client_role, ClientRole::Decompilation);
+        assert_eq!(pipeline.stages[1].client_role, ClientRole::Reasoning);
+    }
+
+    #[test]
+    fn test_source_pipeline_for_target_uses_reasoning_only() {
+        let pipeline = source_pipeline_for_target("sample.c");
+
+        assert!(pipeline.requires_reasoning_client());
+        assert!(!pipeline.requires_decompilation_client());
+        assert_eq!(
+            pipeline
+                .stages
+                .iter()
+                .map(|stage| stage.agent_name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["attack-surface", "vuln-hunter", "critic"]
+        );
+    }
+
+    #[test]
+    fn test_reasoning_only_pipeline_does_not_require_decompilation_client() {
+        let pipeline = pipeline_from_names(&["attack-surface".to_string(), "critic".to_string()]);
+
+        assert!(pipeline.requires_reasoning_client());
+        assert!(!pipeline.requires_decompilation_client());
+    }
+
+    #[test]
+    fn test_decompile_only_pipeline_does_not_require_reasoning_client() {
+        let pipeline = pipeline_from_names(&["decompile-analyst".to_string()]);
+
+        assert!(!pipeline.requires_reasoning_client());
+        assert!(pipeline.requires_decompilation_client());
     }
 
     #[test]

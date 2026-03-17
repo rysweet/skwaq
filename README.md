@@ -150,7 +150,7 @@ Create `skwaq.toml` in your project directory:
 ```toml
 [llm]
 reasoning = "copilot"       # default; or "anthropic" (requires ANTHROPIC_API_KEY)
-decompilation = "copilot"   # explicit no-fallback benchmark config
+decompilation = "copilot"   # backend for decompile-* stages; no hidden fallback
 
 [llm.copilot]
 model = "claude-opus-4.6"   # default model for Copilot backend
@@ -168,6 +168,8 @@ ghidra_path = "/opt/ghidra"
 The default backend is **GitHub Copilot** (`reasoning = "copilot"`), which uses Claude models via the GitHub Copilot LM Models API. Authentication uses your GitHub token (`gh auth login`).
 
 To use Anthropic directly, set `reasoning = "anthropic"` and provide `ANTHROPIC_API_KEY`.
+
+`decompile-renamer` and any future `decompile-*` pipeline stages use `[llm].decompilation`, while the rest of the agent pipeline uses `[llm].reasoning`. skwaq does not silently downgrade one lane to the other: a pipeline that includes `decompile-*` stages fails explicitly if `[llm].decompilation` is invalid or unavailable, but reasoning-only custom pipelines do not require that lane.
 
 See [docs/investigation-copilot-lm-api.md](docs/investigation-copilot-lm-api.md) for details on model availability and the Copilot integration architecture.
 

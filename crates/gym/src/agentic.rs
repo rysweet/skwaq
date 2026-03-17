@@ -1362,10 +1362,12 @@ fn collect_review_findings(
         .collect()
 }
 
-/// Cached LLM client for the process. Avoids redundant Copilot token
-/// negotiation when many cases run concurrently. The `Client` is `Clone`,
-/// so each pipeline stage gets a cheap clone.
-static LLM_CLIENT: tokio::sync::OnceCell<skwaq_core::llm::Client> =
+/// Cached reasoning client for source-only pipelines.
+static REASONING_CLIENT: tokio::sync::OnceCell<skwaq_core::llm::Client> =
+    tokio::sync::OnceCell::const_new();
+
+/// Cached full pipeline clients for pipelines that require decompilation.
+static FULL_PIPELINE_CLIENTS: tokio::sync::OnceCell<skwaq_core::agents::PipelineClients> =
     tokio::sync::OnceCell::const_new();
 
 /// Open the default durable memory store for agents.
@@ -1394,26 +1396,12 @@ async fn run_llm_pipeline(
 ) -> anyhow::Result<()> {
     let config = Config::load()
         .context("Failed to load skwaq configuration for hybrid benchmark analysis")?;
+    let pipeline = pipeline_for_target(file_str);
 
-    // Create or reuse the cached LLM client. The first call validates
-    // Copilot readiness and negotiates a token; subsequent calls reuse it.
-    // This eliminates cold-start rate-limit failures when many cases start
-    // concurrently.
-    let llm_client = LLM_CLIENT
-        .get_or_try_init(|| async {
-            skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm).await?;
-            skwaq_core::llm::create_client(&config.llm).await
-        })
-        .await
-        .with_context(|| {
-            format!(
-                "Hybrid benchmark analysis requires a working LLM client for {}",
-                file_str
-            )
-        })?
-        .clone();
-
-    let pipeline = skwaq_core::agents::deep_pipeline_for_target(file_str);
+    // Create or reuse cached LLM clients. Source-only pipelines cache the
+    // reasoning lane independently so they do not force decompilation auth;
+    // binary/decompile pipelines still cache the full pair together.
+    let pipeline_clients = cached_pipeline_clients(&config, &pipeline, file_str).await?;
     let budget_amount = config.analysis.default_token_budget.min(100_000);
     let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
 
@@ -1430,13 +1418,20 @@ async fn run_llm_pipeline(
     let pipeline_result = if let Some(ref mem) = memory {
         tokio::time::timeout(
             std::time::Duration::from_secs(timeout_secs),
-            pipeline.run_with_memory(&target, inv_id, db, llm_client, &mut budget, mem),
+            pipeline.run_with_memory(
+                &target,
+                inv_id,
+                db,
+                pipeline_clients.clone(),
+                &mut budget,
+                mem,
+            ),
         )
         .await
     } else {
         tokio::time::timeout(
             std::time::Duration::from_secs(timeout_secs),
-            pipeline.run(&target, inv_id, db, llm_client, &mut budget),
+            pipeline.run(&target, inv_id, db, pipeline_clients.clone(), &mut budget),
         )
         .await
     };
@@ -1479,6 +1474,85 @@ async fn run_llm_pipeline(
             );
         }
     }
+}
+
+fn pipeline_for_target(file_str: &str) -> skwaq_core::agents::AnalysisPipeline {
+    if skwaq_core::source::is_source_file(Path::new(file_str)) {
+        skwaq_core::agents::source_pipeline_for_target(file_str)
+    } else {
+        skwaq_core::agents::deep_pipeline_for_target(file_str)
+    }
+}
+
+async fn cached_pipeline_clients(
+    config: &Config,
+    pipeline: &skwaq_core::agents::AnalysisPipeline,
+    file_str: &str,
+) -> anyhow::Result<skwaq_core::agents::PipelineClients> {
+    if pipeline.requires_decompilation_client() {
+        return FULL_PIPELINE_CLIENTS
+            .get_or_try_init(|| async {
+                skwaq_core::llm::ensure_benchmark_copilot_ready_for_pipeline(
+                    &config.llm,
+                    pipeline.requires_reasoning_client(),
+                    pipeline.requires_decompilation_client(),
+                )
+                .await?;
+                let (reasoning_client, decompilation_client) = skwaq_core::llm::create_pipeline_clients(
+                    &config.llm,
+                    pipeline.requires_reasoning_client(),
+                    pipeline.requires_decompilation_client(),
+                )
+                .await?;
+                Ok::<skwaq_core::agents::PipelineClients, anyhow::Error>(
+                    skwaq_core::agents::PipelineClients::from_optional(
+                        reasoning_client,
+                        decompilation_client,
+                    ),
+                )
+            })
+            .await
+            .with_context(|| {
+                format!(
+                    "Hybrid benchmark analysis requires working reasoning/decompilation clients for {}",
+                    file_str
+                )
+            })
+            .cloned();
+    }
+
+    if let Some(full_clients) = FULL_PIPELINE_CLIENTS.get() {
+        return Ok(skwaq_core::agents::PipelineClients::from_optional(
+            full_clients.reasoning.clone(),
+            None,
+        ));
+    }
+
+    let reasoning_client = REASONING_CLIENT
+        .get_or_try_init(|| async {
+            skwaq_core::llm::ensure_benchmark_copilot_ready_for_pipeline(&config.llm, true, false)
+                .await?;
+            let (reasoning_client, _) =
+                skwaq_core::llm::create_pipeline_clients(&config.llm, true, false).await?;
+            reasoning_client.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Hybrid benchmark analysis requested a reasoning lane, but no reasoning client was created"
+                )
+            })
+        })
+        .await
+        .with_context(|| {
+            format!(
+                "Hybrid benchmark analysis requires a working reasoning client for {}",
+                file_str
+            )
+        })?
+        .clone();
+
+    Ok(skwaq_core::agents::PipelineClients::from_optional(
+        Some(reasoning_client),
+        None,
+    ))
 }
 
 /// Collect findings from DB, optionally excluding a specific agent.
@@ -1741,6 +1815,20 @@ mod tests {
         let deduped = dedup_findings_by_best_severity(findings);
         assert_eq!(deduped.len(), 1);
         assert_eq!(deduped[0].id, "2");
+    }
+
+    #[test]
+    fn test_pipeline_for_target_uses_reasoning_only_for_source_files() {
+        let pipeline = pipeline_for_target("tests/fixtures/buffer_overflow.c");
+        assert!(pipeline.requires_reasoning_client());
+        assert!(!pipeline.requires_decompilation_client());
+    }
+
+    #[test]
+    fn test_pipeline_for_target_uses_decompilation_for_binaries() {
+        let pipeline = pipeline_for_target("tests/fixtures/binaries/buffer_overflow_O0");
+        assert!(pipeline.requires_reasoning_client());
+        assert!(pipeline.requires_decompilation_client());
     }
 
     #[test]

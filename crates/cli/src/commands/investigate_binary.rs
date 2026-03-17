@@ -71,7 +71,6 @@ pub async fn run(binary: &Path) -> anyhow::Result<()> {
 
     // LLM agent pipeline — required
     let config = skwaq_core::config::Config::load()?;
-    let llm_client = skwaq_core::llm::create_client(&config.llm).await?;
 
     let file_name = binary
         .file_name()
@@ -80,6 +79,12 @@ pub async fn run(binary: &Path) -> anyhow::Result<()> {
 
     println!("  Running AI agent pipeline...");
     let pipeline = skwaq_core::agents::deep_pipeline_for_target(&file_name);
+    let (reasoning_client, decompilation_client) = skwaq_core::llm::create_pipeline_clients(
+        &config.llm,
+        pipeline.requires_reasoning_client(),
+        pipeline.requires_decompilation_client(),
+    )
+    .await?;
     let budget_amount = config.analysis.default_token_budget.min(200_000);
     let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
 
@@ -87,7 +92,17 @@ pub async fn run(binary: &Path) -> anyhow::Result<()> {
     let memory = skwaq_core::memory::MemoryStore::open_default()?;
 
     let results = pipeline
-        .run_with_memory(&file_name, &inv_id, &db, llm_client, &mut budget, &memory)
+        .run_with_memory(
+            &file_name,
+            &inv_id,
+            &db,
+            skwaq_core::agents::PipelineClients::from_optional(
+                reasoning_client,
+                decompilation_client,
+            ),
+            &mut budget,
+            &memory,
+        )
         .await?;
 
     for result in &results {

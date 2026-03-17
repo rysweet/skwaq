@@ -1,0 +1,68 @@
+name: "skwaq analyze - explicit decompilation lane behavior"
+description: "Verifies reasoning-only custom pipelines ignore an unused invalid decompilation lane, while decompile pipelines fail explicitly on that lane."
+version: "1.0.0"
+
+config:
+  timeout: 300000
+  retries: 0
+  parallel: false
+
+agents:
+  - name: "skwaq-cli"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "."
+      timeout: 300000
+      capture_output: true
+
+steps:
+  - name: "Run explicit decompilation lane smoke"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "./tests/qa/bin/analyze-explicit-decompilation-lane.sh"
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "=== ingest-source ==="
+        - "=== analyze-default-source ==="
+        - "Pipeline: attack-surface -> vuln-hunter -> critic"
+        - "default source pipeline stayed on reasoning lane"
+        - "=== analyze-reasoning-only ==="
+        - "Pipeline: attack-surface"
+        - "Total tokens used: 0"
+        - "reasoning-only pipeline ignored unused llm.decompilation"
+        - "=== analyze-decompile-only ==="
+        - "Unsupported llm.decompilation backend"
+        - "decompile pipeline failed explicitly on llm.decompilation"
+    timeout: 300000
+
+assertions:
+  - name: "Explicit decompilation lane smoke succeeds"
+    type: "command_success"
+    agent: "skwaq-cli"
+    params:
+      step: "Run explicit decompilation lane smoke"
+
+  - name: "Reasoning and decompile lane behavior is visible"
+    type: "output_contains_all"
+    agent: "skwaq-cli"
+    params:
+      step: "Run explicit decompilation lane smoke"
+      required_strings:
+        - "Pipeline: attack-surface -> vuln-hunter -> critic"
+        - "default source pipeline stayed on reasoning lane"
+        - "Pipeline: attack-surface"
+        - "reasoning-only pipeline ignored unused llm.decompilation"
+        - "Unsupported llm.decompilation backend"
+        - "decompile pipeline failed explicitly on llm.decompilation"
+
+metadata:
+  tags:
+    - "cli"
+    - "analysis"
+    - "decompilation"
+    - "regression"
+  priority: "high"
+  author: "copilot-cli"
