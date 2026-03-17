@@ -118,6 +118,36 @@ pub fn print_summary(score: &AggregateScore, suite: &str) {
         }
         println!();
     }
+
+    // Print semantic coverage summary
+    if !score.per_semantic.is_empty() {
+        let exercised = score.per_semantic.len();
+        let with_tp: Vec<_> = score
+            .per_semantic
+            .values()
+            .filter(|s| s.true_positives > 0)
+            .collect();
+        let gaps: Vec<_> = score
+            .per_semantic
+            .values()
+            .filter(|s| s.total_cases > 0 && s.true_positives == 0)
+            .map(|s| s.class_name.as_str())
+            .collect();
+
+        println!(
+            "  SEMANTIC COVERAGE: {}/{} classes exercised, {} with detections",
+            exercised,
+            exercised,
+            with_tp.len()
+        );
+        if !gaps.is_empty() {
+            println!(
+                "  Detection gaps (cases exist but 0 TP): {}",
+                gaps.join(", ")
+            );
+        }
+        println!();
+    }
 }
 
 /// Print a comparison between two runs.
