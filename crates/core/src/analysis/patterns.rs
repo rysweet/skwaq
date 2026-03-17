@@ -21,6 +21,11 @@ pub enum DangerCategory {
     UnsafeCode,
     PrototypePollution,
     Xss,
+    NullDeref,
+    IntegerOverflow,
+    DivideByZero,
+    ResourceLeak,
+    UninitializedVar,
 }
 
 impl std::fmt::Display for DangerCategory {
@@ -37,6 +42,11 @@ impl std::fmt::Display for DangerCategory {
             Self::UnsafeCode => write!(f, "unsafe_code"),
             Self::PrototypePollution => write!(f, "prototype_pollution"),
             Self::Xss => write!(f, "xss"),
+            Self::NullDeref => write!(f, "null_deref"),
+            Self::IntegerOverflow => write!(f, "integer_overflow"),
+            Self::DivideByZero => write!(f, "divide_by_zero"),
+            Self::ResourceLeak => write!(f, "resource_leak"),
+            Self::UninitializedVar => write!(f, "uninitialized_var"),
         }
     }
 }

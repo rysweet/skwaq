@@ -966,6 +966,86 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "Hard-coded secret/key in C code; use secure configuration",
         },
+        // --- Null pointer dereference (CWE-476/690/252/253) ---
+        // Unchecked return from malloc/calloc/realloc
+        SourcePattern {
+            regex: r"\b(malloc|calloc|realloc)\s*\([^)]*\)\s*;",
+            category: DangerCategory::NullDeref,
+            severity: Severity::High,
+            reason: "Return value of allocation not checked for NULL; may dereference null pointer (CWE-690)",
+        },
+        // Unchecked return from fopen
+        SourcePattern {
+            regex: r"\bfopen\s*\([^)]*\)\s*;",
+            category: DangerCategory::NullDeref,
+            severity: Severity::High,
+            reason: "Return value of fopen not checked for NULL; may dereference null pointer (CWE-690)",
+        },
+        // --- Integer overflow / underflow (CWE-190/191) ---
+        SourcePattern {
+            regex: r"\batoi\s*\([^)]*\)\s*[\+\-\*]",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::High,
+            reason: "Arithmetic on atoi result without overflow check; use strtol with range validation (CWE-190)",
+        },
+        SourcePattern {
+            regex: r"\batol\s*\([^)]*\)\s*[\+\-\*]",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::High,
+            reason: "Arithmetic on atol result without overflow check; use strtol with range validation (CWE-190)",
+        },
+        SourcePattern {
+            regex: r"\bstrtol\s*\(",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::Medium,
+            reason: "strtol conversion may overflow; check errno and range after call (CWE-190)",
+        },
+        SourcePattern {
+            regex: r"\bstrtoul\s*\(",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::Medium,
+            reason: "strtoul conversion may overflow; check errno and range after call (CWE-190)",
+        },
+        // --- Divide by zero (CWE-369) ---
+        SourcePattern {
+            regex: r"\b\w+\s*/\s*\w+\s*[;,\)]",
+            category: DangerCategory::DivideByZero,
+            severity: Severity::Medium,
+            reason: "Division without zero check; validate divisor is non-zero (CWE-369)",
+        },
+        SourcePattern {
+            regex: r"\b\w+\s*%\s*\w+\s*[;,\)]",
+            category: DangerCategory::DivideByZero,
+            severity: Severity::Medium,
+            reason: "Modulo without zero check; validate divisor is non-zero (CWE-369)",
+        },
+        // --- Memory/resource leak (CWE-401/404) ---
+        SourcePattern {
+            regex: r"\bmalloc\s*\([^)]*\)\s*;",
+            category: DangerCategory::ResourceLeak,
+            severity: Severity::Medium,
+            reason: "malloc without storing result may leak memory (CWE-401)",
+        },
+        SourcePattern {
+            regex: r"\bfopen\s*\(",
+            category: DangerCategory::ResourceLeak,
+            severity: Severity::Low,
+            reason: "fopen requires matching fclose; missing close causes resource leak (CWE-404)",
+        },
+        SourcePattern {
+            regex: r"(?i)\bCreateFile[AW]?\s*\(",
+            category: DangerCategory::ResourceLeak,
+            severity: Severity::Low,
+            reason: "CreateFile requires matching CloseHandle; missing close causes resource leak (CWE-404)",
+        },
+        // --- Uninitialized variable (CWE-457) ---
+        // Stack arrays without initialization
+        SourcePattern {
+            regex: r"\b(?:char|int|long|short|float|double|unsigned|signed)\s+\w+\s*\[\s*\w+\s*\]\s*;",
+            category: DangerCategory::UninitializedVar,
+            severity: Severity::Medium,
+            reason: "Stack array declared without initialization; may contain undefined values (CWE-457)",
+        },
     ]
 }
 

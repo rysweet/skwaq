@@ -175,6 +175,25 @@ pub fn cwe_family(cwe: u32) -> u32 {
         843 => 119,
         // Untrusted/expired/freed pointer dereference -> memory safety family
         822 | 823 | 825 => 119,
+        // Free pointer not at start of buffer -> memory safety family
+        761 => 119,
+        // Null pointer dereference family -> CWE-476
+        690 => 476,
+        // Memory leak family -> CWE-401
+        772 => 401,
+        // Divide by zero -> CWE-369
+        // (identity — kept explicit so we don't forget)
+        369 => 369,
+        // Uncontrolled resource consumption family -> CWE-400
+        770 | 771 | 789 => 400,
+        // Use of uninitialized variable -> CWE-457
+        908 => 457,
+        // Improper resource shutdown family -> CWE-404
+        459 | 763 | 775 => 404,
+        // Unchecked loop condition -> CWE-606
+        606 => 606,
+        // Uncontrolled search path -> CWE-427
+        426 => 427,
         // Everything else maps to itself.
         other => other,
     }
@@ -197,6 +216,11 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
         "unsafe_code" => vec![676, 242],
         "prototype_pollution" => vec![1321],
         "xss" => vec![79, 80],
+        "null_deref" => vec![476, 252, 253, 690],
+        "integer_overflow" => vec![190, 191, 192, 193, 194, 195, 196, 197, 680, 681],
+        "divide_by_zero" => vec![369],
+        "resource_leak" => vec![401, 772, 775],
+        "uninitialized_var" => vec![457, 908],
         _ => vec![],
     }
 }
@@ -806,6 +830,58 @@ mod tests {
         assert_eq!(regressions.len(), 1);
         assert_eq!(regressions[0].cwe_id, 119);
         assert!((regressions[0].delta_detection_rate + 0.03).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_expanded_cwe_family_mappings() {
+        // Null deref from unchecked return -> CWE-476
+        assert_eq!(cwe_family(690), 476);
+        // Memory leak -> itself (CWE-401)
+        assert_eq!(cwe_family(401), 401);
+        // Held-resource leak -> CWE-401
+        assert_eq!(cwe_family(772), 401);
+        // Free pointer not at start of buffer -> memory safety
+        assert_eq!(cwe_family(761), 119);
+        // Divide by zero -> itself
+        assert_eq!(cwe_family(369), 369);
+        // Excessive allocation size -> resource consumption
+        assert_eq!(cwe_family(789), 400);
+        // Uncontrolled resource consumption variants
+        assert_eq!(cwe_family(770), 400);
+        assert_eq!(cwe_family(771), 400);
+        // Use of uninitialized value -> CWE-457
+        assert_eq!(cwe_family(908), 457);
+        // Improper resource shutdown variants -> CWE-404
+        assert_eq!(cwe_family(459), 404);
+        assert_eq!(cwe_family(763), 404);
+        assert_eq!(cwe_family(775), 404);
+        // Uncontrolled search path -> CWE-427
+        assert_eq!(cwe_family(426), 427);
+    }
+
+    #[test]
+    fn test_expanded_category_to_cwes() {
+        let null_deref = category_to_cwes("null_deref");
+        assert!(null_deref.contains(&476));
+        assert!(null_deref.contains(&690));
+        assert!(null_deref.contains(&252));
+        assert!(null_deref.contains(&253));
+
+        let int_overflow = category_to_cwes("integer_overflow");
+        assert!(int_overflow.contains(&190));
+        assert!(int_overflow.contains(&191));
+        assert!(int_overflow.contains(&197));
+
+        let div_zero = category_to_cwes("divide_by_zero");
+        assert!(div_zero.contains(&369));
+
+        let resource_leak = category_to_cwes("resource_leak");
+        assert!(resource_leak.contains(&401));
+        assert!(resource_leak.contains(&772));
+
+        let uninit = category_to_cwes("uninitialized_var");
+        assert!(uninit.contains(&457));
+        assert!(uninit.contains(&908));
     }
 
     #[test]
