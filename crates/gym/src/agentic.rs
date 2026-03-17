@@ -22,7 +22,7 @@ use skwaq_core::config::Config;
 use skwaq_core::graph::builder::GraphBuilder;
 use skwaq_core::graph::GraphDb;
 use skwaq_core::source::parse_file;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
@@ -293,11 +293,7 @@ pub async fn run_agentic_source_analysis(
         synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await?
     };
 
-    let mut seen_categories: HashSet<String> = HashSet::new();
-    let deduped: Vec<DetectedFinding> = synthesized
-        .into_iter()
-        .filter(|f| seen_categories.insert(dedup_key(f)))
-        .collect();
+    let deduped = dedup_findings_by_best_severity(synthesized);
 
     Ok(deduped)
 }
@@ -408,11 +404,7 @@ pub async fn run_agentic_binary_analysis(
         synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await?
     };
 
-    let mut seen_categories: HashSet<String> = HashSet::new();
-    let deduped: Vec<DetectedFinding> = synthesized
-        .into_iter()
-        .filter(|f| seen_categories.insert(dedup_key(f)))
-        .collect();
+    let deduped = dedup_findings_by_best_severity(synthesized);
 
     Ok(deduped)
 }
@@ -454,12 +446,7 @@ pub async fn run_llm_only_source_analysis(
     // Return all LLM findings directly (no intersection filter)
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
 
-    // Deduplicate by category
-    let mut seen_categories: HashSet<String> = HashSet::new();
-    let deduped: Vec<DetectedFinding> = all_findings
-        .into_iter()
-        .filter(|f| seen_categories.insert(dedup_key(f)))
-        .collect();
+    let deduped = dedup_findings_by_best_severity(all_findings);
 
     Ok(deduped)
 }
@@ -499,11 +486,7 @@ pub async fn run_llm_only_binary_analysis(
 
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
 
-    let mut seen_categories: HashSet<String> = HashSet::new();
-    let deduped: Vec<DetectedFinding> = all_findings
-        .into_iter()
-        .filter(|f| seen_categories.insert(dedup_key(f)))
-        .collect();
+    let deduped = dedup_findings_by_best_severity(all_findings);
 
     Ok(deduped)
 }
@@ -1353,21 +1336,13 @@ fn apply_rejected_synthesis_decisions(
         total
     );
 
-    let mut seen_categories: HashSet<String> = HashSet::new();
-    let mut synthesized: Vec<DetectedFinding> = Vec::new();
-
-    for f in llm_findings {
-        if !rejected_ids.contains(&f.id.to_lowercase()) && seen_categories.insert(dedup_key(f)) {
-            synthesized.push(f.clone());
-        }
-    }
-    for f in pattern_findings {
-        if !rejected_ids.contains(&f.id.to_lowercase()) && seen_categories.insert(dedup_key(f)) {
-            synthesized.push(f.clone());
-        }
-    }
-
-    synthesized
+    dedup_findings_by_best_severity(
+        llm_findings
+            .iter()
+            .chain(pattern_findings.iter())
+            .filter(|finding| !rejected_ids.contains(&finding.id.to_ascii_lowercase()))
+            .cloned(),
+    )
 }
 
 fn collect_review_findings(
@@ -1619,6 +1594,40 @@ fn dedup_key(finding: &DetectedFinding) -> String {
     format!("semantic:{}:{}:{}", class_names, scope, location)
 }
 
+fn dedup_findings_by_best_severity(
+    findings: impl IntoIterator<Item = DetectedFinding>,
+) -> Vec<DetectedFinding> {
+    let mut kept: Vec<DetectedFinding> = Vec::new();
+    let mut positions: HashMap<String, usize> = HashMap::new();
+
+    for finding in findings {
+        let key = dedup_key(&finding);
+        match positions.get(&key).copied() {
+            Some(index) => {
+                if severity_rank(&finding.severity) < severity_rank(&kept[index].severity) {
+                    kept[index] = finding;
+                }
+            }
+            None => {
+                positions.insert(key, kept.len());
+                kept.push(finding);
+            }
+        }
+    }
+
+    kept
+}
+
+fn severity_rank(severity: &str) -> u8 {
+    match severity.trim().to_ascii_lowercase().as_str() {
+        "critical" => 0,
+        "high" => 1,
+        "medium" => 2,
+        "low" => 3,
+        _ => 4,
+    }
+}
+
 fn dedup_location_key(finding: &DetectedFinding) -> String {
     if let Some(line) = finding.line {
         return format!("line:{line}");
@@ -1729,12 +1738,9 @@ mod tests {
             },
         ];
 
-        let mut seen = HashSet::new();
-        let deduped: Vec<_> = findings
-            .into_iter()
-            .filter(|f| seen.insert(dedup_key(f)))
-            .collect();
+        let deduped = dedup_findings_by_best_severity(findings);
         assert_eq!(deduped.len(), 1);
+        assert_eq!(deduped[0].id, "2");
     }
 
     #[test]
@@ -1762,11 +1768,7 @@ mod tests {
             },
         ];
 
-        let mut seen = HashSet::new();
-        let deduped: Vec<_> = findings
-            .into_iter()
-            .filter(|f| seen.insert(dedup_key(f)))
-            .collect();
+        let deduped = dedup_findings_by_best_severity(findings);
         assert_eq!(deduped.len(), 2);
     }
 
@@ -1795,12 +1797,38 @@ mod tests {
             },
         ];
 
-        let mut seen = HashSet::new();
-        let deduped: Vec<_> = findings
-            .into_iter()
-            .filter(|f| seen.insert(dedup_key(f)))
-            .collect();
+        let deduped = dedup_findings_by_best_severity(findings);
         assert_eq!(deduped.len(), 2);
+    }
+
+    #[test]
+    fn test_dedup_preserves_first_finding_on_severity_tie() {
+        let findings = vec![
+            DetectedFinding {
+                id: "1".into(),
+                category: "memory".into(),
+                severity: "high".into(),
+                cwes: vec![],
+                file: "test.c".into(),
+                function: "strcpy".into(),
+                line: Some(10),
+                title: "Pattern: strcpy".into(),
+            },
+            DetectedFinding {
+                id: "2".into(),
+                category: "memory".into(),
+                severity: "high".into(),
+                cwes: vec![],
+                file: "test.c".into(),
+                function: "strcpy".into(),
+                line: Some(10),
+                title: "LLM: buffer overflow in strcpy".into(),
+            },
+        ];
+
+        let deduped = dedup_findings_by_best_severity(findings);
+        assert_eq!(deduped.len(), 1);
+        assert_eq!(deduped[0].id, "1");
     }
 
     #[test]
@@ -2005,6 +2033,34 @@ mod tests {
         let result = apply_synthesis_decisions(&pattern, &llm, response);
         assert_eq!(result.len(), 1, "One rejected → only 1 remains");
         assert_eq!(result[0].id, "l1");
+    }
+
+    #[test]
+    fn test_apply_synthesis_prefers_higher_severity_for_same_key() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "LLM: buffer overflow in strcpy".into(),
+        }];
+        let response = "CONFIRM p1\nCONFIRM l1\n";
+        let result = apply_synthesis_decisions(&pattern, &llm, response);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, "p1");
     }
 
     #[test]
