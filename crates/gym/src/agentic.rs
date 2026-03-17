@@ -22,7 +22,7 @@ use skwaq_core::config::Config;
 use skwaq_core::graph::builder::GraphBuilder;
 use skwaq_core::graph::GraphDb;
 use skwaq_core::source::parse_file;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -33,6 +33,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 pub struct SynthesisStats {
     llm_synthesis_count: AtomicU32,
     failed_count: AtomicU32,
+    refinement_count: AtomicU32,
 }
 
 impl Default for SynthesisStats {
@@ -40,6 +41,7 @@ impl Default for SynthesisStats {
         Self {
             llm_synthesis_count: AtomicU32::new(0),
             failed_count: AtomicU32::new(0),
+            refinement_count: AtomicU32::new(0),
         }
     }
 }
@@ -57,10 +59,15 @@ impl SynthesisStats {
         self.failed_count.fetch_add(1, Ordering::Relaxed);
     }
 
+    fn record_refinement(&self) {
+        self.refinement_count.fetch_add(1, Ordering::Relaxed);
+    }
+
     /// Log end-of-run synthesis summary. Call after all cases complete.
     pub fn report(&self) {
         let llm = self.llm_synthesis_count.load(Ordering::Relaxed);
         let failed = self.failed_count.load(Ordering::Relaxed);
+        let refined = self.refinement_count.load(Ordering::Relaxed);
         let total = llm + failed;
         if total == 0 {
             tracing::info!("Synthesis: no dual-source cases (nothing to synthesize)");
@@ -68,9 +75,10 @@ impl SynthesisStats {
         }
         if failed > 0 {
             tracing::warn!(
-                "Synthesis summary: {}/{} cases used LLM synthesis, {} failed loudly",
+                "Synthesis summary: {}/{} cases used LLM synthesis, {} refined, {} failed loudly",
                 llm,
                 total,
+                refined,
                 failed,
             );
             eprintln!(
@@ -80,9 +88,10 @@ impl SynthesisStats {
             );
         } else {
             tracing::info!(
-                "Synthesis summary: {}/{} cases used LLM synthesis (all successful)",
+                "Synthesis summary: {}/{} cases used LLM synthesis ({} refined, all successful)",
                 llm,
                 total,
+                refined,
             );
         }
     }
@@ -540,10 +549,11 @@ async fn llm_synthesize(
          2. LLM AGENTS (AI-powered deep analysis, better understanding, may hallucinate)\n\n\
          Your job: decide which findings are REAL vulnerabilities.\n\n\
          For each finding, respond with one line:\n\
-         CONFIRM <id> — strong evidence from one or both sources\n\
+         CONFIRM <id> — strong evidence, clearly a real vulnerability\n\
+         CONFIRM_WEAK <id> — probably real but you are not fully certain\n\
          REJECT <id> — insufficient evidence, likely false positive\n\n\
          Only REJECT findings where you are confident they are false positives.\n\
-         When in doubt, CONFIRM.\n\n",
+         Use CONFIRM_WEAK when evidence is mixed or you need more context.\n\n",
     );
 
     prompt.push_str("=== PATTERN FINDINGS ===\n");
@@ -567,7 +577,9 @@ async fn llm_synthesize(
         ));
     }
 
-    prompt.push_str("\nEvaluate each finding. Respond with CONFIRM or REJECT for each ID.\n");
+    prompt.push_str(
+        "\nEvaluate each finding. Respond with CONFIRM, CONFIRM_WEAK, or REJECT for each ID.\n",
+    );
 
     // Budget scales with number of findings to evaluate
     let budget_amount = config
@@ -602,8 +614,71 @@ async fn llm_synthesize(
         Err(_) => anyhow::bail!("LLM synthesis timed out after {}s", timeout_secs),
     };
 
-    // Parse and apply synthesis decisions
-    let synthesized = apply_synthesis_decisions(pattern_findings, llm_findings, &response_text);
+    // Parse initial verdicts
+    let mut verdicts = parse_verdicts(&response_text);
+    let borderline = verdicts.borderline_ids();
+
+    // Refinement: if the initial pass flagged borderline findings, ask the
+    // LLM to reconsider just those with the initial verdict as context.
+    // At most one refinement round to bound cost.
+    if !borderline.is_empty() {
+        let borderline_findings: Vec<&DetectedFinding> = pattern_findings
+            .iter()
+            .chain(llm_findings.iter())
+            .filter(|f| borderline.contains(&f.id.to_lowercase()))
+            .collect();
+
+        if !borderline_findings.is_empty() {
+            tracing::info!(
+                "Refinement: re-evaluating {} borderline findings",
+                borderline_findings.len()
+            );
+
+            let refinement_prompt = build_refinement_prompt(&borderline_findings, &response_text);
+            let refinement_budget_amount = config
+                .analysis
+                .default_token_budget
+                .min(5_000 + borderline_findings.len() as u64 * 500);
+            let mut refinement_budget = skwaq_core::llm::TokenBudget::new(refinement_budget_amount);
+
+            let noop_executor2 = |_name: String, _args: serde_json::Value| async move {
+                Ok::<serde_json::Value, anyhow::Error>(serde_json::json!({"error": "no tools"}))
+            };
+
+            let refinement_result = tokio::time::timeout(
+                std::time::Duration::from_secs(timeout_secs),
+                skwaq_core::llm::execute_with_tools(
+                    &client,
+                    model,
+                    "You are a lead security reviewer refining borderline verdicts.",
+                    &refinement_prompt,
+                    &[],
+                    noop_executor2,
+                    &mut refinement_budget,
+                ),
+            )
+            .await;
+
+            if let Ok(Ok(refinement_text)) = refinement_result {
+                let refined = parse_verdicts(&refinement_text);
+                // Merge: only update borderline IDs; keep all other verdicts.
+                for (id, new_verdict) in &refined.decisions {
+                    if borderline.contains(id) {
+                        verdicts.decisions.insert(id.clone(), new_verdict.clone());
+                    }
+                }
+                SYNTHESIS_STATS.record_refinement();
+                tracing::info!(
+                    "Refinement complete: {} verdicts updated",
+                    refined.decisions.len()
+                );
+            } else {
+                tracing::warn!("Refinement LLM call failed; using initial verdicts");
+            }
+        }
+    }
+
+    let synthesized = apply_verdicts(pattern_findings, llm_findings, &verdicts);
 
     Ok(synthesized)
 }
@@ -618,30 +693,117 @@ fn sanitize_for_prompt(s: &str) -> String {
         .replace("===", "---") // Prevent section marker injection
 }
 
-/// Parse LLM synthesis response and apply CONFIRM/REJECT decisions.
+/// A single verdict from the LLM synthesis response.
+#[derive(Debug, Clone, PartialEq)]
+enum Verdict {
+    Confirm,
+    ConfirmWeak,
+    Reject,
+}
+
+/// Parsed verdicts keyed by finding ID (lowercase).
+struct SynthesisVerdicts {
+    decisions: HashMap<String, Verdict>,
+}
+
+impl SynthesisVerdicts {
+    /// IDs where the LLM was uncertain (CONFIRM_WEAK or not mentioned at all
+    /// when other findings were explicitly decided).
+    fn borderline_ids(&self) -> HashSet<String> {
+        self.decisions
+            .iter()
+            .filter(|(_, v)| **v == Verdict::ConfirmWeak)
+            .map(|(id, _)| id.clone())
+            .collect()
+    }
+}
+
+/// Build a refinement prompt for borderline findings.
+///
+/// Provides the initial synthesis context and asks the LLM to make a
+/// definitive CONFIRM or REJECT decision for each borderline finding.
+fn build_refinement_prompt(
+    borderline_findings: &[&DetectedFinding],
+    initial_response: &str,
+) -> String {
+    let mut prompt = String::from(
+        "You previously evaluated vulnerability findings and were uncertain about some.\n\
+         Below is your initial assessment, followed by the borderline findings.\n\n\
+         For each borderline finding, make a FINAL decision:\n\
+         CONFIRM <id> — this is a real vulnerability\n\
+         REJECT <id> — this is a false positive\n\n\
+         Do NOT use CONFIRM_WEAK. You must commit to CONFIRM or REJECT.\n\n\
+         === YOUR INITIAL ASSESSMENT ===\n",
+    );
+    // Include a sanitized excerpt of the initial response for context
+    let safe_initial: String = initial_response.chars().take(2000).collect();
+    prompt.push_str(&sanitize_for_prompt(&safe_initial));
+    prompt.push_str("\n\n=== BORDERLINE FINDINGS FOR RE-EVALUATION ===\n");
+    for f in borderline_findings {
+        let safe_title = sanitize_for_prompt(&f.title);
+        let semantic = semantic_prompt_hint(f);
+        prompt.push_str(&format!(
+            "ID: {} | Category: {} | Severity: {} | Semantic classes: {} | {}\n",
+            f.id, f.category, f.severity, semantic, safe_title
+        ));
+    }
+    prompt.push_str("\nMake a definitive CONFIRM or REJECT decision for each ID above.\n");
+    prompt
+}
+
+/// Parse LLM synthesis response into structured verdicts.
+///
+/// Recognises three forms per line:
+///   CONFIRM <id>       — strong confirm
+///   CONFIRM_WEAK <id>  — borderline / low confidence
+///   REJECT <id>        — rejected
+///
+/// Any finding ID not mentioned defaults to `Confirm`.
+fn parse_verdicts(response_text: &str) -> SynthesisVerdicts {
+    let mut decisions: HashMap<String, Verdict> = HashMap::new();
+    for line in response_text.lines() {
+        let trimmed = line.trim().to_uppercase();
+        let (verdict, rest) = if let Some(rest) = trimmed.strip_prefix("CONFIRM_WEAK") {
+            (Verdict::ConfirmWeak, rest)
+        } else if let Some(rest) = trimmed.strip_prefix("CONFIRM") {
+            (Verdict::Confirm, rest)
+        } else if let Some(rest) = trimmed.strip_prefix("REJECT") {
+            (Verdict::Reject, rest)
+        } else {
+            continue;
+        };
+        if let Some(id) = rest.split_whitespace().next() {
+            decisions.insert(id.to_lowercase(), verdict);
+        }
+    }
+    SynthesisVerdicts { decisions }
+}
+
+/// Apply parsed verdicts to produce the final findings list.
 ///
 /// Pure function — no I/O, fully testable.
 /// Default behavior: CONFIRM all (only explicit REJECT removes findings).
+#[cfg(test)]
 fn apply_synthesis_decisions(
     pattern_findings: &[DetectedFinding],
     llm_findings: &[DetectedFinding],
     response_text: &str,
 ) -> Vec<DetectedFinding> {
-    // Parse REJECT decisions (CONFIRM is the default — unlisted = confirmed)
-    let rejected_ids: HashSet<String> = response_text
-        .lines()
-        .filter_map(|line| {
-            let trimmed = line.trim().to_uppercase();
-            if trimmed.starts_with("REJECT") {
-                // Extract ID: "REJECT abc-123" or "REJECT abc-123 — reason"
-                trimmed
-                    .split_whitespace()
-                    .nth(1)
-                    .map(|id| id.to_lowercase()) // Normalize case for matching
-            } else {
-                None
-            }
-        })
+    let verdicts = parse_verdicts(response_text);
+    apply_verdicts(pattern_findings, llm_findings, &verdicts)
+}
+
+/// Apply structured verdicts to produce the final findings list.
+fn apply_verdicts(
+    pattern_findings: &[DetectedFinding],
+    llm_findings: &[DetectedFinding],
+    verdicts: &SynthesisVerdicts,
+) -> Vec<DetectedFinding> {
+    let rejected_ids: HashSet<&String> = verdicts
+        .decisions
+        .iter()
+        .filter(|(_, v)| **v == Verdict::Reject)
+        .map(|(id, _)| id)
         .collect();
 
     let total = pattern_findings.len() + llm_findings.len();
@@ -651,9 +813,6 @@ fn apply_synthesis_decisions(
         total
     );
 
-    // Keep all non-rejected findings, deduplicated by semantic class when
-    // available so coarse categories like "memory" do not collapse distinct
-    // vulnerability classes.
     let mut seen_categories: HashSet<String> = HashSet::new();
     let mut synthesized: Vec<DetectedFinding> = Vec::new();
 
@@ -1466,7 +1625,151 @@ mod tests {
         stats.record_llm_synthesis();
         stats.record_llm_synthesis();
         stats.record_failure();
+        stats.record_refinement();
         // Just verify it doesn't panic — the output goes to tracing/eprintln
         stats.report();
+    }
+
+    #[test]
+    fn test_parse_verdicts_confirm_weak() {
+        let response = "CONFIRM p1\nCONFIRM_WEAK p2\nREJECT p3\n";
+        let verdicts = parse_verdicts(response);
+        assert_eq!(verdicts.decisions.get("p1"), Some(&Verdict::Confirm));
+        assert_eq!(verdicts.decisions.get("p2"), Some(&Verdict::ConfirmWeak));
+        assert_eq!(verdicts.decisions.get("p3"), Some(&Verdict::Reject));
+    }
+
+    #[test]
+    fn test_parse_verdicts_case_insensitive() {
+        let response = "confirm_weak X1\nReject X2\n";
+        let verdicts = parse_verdicts(response);
+        assert_eq!(verdicts.decisions.get("x1"), Some(&Verdict::ConfirmWeak));
+        assert_eq!(verdicts.decisions.get("x2"), Some(&Verdict::Reject));
+    }
+
+    #[test]
+    fn test_borderline_ids_extracts_weak_only() {
+        let response = "CONFIRM a1\nCONFIRM_WEAK a2\nCONFIRM_WEAK a3\nREJECT a4\n";
+        let verdicts = parse_verdicts(response);
+        let borderline = verdicts.borderline_ids();
+        assert_eq!(borderline.len(), 2);
+        assert!(borderline.contains("a2"));
+        assert!(borderline.contains("a3"));
+    }
+
+    #[test]
+    fn test_apply_verdicts_weak_is_confirm() {
+        // CONFIRM_WEAK should NOT reject — it should keep the finding
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "f".into(),
+            line: Some(1),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+        let response = "CONFIRM_WEAK p1\n";
+        let result = apply_synthesis_decisions(&pattern, &[], response);
+        assert_eq!(
+            result.len(),
+            1,
+            "CONFIRM_WEAK should still keep the finding"
+        );
+    }
+
+    #[test]
+    fn test_build_refinement_prompt_contains_findings() {
+        let finding = DetectedFinding {
+            id: "b1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Pattern: strcpy usage".into(),
+        };
+        let prompt = build_refinement_prompt(&[&finding], "CONFIRM_WEAK b1");
+        assert!(prompt.contains("b1"));
+        assert!(prompt.contains("BORDERLINE FINDINGS"));
+        assert!(prompt.contains("CONFIRM or REJECT"));
+        assert!(prompt.contains("Do NOT use CONFIRM_WEAK"));
+    }
+
+    #[test]
+    fn test_refinement_overrides_weak_with_reject() {
+        // Simulate: initial pass says CONFIRM_WEAK, refinement says REJECT
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "f".into(),
+            line: Some(1),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+        let llm = vec![DetectedFinding {
+            id: "l1".into(),
+            category: "injection".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "g".into(),
+            line: Some(2),
+            title: "LLM: command injection".into(),
+        }];
+
+        // Initial: p1 is weak, l1 is confirmed
+        let mut verdicts = parse_verdicts("CONFIRM_WEAK p1\nCONFIRM l1\n");
+        let borderline = verdicts.borderline_ids();
+        assert_eq!(borderline.len(), 1);
+        assert!(borderline.contains("p1"));
+
+        // Refinement: p1 gets rejected
+        let refined = parse_verdicts("REJECT p1\n");
+        for (id, new_verdict) in &refined.decisions {
+            if borderline.contains(id) {
+                verdicts.decisions.insert(id.clone(), new_verdict.clone());
+            }
+        }
+
+        let result = apply_verdicts(&pattern, &llm, &verdicts);
+        assert_eq!(result.len(), 1, "p1 should be rejected after refinement");
+        assert_eq!(result[0].id, "l1");
+    }
+
+    #[test]
+    fn test_refinement_overrides_weak_with_confirm() {
+        // Simulate: initial pass says CONFIRM_WEAK, refinement promotes to CONFIRM
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "f".into(),
+            line: Some(1),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+
+        let mut verdicts = parse_verdicts("CONFIRM_WEAK p1\n");
+        let borderline = verdicts.borderline_ids();
+
+        let refined = parse_verdicts("CONFIRM p1\n");
+        for (id, new_verdict) in &refined.decisions {
+            if borderline.contains(id) {
+                verdicts.decisions.insert(id.clone(), new_verdict.clone());
+            }
+        }
+
+        let result = apply_verdicts(&pattern, &[], &verdicts);
+        assert_eq!(
+            result.len(),
+            1,
+            "p1 should remain after refinement to CONFIRM"
+        );
     }
 }
