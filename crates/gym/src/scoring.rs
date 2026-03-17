@@ -190,8 +190,7 @@ pub fn cwe_family(cwe: u32) -> u32 {
 pub fn category_to_cwes(category: &str) -> Vec<u32> {
     match category {
         "memory" => vec![
-            119, 120, 121, 122, 125, 126, 787, 416, 415, 190, 191, 192, 193, 194, 195, 196, 197,
-            680, 681, 590, 822, 823, 825, 843,
+            119, 120, 121, 122, 125, 126, 787, 416, 415, 590, 822, 823, 825, 843,
         ],
         "injection" => vec![15, 77, 78, 89, 90, 94, 114, 501, 643, 917],
         "format_string" => vec![134],
@@ -707,6 +706,8 @@ mod tests {
         let memory = category_to_cwes("memory");
         assert!(memory.contains(&822));
         assert!(memory.contains(&825));
+        assert!(!memory.contains(&190));
+        assert!(!memory.contains(&680));
         assert!(!memory.contains(&242));
 
         let unsafe_code = category_to_cwes("unsafe_code");
@@ -733,7 +734,7 @@ mod tests {
         let inferred = inferred_finding_cwes(&finding);
         assert!(inferred.contains(&119));
         assert!(inferred.contains(&416));
-        assert!(inferred.contains(&190));
+        assert!(!inferred.contains(&190));
     }
 
     #[test]
@@ -934,6 +935,8 @@ mod tests {
         let int_overflow = category_to_cwes("integer_overflow");
         assert!(int_overflow.contains(&190));
         assert!(int_overflow.contains(&680));
+        assert!(!category_to_cwes("memory").contains(&190));
+        assert!(!category_to_cwes("memory").contains(&680));
 
         let div_zero = category_to_cwes("divide_by_zero");
         assert!(div_zero.contains(&369));
