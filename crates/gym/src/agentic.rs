@@ -23,7 +23,7 @@ use skwaq_core::graph::builder::GraphBuilder;
 use skwaq_core::graph::GraphDb;
 use skwaq_core::source::parse_file;
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
@@ -203,6 +203,119 @@ pub async fn run_agentic_source_analysis(
     timeout_secs: u64,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
     run_agentic_source_analysis_with_hints(path, timeout_secs, &AnalysisHints::default()).await
+}
+
+/// Run pattern-only analysis across multiple source files with a shared graph.
+///
+/// Unlike per-file analysis, this ingests ALL files into a single Code Property
+/// Graph before running pattern detection. This enables cross-file relationship
+/// detection: a dangerous API call in one file that uses data defined in another
+/// file can be traced through the shared graph.
+///
+/// This is an agentic pattern experiment: does shared-graph multi-file analysis
+/// improve detection on real-world projects where vulnerabilities span files?
+pub fn run_multi_file_pattern_analysis(paths: &[PathBuf]) -> anyhow::Result<Vec<DetectedFinding>> {
+    if paths.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let db = GraphDb::in_memory()?;
+    let inv_id = format!("gym-mf-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+    let now = chrono::Utc::now().to_rfc3339();
+    let target = paths
+        .first()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    db.execute(
+        "INSERT INTO investigations (id, name, target, status, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
+        &[
+            &inv_id.as_str(),
+            &target.as_str(),
+            &target.as_str(),
+            &now.as_str(),
+            &now.as_str(),
+        ],
+    )?;
+
+    // Ingest all files into a single shared graph
+    let builder = GraphBuilder::new(&db);
+    let mut parsed_files = Vec::new();
+    for path in paths {
+        match parse_file(path) {
+            Ok(parsed) => parsed_files.push(parsed),
+            Err(e) => tracing::debug!("Multi-file parse skip {}: {}", path.display(), e),
+        }
+    }
+
+    if parsed_files.is_empty() {
+        return Ok(vec![]);
+    }
+
+    builder.build_from_source(&parsed_files, &inv_id)?;
+
+    // Run pattern detection across the shared graph
+    let detector = DangerousApiDetector::new();
+    let mut all_findings = Vec::new();
+
+    // Per-file source pattern detection
+    for path in paths {
+        let lang = path.extension().and_then(|e| e.to_str()).unwrap_or("c");
+        if let Ok(hits) = detector.detect_in_source(path, lang) {
+            for hit in hits {
+                all_findings.push(DetectedFinding {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    category: hit.danger_category.to_string(),
+                    severity: hit.severity.to_string(),
+                    cwes: vec![],
+                    file: path.to_string_lossy().to_string(),
+                    function: hit.function_name.clone(),
+                    line: Some(hit.line as u32),
+                    title: format!(
+                        "Dangerous pattern: {} ({}:{})",
+                        hit.function_name,
+                        path.file_name().unwrap_or_default().to_string_lossy(),
+                        hit.line
+                    ),
+                });
+            }
+        }
+    }
+
+    // Graph-based cross-file detection
+    if let Ok(graph_hits) = detector.detect(&db) {
+        let seen: std::collections::HashSet<String> =
+            all_findings.iter().map(|f| f.function.clone()).collect();
+        for hit in graph_hits {
+            let base = hit
+                .function_name
+                .split('@')
+                .next()
+                .unwrap_or(&hit.function_name)
+                .to_string();
+            if !seen.contains(&base) {
+                all_findings.push(DetectedFinding {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    category: hit.danger_category.to_string(),
+                    severity: hit.severity.to_string(),
+                    cwes: vec![],
+                    file: target.clone(),
+                    function: base,
+                    line: None,
+                    title: format!("Cross-file graph: {}", hit.function_name),
+                });
+            }
+        }
+    }
+
+    tracing::debug!(
+        "Multi-file analysis: {} files, {} findings",
+        paths.len(),
+        all_findings.len()
+    );
+
+    Ok(all_findings)
 }
 
 /// Run full agentic analysis with optional context hints.
@@ -3527,6 +3640,27 @@ mod tests {
         assert_eq!(
             select_synthesis_route(&pattern, &llm),
             SynthesisRoute::FullSynthesis
+        );
+    }
+
+    #[test]
+    fn test_multi_file_pattern_analysis_empty() {
+        let result = run_multi_file_pattern_analysis(&[]);
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_multi_file_pattern_analysis_with_fixtures() {
+        let fixtures = fixtures_dir();
+        let vuln_c = fixtures.join("tests/fixtures/vulnerable.c");
+        if !vuln_c.exists() {
+            return; // Skip if fixtures not available
+        }
+        let files = vec![vuln_c];
+        let findings = run_multi_file_pattern_analysis(&files).unwrap();
+        assert!(
+            !findings.is_empty(),
+            "Multi-file analysis should find patterns in vulnerable.c"
         );
     }
 }

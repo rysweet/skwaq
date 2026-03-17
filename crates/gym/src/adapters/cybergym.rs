@@ -127,15 +127,19 @@ impl BenchmarkAdapter for CyberGymAdapter {
             return Ok(vec![]);
         }
 
+        // In quick mode, use multi-file shared-graph analysis for cross-file
+        // relationship detection.
+        if config.quick_mode {
+            return crate::agentic::run_multi_file_pattern_analysis(&source_files);
+        }
+
         // Load optional context hints (description.txt, patch.diff) for
         // hint-augmented agentic analysis.
         let hints = load_case_hints(data_dir, &case.id);
 
         let mut all_findings = Vec::new();
         for path in &source_files {
-            let findings = if config.quick_mode {
-                run_source_pattern_detection(path)
-            } else if config.llm_only {
+            let findings = if config.llm_only {
                 crate::agentic::run_llm_only_source_analysis(path, config.timeout_secs).await
             } else {
                 crate::agentic::run_agentic_source_analysis_with_hints(
