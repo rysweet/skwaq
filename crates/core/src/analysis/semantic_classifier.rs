@@ -18,6 +18,7 @@ pub enum SemanticPatternClass {
     FormatString,
     InsecureTempFile,
     PathTraversal,
+    UntrustedSearchPath,
     PrototypePollution,
     RaceCondition,
     UnsafeApiUsage,
@@ -41,6 +42,7 @@ impl SemanticPatternClass {
             Self::FormatString => "format_string",
             Self::InsecureTempFile => "insecure_temp_file",
             Self::PathTraversal => "path_traversal",
+            Self::UntrustedSearchPath => "untrusted_search_path",
             Self::PrototypePollution => "prototype_pollution",
             Self::RaceCondition => "race_condition",
             Self::UnsafeApiUsage => "unsafe_api_usage",
@@ -61,9 +63,10 @@ impl SemanticPatternClass {
             Self::NullDeref => "memory_allocation",
             Self::CommandInjection | Self::Deserialization => "code_execution",
             Self::CrossSiteScripting | Self::PrototypePollution => "web_data_flow",
-            Self::InsecureTempFile | Self::PathTraversal | Self::RaceCondition => {
-                "filesystem_safety"
-            }
+            Self::InsecureTempFile
+            | Self::PathTraversal
+            | Self::UntrustedSearchPath
+            | Self::RaceCondition => "filesystem_safety",
             Self::IntegerOverflow | Self::DivideByZero => "arithmetic_safety",
             Self::ResourceLeak => "resource_management",
             Self::UninitializedVar => "initialization_safety",
@@ -113,8 +116,11 @@ impl SemanticPatternClassifier {
         if is_format_string(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::FormatString);
         }
-        if is_path_traversal(&category, &title) {
+        if is_path_traversal(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::PathTraversal);
+        }
+        if is_untrusted_search_path(&category, &title, &function_name) {
+            classes.insert(SemanticPatternClass::UntrustedSearchPath);
         }
         if is_prototype_pollution(&category, &title) {
             classes.insert(SemanticPatternClass::PrototypePollution);
@@ -253,12 +259,29 @@ fn is_format_string(category: &str, title: &str, function_name: &str) -> bool {
         || contains_any(title, FORMAT_TERMS)
 }
 
-fn is_path_traversal(category: &str, title: &str) -> bool {
-    category == "path_traversal"
-        || contains_any(
-            title,
-            &["path traversal", "directory traversal", "zip slip"],
-        )
+fn is_path_traversal(category: &str, title: &str, function_name: &str) -> bool {
+    !is_untrusted_search_path(category, title, function_name)
+        && (category == "path_traversal"
+            || contains_any(
+                title,
+                &["path traversal", "directory traversal", "zip slip"],
+            ))
+}
+
+fn is_untrusted_search_path(category: &str, title: &str, function_name: &str) -> bool {
+    const SEARCH_PATH_APIS: &[&str] = &["dlopen", "loadlibrary", "loadlibraryex"];
+    const SEARCH_PATH_TERMS: &[&str] = &[
+        "untrusted search path",
+        "uncontrolled search path",
+        "library path",
+        "shared library",
+        "dll search path",
+        "loadlibrary",
+        "dlopen",
+    ];
+
+    is_function(function_name, SEARCH_PATH_APIS)
+        || (category == "path_traversal" && contains_any(title, SEARCH_PATH_TERMS))
 }
 
 fn is_use_after_free(category: &str, title: &str) -> bool {
@@ -512,6 +535,10 @@ mod tests {
             SemanticPatternClass::UseAfterFree.confidence_cluster(),
             "memory_lifecycle"
         );
+        assert_eq!(
+            SemanticPatternClass::UntrustedSearchPath.confidence_cluster(),
+            "filesystem_safety"
+        );
     }
 
     #[test]
@@ -535,6 +562,42 @@ mod tests {
 
         assert!(classes.contains(&SemanticPatternClass::InsecureTempFile));
         assert!(!classes.contains(&SemanticPatternClass::RaceCondition));
+    }
+
+    #[test]
+    fn classifies_untrusted_search_path_without_generic_path_overlap() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "path_traversal",
+            "Pattern: dlopen with untrusted path allows uncontrolled search path loading",
+            "dlopen",
+        );
+
+        assert!(classes.contains(&SemanticPatternClass::UntrustedSearchPath));
+        assert!(!classes.contains(&SemanticPatternClass::PathTraversal));
+    }
+
+    #[test]
+    fn keeps_generic_path_traversal_distinct_from_search_path() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "path_traversal",
+            "LLM: directory traversal in archive extraction",
+            "extract_archive",
+        );
+
+        assert!(classes.contains(&SemanticPatternClass::PathTraversal));
+        assert!(!classes.contains(&SemanticPatternClass::UntrustedSearchPath));
+    }
+
+    #[test]
+    fn does_not_classify_unrelated_library_path_titles_as_search_path() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "memory",
+            "LLM: buffer overflow in library path parser",
+            "strcpy",
+        );
+
+        assert!(classes.contains(&SemanticPatternClass::BufferOverflow));
+        assert!(!classes.contains(&SemanticPatternClass::UntrustedSearchPath));
     }
 
     #[test]
