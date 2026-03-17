@@ -171,7 +171,10 @@ impl BenchmarkAdapter for CyberGymAdapter {
 fn load_case_hints(data_dir: &Path, case_id: &str) -> AnalysisHints {
     let mut hints = AnalysisHints::default();
 
-    if let Some((source, id)) = case_id.split_once(':') {
+    // Strip "-fix" suffix from negative case IDs
+    let base_id = case_id.strip_suffix("-fix").unwrap_or(case_id);
+
+    if let Some((source, id)) = base_id.split_once(':') {
         let case_data_dir = data_dir.join("dataset").join("data").join(source).join(id);
 
         let desc_path = case_data_dir.join("description.txt");
@@ -211,16 +214,19 @@ fn archive_path_for_case(dataset_dir: &Path, case_id: &str, is_negative: bool) -
         "repo-vul.tar.gz"
     };
 
+    // Strip "-fix" suffix from negative case IDs to get the base task ID.
+    // e.g. "arvo:1065-fix" → "arvo:1065"
+    let base_id = case_id.strip_suffix("-fix").unwrap_or(case_id);
+
     // Parse "arvo:NNN" or "oss-fuzz:NNN" format
-    if let Some((source, id)) = case_id.split_once(':') {
+    if let Some((source, id)) = base_id.split_once(':') {
         dataset_dir
             .join("data")
             .join(source)
             .join(id)
             .join(archive_name)
     } else {
-        // Fallback: treat entire case_id as a path component
-        dataset_dir.join("data").join(case_id).join(archive_name)
+        dataset_dir.join("data").join(base_id).join(archive_name)
     }
 }
 
@@ -315,6 +321,17 @@ mod tests {
     fn test_archive_path_negative_case() {
         let dataset = PathBuf::from("/data/cybergym/dataset");
         let path = archive_path_for_case(&dataset, "arvo:1065", true);
+        assert_eq!(
+            path,
+            PathBuf::from("/data/cybergym/dataset/data/arvo/1065/repo-fix.tar.gz")
+        );
+    }
+
+    #[test]
+    fn test_archive_path_negative_case_with_fix_suffix() {
+        let dataset = PathBuf::from("/data/cybergym/dataset");
+        // Negative case IDs have "-fix" suffix that must be stripped
+        let path = archive_path_for_case(&dataset, "arvo:1065-fix", true);
         assert_eq!(
             path,
             PathBuf::from("/data/cybergym/dataset/data/arvo/1065/repo-fix.tar.gz")
