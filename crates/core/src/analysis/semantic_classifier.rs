@@ -56,12 +56,15 @@ impl SemanticPatternClass {
     /// Coarse semantic cluster for routing closely related findings.
     pub fn confidence_cluster(&self) -> &'static str {
         match self {
-            Self::BufferOverflow | Self::UseAfterFree => "memory_safety",
+            Self::BufferOverflow | Self::UseAfterFree | Self::NullDeref => "memory_safety",
             Self::CommandInjection | Self::Deserialization => "code_execution",
             Self::CrossSiteScripting | Self::PrototypePollution => "web_data_flow",
             Self::InsecureTempFile | Self::PathTraversal | Self::RaceCondition => {
                 "filesystem_safety"
             }
+            Self::IntegerOverflow | Self::DivideByZero => "arithmetic_safety",
+            Self::ResourceLeak => "resource_management",
+            Self::UninitializedVar => "initialization_safety",
             Self::FormatString => "format_string",
             Self::CryptoWeakness => "crypto",
             Self::UnsafeApiUsage => "unsafe_api",
