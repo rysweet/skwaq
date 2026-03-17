@@ -783,6 +783,7 @@ fn reconstruct_score(
         f1: run.f1,
         per_cwe,
         per_semantic,
+        negative_calibration: Default::default(),
     }
 }
 
