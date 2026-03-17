@@ -145,43 +145,57 @@ pub fn score_case(
 }
 
 /// Map a specific CWE to its broad family for matching purposes.
+///
+/// Family assignments follow the MITRE CWE hierarchy (child → parent).
+/// When a detected CWE and an expected CWE share the same family root,
+/// scoring treats the match as a true positive.
 pub fn cwe_family(cwe: u32) -> u32 {
     match cwe {
-        // Buffer overflow family -> CWE-119
-        120 | 121 | 122 | 123 | 124 | 125 | 126 | 127 | 787 | 788 => 119,
-        // Use-after-free family -> CWE-416
-        415 => 416,
+        // Buffer overflow / memory safety family -> CWE-119
+        118 | 120 | 121 | 122 | 123 | 124 | 125 | 126 | 127 | 787 | 788 => 119,
+        129 | 131 | 135 | 170 | 176 | 188 | 785 | 805 | 806 | 839 => 119,
+        467 | 562 | 587 | 588 | 590 | 824 | 843 | 822 | 823 | 825 => 119,
+        // Use-after-free / memory lifecycle family -> CWE-416
+        415 | 761 | 763 => 416,
         // Injection family -> CWE-74
-        15 | 77 | 78 | 79 | 80 | 89 | 90 | 94 | 95 | 96 | 114 => 74,
-        // Race condition family -> CWE-362
-        367 => 362,
-        // Integer overflow family -> CWE-190
-        128 | 191 | 192 | 193 | 194 | 195 | 196 | 197 | 680 | 681 => 190,
-        // free-of-non-heap -> Buffer overflow family
-        590 => 119,
+        15 | 77 | 78 | 79 | 80 | 89 | 90 | 94 | 95 | 96 | 114 | 116 => 74,
+        501 | 643 => 74,
+        // Input validation family -> CWE-20
+        17 | 187 => 20,
+        // Race condition / concurrency family -> CWE-362
+        364 | 366 | 367 | 832 => 362,
+        // Integer / numeric errors family -> CWE-190
+        128 | 189 | 191 | 192 | 193 | 194 | 195 | 196 | 197 | 680 | 681 | 682 => 190,
         // Null pointer family -> CWE-476
         252 | 253 | 690 => 476,
-        // Out-of-bounds read/write -> Buffer overflow family
-        129 | 131 | 170 | 805 => 119,
         // Path traversal family -> CWE-22
-        23 | 36 => 22,
+        23 | 36 | 59 | 61 => 22,
         // Crypto weakness family -> CWE-327
-        326 | 328 | 330 | 338 | 310 | 295 => 327,
-        // Use of potentially dangerous function -> CWE-676
-        242 | 676 => 676,
-        // Hardware crypto with short key -> crypto family
-        1240 => 327,
-        // Type confusion -> memory safety family
-        843 => 119,
-        // Untrusted/expired/freed pointer dereference -> memory safety family
-        822 | 823 | 825 => 119,
-        // Invalid release / offset free -> memory lifecycle family
-        761 | 763 => 416,
+        295 | 310 | 321 | 323 | 325 | 326 | 328 | 330 | 338 | 347 | 780 | 1240 => 327,
+        // Dangerous function family -> CWE-676
+        222 | 223 | 242 | 244 | 247 => 676,
+        // Information exposure family -> CWE-200
+        201 | 209 | 226 | 311 | 312 | 319 | 526 | 534 | 535 | 614 | 615 => 200,
+        // Authentication / credentials family -> CWE-287
+        256 | 259 | 290 | 613 | 798 => 287,
+        // Access control family -> CWE-284
+        264 | 269 | 272 | 273 | 275 | 426 | 427 | 434 | 732 => 284,
+        // Error handling family -> CWE-703
+        388 | 390 | 391 | 393 | 754 | 755 => 703,
+        // Resource consumption family -> CWE-400
+        399 | 404 | 770 | 835 => 400,
         // Resource leak family -> CWE-401
-        459 | 772 | 775 | 789 => 401,
+        459 | 772 | 773 | 775 | 789 => 401,
         // Uninitialized variable family -> CWE-457
-        908 => 457,
-        // Everything else maps to itself.
+        665 | 908 => 457,
+        // Code quality family -> CWE-710
+        398 | 464 | 465 | 468 | 469 | 471 | 475 | 478 | 479 | 480 | 481 => 710,
+        482 | 483 | 484 | 506 | 510 | 511 | 546 | 561 | 563 | 570 | 571 => 710,
+        591 | 605 | 606 | 617 | 620 | 666 | 667 | 674 | 675 | 685 | 688 => 710,
+        697 | 704 | 758 | 783 | 924 => 710,
+        // Everything else maps to itself (including family roots like 20, 22, 74,
+        // 119, 134, 190, 200, 284, 287, 327, 362, 369, 377, 400, 401, 416,
+        // 444, 457, 476, 502, 676, 703, 710, 1321).
         other => other,
     }
 }
@@ -271,29 +285,33 @@ fn dedup_cwes(cwes: impl IntoIterator<Item = u32>) -> Vec<u32> {
 
 fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
     match cwe {
-        119 | 120 | 121 | 122 | 123 | 124 | 125 | 126 | 127 | 129 | 131 | 170 | 787 | 788 | 805 => {
+        118 | 119 | 120 | 121 | 122 | 123 | 124 | 125 | 126 | 127 | 129 | 131 | 135 => {
             Some(SemanticPatternClass::BufferOverflow)
         }
+        170 | 176 | 188 | 467 | 562 | 587 | 588 | 590 | 785 | 787 | 788 | 805 | 806 => {
+            Some(SemanticPatternClass::BufferOverflow)
+        }
+        822 | 823 | 824 | 825 | 839 | 843 => Some(SemanticPatternClass::BufferOverflow),
         77 | 78 => Some(SemanticPatternClass::CommandInjection),
         79 | 80 => Some(SemanticPatternClass::CrossSiteScripting),
-        295 | 310 | 326 | 327 | 328 | 330 | 338 | 1240 => {
+        295 | 310 | 321 | 323 | 325 | 326 | 327 | 328 | 330 | 338 | 347 | 780 | 1240 => {
             Some(SemanticPatternClass::CryptoWeakness)
         }
         502 => Some(SemanticPatternClass::Deserialization),
         134 => Some(SemanticPatternClass::FormatString),
-        22 | 23 | 36 => Some(SemanticPatternClass::PathTraversal),
+        22 | 23 | 36 | 59 | 61 => Some(SemanticPatternClass::PathTraversal),
         1321 => Some(SemanticPatternClass::PrototypePollution),
-        362 | 367 => Some(SemanticPatternClass::RaceCondition),
+        362 | 364 | 366 | 367 | 832 => Some(SemanticPatternClass::RaceCondition),
         377 => Some(SemanticPatternClass::InsecureTempFile),
-        242 | 676 => Some(SemanticPatternClass::UnsafeApiUsage),
+        222 | 223 | 242 | 244 | 247 | 676 => Some(SemanticPatternClass::UnsafeApiUsage),
         415 | 416 | 761 | 763 => Some(SemanticPatternClass::UseAfterFree),
         252 | 253 | 476 | 690 => Some(SemanticPatternClass::NullDeref),
-        128 | 190 | 191 | 192 | 193 | 194 | 195 | 196 | 197 | 680 | 681 => {
+        128 | 189 | 190 | 191 | 192 | 193 | 194 | 195 | 196 | 197 | 680 | 681 | 682 => {
             Some(SemanticPatternClass::IntegerOverflow)
         }
         369 => Some(SemanticPatternClass::DivideByZero),
-        401 | 459 | 772 | 775 | 789 => Some(SemanticPatternClass::ResourceLeak),
-        457 | 908 => Some(SemanticPatternClass::UninitializedVar),
+        401 | 459 | 772 | 773 | 775 | 789 => Some(SemanticPatternClass::ResourceLeak),
+        457 | 665 | 908 => Some(SemanticPatternClass::UninitializedVar),
         _ => None,
     }
 }
@@ -655,8 +673,8 @@ mod tests {
 
     #[test]
     fn test_new_cwe_family_mappings() {
-        // CWE-312 (Cleartext Storage) maps to itself, NOT to CWE-798
-        assert_eq!(cwe_family(312), 312);
+        // CWE-312 (Cleartext Storage) maps to information exposure family (CWE-200)
+        assert_eq!(cwe_family(312), 200);
         // Pointer dereference issues map to memory safety (CWE-119)
         assert_eq!(cwe_family(822), 119);
         assert_eq!(cwe_family(823), 119);
@@ -873,6 +891,218 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(242), Some(UnsafeApiUsage));
         assert_eq!(cwe_to_semantic_class(457), Some(UninitializedVar));
         assert_eq!(cwe_to_semantic_class(908), Some(UninitializedVar));
+    }
+
+    #[test]
+    fn test_cwe_family_expanded_buffer_overflow() {
+        // New members of buffer overflow family (CWE-119)
+        for cwe in [118, 135, 176, 188, 467, 562, 587, 588, 785, 806, 824, 839] {
+            assert_eq!(
+                cwe_family(cwe),
+                119,
+                "CWE-{cwe} should map to buffer overflow family 119"
+            );
+        }
+    }
+
+    #[test]
+    fn test_cwe_family_expanded_injection() {
+        // CWE-116 (improper encoding), CWE-501 (trust boundary), CWE-643 (XPath injection)
+        assert_eq!(cwe_family(116), 74);
+        assert_eq!(cwe_family(501), 74);
+        assert_eq!(cwe_family(643), 74);
+    }
+
+    #[test]
+    fn test_cwe_family_expanded_path_traversal() {
+        // Symlink following -> path traversal family
+        assert_eq!(cwe_family(59), 22);
+        assert_eq!(cwe_family(61), 22);
+    }
+
+    #[test]
+    fn test_cwe_family_expanded_crypto() {
+        for cwe in [321, 323, 325, 347, 780] {
+            assert_eq!(
+                cwe_family(cwe),
+                327,
+                "CWE-{cwe} should map to crypto family 327"
+            );
+        }
+    }
+
+    #[test]
+    fn test_cwe_family_expanded_race_condition() {
+        assert_eq!(cwe_family(364), 362); // signal handler race
+        assert_eq!(cwe_family(366), 362); // race within thread
+        assert_eq!(cwe_family(832), 362); // unlock of unlocked resource
+    }
+
+    #[test]
+    fn test_cwe_family_expanded_integer_overflow() {
+        assert_eq!(cwe_family(189), 190); // numeric errors parent
+        assert_eq!(cwe_family(682), 190); // incorrect calculation
+    }
+
+    #[test]
+    fn test_cwe_family_new_information_exposure() {
+        // Information exposure family (CWE-200)
+        for cwe in [200, 201, 209, 226, 311, 312, 319, 526, 534, 535, 614, 615] {
+            assert_eq!(
+                cwe_family(cwe),
+                200,
+                "CWE-{cwe} should map to info exposure family 200"
+            );
+        }
+    }
+
+    #[test]
+    fn test_cwe_family_new_authentication() {
+        // Authentication family (CWE-287)
+        for cwe in [256, 259, 287, 290, 613, 798] {
+            assert_eq!(
+                cwe_family(cwe),
+                287,
+                "CWE-{cwe} should map to auth family 287"
+            );
+        }
+    }
+
+    #[test]
+    fn test_cwe_family_new_access_control() {
+        // Access control family (CWE-284)
+        for cwe in [264, 269, 272, 273, 275, 284, 426, 427, 434, 732] {
+            assert_eq!(
+                cwe_family(cwe),
+                284,
+                "CWE-{cwe} should map to access control family 284"
+            );
+        }
+    }
+
+    #[test]
+    fn test_cwe_family_new_error_handling() {
+        // Error handling family (CWE-703)
+        for cwe in [388, 390, 391, 393, 703, 754, 755] {
+            assert_eq!(
+                cwe_family(cwe),
+                703,
+                "CWE-{cwe} should map to error handling family 703"
+            );
+        }
+    }
+
+    #[test]
+    fn test_cwe_family_new_resource_consumption() {
+        // Resource consumption family (CWE-400)
+        for cwe in [399, 400, 404, 770, 835] {
+            assert_eq!(
+                cwe_family(cwe),
+                400,
+                "CWE-{cwe} should map to resource consumption family 400"
+            );
+        }
+    }
+
+    #[test]
+    fn test_cwe_family_new_code_quality() {
+        // Code quality family (CWE-710) — spot-check representative members
+        for cwe in [478, 480, 481, 484, 561, 570, 571, 617, 674, 697, 783] {
+            assert_eq!(
+                cwe_family(cwe),
+                710,
+                "CWE-{cwe} should map to code quality family 710"
+            );
+        }
+    }
+
+    #[test]
+    fn test_cwe_family_expanded_dangerous_function() {
+        // New dangerous function family members
+        assert_eq!(cwe_family(222), 676);
+        assert_eq!(cwe_family(223), 676);
+        assert_eq!(cwe_family(244), 676);
+        assert_eq!(cwe_family(247), 676);
+    }
+
+    #[test]
+    fn test_cwe_family_expanded_uninitialized() {
+        assert_eq!(cwe_family(665), 457); // improper initialization
+    }
+
+    #[test]
+    fn test_cwe_family_expanded_resource_leak() {
+        assert_eq!(cwe_family(773), 401); // missing reference to file descriptor
+    }
+
+    #[test]
+    fn test_cwe_family_input_validation() {
+        assert_eq!(cwe_family(17), 20);
+        assert_eq!(cwe_family(20), 20);
+        assert_eq!(cwe_family(187), 20);
+    }
+
+    #[test]
+    fn test_cwe_to_semantic_class_expanded_mappings() {
+        use SemanticPatternClass::*;
+        // New buffer overflow semantic mappings
+        assert_eq!(cwe_to_semantic_class(118), Some(BufferOverflow));
+        assert_eq!(cwe_to_semantic_class(824), Some(BufferOverflow));
+        assert_eq!(cwe_to_semantic_class(806), Some(BufferOverflow));
+        // New crypto semantic mappings
+        assert_eq!(cwe_to_semantic_class(321), Some(CryptoWeakness));
+        assert_eq!(cwe_to_semantic_class(347), Some(CryptoWeakness));
+        assert_eq!(cwe_to_semantic_class(780), Some(CryptoWeakness));
+        // New path traversal semantic mappings
+        assert_eq!(cwe_to_semantic_class(59), Some(PathTraversal));
+        assert_eq!(cwe_to_semantic_class(61), Some(PathTraversal));
+        // New race condition semantic mappings
+        assert_eq!(cwe_to_semantic_class(364), Some(RaceCondition));
+        assert_eq!(cwe_to_semantic_class(832), Some(RaceCondition));
+        // New integer overflow semantic mappings
+        assert_eq!(cwe_to_semantic_class(189), Some(IntegerOverflow));
+        assert_eq!(cwe_to_semantic_class(682), Some(IntegerOverflow));
+        // New resource leak semantic mapping
+        assert_eq!(cwe_to_semantic_class(773), Some(ResourceLeak));
+        // New uninitialized var semantic mapping
+        assert_eq!(cwe_to_semantic_class(665), Some(UninitializedVar));
+        // New unsafe API semantic mappings
+        assert_eq!(cwe_to_semantic_class(222), Some(UnsafeApiUsage));
+        assert_eq!(cwe_to_semantic_class(244), Some(UnsafeApiUsage));
+    }
+
+    #[test]
+    fn test_all_ground_truth_cwes_have_family_mapping() {
+        // Every CWE that appears in ground truth should map to a known family,
+        // not just to itself (unless it IS a family root).
+        let family_roots: HashSet<u32> = [
+            20, 22, 74, 119, 134, 190, 200, 284, 287, 327, 362, 369, 377, 400, 401, 416, 444, 457,
+            476, 502, 676, 703, 710, 1321,
+        ]
+        .into_iter()
+        .collect();
+
+        let ground_truth_cwes: Vec<u32> = vec![
+            15, 17, 20, 22, 59, 61, 74, 78, 79, 89, 90, 94, 114, 116, 118, 119, 120, 121, 122, 123,
+            124, 125, 126, 127, 128, 129, 131, 134, 135, 170, 176, 187, 188, 189, 190, 191, 193,
+            194, 195, 196, 197, 200, 201, 209, 222, 223, 226, 242, 244, 247, 252, 253, 256, 259,
+            264, 269, 272, 273, 275, 284, 287, 290, 311, 312, 319, 321, 323, 325, 326, 327, 328,
+            330, 338, 347, 362, 364, 366, 367, 369, 377, 388, 390, 391, 393, 398, 399, 400, 401,
+            404, 415, 416, 426, 427, 434, 444, 457, 459, 464, 465, 467, 468, 469, 471, 475, 476,
+            478, 479, 480, 481, 482, 483, 484, 501, 502, 506, 510, 511, 526, 534, 535, 546, 561,
+            562, 563, 570, 571, 587, 588, 590, 591, 605, 606, 613, 614, 615, 617, 620, 643, 665,
+            666, 667, 674, 675, 676, 680, 681, 682, 685, 688, 690, 697, 703, 704, 732, 754, 755,
+            758, 761, 763, 770, 772, 773, 775, 780, 783, 785, 787, 788, 789, 798, 805, 806, 822,
+            823, 824, 825, 832, 835, 839, 843, 908, 924, 1240, 1321,
+        ];
+
+        for cwe in ground_truth_cwes {
+            let family = cwe_family(cwe);
+            assert!(
+                family != cwe || family_roots.contains(&cwe),
+                "CWE-{cwe} maps to itself but is not a family root — missing family mapping",
+            );
+        }
     }
 
     #[test]
