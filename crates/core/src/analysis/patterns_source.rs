@@ -966,6 +966,95 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "Hard-coded secret/key in C code; use secure configuration",
         },
+        // --- Null dereference (CWE-476/690) ---
+        SourcePattern {
+            regex: r"\*\s*\(\s*\w+\s*\)\s*=",
+            category: DangerCategory::NullDeref,
+            severity: Severity::High,
+            reason: "Pointer dereference without null check; verify pointer is non-null before use",
+        },
+        SourcePattern {
+            regex: r"(?i)\b(?:malloc|calloc|realloc)\s*\([^)]*\)\s*;",
+            category: DangerCategory::NullDeref,
+            severity: Severity::High,
+            reason: "Allocation result not checked for NULL; malloc/calloc/realloc can return NULL",
+        },
+        SourcePattern {
+            regex: r"\bNULL\b",
+            category: DangerCategory::NullDeref,
+            severity: Severity::Low,
+            reason: "NULL reference in code; verify null checks on all paths using this value",
+        },
+        // --- Integer overflow (CWE-190/191/192/680) ---
+        SourcePattern {
+            regex: r"\b\w+\s*\+\+\s*;",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::Medium,
+            reason: "Increment without overflow check; may wrap on INT_MAX/UINT_MAX",
+        },
+        SourcePattern {
+            regex: r"\b\w+\s*\+=\s*\w+",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::Medium,
+            reason: "Addition assignment without overflow check; validate operands before addition",
+        },
+        SourcePattern {
+            regex: r"\b\w+\s*\*=\s*\w+",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::High,
+            reason: "Multiplication assignment without overflow check; validate operands",
+        },
+        // --- Divide by zero (CWE-369) ---
+        SourcePattern {
+            regex: r"\b\w+\s*/\s*\w+",
+            category: DangerCategory::DivideByZero,
+            severity: Severity::Medium,
+            reason: "Division without zero-check on divisor; validate divisor is non-zero",
+        },
+        SourcePattern {
+            regex: r"\b\w+\s*%\s*\w+",
+            category: DangerCategory::DivideByZero,
+            severity: Severity::Medium,
+            reason: "Modulo without zero-check on divisor; validate divisor is non-zero",
+        },
+        // --- Resource leak (CWE-401/772/775) ---
+        SourcePattern {
+            regex: r"\bfopen\s*\(",
+            category: DangerCategory::ResourceLeak,
+            severity: Severity::Medium,
+            reason: "File opened with fopen; verify matching fclose on all paths including error paths",
+        },
+        SourcePattern {
+            regex: r"\bsocket\s*\(",
+            category: DangerCategory::ResourceLeak,
+            severity: Severity::Medium,
+            reason: "Socket opened; verify matching close() on all paths including error paths",
+        },
+        SourcePattern {
+            regex: r"\bopen\s*\(",
+            category: DangerCategory::ResourceLeak,
+            severity: Severity::Medium,
+            reason: "File descriptor opened; verify matching close() on all paths",
+        },
+        SourcePattern {
+            regex: r"\bCreateFile[AW]?\s*\(",
+            category: DangerCategory::ResourceLeak,
+            severity: Severity::Medium,
+            reason: "Handle opened via CreateFile; verify matching CloseHandle on all paths",
+        },
+        // --- Uninitialized variable (CWE-457/908) ---
+        SourcePattern {
+            regex: r"\b(?:int|long|short|char|float|double|unsigned|size_t)\s+\w+\s*;",
+            category: DangerCategory::UninitializedVar,
+            severity: Severity::Medium,
+            reason: "Variable declared without initialization; C does not zero-initialize local variables",
+        },
+        SourcePattern {
+            regex: r"\b(?:int|long|short|char|float|double|unsigned|size_t)\s+\w+\s*\[",
+            category: DangerCategory::UninitializedVar,
+            severity: Severity::Medium,
+            reason: "Array declared without initialization; contents are indeterminate in C",
+        },
     ]
 }
 
@@ -1327,6 +1416,88 @@ const char* password = "admin123";
             hits.iter()
                 .any(|h| h.danger_category == DangerCategory::Crypto),
             "Should detect hard-coded credentials in C"
+        );
+    }
+
+    #[test]
+    fn test_detect_c_null_deref_patterns() {
+        let src = r#"
+void vuln() {
+    char *p = malloc(100);
+    *p = 'a';
+    if (p == NULL) return;
+}
+"#;
+        let hits = detect_in_source_content(src, "c", "null.c").unwrap();
+        assert!(
+            hits.iter()
+                .any(|h| h.danger_category == DangerCategory::NullDeref),
+            "Should detect null dereference risk"
+        );
+    }
+
+    #[test]
+    fn test_detect_c_resource_leak_patterns() {
+        let src = r#"
+void vuln() {
+    FILE *f = fopen("data.txt", "r");
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+}
+"#;
+        let hits = detect_in_source_content(src, "c", "leak.c").unwrap();
+        assert!(
+            hits.iter()
+                .any(|h| h.danger_category == DangerCategory::ResourceLeak),
+            "Should detect resource leak risk"
+        );
+    }
+
+    #[test]
+    fn test_detect_c_uninitialized_var_patterns() {
+        let src = r#"
+void vuln() {
+    int x;
+    char buf[64];
+    return x;
+}
+"#;
+        let hits = detect_in_source_content(src, "c", "uninit.c").unwrap();
+        assert!(
+            hits.iter()
+                .any(|h| h.danger_category == DangerCategory::UninitializedVar),
+            "Should detect uninitialized variable risk"
+        );
+    }
+
+    #[test]
+    fn test_detect_c_divide_by_zero_patterns() {
+        let src = r#"
+int vuln(int a, int b) {
+    return a / b;
+}
+"#;
+        let hits = detect_in_source_content(src, "c", "divzero.c").unwrap();
+        assert!(
+            hits.iter()
+                .any(|h| h.danger_category == DangerCategory::DivideByZero),
+            "Should detect divide-by-zero risk"
+        );
+    }
+
+    #[test]
+    fn test_detect_c_integer_overflow_patterns() {
+        let src = r#"
+void vuln(int n) {
+    n++;
+    int total = 0;
+    total += n;
+}
+"#;
+        let hits = detect_in_source_content(src, "c", "overflow.c").unwrap();
+        assert!(
+            hits.iter()
+                .any(|h| h.danger_category == DangerCategory::IntegerOverflow),
+            "Should detect integer overflow risk"
         );
     }
 }

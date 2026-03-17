@@ -160,7 +160,7 @@ pub fn cwe_family(cwe: u32) -> u32 {
         // free-of-non-heap -> Buffer overflow family
         590 => 119,
         // Null pointer family -> CWE-476
-        252 | 253 => 476,
+        252 | 253 | 690 => 476,
         // Out-of-bounds read/write -> Buffer overflow family
         129 | 131 | 170 | 805 => 119,
         // Path traversal family -> CWE-22
@@ -175,6 +175,12 @@ pub fn cwe_family(cwe: u32) -> u32 {
         843 => 119,
         // Untrusted/expired/freed pointer dereference -> memory safety family
         822 | 823 | 825 => 119,
+        // Divide by zero family -> CWE-369
+        128 => 369,
+        // Resource leak family -> CWE-401
+        459 | 761 | 763 | 772 | 775 | 789 => 401,
+        // Uninitialized variable family -> CWE-457
+        908 => 457,
         // Everything else maps to itself.
         other => other,
     }
@@ -197,6 +203,11 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
         "unsafe_code" => vec![676, 242],
         "prototype_pollution" => vec![1321],
         "xss" => vec![79, 80],
+        "null_deref" => vec![476, 252, 253, 690],
+        "integer_overflow" => vec![190, 191, 192, 193, 194, 195, 196, 197, 680, 681],
+        "divide_by_zero" => vec![369, 128],
+        "resource_leak" => vec![401, 459, 761, 763, 772, 775, 789],
+        "uninitialized_var" => vec![457, 908],
         _ => vec![],
     }
 }
@@ -882,5 +893,57 @@ mod tests {
         let regressions = cwe_regressions(&baseline, &new);
 
         assert!(regressions.is_empty());
+    }
+
+    #[test]
+    fn test_cwe_family_null_deref() {
+        assert_eq!(cwe_family(476), 476);
+        assert_eq!(cwe_family(252), 476);
+        assert_eq!(cwe_family(253), 476);
+        assert_eq!(cwe_family(690), 476);
+    }
+
+    #[test]
+    fn test_cwe_family_divide_by_zero() {
+        assert_eq!(cwe_family(369), 369);
+        assert_eq!(cwe_family(128), 369);
+    }
+
+    #[test]
+    fn test_cwe_family_resource_leak() {
+        assert_eq!(cwe_family(401), 401);
+        assert_eq!(cwe_family(459), 401);
+        assert_eq!(cwe_family(761), 401);
+        assert_eq!(cwe_family(772), 401);
+        assert_eq!(cwe_family(775), 401);
+        assert_eq!(cwe_family(789), 401);
+    }
+
+    #[test]
+    fn test_cwe_family_uninitialized_var() {
+        assert_eq!(cwe_family(457), 457);
+        assert_eq!(cwe_family(908), 457);
+    }
+
+    #[test]
+    fn test_category_to_cwes_new_categories() {
+        let null = category_to_cwes("null_deref");
+        assert!(null.contains(&476));
+        assert!(null.contains(&690));
+
+        let int_overflow = category_to_cwes("integer_overflow");
+        assert!(int_overflow.contains(&190));
+        assert!(int_overflow.contains(&680));
+
+        let div_zero = category_to_cwes("divide_by_zero");
+        assert!(div_zero.contains(&369));
+
+        let leak = category_to_cwes("resource_leak");
+        assert!(leak.contains(&401));
+        assert!(leak.contains(&772));
+
+        let uninit = category_to_cwes("uninitialized_var");
+        assert!(uninit.contains(&457));
+        assert!(uninit.contains(&908));
     }
 }
