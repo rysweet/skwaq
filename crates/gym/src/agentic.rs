@@ -33,6 +33,7 @@ use std::time::{Duration, Instant};
 /// Call [`SynthesisStats::report`] at end of a gym run to log the summary.
 pub struct SynthesisStats {
     llm_synthesis_count: AtomicU32,
+    pattern_confidence_early_exit_count: AtomicU32,
     consensus_early_exit_count: AtomicU32,
     failed_count: AtomicU32,
 }
@@ -41,6 +42,7 @@ impl Default for SynthesisStats {
     fn default() -> Self {
         Self {
             llm_synthesis_count: AtomicU32::new(0),
+            pattern_confidence_early_exit_count: AtomicU32::new(0),
             consensus_early_exit_count: AtomicU32::new(0),
             failed_count: AtomicU32::new(0),
         }
@@ -56,6 +58,11 @@ impl SynthesisStats {
         self.llm_synthesis_count.fetch_add(1, Ordering::Relaxed);
     }
 
+    fn record_pattern_confidence_early_exit(&self) {
+        self.pattern_confidence_early_exit_count
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
     fn record_consensus_early_exit(&self) {
         self.consensus_early_exit_count
             .fetch_add(1, Ordering::Relaxed);
@@ -68,17 +75,20 @@ impl SynthesisStats {
     /// Log end-of-run synthesis summary. Call after all cases complete.
     pub fn report(&self) {
         let llm = self.llm_synthesis_count.load(Ordering::Relaxed);
+        let pattern_confidence = self
+            .pattern_confidence_early_exit_count
+            .load(Ordering::Relaxed);
         let consensus = self.consensus_early_exit_count.load(Ordering::Relaxed);
         let failed = self.failed_count.load(Ordering::Relaxed);
-        let total = llm + consensus + failed;
+        let total = llm + pattern_confidence + consensus + failed;
         if total == 0 {
             tracing::info!("Synthesis: no dual-source cases (nothing to synthesize)");
             return;
         }
         if failed > 0 {
             tracing::warn!(
-                "Synthesis summary: {}/{} LLM synthesis, {}/{} consensus early-exit, {} failed loudly",
-                llm, total, consensus, total, failed,
+                "Synthesis summary: {}/{} LLM synthesis, {}/{} pattern-confidence early-exit, {}/{} consensus early-exit, {} failed loudly",
+                llm, total, pattern_confidence, total, consensus, total, failed,
             );
             eprintln!(
                 "\n  WARNING: {}/{} synthesis cases failed loudly.\n  \
@@ -87,8 +97,8 @@ impl SynthesisStats {
             );
         } else {
             tracing::info!(
-                "Synthesis summary: {}/{} LLM synthesis, {}/{} consensus early-exit (all successful)",
-                llm, total, consensus, total,
+                "Synthesis summary: {}/{} LLM synthesis, {}/{} pattern-confidence early-exit, {}/{} consensus early-exit (all successful)",
+                llm, total, pattern_confidence, total, consensus, total,
             );
         }
     }
@@ -139,6 +149,7 @@ pub async fn run_agentic_source_analysis(
 
     // --- Layer 2: Pattern detection → collect pattern-detected categories ---
     let mut pattern_categories: HashSet<String> = HashSet::new();
+    let mut pattern_findings: Vec<DetectedFinding> = Vec::new();
     let detector = DangerousApiDetector::new();
     if let Ok(hits) = detector.detect_in_source(path, &parsed.language) {
         for hit in &hits {
@@ -146,6 +157,19 @@ pub async fn run_agentic_source_analysis(
             pattern_categories.insert(category.clone());
 
             let finding_id = uuid::Uuid::new_v4().to_string();
+            pattern_findings.push(DetectedFinding {
+                id: finding_id.clone(),
+                category: category.clone(),
+                severity: hit.severity.to_string().to_lowercase(),
+                cwes: vec![],
+                file: hit.file.clone(),
+                function: hit.function_name.clone(),
+                line: Some(hit.line as u32),
+                title: format!(
+                    "Dangerous pattern: {} ({}:{})",
+                    hit.function_name, hit.file, hit.line
+                ),
+            });
             if let Err(e) = db.execute(
                 "INSERT INTO findings (id, title, evidence, agent, timestamp, investigation_id, \
                  status, severity, category) \
@@ -190,8 +214,19 @@ pub async fn run_agentic_source_analysis(
         pattern_categories.insert(f.category.clone());
     }
 
+    let skip_llm_pipeline = should_skip_llm_pipeline(&pattern_findings, &orchestrator_findings);
+
     // --- Layer 4: LLM agent pipeline ---
-    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+    if skip_llm_pipeline {
+        SYNTHESIS_STATS.record_pattern_confidence_early_exit();
+        tracing::info!(
+            "Pattern-confidence early-exit: {} pattern + {} corroborating findings agree, skipping full LLM pipeline",
+            pattern_findings.len(),
+            orchestrator_findings.len()
+        );
+    } else {
+        run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+    }
 
     // --- Layer 5: Synthesis — weigh all evidence ---
     // Collect ALL findings from DB (pattern + orchestrator + LLM)
@@ -201,8 +236,11 @@ pub async fn run_agentic_source_analysis(
     // Unlike the old intersection filter, this preserves LLM-only findings that
     // demonstrate real understanding of the code, but it fails loudly if synthesis
     // cannot run instead of silently downgrading analysis quality.
-    let synthesized =
-        synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await?;
+    let synthesized = if skip_llm_pipeline {
+        all_findings
+    } else {
+        synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await?
+    };
 
     let mut seen_categories: HashSet<String> = HashSet::new();
     let deduped: Vec<DetectedFinding> = synthesized
@@ -250,6 +288,7 @@ pub async fn run_agentic_binary_analysis(
 
     // Pattern detection on imports
     let mut pattern_categories: HashSet<String> = HashSet::new();
+    let mut pattern_findings: Vec<DetectedFinding> = Vec::new();
     let detector = DangerousApiDetector::new();
     let import_hits = detector.check_imports(&binary_info.imports);
 
@@ -258,6 +297,16 @@ pub async fn run_agentic_binary_analysis(
         pattern_categories.insert(category.clone());
 
         let finding_id = uuid::Uuid::new_v4().to_string();
+        pattern_findings.push(DetectedFinding {
+            id: finding_id.clone(),
+            category: category.clone(),
+            severity: hit.severity.to_string().to_lowercase(),
+            cwes: vec![],
+            file: file_str.clone(),
+            function: hit.function_name.clone(),
+            line: None,
+            title: format!("Binary import: {} ({})", hit.function_name, hit.library),
+        });
         let _ = db.execute(
             "INSERT INTO findings (id, title, evidence, agent, timestamp, investigation_id, \
              status, severity, category) \
@@ -294,14 +343,28 @@ pub async fn run_agentic_binary_analysis(
         pattern_categories.insert(f.category.clone());
     }
 
+    let skip_llm_pipeline = should_skip_llm_pipeline(&pattern_findings, &orchestrator_findings);
+
     // LLM agent pipeline
-    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+    if skip_llm_pipeline {
+        SYNTHESIS_STATS.record_pattern_confidence_early_exit();
+        tracing::info!(
+            "Pattern-confidence early-exit: {} binary pattern + {} corroborating findings agree, skipping full LLM pipeline",
+            pattern_findings.len(),
+            orchestrator_findings.len()
+        );
+    } else {
+        run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+    }
 
     // Synthesis — weigh all evidence
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
 
-    let synthesized =
-        synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await?;
+    let synthesized = if skip_llm_pipeline {
+        all_findings
+    } else {
+        synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await?
+    };
 
     let mut seen_categories: HashSet<String> = HashSet::new();
     let deduped: Vec<DetectedFinding> = synthesized
@@ -514,6 +577,24 @@ fn findings_have_consensus(
     // We intentionally do NOT require patterns ⊆ LLM — pattern detectors
     // are high-precision and may flag things the LLM missed, which is fine.
     llm_fp.iter().all(|fp| pattern_fp.contains(fp))
+}
+
+fn should_skip_llm_pipeline(
+    pattern_findings: &[DetectedFinding],
+    corroborating_findings: &[DetectedFinding],
+) -> bool {
+    !pattern_findings.is_empty()
+        && !corroborating_findings.is_empty()
+        && pattern_findings.iter().all(is_high_confidence_pattern)
+        && findings_have_consensus(pattern_findings, corroborating_findings)
+        && findings_have_consensus(corroborating_findings, pattern_findings)
+}
+
+fn is_high_confidence_pattern(finding: &DetectedFinding) -> bool {
+    matches!(
+        finding.severity.to_ascii_lowercase().as_str(),
+        "high" | "critical"
+    )
 }
 
 /// Synthesize findings from both pattern detection and LLM agents.
@@ -1747,10 +1828,165 @@ mod tests {
         let stats = SynthesisStats::new();
         stats.record_llm_synthesis();
         stats.record_llm_synthesis();
+        stats.record_pattern_confidence_early_exit();
         stats.record_consensus_early_exit();
         stats.record_failure();
         // Just verify it doesn't panic — the output goes to tracing/eprintln
         stats.report();
+    }
+
+    #[test]
+    fn test_pattern_confidence_routing_requires_high_confidence_consensus() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+        let corroborating = vec![DetectedFinding {
+            id: "o1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dataflow: reachable strcpy overflow".into(),
+        }];
+
+        assert!(should_skip_llm_pipeline(&pattern, &corroborating));
+    }
+
+    #[test]
+    fn test_pattern_confidence_routing_rejects_low_severity_patterns() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "medium".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+        let corroborating = vec![DetectedFinding {
+            id: "o1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dataflow: reachable strcpy overflow".into(),
+        }];
+
+        assert!(!should_skip_llm_pipeline(&pattern, &corroborating));
+    }
+
+    #[test]
+    fn test_pattern_confidence_routing_rejects_missing_consensus() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+        let corroborating = vec![DetectedFinding {
+            id: "o1".into(),
+            category: "injection".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "system".into(),
+            line: Some(20),
+            title: "Dataflow: shell injection".into(),
+        }];
+
+        assert!(!should_skip_llm_pipeline(&pattern, &corroborating));
+    }
+
+    #[test]
+    fn test_pattern_confidence_routing_requires_all_patterns_to_be_corroborated() {
+        let pattern = vec![
+            DetectedFinding {
+                id: "p1".into(),
+                category: "memory".into(),
+                severity: "critical".into(),
+                cwes: vec![],
+                file: "t.c".into(),
+                function: "strcpy".into(),
+                line: Some(10),
+                title: "Dangerous pattern: strcpy".into(),
+            },
+            DetectedFinding {
+                id: "p2".into(),
+                category: "format-string".into(),
+                severity: "high".into(),
+                cwes: vec![],
+                file: "t.c".into(),
+                function: "printf".into(),
+                line: Some(20),
+                title: "Dangerous pattern: printf".into(),
+            },
+        ];
+        let corroborating = vec![DetectedFinding {
+            id: "o1".into(),
+            category: "memory".into(),
+            severity: "high".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dataflow: reachable strcpy overflow".into(),
+        }];
+
+        assert!(!should_skip_llm_pipeline(&pattern, &corroborating));
+    }
+
+    #[test]
+    fn test_pattern_confidence_routing_rejects_extra_uncorroborated_local_findings() {
+        let pattern = vec![DetectedFinding {
+            id: "p1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![],
+            file: "t.c".into(),
+            function: "strcpy".into(),
+            line: Some(10),
+            title: "Dangerous pattern: strcpy".into(),
+        }];
+        let corroborating = vec![
+            DetectedFinding {
+                id: "o1".into(),
+                category: "memory".into(),
+                severity: "high".into(),
+                cwes: vec![],
+                file: "t.c".into(),
+                function: "strcpy".into(),
+                line: Some(10),
+                title: "Dataflow: reachable strcpy overflow".into(),
+            },
+            DetectedFinding {
+                id: "o2".into(),
+                category: "injection".into(),
+                severity: "high".into(),
+                cwes: vec![],
+                file: "t.c".into(),
+                function: "system".into(),
+                line: Some(20),
+                title: "Dataflow: shell injection".into(),
+            },
+        ];
+
+        assert!(!should_skip_llm_pipeline(&pattern, &corroborating));
     }
 
     #[test]
