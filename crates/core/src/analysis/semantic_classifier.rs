@@ -119,7 +119,7 @@ impl SemanticPatternClassifier {
         if is_prototype_pollution(&category, &title) {
             classes.insert(SemanticPatternClass::PrototypePollution);
         }
-        if is_use_after_free(&title) {
+        if is_use_after_free(&category, &title) {
             classes.insert(SemanticPatternClass::UseAfterFree);
         }
         if is_race_condition(&category, &title, &function_name) {
@@ -261,8 +261,9 @@ fn is_path_traversal(category: &str, title: &str) -> bool {
         )
 }
 
-fn is_use_after_free(title: &str) -> bool {
-    contains_any(title, &["use-after-free", "use after free", "uaf"])
+fn is_use_after_free(category: &str, title: &str) -> bool {
+    category == "use_after_free"
+        || contains_any(title, &["use-after-free", "use after free", "uaf"])
 }
 
 fn is_race_condition(category: &str, title: &str, function_name: &str) -> bool {
@@ -481,6 +482,17 @@ mod tests {
             "memory",
             "LLM: use-after-free in cleanup",
             "cleanup",
+        );
+
+        assert!(classes.contains(&SemanticPatternClass::UseAfterFree));
+    }
+
+    #[test]
+    fn classifies_use_after_free_from_category() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "use_after_free",
+            "Dangerous API: free",
+            "free",
         );
 
         assert!(classes.contains(&SemanticPatternClass::UseAfterFree));
