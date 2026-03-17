@@ -19,6 +19,7 @@ pub enum SemanticPatternClass {
     InsecureTempFile,
     PathTraversal,
     UntrustedSearchPath,
+    UncheckedLoopCondition,
     PrototypePollution,
     RaceCondition,
     UnsafeApiUsage,
@@ -43,6 +44,7 @@ impl SemanticPatternClass {
             Self::InsecureTempFile => "insecure_temp_file",
             Self::PathTraversal => "path_traversal",
             Self::UntrustedSearchPath => "untrusted_search_path",
+            Self::UncheckedLoopCondition => "unchecked_loop_condition",
             Self::PrototypePollution => "prototype_pollution",
             Self::RaceCondition => "race_condition",
             Self::UnsafeApiUsage => "unsafe_api_usage",
@@ -67,7 +69,9 @@ impl SemanticPatternClass {
             | Self::PathTraversal
             | Self::UntrustedSearchPath
             | Self::RaceCondition => "filesystem_safety",
-            Self::IntegerOverflow | Self::DivideByZero => "arithmetic_safety",
+            Self::UncheckedLoopCondition | Self::IntegerOverflow | Self::DivideByZero => {
+                "arithmetic_safety"
+            }
             Self::ResourceLeak => "resource_management",
             Self::UninitializedVar => "initialization_safety",
             Self::FormatString => "format_string",
@@ -121,6 +125,9 @@ impl SemanticPatternClassifier {
         }
         if is_untrusted_search_path(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::UntrustedSearchPath);
+        }
+        if is_unchecked_loop_condition(&category, &title) {
+            classes.insert(SemanticPatternClass::UncheckedLoopCondition);
         }
         if is_prototype_pollution(&category, &title) {
             classes.insert(SemanticPatternClass::PrototypePollution);
@@ -287,6 +294,22 @@ fn is_untrusted_search_path(category: &str, title: &str, function_name: &str) ->
 fn is_use_after_free(category: &str, title: &str) -> bool {
     category == "use_after_free"
         || contains_any(title, &["use-after-free", "use after free", "uaf"])
+}
+
+fn is_unchecked_loop_condition(category: &str, title: &str) -> bool {
+    const LOOP_CONDITION_TERMS: &[&str] = &[
+        "unchecked loop condition",
+        "untrusted loop condition",
+        "unchecked loop bound",
+        "unchecked loop bounds",
+        "untrusted loop bound",
+        "untrusted loop bounds",
+        "loop condition from untrusted input",
+        "untrusted iteration count",
+        "unbounded iteration count",
+    ];
+
+    category == "unchecked_loop_condition" || contains_any(title, LOOP_CONDITION_TERMS)
 }
 
 fn is_race_condition(category: &str, title: &str, function_name: &str) -> bool {
@@ -539,6 +562,10 @@ mod tests {
             SemanticPatternClass::UntrustedSearchPath.confidence_cluster(),
             "filesystem_safety"
         );
+        assert_eq!(
+            SemanticPatternClass::UncheckedLoopCondition.confidence_cluster(),
+            "arithmetic_safety"
+        );
     }
 
     #[test]
@@ -577,6 +604,17 @@ mod tests {
     }
 
     #[test]
+    fn classifies_unchecked_loop_condition_from_title() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "memory",
+            "LLM: unchecked loop condition from untrusted input controls iteration count",
+            "print_line",
+        );
+
+        assert!(classes.contains(&SemanticPatternClass::UncheckedLoopCondition));
+    }
+
+    #[test]
     fn keeps_generic_path_traversal_distinct_from_search_path() {
         let classes = SemanticPatternClassifier::new().classify(
             "path_traversal",
@@ -586,6 +624,17 @@ mod tests {
 
         assert!(classes.contains(&SemanticPatternClass::PathTraversal));
         assert!(!classes.contains(&SemanticPatternClass::UntrustedSearchPath));
+    }
+
+    #[test]
+    fn does_not_classify_generic_loop_mentions_as_unchecked_loop_condition() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "memory",
+            "LLM: manual byte-by-byte loop without proof of overflow",
+            "copy_bytes",
+        );
+
+        assert!(!classes.contains(&SemanticPatternClass::UncheckedLoopCondition));
     }
 
     #[test]

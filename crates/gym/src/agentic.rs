@@ -702,9 +702,11 @@ impl ExpertDomain {
             }
             Self::ArithmeticSafety => {
                 "You are a numeric-safety expert reviewing vulnerability findings. \
-                 You specialize in integer overflows, underflows, and divide-by-zero conditions. \
-                 Evaluate whether arithmetic operations on attacker-influenced values can actually \
-                 overflow or produce division by zero in the given context."
+                 You specialize in integer overflows, underflows, divide-by-zero conditions, \
+                 and unchecked loop bounds from untrusted input. \
+                 Evaluate whether arithmetic operations or loop iteration counts on \
+                 attacker-influenced values can actually overflow, divide by zero, or \
+                 drive unsafe looping in the given context."
             }
             Self::Crypto => {
                 "You are a cryptography expert reviewing vulnerability findings. \
@@ -748,10 +750,12 @@ impl ExpertDomain {
             }
             Self::ArithmeticSafety => {
                 "All findings below relate to ARITHMETIC SAFETY vulnerabilities.\n\
-                 Focus on: integer width, signedness, overflow wrapping behavior, and \
-                 divisor validation.\n\
-                 CONFIRM findings where attacker-influenced arithmetic can wrap or divide by zero.\n\
-                 REJECT findings where range checks, saturating arithmetic, or type constraints prevent overflow.\n\n"
+                 Focus on: integer width, signedness, overflow wrapping behavior, \
+                 divisor validation, and loop bound validation.\n\
+                 CONFIRM findings where attacker-influenced arithmetic can wrap, divide by zero, \
+                 or control loop iteration counts without effective bounds checks.\n\
+                 REJECT findings where range checks, saturating arithmetic, type constraints, \
+                 or explicit iteration limits prevent overflow or unsafe looping.\n\n"
             }
             Self::Crypto => {
                 "All findings below relate to CRYPTOGRAPHIC vulnerabilities.\n\

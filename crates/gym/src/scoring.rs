@@ -259,6 +259,7 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         SemanticPatternClass::InsecureTempFile => &[377],
         SemanticPatternClass::PathTraversal => &[22, 23, 36, 426],
         SemanticPatternClass::UntrustedSearchPath => &[114, 427],
+        SemanticPatternClass::UncheckedLoopCondition => &[606],
         SemanticPatternClass::PrototypePollution => &[1321],
         SemanticPatternClass::RaceCondition => &[362, 364, 366, 367, 832],
         SemanticPatternClass::UnsafeApiUsage => &[222, 223, 242, 244, 247, 676],
@@ -317,6 +318,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         134 => Some(SemanticPatternClass::FormatString),
         22 | 23 | 36 | 426 => Some(SemanticPatternClass::PathTraversal),
         114 | 427 => Some(SemanticPatternClass::UntrustedSearchPath),
+        606 => Some(SemanticPatternClass::UncheckedLoopCondition),
         1321 => Some(SemanticPatternClass::PrototypePollution),
         362 | 364 | 366 | 367 | 832 => Some(SemanticPatternClass::RaceCondition),
         377 => Some(SemanticPatternClass::InsecureTempFile),
@@ -1122,6 +1124,20 @@ mod tests {
     }
 
     #[test]
+    fn test_inferred_finding_cwes_for_unchecked_loop_condition() {
+        let finding = make_semantic_finding(
+            "memory",
+            "print_line",
+            "LLM: unchecked loop condition from untrusted input controls iteration count",
+        );
+
+        let inferred = inferred_finding_cwes(&finding);
+        assert!(inferred.contains(&606));
+        assert!(!inferred.contains(&190));
+        assert!(!inferred.contains(&119));
+    }
+
+    #[test]
     fn test_aggregate_tracks_per_semantic_scores() {
         let outcomes = vec![
             CaseOutcome {
@@ -1206,6 +1222,9 @@ mod tests {
         let search_path = semantic_class_to_cwes(SemanticPatternClass::UntrustedSearchPath);
         assert!(search_path.contains(&114));
         assert!(search_path.contains(&427));
+
+        let loop_condition = semantic_class_to_cwes(SemanticPatternClass::UncheckedLoopCondition);
+        assert_eq!(loop_condition, &[606]);
 
         let race = semantic_class_to_cwes(SemanticPatternClass::RaceCondition);
         assert!(race.contains(&364));
@@ -1304,6 +1323,7 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(114), Some(UntrustedSearchPath));
         assert_eq!(cwe_to_semantic_class(426), Some(PathTraversal));
         assert_eq!(cwe_to_semantic_class(427), Some(UntrustedSearchPath));
+        assert_eq!(cwe_to_semantic_class(606), Some(UncheckedLoopCondition));
     }
 
     #[test]
