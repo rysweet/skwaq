@@ -17,10 +17,15 @@ pub enum SemanticPatternClass {
     Deserialization,
     FormatString,
     InsecureTempFile,
+    IntegerOverflow,
+    DivideByZero,
+    NullDereference,
     PathTraversal,
     PrototypePollution,
     RaceCondition,
+    ResourceLeak,
     UnsafeApiUsage,
+    UninitializedVariable,
     UseAfterFree,
 }
 
@@ -35,10 +40,15 @@ impl SemanticPatternClass {
             Self::Deserialization => "deserialization",
             Self::FormatString => "format_string",
             Self::InsecureTempFile => "insecure_temp_file",
+            Self::IntegerOverflow => "integer_overflow",
+            Self::DivideByZero => "divide_by_zero",
+            Self::NullDereference => "null_dereference",
             Self::PathTraversal => "path_traversal",
             Self::PrototypePollution => "prototype_pollution",
             Self::RaceCondition => "race_condition",
+            Self::ResourceLeak => "resource_leak",
             Self::UnsafeApiUsage => "unsafe_api_usage",
+            Self::UninitializedVariable => "uninitialized_variable",
             Self::UseAfterFree => "use_after_free",
         }
     }
@@ -100,6 +110,21 @@ impl SemanticPatternClassifier {
         }
         if is_insecure_temp_file(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::InsecureTempFile);
+        }
+        if is_integer_overflow(&category, &title) {
+            classes.insert(SemanticPatternClass::IntegerOverflow);
+        }
+        if is_divide_by_zero(&category, &title) {
+            classes.insert(SemanticPatternClass::DivideByZero);
+        }
+        if is_null_dereference(&category, &title) {
+            classes.insert(SemanticPatternClass::NullDereference);
+        }
+        if is_resource_leak(&category, &title) {
+            classes.insert(SemanticPatternClass::ResourceLeak);
+        }
+        if is_uninitialized_variable(&category, &title) {
+            classes.insert(SemanticPatternClass::UninitializedVariable);
         }
 
         classes
@@ -218,6 +243,71 @@ fn is_insecure_temp_file(category: &str, title: &str, function_name: &str) -> bo
         || contains_any(
             title,
             &["temporary file", "temp file", "insecure temporary file"],
+        )
+}
+
+fn is_integer_overflow(category: &str, title: &str) -> bool {
+    category == "integer_overflow"
+        || contains_any(
+            title,
+            &[
+                "integer overflow",
+                "signed integer overflow",
+                "unsigned integer overflow",
+                "arithmetic overflow",
+                "integer wraparound",
+            ],
+        )
+}
+
+fn is_divide_by_zero(category: &str, title: &str) -> bool {
+    category == "divide_by_zero"
+        || contains_any(
+            title,
+            &["divide by zero", "division by zero", "div-by-zero"],
+        )
+}
+
+fn is_null_dereference(category: &str, title: &str) -> bool {
+    category == "null_deref"
+        || contains_any(
+            title,
+            &[
+                "null dereference",
+                "null-dereference",
+                "null pointer dereference",
+                "dereference of null",
+                "nullptr dereference",
+            ],
+        )
+}
+
+fn is_resource_leak(category: &str, title: &str) -> bool {
+    category == "resource_leak"
+        || contains_any(
+            title,
+            &[
+                "resource leak",
+                "memory leak",
+                "file handle leak",
+                "descriptor leak",
+                "connection leak",
+                "missing free",
+                "missing fclose",
+            ],
+        )
+}
+
+fn is_uninitialized_variable(category: &str, title: &str) -> bool {
+    category == "uninitialized_var"
+        || contains_any(
+            title,
+            &[
+                "uninitialized variable",
+                "uninitialized value",
+                "use of uninitialized",
+                "use of uninitialized variable",
+            ],
         )
 }
 
@@ -360,6 +450,61 @@ mod tests {
 
         assert!(classes.contains(&SemanticPatternClass::InsecureTempFile));
         assert!(!classes.contains(&SemanticPatternClass::RaceCondition));
+    }
+
+    #[test]
+    fn classifies_integer_overflow_from_category() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "integer_overflow",
+            "Dangerous arithmetic path",
+            "update_total",
+        );
+
+        assert!(classes.contains(&SemanticPatternClass::IntegerOverflow));
+    }
+
+    #[test]
+    fn classifies_divide_by_zero_from_title() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "arithmetic",
+            "LLM: division by zero in normalize_ratio",
+            "normalize_ratio",
+        );
+
+        assert!(classes.contains(&SemanticPatternClass::DivideByZero));
+    }
+
+    #[test]
+    fn classifies_null_dereference_from_title() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "memory",
+            "LLM: null pointer dereference in parse_header",
+            "parse_header",
+        );
+
+        assert!(classes.contains(&SemanticPatternClass::NullDereference));
+    }
+
+    #[test]
+    fn classifies_resource_leak_from_category() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "resource_leak",
+            "Potential leak on error path",
+            "open_config",
+        );
+
+        assert!(classes.contains(&SemanticPatternClass::ResourceLeak));
+    }
+
+    #[test]
+    fn classifies_uninitialized_variable_from_title() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "dataflow",
+            "LLM: use of uninitialized variable in parse_count",
+            "parse_count",
+        );
+
+        assert!(classes.contains(&SemanticPatternClass::UninitializedVariable));
     }
 
     #[test]
