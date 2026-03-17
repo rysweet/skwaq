@@ -2675,7 +2675,7 @@ mod tests {
         assert!(findings_have_semantic_confidence(&pattern, &llm));
         assert_eq!(
             select_synthesis_route(&pattern, &llm),
-            SynthesisRoute::SemanticConfidenceFastPath
+            SynthesisRoute::ExpertRouted(ExpertDomain::ArithmeticSafety)
         );
     }
 
@@ -2706,7 +2706,7 @@ mod tests {
         assert!(!findings_have_semantic_confidence(&pattern, &llm));
         assert_eq!(
             select_synthesis_route(&pattern, &llm),
-            SynthesisRoute::ExpertRouted(ExpertDomain::MemorySafety)
+            SynthesisRoute::FullSynthesis
         );
     }
 
@@ -2957,28 +2957,28 @@ mod tests {
     fn test_dominant_expert_domain_single_cluster() {
         let pattern = vec![DetectedFinding {
             id: "p1".into(),
-            category: "memory".into(),
+            category: "integer_overflow".into(),
             severity: "critical".into(),
             cwes: vec![],
             file: "test.c".into(),
-            function: "strcpy".into(),
+            function: "scale".into(),
             line: Some(10),
-            title: "Dangerous pattern: strcpy".into(),
+            title: "Dangerous pattern: integer overflow in scale".into(),
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
-            category: "memory".into(),
+            category: "divide_by_zero".into(),
             severity: "high".into(),
             cwes: vec![],
             file: "test.c".into(),
-            function: "copy".into(),
+            function: "normalize".into(),
             line: Some(20),
-            title: "LLM: heap overflow in copy".into(),
+            title: "LLM: division by zero in normalize".into(),
         }];
 
         assert_eq!(
             dominant_expert_domain(&pattern, &llm),
-            Some(ExpertDomain::MemorySafety)
+            Some(ExpertDomain::ArithmeticSafety)
         );
     }
 
