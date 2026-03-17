@@ -36,6 +36,7 @@ pub struct SynthesisStats {
     semantic_confidence_fast_path_count: AtomicU32,
     llm_synthesis_count: AtomicU32,
     consensus_early_exit_count: AtomicU32,
+    fallback_count: AtomicU32,
     failed_count: AtomicU32,
 }
 
@@ -46,6 +47,7 @@ impl Default for SynthesisStats {
             semantic_confidence_fast_path_count: AtomicU32::new(0),
             llm_synthesis_count: AtomicU32::new(0),
             consensus_early_exit_count: AtomicU32::new(0),
+            fallback_count: AtomicU32::new(0),
             failed_count: AtomicU32::new(0),
         }
     }
@@ -75,6 +77,11 @@ impl SynthesisStats {
             .fetch_add(1, Ordering::Relaxed);
     }
 
+    fn record_fallback(&self) {
+        self.fallback_count.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[cfg(test)]
     fn record_failure(&self) {
         self.failed_count.fetch_add(1, Ordering::Relaxed);
     }
@@ -89,41 +96,46 @@ impl SynthesisStats {
             .load(Ordering::Relaxed);
         let llm = self.llm_synthesis_count.load(Ordering::Relaxed);
         let consensus = self.consensus_early_exit_count.load(Ordering::Relaxed);
+        let fallback = self.fallback_count.load(Ordering::Relaxed);
         let failed = self.failed_count.load(Ordering::Relaxed);
-        let total = pattern_confidence + semantic_confidence + llm + consensus + failed;
+        let total = pattern_confidence + semantic_confidence + llm + consensus + fallback + failed;
         if total == 0 {
             tracing::info!("Synthesis: no dual-source cases (nothing to synthesize)");
             return;
         }
-        if failed > 0 {
+        if fallback > 0 || failed > 0 {
             tracing::warn!(
-                "Synthesis summary: {}/{} pattern-confidence early-exit, {}/{} semantic-confidence fast-path, {}/{} LLM synthesis, {}/{} consensus early-exit, {} failed loudly",
-                pattern_confidence,
-                total,
-                semantic_confidence,
-                total,
-                llm,
-                total,
-                consensus,
-                total,
+                "Synthesis summary: {}/{} pattern-confidence early-exit, {}/{} semantic-confidence fast-path, \
+                 {}/{} LLM synthesis, {}/{} consensus early-exit, {}/{} fallback (kept all findings), {} failed",
+                pattern_confidence, total,
+                semantic_confidence, total,
+                llm, total,
+                consensus, total,
+                fallback, total,
                 failed,
             );
-            eprintln!(
-                "\n  WARNING: {}/{} synthesis cases failed loudly.\n  \
-                 Check the logged LLM synthesis errors above.\n",
-                failed, total,
-            );
+            if fallback > 0 {
+                eprintln!(
+                    "\n  NOTE: {}/{} synthesis cases used fallback (kept all findings due to LLM errors).\n  \
+                     Scoring is still valid but synthesis quality is degraded for those cases.\n",
+                    fallback, total,
+                );
+            }
+            if failed > 0 {
+                eprintln!(
+                    "\n  WARNING: {}/{} synthesis cases failed loudly.\n  \
+                     Check the logged LLM synthesis errors above.\n",
+                    failed, total,
+                );
+            }
         } else {
             tracing::info!(
-                "Synthesis summary: {}/{} pattern-confidence early-exit, {}/{} semantic-confidence fast-path, {}/{} LLM synthesis, {}/{} consensus early-exit (all successful)",
-                pattern_confidence,
-                total,
-                semantic_confidence,
-                total,
-                llm,
-                total,
-                consensus,
-                total,
+                "Synthesis summary: {}/{} pattern-confidence early-exit, {}/{} semantic-confidence fast-path, \
+                 {}/{} LLM synthesis, {}/{} consensus early-exit (all successful)",
+                pattern_confidence, total,
+                semantic_confidence, total,
+                llm, total,
+                consensus, total,
             );
         }
     }
@@ -788,8 +800,17 @@ async fn synthesize_findings(
             Ok(synthesized)
         }
         Err(e) => {
-            SYNTHESIS_STATS.record_failure();
-            Err(e)
+            // Graceful fallback: keep all findings instead of killing the case.
+            // This prevents transient LLM errors (rate limits, timeouts, token
+            // budget exhaustion) from aborting entire long-running benchmark
+            // suites. The fallback is transparent: WARN-level logging plus
+            // stats tracking ensures degraded quality is never hidden.
+            SYNTHESIS_STATS.record_fallback();
+            tracing::warn!(
+                "LLM synthesis failed, falling back to all findings (pattern + LLM): {}",
+                e,
+            );
+            Ok(all_findings)
         }
     }
 }
@@ -1942,29 +1963,34 @@ mod tests {
         let stats = synthesis_stats();
         let before_llm = stats.llm_synthesis_count.load(Ordering::Relaxed);
         let before_consensus = stats.consensus_early_exit_count.load(Ordering::Relaxed);
+        let before_fallback = stats.fallback_count.load(Ordering::Relaxed);
         let before_failed = stats.failed_count.load(Ordering::Relaxed);
 
         let result = synthesize_findings(findings, &cats, &db, 30).await;
-        if let Ok(findings) = &result {
-            assert!(
-                findings.len() <= 2,
-                "Successful synthesis should return a bounded subset of the candidate findings"
-            );
-        }
+        // With graceful fallback, synthesis always returns Ok — either via
+        // LLM synthesis, consensus, or fallback (keeping all findings).
+        let findings = result.expect("synthesize_findings should not fail with graceful fallback");
+        assert!(
+            findings.len() <= 2,
+            "Synthesis should return a bounded subset of the candidate findings"
+        );
 
         let after_llm = stats.llm_synthesis_count.load(Ordering::Relaxed);
         let after_consensus = stats.consensus_early_exit_count.load(Ordering::Relaxed);
+        let after_fallback = stats.fallback_count.load(Ordering::Relaxed);
         let after_failed = stats.failed_count.load(Ordering::Relaxed);
 
-        // One of the three counters must increase.
+        // One of the four counters must increase.
         let total_increase = (after_llm - before_llm)
             + (after_consensus - before_consensus)
+            + (after_fallback - before_fallback)
             + (after_failed - before_failed);
         assert!(
             total_increase > 0,
-            "Synthesis must track its outcome: llm_delta={}, consensus_delta={}, failed_delta={} (none changed!)",
+            "Synthesis must track its outcome: llm_delta={}, consensus_delta={}, fallback_delta={}, failed_delta={} (none changed!)",
             after_llm - before_llm,
             after_consensus - before_consensus,
+            after_fallback - before_fallback,
             after_failed - before_failed,
         );
     }
@@ -1977,6 +2003,7 @@ mod tests {
         stats.record_llm_synthesis();
         stats.record_llm_synthesis();
         stats.record_consensus_early_exit();
+        stats.record_fallback();
         stats.record_failure();
         // Just verify it doesn't panic — the output goes to tracing/eprintln
         stats.report();
@@ -2538,5 +2565,16 @@ mod tests {
 
         // p2 (crypto) has no LLM match → not fully covered
         assert!(!findings_have_semantic_confidence(&pattern, &llm));
+    }
+
+    #[test]
+    fn test_synthesis_stats_fallback_counter() {
+        let stats = SynthesisStats::new();
+        assert_eq!(stats.fallback_count.load(Ordering::Relaxed), 0);
+        stats.record_fallback();
+        stats.record_fallback();
+        assert_eq!(stats.fallback_count.load(Ordering::Relaxed), 2);
+        // Verify report includes fallback count without panicking
+        stats.report();
     }
 }
