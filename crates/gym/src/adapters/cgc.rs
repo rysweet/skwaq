@@ -122,6 +122,19 @@ impl BenchmarkAdapter for CgcAdapter {
             .parent()
             .unwrap_or_else(|| std::path::Path::new("."));
 
+        // In quick mode, use multi-file shared-graph analysis for cross-file
+        // relationship detection (agentic pattern experiment).
+        if config.quick_mode && challenge_src_dir.is_dir() {
+            let c_files: Vec<std::path::PathBuf> = std::fs::read_dir(challenge_src_dir)?
+                .filter_map(|e| e.ok())
+                .map(|e| e.path())
+                .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("c"))
+                .collect();
+            if !c_files.is_empty() {
+                return crate::agentic::run_multi_file_pattern_analysis(&c_files);
+            }
+        }
+
         let mut all_findings = Vec::new();
 
         // Collect all .c files in the challenge source directory
@@ -130,9 +143,7 @@ impl BenchmarkAdapter for CgcAdapter {
                 let entry = entry?;
                 let path = entry.path();
                 if path.extension().and_then(|e| e.to_str()) == Some("c") {
-                    let findings = if config.quick_mode {
-                        run_source_pattern_detection(&path)
-                    } else if config.llm_only {
+                    let findings = if config.llm_only {
                         crate::agentic::run_llm_only_source_analysis(&path, config.timeout_secs)
                             .await
                     } else {
