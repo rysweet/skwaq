@@ -26,6 +26,7 @@ pub enum DangerCategory {
     DivideByZero,
     ResourceLeak,
     UninitializedVar,
+    UseAfterFree,
 }
 
 impl std::fmt::Display for DangerCategory {
@@ -47,6 +48,7 @@ impl std::fmt::Display for DangerCategory {
             Self::DivideByZero => write!(f, "divide_by_zero"),
             Self::ResourceLeak => write!(f, "resource_leak"),
             Self::UninitializedVar => write!(f, "uninitialized_var"),
+            Self::UseAfterFree => write!(f, "use_after_free"),
         }
     }
 }
@@ -253,33 +255,39 @@ pub(crate) const DANGEROUS_APIS: &[DangerousEntry] = &[
         name: "realloc",
         category: DangerCategory::NullDeref,
         severity: Severity::Medium,
-        reason: "returns NULL on failure; check return value before use",
+        reason: "returns NULL on failure and may free original pointer; check return value",
     },
     // Use-after-free (CWE-416) — free can lead to UAF if pointer reused
     DangerousEntry {
         name: "free",
-        category: DangerCategory::Memory,
-        severity: Severity::Medium,
-        reason: "pointer must not be used after free; set to NULL after freeing",
+        category: DangerCategory::UseAfterFree,
+        severity: Severity::High,
+        reason: "accessing freed memory causes use-after-free; nullify pointer after free",
     },
     // Resource leak (CWE-401/772/775) — resource-acquiring APIs
     DangerousEntry {
         name: "fopen",
         category: DangerCategory::ResourceLeak,
         severity: Severity::Medium,
-        reason: "file must be closed with fclose on all paths including error paths",
+        reason: "opened file must be closed with fclose; check for leaks on error paths",
+    },
+    DangerousEntry {
+        name: "fdopen",
+        category: DangerCategory::ResourceLeak,
+        severity: Severity::Medium,
+        reason: "opened stream must be closed with fclose; check for leaks on error paths",
     },
     DangerousEntry {
         name: "open",
         category: DangerCategory::ResourceLeak,
         severity: Severity::Medium,
-        reason: "file descriptor must be closed on all paths including error paths",
+        reason: "opened file descriptor must be closed; check for leaks on error paths",
     },
     DangerousEntry {
         name: "socket",
         category: DangerCategory::ResourceLeak,
         severity: Severity::Medium,
-        reason: "socket must be closed on all paths including error paths",
+        reason: "opened socket must be closed; check for leaks on error paths",
     },
 ];
 

@@ -217,8 +217,8 @@ mod tests {
                 library: "libc.so.6".into(),
             },
             ImportInfo {
-                name: "exit".into(),
-                library: "libc.so.6".into(),
+                name: "my_custom_func".into(),
+                library: "libfoo.so".into(),
             },
         ];
         let hits = detector.check_imports(&imports);
@@ -226,31 +226,31 @@ mod tests {
     }
 
     #[test]
-    fn test_malloc_detected_as_null_deref() {
+    fn test_allocation_apis_detected_as_null_deref() {
         let detector = DangerousApiDetector::new();
-        let imports = vec![ImportInfo {
-            name: "malloc".into(),
-            library: "libc.so.6".into(),
-        }];
+        let imports = vec![
+            ImportInfo {
+                name: "malloc".into(),
+                library: "libc.so.6".into(),
+            },
+            ImportInfo {
+                name: "calloc".into(),
+                library: "libc.so.6".into(),
+            },
+            ImportInfo {
+                name: "realloc".into(),
+                library: "libc.so.6".into(),
+            },
+        ];
         let hits = detector.check_imports(&imports);
-        assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].danger_category, DangerCategory::NullDeref);
+        assert_eq!(hits.len(), 3);
+        for hit in &hits {
+            assert_eq!(hit.danger_category, DangerCategory::NullDeref);
+        }
     }
 
     #[test]
-    fn test_fopen_detected_as_resource_leak() {
-        let detector = DangerousApiDetector::new();
-        let imports = vec![ImportInfo {
-            name: "fopen".into(),
-            library: "libc.so.6".into(),
-        }];
-        let hits = detector.check_imports(&imports);
-        assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].danger_category, DangerCategory::ResourceLeak);
-    }
-
-    #[test]
-    fn test_free_detected_as_memory() {
+    fn test_free_detected_as_use_after_free() {
         let detector = DangerousApiDetector::new();
         let imports = vec![ImportInfo {
             name: "free".into(),
@@ -258,6 +258,34 @@ mod tests {
         }];
         let hits = detector.check_imports(&imports);
         assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].danger_category, DangerCategory::Memory);
+        assert_eq!(hits[0].danger_category, DangerCategory::UseAfterFree);
+    }
+
+    #[test]
+    fn test_file_socket_apis_detected_as_resource_leak() {
+        let detector = DangerousApiDetector::new();
+        let imports = vec![
+            ImportInfo {
+                name: "fopen".into(),
+                library: "libc.so.6".into(),
+            },
+            ImportInfo {
+                name: "fdopen".into(),
+                library: "libc.so.6".into(),
+            },
+            ImportInfo {
+                name: "open".into(),
+                library: "libc.so.6".into(),
+            },
+            ImportInfo {
+                name: "socket".into(),
+                library: "libc.so.6".into(),
+            },
+        ];
+        let hits = detector.check_imports(&imports);
+        assert_eq!(hits.len(), 4);
+        for hit in &hits {
+            assert_eq!(hit.danger_category, DangerCategory::ResourceLeak);
+        }
     }
 }
