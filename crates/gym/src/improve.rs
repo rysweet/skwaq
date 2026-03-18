@@ -1020,6 +1020,40 @@ async fn run_overfitting_review(
         return Ok(proposals);
     }
 
+    // Batch proposals to avoid LLM output truncation.
+    // The reviewer generates verbose structured JSON per proposal;
+    // more than ~5 proposals per call risks exceeding output limits.
+    const BATCH_SIZE: usize = 5;
+
+    if proposals.len() <= BATCH_SIZE {
+        return run_overfitting_review_batch(proposals, suite, knowledge_db).await;
+    }
+
+    let mut all_reviewed = Vec::new();
+    for (batch_idx, chunk) in proposals.chunks(BATCH_SIZE).enumerate() {
+        tracing::info!(
+            "Overfitting review batch {}/{} ({} proposals)",
+            batch_idx + 1,
+            proposals.len().div_ceil(BATCH_SIZE),
+            chunk.len()
+        );
+        let batch = chunk.to_vec();
+        let reviewed = run_overfitting_review_batch(batch, suite, knowledge_db).await?;
+        all_reviewed.extend(reviewed);
+    }
+
+    Ok(all_reviewed)
+}
+
+async fn run_overfitting_review_batch(
+    proposals: Vec<Improvement>,
+    suite: &str,
+    knowledge_db: &skwaq_core::graph::GraphDb,
+) -> anyhow::Result<Vec<Improvement>> {
+    if proposals.is_empty() {
+        return Ok(proposals);
+    }
+
     let config = skwaq_core::config::Config::load().map_err(|e| {
         anyhow::anyhow!("overfitting review requires config loading to succeed: {e}")
     })?;
