@@ -62,14 +62,14 @@ impl GroundTruth {
                     );
                 }
             }
-            // Restrict case IDs to safe characters.
+            // Restrict case IDs to safe characters (colons allowed for CyberGym task IDs like arvo:1065).
             if !case
                 .id
                 .chars()
-                .all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.')
+                .all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.' || c == ':')
             {
                 anyhow::bail!(
-                    "Invalid case ID '{}': must be alphanumeric, underscore, hyphen, or dot",
+                    "Invalid case ID '{}': must be alphanumeric, underscore, hyphen, dot, or colon",
                     case.id
                 );
             }
