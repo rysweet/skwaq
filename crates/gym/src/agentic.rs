@@ -170,7 +170,7 @@ static SYNTHESIS_STATS: std::sync::LazyLock<SynthesisStats> =
     std::sync::LazyLock::new(SynthesisStats::new);
 
 const GHIDRA_ANALYSIS_TIMEOUT_SECS: u64 = 300;
-const SYNTHESIS_REFINEMENT_MAX_BUDGET: u64 = 10_000;
+const SYNTHESIS_REFINEMENT_MAX_BUDGET: u64 = 50_000;
 
 /// Get the global synthesis stats. Call [`SynthesisStats::report`] at end of run.
 pub fn synthesis_stats() -> &'static SynthesisStats {
@@ -1182,13 +1182,7 @@ async fn synthesize_findings(
                 pattern_findings.len(),
                 llm_findings.len(),
             );
-            llm_synthesize_with_limits(
-                &pattern_findings,
-                &llm_findings,
-                timeout_secs.min(10),
-                Some(6_000),
-            )
-            .await
+            llm_synthesize_with_limits(&pattern_findings, &llm_findings, timeout_secs, None).await
         }
         SynthesisRoute::ExpertRouted(domain) => {
             SYNTHESIS_STATS.record_expert_routed();
@@ -1279,10 +1273,7 @@ async fn llm_synthesize_expert(
     append_findings_for_prompt(&mut prompt, "\n=== LLM AGENT FINDINGS ===\n", llm_findings);
     prompt.push_str("\nEvaluate each finding. Respond with CONFIRM or REJECT for each ID.\n");
 
-    let budget_amount = config
-        .analysis
-        .default_token_budget
-        .min(10_000 + (pattern_findings.len() + llm_findings.len()) as u64 * 500);
+    let budget_amount = config.analysis.default_token_budget;
     let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
     let model = &config.llm.copilot.model;
 
@@ -1351,11 +1342,8 @@ async fn llm_synthesize_with_limits(
 
     prompt.push_str("\nEvaluate each finding. Respond with CONFIRM or REJECT for each ID.\n");
 
-    // Budget scales with number of findings to evaluate
-    let budget_amount = config.analysis.default_token_budget.min(
-        max_budget_override
-            .unwrap_or(10_000 + (pattern_findings.len() + llm_findings.len()) as u64 * 500),
-    );
+    // Use full budget or override if specified
+    let budget_amount = max_budget_override.unwrap_or(config.analysis.default_token_budget);
     let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
     let model = &config.llm.copilot.model;
     let synthesis_started = Instant::now();
@@ -1645,7 +1633,7 @@ async fn run_llm_pipeline(
     // reasoning lane independently so they do not force decompilation auth;
     // binary/decompile pipelines still cache the full pair together.
     let pipeline_clients = cached_pipeline_clients(&config, &pipeline, file_str).await?;
-    let budget_amount = config.analysis.default_token_budget.min(100_000);
+    let budget_amount = config.analysis.default_token_budget;
     let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
 
     let target = std::path::Path::new(file_str)
