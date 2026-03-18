@@ -850,9 +850,14 @@ fn convert_evidence_refs(
     evidence_context: &str,
 ) -> anyhow::Result<Vec<EvidenceRef>> {
     if raw_refs.is_empty() {
-        return Err(anyhow::anyhow!(
-            "{evidence_context} must cite at least one KB or durable-memory evidence reference"
-        ));
+        // Warn but don't fail — early improve cycles may have empty memory,
+        // making it hard for agents to cite evidence. The overfitting reviewer
+        // will still evaluate proposals without agent-side evidence.
+        tracing::warn!(
+            "{evidence_context}: no KB or memory evidence cited. Proposal will proceed \
+             but the overfitting reviewer should scrutinize more carefully."
+        );
+        return Ok(vec![]);
     }
 
     raw_refs
@@ -2612,7 +2617,7 @@ analysis
     }
 
     #[test]
-    fn test_parse_analyst_proposals_rejects_missing_evidence() {
+    fn test_parse_analyst_proposals_warns_on_missing_evidence() {
         let fn_case = sample_false_negative_case();
         let output = r#"
 ```json
@@ -2620,8 +2625,12 @@ analysis
 ```
 "#;
 
-        let error = parse_analyst_proposals(output, &fn_case).expect_err("missing evidence");
-        assert!(error.to_string().contains("must cite at least one"));
+        // Missing evidence is now a warning, not an error — proposals still parse
+        let result = parse_analyst_proposals(output, &fn_case);
+        assert!(result.is_ok(), "Missing evidence should warn, not error");
+        let proposals = result.unwrap();
+        assert_eq!(proposals.len(), 1);
+        assert!(proposals[0].supporting_evidence.is_empty());
     }
 
     #[test]
@@ -2754,7 +2763,7 @@ analysis
     }
 
     #[test]
-    fn test_parse_review_decisions_rejects_missing_review_evidence() {
+    fn test_parse_review_decisions_warns_on_missing_review_evidence() {
         let proposals = vec![sample_improvement("Detect sprintf-based overflow")];
         let output = r#"
 ```json
@@ -2764,8 +2773,14 @@ analysis
 ```
 "#;
 
-        let error =
-            parse_review_decisions(output, &proposals).expect_err("review evidence is required");
-        assert!(error.to_string().contains("must cite at least one"));
+        // Missing review evidence is now a warning, not an error
+        let result = parse_review_decisions(output, &proposals);
+        assert!(
+            result.is_ok(),
+            "Missing review evidence should warn, not error"
+        );
+        let reviews = result.unwrap();
+        assert_eq!(reviews.len(), 1);
+        assert!(reviews[0].evidence_refs.is_empty());
     }
 }
