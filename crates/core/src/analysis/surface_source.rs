@@ -357,8 +357,19 @@ fn rust_source_sinks() -> &'static [SourceSinkPattern] {
 
 fn c_cpp_source_sinks() -> &'static [SourceSinkPattern] {
     &[
+        // --- Sources (where untrusted data enters) ---
         SourceSinkPattern {
             regex: r#"\brecv\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "network",
+        },
+        SourceSinkPattern {
+            regex: r#"\bread\s*\(\s*\w+sock"#,
+            kind: SourceSinkKind::Source,
+            category: "network",
+        },
+        SourceSinkPattern {
+            regex: r#"\brecvfrom\s*\("#,
             kind: SourceSinkKind::Source,
             category: "network",
         },
@@ -388,7 +399,18 @@ fn c_cpp_source_sinks() -> &'static [SourceSinkPattern] {
             category: "stdin",
         },
         SourceSinkPattern {
+            regex: r#"\bargv\b"#,
+            kind: SourceSinkKind::Source,
+            category: "command_line",
+        },
+        // --- Sinks (where data reaches dangerous operations) ---
+        SourceSinkPattern {
             regex: r#"\bstrcpy\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "memory",
+        },
+        SourceSinkPattern {
+            regex: r#"\bstrcat\s*\("#,
             kind: SourceSinkKind::Sink,
             category: "memory",
         },
@@ -398,14 +420,59 @@ fn c_cpp_source_sinks() -> &'static [SourceSinkPattern] {
             category: "memory",
         },
         SourceSinkPattern {
+            regex: r#"\bmemcpy\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "memory",
+        },
+        SourceSinkPattern {
+            regex: r#"\bmemmove\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "memory",
+        },
+        SourceSinkPattern {
             regex: r#"\bsystem\s*\("#,
             kind: SourceSinkKind::Sink,
             category: "command_exec",
         },
         SourceSinkPattern {
-            regex: r#"\bmemcpy\s*\("#,
+            regex: r#"\bpopen\s*\("#,
             kind: SourceSinkKind::Sink,
-            category: "memory",
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bexecl\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bexecvp\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bLoadLibrary[AW]?\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "process_control",
+        },
+        SourceSinkPattern {
+            regex: r#"\bdlopen\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "process_control",
+        },
+        SourceSinkPattern {
+            regex: r#"\bfree\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "memory_lifecycle",
+        },
+        SourceSinkPattern {
+            regex: r#"\bprintf\s*\(\s*[a-zA-Z_]"#,
+            kind: SourceSinkKind::Sink,
+            category: "format_string",
+        },
+        SourceSinkPattern {
+            regex: r#"\bfprintf\s*\([^,]+,\s*[a-zA-Z_]"#,
+            kind: SourceSinkKind::Sink,
+            category: "format_string",
         },
     ]
 }
