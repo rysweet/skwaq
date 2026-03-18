@@ -611,6 +611,17 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 skwaq_gym::improve::run_improvement_cycle(adapter.as_ref(), &config, &data_dir)
                     .await?;
             skwaq_gym::improve::store_improvement_lessons(&cycle)?;
+            skwaq_gym::improve::append_learned_patterns(&cycle);
+
+            // Apply accepted NewPattern proposals to the codebase
+            let applied = skwaq_gym::improve::apply_accepted_proposals(&cycle)?;
+            if applied > 0 {
+                println!(
+                    "\n  {} proposal(s) applied to source code. Run `cargo test` to validate.",
+                    applied
+                );
+            }
+
             skwaq_gym::improve::print_proposals(&cycle);
         }
         GymSub::Dashboard => {
