@@ -448,14 +448,89 @@ pub async fn run_agentic_source_analysis_with_hints(
     let orchestrator = skwaq_core::analysis::AnalysisOrchestrator::new(&db, 3);
     let _cycles = orchestrator.run_quick_analysis(&inv_id)?;
 
-    // Collect orchestrator findings (taint flows, etc.) and add their categories
+    // --- Layer 3b: Explicit taint analysis via graph traversal ---
+    // Trace source→sink paths through the Code Property Graph using
+    // recursive CTEs. These paths represent actual data flow chains
+    // that regex patterns can never capture.
+    let taint_analyzer = skwaq_core::analysis::taint::TaintAnalyzer::new(&db, 8);
+    let taint_paths = taint_analyzer.find_unsanitized_paths().unwrap_or_default();
+    if !taint_paths.is_empty() {
+        tracing::info!(
+            "Taint analysis found {} unsanitized source→sink paths for {}",
+            taint_paths.len(),
+            file_str
+        );
+        // Store taint findings in the graph so LLM agents can see them
+        for path in &taint_paths {
+            let finding_id = uuid::Uuid::new_v4().to_string();
+            let _ = db.execute(
+                "INSERT INTO findings (id, title, evidence, agent, timestamp, \
+                 investigation_id, status, severity, category) \
+                 VALUES (?1, ?2, ?3, 'taint-analyzer', ?4, ?5, 'new', 'high', 'taint')",
+                &[
+                    &finding_id.as_str(),
+                    &format!("Taint flow: {} → {}", path.source, path.sink).as_str(),
+                    &format!("Unsanitized data flow path: {}", path.hops.join(" → ")).as_str(),
+                    &now.as_str(),
+                    &inv_id.as_str(),
+                ],
+            );
+        }
+    }
+
+    // Also run stack-buffer-write chain detection on the source
+    if let Ok(ref content) = std::fs::read_to_string(path) {
+        let chains = skwaq_core::analysis::taint::detect_stack_buffer_write_chains(content);
+        for chain in &chains {
+            let finding_id = uuid::Uuid::new_v4().to_string();
+            let _ = db.execute(
+                "INSERT INTO findings (id, title, evidence, agent, timestamp, \
+                 investigation_id, status, severity, category) \
+                 VALUES (?1, ?2, ?3, 'taint-analyzer', ?4, ?5, 'new', 'high', 'memory')",
+                &[
+                    &finding_id.as_str(),
+                    &format!(
+                        "Stack buffer write chain: {} ({} bytes) → {}",
+                        chain.buffer_var, chain.buffer_size, chain.write_api
+                    )
+                    .as_str(),
+                    &format!(
+                        "Buffer '{}' (size {}) at line {} is written by {} at line {} without bounds check",
+                        chain.buffer_var,
+                        chain.buffer_size,
+                        chain.decl_line,
+                        chain.write_api,
+                        chain.write_line
+                    )
+                    .as_str(),
+                    &now.as_str(),
+                    &inv_id.as_str(),
+                ],
+            );
+        }
+        if !chains.is_empty() {
+            tracing::info!(
+                "Stack buffer chain detection found {} chains for {}",
+                chains.len(),
+                file_str
+            );
+        }
+    }
+
+    // Collect ALL orchestrator + taint findings and add their categories
     let orchestrator_findings = collect_findings_from_db(&db, &inv_id, "source-pattern-detector")?;
-    for f in &orchestrator_findings {
+    let taint_findings = collect_findings_from_db(&db, &inv_id, "taint-analyzer")?;
+    for f in orchestrator_findings.iter().chain(taint_findings.iter()) {
         pattern_categories.insert(f.category.clone());
     }
 
+    let all_graph_findings: Vec<_> = orchestrator_findings
+        .iter()
+        .chain(taint_findings.iter())
+        .cloned()
+        .collect();
     let skip_llm_pipeline =
-        should_skip_llm_pipeline_for_pattern_confidence(&pattern_hits, &orchestrator_findings);
+        should_skip_llm_pipeline_for_pattern_confidence(&pattern_hits, &all_graph_findings);
 
     // --- Layer 4: LLM agent pipeline ---
     if skip_llm_pipeline {
