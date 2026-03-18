@@ -2023,6 +2023,85 @@ pub fn store_improvement_lessons(cycle: &ImprovementCycle) -> anyhow::Result<()>
     Ok(())
 }
 
+/// Apply accepted NewPattern proposals by appending regex patterns to the
+/// source pattern file. Only applies NewPattern proposals with non-empty
+/// patches and a target file that exists.
+///
+/// Returns the number of proposals successfully applied.
+pub fn apply_accepted_proposals(cycle: &ImprovementCycle) -> anyhow::Result<usize> {
+    let applicable: Vec<&Improvement> = cycle
+        .proposals
+        .iter()
+        .filter(|p| matches!(p.kind, ImprovementKind::NewPattern))
+        .filter(|p| !p.patch.replace.is_empty())
+        .collect();
+
+    if applicable.is_empty() {
+        tracing::info!("No applicable NewPattern proposals to apply");
+        return Ok(0);
+    }
+
+    let mut applied = 0;
+    for proposal in &applicable {
+        let target = &proposal.target_file;
+        if !target.exists() {
+            tracing::warn!("Proposal target file does not exist: {}", target.display());
+            continue;
+        }
+
+        let content = std::fs::read_to_string(target)?;
+
+        let new_content = if proposal.patch.find.is_empty() {
+            // Append mode: find the C/C++ pattern array end and insert before it.
+            // Look for the last `]` in the c_cpp_patterns() function.
+            if let Some(insert_pos) = content.rfind("    ]\n}") {
+                let mut result = content[..insert_pos].to_string();
+                result.push_str(&format!(
+                    "        // Self-improvement: {} (from case {})\n\
+                     {}\n",
+                    proposal.description.chars().take(60).collect::<String>(),
+                    proposal.source_case,
+                    proposal.patch.replace,
+                ));
+                result.push_str(&content[insert_pos..]);
+                result
+            } else {
+                tracing::warn!("Could not find insertion point in {}", target.display());
+                continue;
+            }
+        } else {
+            // Replace mode
+            if !content.contains(&proposal.patch.find) {
+                tracing::warn!(
+                    "Patch find text not found in {}: '{}'",
+                    target.display(),
+                    proposal.patch.find.chars().take(50).collect::<String>()
+                );
+                continue;
+            }
+            content.replacen(&proposal.patch.find, &proposal.patch.replace, 1)
+        };
+
+        std::fs::write(target, &new_content)?;
+        applied += 1;
+        tracing::info!(
+            "Applied proposal: {} → {}",
+            proposal.description.chars().take(60).collect::<String>(),
+            target.display()
+        );
+    }
+
+    if applied > 0 {
+        tracing::info!(
+            "Applied {}/{} NewPattern proposals. Run `cargo test` to validate.",
+            applied,
+            applicable.len()
+        );
+    }
+
+    Ok(applied)
+}
+
 /// Print improvement proposals in a human-readable format.
 pub fn print_proposals(cycle: &ImprovementCycle) {
     let rejected_proposals = cycle

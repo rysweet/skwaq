@@ -35,3 +35,5 @@ For each entry point, report:
 - Risk level: critical (network-facing + dangerous ops), high (file parsing + dangerous ops), medium (local input + dangerous ops), low (internal only)
 
 Produce a structured summary that guides subsequent vulnerability analysis toward the highest-risk areas first.
+
+**Memory usage:** Call `recall_memory` at start with "attack surface entry points" to check for prior observations about this type of target. After analysis, call `store_memory` with type "insight" to record reusable observations about the attack surface (e.g., "binary with network-facing recv() calls reaching strcpy sinks has high CWE-119 risk").
