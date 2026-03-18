@@ -116,6 +116,10 @@ pub enum GymSub {
         /// Maximum cases to analyze
         #[arg(long, default_value = "20")]
         max_cases: usize,
+
+        /// Filter to specific CWE (e.g., CWE-121). Only analyze cases matching this CWE.
+        #[arg(long)]
+        cwe: Option<String>,
     },
 
     /// Compare per-case outcomes between the latest two finished runs for a suite
@@ -575,12 +579,20 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             println!("Summary: {}", eval_dir.join("summary.md").display());
             println!("Dashboard: {}", eval_dir.join("dashboard.md").display());
         }
-        GymSub::Improve { suite, max_cases } => {
+        GymSub::Improve {
+            suite,
+            max_cases,
+            cwe,
+        } => {
+            let cwe_filter = cwe.as_ref().and_then(|c| {
+                let num_str = c.trim_start_matches("CWE-").trim_start_matches("cwe-");
+                num_str.parse::<u32>().ok().map(|n| vec![n])
+            });
             let config = skwaq_gym::adapters::BenchmarkConfig {
                 cache_dir: dirs::data_dir()
                     .unwrap_or_else(|| std::path::PathBuf::from("."))
                     .join("skwaq/gym/cache"),
-                cwe_filter: None,
+                cwe_filter,
                 max_cases: Some(*max_cases),
                 quick_mode: true,
                 llm_only: false,
