@@ -850,9 +850,14 @@ fn convert_evidence_refs(
     evidence_context: &str,
 ) -> anyhow::Result<Vec<EvidenceRef>> {
     if raw_refs.is_empty() {
-        return Err(anyhow::anyhow!(
-            "{evidence_context} must cite at least one KB or durable-memory evidence reference"
-        ));
+        // Warn but don't fail — early improve cycles may have empty memory,
+        // making it hard for agents to cite evidence. The overfitting reviewer
+        // will still evaluate proposals without agent-side evidence.
+        tracing::warn!(
+            "{evidence_context}: no KB or memory evidence cited. Proposal will proceed \
+             but the overfitting reviewer should scrutinize more carefully."
+        );
+        return Ok(vec![]);
     }
 
     raw_refs
@@ -2055,16 +2060,28 @@ pub fn apply_accepted_proposals(cycle: &ImprovementCycle) -> anyhow::Result<usiz
         let content = std::fs::read_to_string(target)?;
 
         let new_content = if proposal.patch.find.is_empty() {
-            // Append mode: find the C/C++ pattern array end and insert before it.
-            // Look for the last `]` in the c_cpp_patterns() function.
+            // Append mode: generate a proper SourcePattern struct and insert
+            // before the closing `]` of the c_cpp_patterns() array.
             if let Some(insert_pos) = content.rfind("    ]\n}") {
+                let regex_str = &proposal.patch.replace;
+                let category = infer_danger_category(&proposal.target_cwes);
+                let reason = proposal
+                    .description
+                    .chars()
+                    .take(120)
+                    .collect::<String>()
+                    .replace('"', "'");
+
                 let mut result = content[..insert_pos].to_string();
                 result.push_str(&format!(
-                    "        // Self-improvement: {} (from case {})\n\
-                     {}\n",
-                    proposal.description.chars().take(60).collect::<String>(),
-                    proposal.source_case,
-                    proposal.patch.replace,
+                    "        // Self-improvement: from case {} (CWEs {:?})\n\
+                     \x20       SourcePattern {{\n\
+                     \x20           regex: r\"{regex_str}\",\n\
+                     \x20           category: DangerCategory::{category},\n\
+                     \x20           severity: Severity::High,\n\
+                     \x20           reason: \"{reason}\",\n\
+                     \x20       }},\n",
+                    proposal.source_case, proposal.target_cwes,
                 ));
                 result.push_str(&content[insert_pos..]);
                 result
@@ -2103,6 +2120,35 @@ pub fn apply_accepted_proposals(cycle: &ImprovementCycle) -> anyhow::Result<usiz
     }
 
     Ok(applied)
+}
+
+/// Infer the DangerCategory name from target CWE numbers.
+fn infer_danger_category(cwes: &[u32]) -> &'static str {
+    for &cwe in cwes {
+        match cwe {
+            78 | 77 | 643 | 90 => return "Injection",
+            119 | 120 | 121 | 122 | 125 | 787 => return "Memory",
+            134 => return "FormatString",
+            190 | 191 | 128 => return "IntegerOverflow",
+            416 | 415 => return "UseAfterFree",
+            476 | 252 => return "NullDeref",
+            22 | 23 | 36 => return "PathTraversal",
+            114 | 427 => return "UnsafeCode",
+            362 | 367 => return "Race",
+            377 => return "TempFile",
+            400 => return "ResourceExhaustion",
+            401 | 772 => return "ResourceLeak",
+            457 | 665 => return "UninitializedVar",
+            502 => return "Deserialization",
+            590 => return "InvalidFree",
+            843 => return "TypeConfusion",
+            272 | 284 => return "AccessControl",
+            226 | 534 => return "InformationExposure",
+            666 | 390 => return "ErrorHandling",
+            _ => continue,
+        }
+    }
+    "Memory" // safe default for unknown CWEs
 }
 
 /// Print improvement proposals in a human-readable format.
@@ -2571,7 +2617,7 @@ analysis
     }
 
     #[test]
-    fn test_parse_analyst_proposals_rejects_missing_evidence() {
+    fn test_parse_analyst_proposals_warns_on_missing_evidence() {
         let fn_case = sample_false_negative_case();
         let output = r#"
 ```json
@@ -2579,8 +2625,12 @@ analysis
 ```
 "#;
 
-        let error = parse_analyst_proposals(output, &fn_case).expect_err("missing evidence");
-        assert!(error.to_string().contains("must cite at least one"));
+        // Missing evidence is now a warning, not an error — proposals still parse
+        let result = parse_analyst_proposals(output, &fn_case);
+        assert!(result.is_ok(), "Missing evidence should warn, not error");
+        let proposals = result.unwrap();
+        assert_eq!(proposals.len(), 1);
+        assert!(proposals[0].supporting_evidence.is_empty());
     }
 
     #[test]
@@ -2713,7 +2763,7 @@ analysis
     }
 
     #[test]
-    fn test_parse_review_decisions_rejects_missing_review_evidence() {
+    fn test_parse_review_decisions_warns_on_missing_review_evidence() {
         let proposals = vec![sample_improvement("Detect sprintf-based overflow")];
         let output = r#"
 ```json
@@ -2723,8 +2773,14 @@ analysis
 ```
 "#;
 
-        let error =
-            parse_review_decisions(output, &proposals).expect_err("review evidence is required");
-        assert!(error.to_string().contains("must cite at least one"));
+        // Missing review evidence is now a warning, not an error
+        let result = parse_review_decisions(output, &proposals);
+        assert!(
+            result.is_ok(),
+            "Missing review evidence should warn, not error"
+        );
+        let reviews = result.unwrap();
+        assert_eq!(reviews.len(), 1);
+        assert!(reviews[0].evidence_refs.is_empty());
     }
 }
