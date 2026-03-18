@@ -1020,7 +1020,14 @@ async fn run_overfitting_review(
         .await
         .map_err(|e| anyhow::anyhow!("overfitting review requires an LLM client: {e}"))?;
 
-    let budget_amount = config.analysis.default_token_budget.min(20_000);
+    // Scale budget with proposal count — each proposal needs ~1500 tokens for
+    // the structured review JSON (verdict, reason, evidence_refs).
+    let base_budget = 10_000_u64;
+    let per_proposal = 1_500_u64;
+    let budget_amount = config
+        .analysis
+        .default_token_budget
+        .min(base_budget + proposals.len() as u64 * per_proposal);
     let knowledge_context = build_overfitting_knowledge_context(knowledge_db, &proposals)?;
 
     let mut proposal_text = format!(
