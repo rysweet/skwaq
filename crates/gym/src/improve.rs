@@ -22,8 +22,8 @@ const IMPROVE_KB_SNIPPET_CHAR_LIMIT: usize = 700;
 const IMPROVE_KB_FIXED_QUERIES: [&str; 2] = ["methodology", "cwe-families"];
 const FAILURE_ANALYST_MIN_CASES: usize = 5;
 const FAILURE_ANALYST_MAX_CASES: usize = 20;
-const FAILURE_ANALYST_TARGET_BUDGET_PER_CASE: u64 = 10_000;
-const FAILURE_ANALYST_MAX_BUDGET_PER_CASE: u64 = 30_000;
+const FAILURE_ANALYST_TARGET_BUDGET_PER_CASE: u64 = 50_000;
+const FAILURE_ANALYST_MAX_BUDGET_PER_CASE: u64 = 100_000;
 
 /// A proposed improvement from the failure-analyst agent.
 #[derive(Debug, Clone)]
@@ -444,7 +444,7 @@ async fn run_failure_analyst_agent(
 
     for (i, fn_case) in false_negatives.iter().enumerate().take(case_limit) {
         let mut budget = skwaq_core::llm::TokenBudget::new(budget_per_case);
-        let source_excerpt_len = fn_case.source_content.len().min(4000);
+        let source_excerpt_len = fn_case.source_content.len().min(32_000);
         if fn_case.source_content.len() > source_excerpt_len {
             tracing::warn!(
                 "Truncating source context for case {} from {} to {} bytes",
@@ -548,7 +548,7 @@ async fn run_failure_analyst_agent(
                 anyhow::anyhow!("failure analyst failed on case {}: {e}", fn_case.case_id)
             })?;
 
-        let mut formatter_budget = skwaq_core::llm::TokenBudget::new(budget_per_case.min(10_000));
+        let mut formatter_budget = skwaq_core::llm::TokenBudget::new(budget_per_case.min(50_000));
         let formatted_output = format_failure_analyst_output(
             &config,
             agent.model.as_str(),
@@ -1020,14 +1020,9 @@ async fn run_overfitting_review(
         .await
         .map_err(|e| anyhow::anyhow!("overfitting review requires an LLM client: {e}"))?;
 
-    // Scale budget with proposal count — each proposal needs ~1500 tokens for
-    // the structured review JSON (verdict, reason, evidence_refs).
-    let base_budget = 10_000_u64;
-    let per_proposal = 1_500_u64;
-    let budget_amount = config
-        .analysis
-        .default_token_budget
-        .min(base_budget + proposals.len() as u64 * per_proposal);
+    // Use full budget — the reviewer needs enough tokens to evaluate all proposals
+    // with detailed structured JSON output.
+    let budget_amount = config.analysis.default_token_budget;
     let knowledge_context = build_overfitting_knowledge_context(knowledge_db, &proposals)?;
 
     let mut proposal_text = format!(
@@ -2353,20 +2348,22 @@ mod tests {
 
     #[test]
     fn test_failure_analyst_case_limit_scales_with_budget() {
-        assert_eq!(failure_analyst_case_limit(100_000, 50), 10);
-        assert_eq!(failure_analyst_case_limit(250_000, 50), 20);
-        assert_eq!(failure_analyst_case_limit(30_000, 50), 5);
-        assert_eq!(failure_analyst_case_limit(100_000, 3), 3);
-        assert_eq!(failure_analyst_case_limit(100_000, 0), 0);
+        // TARGET_BUDGET_PER_CASE = 50_000, MIN_CASES = 5, MAX_CASES = 20
+        assert_eq!(failure_analyst_case_limit(250_000, 50), 5); // 250K/50K = 5
+        assert_eq!(failure_analyst_case_limit(500_000, 50), 10); // 500K/50K = 10
+        assert_eq!(failure_analyst_case_limit(50_000, 50), 5); // 50K/50K = 1 → clamped to MIN 5
+        assert_eq!(failure_analyst_case_limit(250_000, 3), 3); // capped by FN count
+        assert_eq!(failure_analyst_case_limit(250_000, 0), 0);
     }
 
     #[test]
     fn test_failure_analyst_budget_per_case_respects_total_budget() {
-        assert_eq!(failure_analyst_budget_per_case(100_000, 10), 10_000);
-        assert_eq!(failure_analyst_budget_per_case(30_000, 5), 6_000);
-        assert_eq!(failure_analyst_budget_per_case(1_000_000, 20), 30_000);
+        // MAX_BUDGET_PER_CASE = 100_000
+        assert_eq!(failure_analyst_budget_per_case(250_000, 5), 50_000);
+        assert_eq!(failure_analyst_budget_per_case(100_000, 5), 20_000);
+        assert_eq!(failure_analyst_budget_per_case(5_000_000, 20), 100_000); // capped at MAX
         assert_eq!(failure_analyst_budget_per_case(1, 5), 1);
-        assert_eq!(failure_analyst_budget_per_case(100_000, 0), 0);
+        assert_eq!(failure_analyst_budget_per_case(250_000, 0), 0);
     }
 
     #[test]

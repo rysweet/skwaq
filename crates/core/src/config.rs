@@ -129,7 +129,7 @@ fn default_fp_target() -> f64 {
     0.15
 }
 fn default_token_budget() -> u64 {
-    100_000
+    250_000
 }
 fn default_format() -> String {
     "text".into()
