@@ -810,18 +810,21 @@ fn convert_llm_proposal(
         ),
     )?;
 
-    let target_file = proposal
-        .target_file
-        .map(PathBuf::from)
-        .unwrap_or_else(|| match kind {
-            ImprovementKind::NewPattern => {
-                PathBuf::from("crates/core/src/analysis/patterns_source.rs")
-            }
-            ImprovementKind::AgentPrompt => PathBuf::from("agents/vuln-hunter.md"),
-            ImprovementKind::CweMapping => PathBuf::from("crates/gym/src/scoring.rs"),
-            ImprovementKind::TaintRule => PathBuf::from("crates/core/src/analysis/taint.rs"),
-            ImprovementKind::GroundTruthFix => PathBuf::from("data/gym/ground_truth/"),
-        });
+    // For NewPattern proposals, always target patterns_source.rs regardless
+    // of what the LLM suggests (it often puts the test case file path).
+    let target_file = match kind {
+        ImprovementKind::NewPattern => PathBuf::from("crates/core/src/analysis/patterns_source.rs"),
+        _ => proposal
+            .target_file
+            .map(PathBuf::from)
+            .unwrap_or_else(|| match kind {
+                ImprovementKind::AgentPrompt => PathBuf::from("agents/vuln-hunter.md"),
+                ImprovementKind::CweMapping => PathBuf::from("crates/gym/src/scoring.rs"),
+                ImprovementKind::TaintRule => PathBuf::from("crates/core/src/analysis/taint.rs"),
+                ImprovementKind::GroundTruthFix => PathBuf::from("data/gym/ground_truth/"),
+                _ => unreachable!(),
+            }),
+    };
 
     Ok(Improvement {
         kind,
