@@ -426,6 +426,62 @@ pub fn build_analysis_context_with_limit(
         }
     }
 
+    // Include data flow edges from tree-sitter analysis
+    if let Ok(mut stmt) = db
+        .conn()
+        .prepare("SELECT from_block, to_block FROM flows_to LIMIT 30")
+    {
+        if let Ok(rows) = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        }) {
+            let flows: Vec<(String, String)> =
+                rows.collect::<Result<Vec<_>, _>>().unwrap_or_default();
+            if !flows.is_empty() {
+                parts.push(format!(
+                    "\n## Data flow edges ({} — from tree-sitter analysis):\n\
+                     These trace variable assignments and usage within functions.\n\
+                     Format: <source> -> <destination>\n",
+                    flows.len()
+                ));
+                for (from, to) in &flows {
+                    parts.push(format!("- {} -> {}", from, to));
+                }
+            }
+        }
+    }
+
+    // Include findings from taint analyzer and orchestrator
+    if let Ok(mut stmt) = db.conn().prepare(
+        "SELECT title, evidence, severity, category FROM findings \
+         WHERE investigation_id = ?1 AND agent IN ('taint-analyzer', 'orchestrator') \
+         AND status != 'invalidated' LIMIT 15",
+    ) {
+        if let Ok(rows) = stmt.query_map([investigation_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1).unwrap_or_default(),
+                row.get::<_, String>(2).unwrap_or_default(),
+                row.get::<_, String>(3).unwrap_or_default(),
+            ))
+        }) {
+            let findings: Vec<(String, String, String, String)> =
+                rows.collect::<Result<Vec<_>, _>>().unwrap_or_default();
+            if !findings.is_empty() {
+                parts.push(format!(
+                    "\n## Prior analysis findings ({} — from taint/pattern analysis):\n\
+                     These are HIGH PRIORITY leads. Investigate each one.\n",
+                    findings.len()
+                ));
+                for (title, evidence, severity, category) in &findings {
+                    parts.push(format!(
+                        "- [{}] {}: {} ({})",
+                        severity, title, evidence, category
+                    ));
+                }
+            }
+        }
+    }
+
     parts.push(
         "\n\nYou have access to durable memory (store_memory/recall_memory tools). \
          Use recall_memory to check for relevant past experiences before starting your analysis. \
