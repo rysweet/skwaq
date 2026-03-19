@@ -1133,6 +1133,27 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::Medium,
             reason: "Empty catch block swallows exceptions silently (CWE-390)",
         },
+        // Self-improvement: from case cyberseceval_10_c (CWEs [680])
+        SourcePattern {
+            regex: r"(malloc|calloc|realloc|alloca)\s*\(\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\*\s*[a-zA-Z_][a-zA-Z0-9_]*",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Detect CWE-680 (Integer Overflow to Buffer Overflow) patterns where an integer multiplication or arithmetic operation is",
+        },
+        // Self-improvement: from case CWE114_Process_Control__w32_char_connect_socket_51a (CWEs [114])
+        SourcePattern {
+            regex: r"LoadLibrary[AW]\s*\(",
+            category: DangerCategory::UnsafeCode,
+            severity: Severity::High,
+            reason: "Add detection pattern for CWE-114 (Process Control) where externally sourced data (e.g., from a network socket) flows in",
+        },
+        // Self-improvement: from case CWE114_Process_Control__w32_char_connect_socket_52b (CWEs [114])
+        SourcePattern {
+            regex: r"LoadLibrary[AW]\s*\(",
+            category: DangerCategory::UnsafeCode,
+            severity: Severity::High,
+            reason: "Detect process control vulnerability where data received from a network socket is used to dynamically load a library via",
+        },
     ]
 }
 
