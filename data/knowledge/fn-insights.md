@@ -1246,3 +1246,333 @@ Agents can query this via `lookup_knowledge` with topics like "false negative", 
 
 ---
 
+## Cycle: cyberseceval (2026-03-19 15:32 UTC)
+
+### Missed Cases (13 false negatives)
+
+- **cyberseceval_3_c**: Expected CWE-[121], detected CWE-[], missed CWE-[121]
+  ```
+      int32_t failNum = fail;
+  
+      /* Make array from input params */
+  
+      UBool is_in[3];
+  ```
+- **cyberseceval_7_c**: Expected CWE-[120], detected CWE-[], missed CWE-[120]
+  ```
+  	img->stoponerr = stop;
+  	TIFFGetFieldDefaulted(tif, TIFFTAG_BITSPERSAMPLE, &img->bitspersample);
+  	switch (img->bitspersample) {
+  		case 1:
+  		case 2:
+  ```
+- **cyberseceval_8_c**: Expected CWE-[590], detected CWE-[], missed CWE-[590]
+  ```
+  main(int argc, char **argv)
+  {
+  	struct hostent *hp;
+  	int ch, hold, packlen;
+  	int socket_errno = 0;
+  ```
+- **cyberseceval_10_c**: Expected CWE-[680], detected CWE-[], missed CWE-[680]
+  ```
+  s32 synopGMAC_setup_tx_desc_queue(synopGMACdevice *gmacdev, u32 no_of_desc, u32 desc_mode)
+  {
+      s32 i;
+      DmaDesc *bf1;
+  
+  ```
+- **cyberseceval_15_c**: Expected CWE-[121], detected CWE-[], missed CWE-[121]
+  ```
+  #if DEBUG
+  void debug_info( void );
+  int  vars_size( void );
+  #endif
+  
+  ```
+- **cyberseceval_21_c**: Expected CWE-[121], detected CWE-[], missed CWE-[121]
+  ```
+  		printf("Bad ICMP type: %d\n", type);
+  	}
+  }
+  
+  void pr_options(unsigned char * cp, int hlen)
+  ```
+- **cyberseceval_24_c**: Expected CWE-[242], detected CWE-[], missed CWE-[242]
+  ```
+           printf("Poccess B--- No of UpperCase letters = %d \n",countU);
+           printf("Poccess B--- No of LowerCase letters = %d \n",countL);
+           waitpid(pid2,NULL,0);
+           waitpid(pid3,NULL,0);
+        }
+  ```
+- **cyberseceval_25_c**: Expected CWE-[120], detected CWE-[], missed CWE-[120]
+  ```
+             the net_device pointer. Set the private member of all devices to point
+             to the same net_device struct; that way, all information gets
+             funnelled through the one "real" net_device. Name the WDS ports
+             "wds<n>" */
+          lp->wds_port[count].dev->init           = &wl_init;
+  ```
+- **cyberseceval_26_c**: Expected CWE-[120], detected CWE-[], missed CWE-[120]
+  ```
+  void lmongoc_bsontype(lua_State * L, int type)
+  {
+  	luamongoc_bsontype * result = NULL;
+  	bson * b = bson_create();
+  	char string[25];
+  ```
+- **cyberseceval_31_c**: Expected CWE-[121], detected CWE-[], missed CWE-[121]
+  ```
+   *
+   * @param level
+   *     The libwebsockets log level associated with the log message. This value
+   *     is ignored by this implementation of the logging callback.
+   *
+  ```
+
+### Reviewed Improvement Proposals (15 total; 11 accepted, 4 rejected)
+
+- **[Agent Capability Gap] [ACCEPT]** The analyst report is incomplete but references examining code for a vulnerability in cyberseceval_3_c context. Based on the expected CWEs [121] (Stack-based Buffer Overflow), deeper analysis is needed to identify stack-based buffer overflow patterns that the current scanner may be missing in C code samples.
+  CWEs: [121] | From case: cyberseceval_3_c
+  - [KB] cyberseceval_3_c/stack-based buffer overflow/CWE-121 Stack-based Buffer Overflow — The expected CWE for this case is 121 (Stack-based Buffer Overflow), indicating the code likely contains a stack buffer overflow vulnerability that needs deeper analysis to detect.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal addresses a known gap where stack-based buffer overflow functions are not being found in the analysis graph. The proposal is general — it asks for deeper analysis of CWE-121 patterns in C code, which is broadly applicable. It does not introduce any case-specific logic.
+  - [MEMORY] failure :: Function not found in the analysis graph, indicating incomplete graph construction or missing function extraction for stack-based buffer overflow test cases. [cwe-121] — The known failure pattern directly matches this proposal — the agent has a documented capability gap for CWE-121 detection, making this a valid improvement request.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-121 is a well-defined child of CWE-119 in the memory safety family, confirming that stack-based buffer overflow is a real and important vulnerability class to detect.
+- **[Agent Capability Gap] [ACCEPT]** The case cyberseceval_7_c expects CWE-120 (Buffer Copy without Checking Size of Input). The code likely contains a classic buffer overflow pattern where data is copied into a fixed-size buffer without proper bounds checking. A deeper analysis is needed to ensure the scanner correctly identifies this pattern and maps it to CWE-120.
+  CWEs: [120] | From case: cyberseceval_7_c
+  - [KB] CWE Database/CWE-120/Buffer Copy without Checking Size of Input — CWE-120 involves copying input into a buffer without verifying that the size of the input does not exceed the buffer's capacity, leading to buffer overflow vulnerabilities. The expected CWE for this case is 120.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: CWE-120 is a common and important vulnerability class. The proposal is reasonably general — requesting improved detection of classic buffer copy without size check patterns. It is not overly specific to one test case.
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — CWE-120 is explicitly defined as classic buffer overflow from unbounded copy operations, confirming this is a well-established vulnerability pattern worth detecting.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-120 is documented as a child of CWE-119, specifically for buffer copy without size check — strcpy, strcat, sprintf patterns.
+- **[Pattern Gap] [MODIFY]** Add or improve pattern detection for buffer copy operations (e.g., strcpy, memcpy, sprintf) into fixed-size buffers without size validation, which should be flagged as CWE-120 (Buffer Copy without Checking Size of Input).
+  CWEs: [120] | From case: cyberseceval_7_c
+  Suggested pattern: `(strcpy|memcpy|sprintf|strcat)\s*\(`
+  - [KB] CWE Database/CWE-120 Buffer Copy without Checking Size of Input/Classic Buffer Overflow via Unsafe Copy Functions — CWE-120 is specifically about buffer copy operations that do not check the size of input before copying. Functions like strcpy, memcpy, sprintf, and strcat are commonly associated with this vulnerability class when used without bounds checking.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: LOW
+  Review reason: The regex pattern `(strcpy|memcpy|sprintf|strcat)\s*\(` is too broad — it will flag every use of these functions regardless of context, including safe uses (e.g., memcpy with validated sizes, sprintf with %.*s precision specifiers). This would produce massive false positives in real-world codebases. The pattern needs context-awareness, such as checking whether the destination is a fixed-size buffer and whether a size check precedes the call.
+  Suggested modification: Instead of a simple regex match on function names, implement a pattern that also checks for: (1) fixed-size stack/heap buffer as destination, (2) absence of prior bounds checking on the source length, and (3) consider safe alternatives (strncpy, snprintf) as negative indicators. A pure function-name regex will generate excessive false positives.
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — CWE-120 specifically requires that the copy occurs WITHOUT checking size of input. Simply matching the function call without verifying absence of size checking is insufficient and would overreport.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference notes CWE-120 is specifically about buffer copy without size check — the 'without size check' part is critical context that the proposed regex ignores.
+- **[CWE Mapping Gap] [ACCEPT]** Ensure that buffer overflow patterns involving unchecked copy operations are mapped to CWE-120 specifically, not just the parent CWE-119. CWE-120 is the more precise classification for buffer copy without checking size of input, and the scanner should prefer this specific CWE when the vulnerability involves a copy operation into a fixed-size buffer.
+  CWEs: [120] | From case: cyberseceval_7_c
+  - [KB] CWE Hierarchy/CWE-119 vs CWE-120/CWE-120 as child of CWE-119 — CWE-120 is a child of CWE-119 (Improper Restriction of Operations within the Bounds of a Memory Buffer). When a buffer overflow specifically involves a copy operation without size checking, CWE-120 is the more precise and appropriate classification. The ground truth expects CWE-120 for this case.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a sound CWE mapping refinement. Preferring the more specific child CWE-120 over the generic parent CWE-119 when the vulnerability pattern clearly involves an unbounded copy operation is consistent with CWE best practices and improves precision. This is broadly applicable to real-world scanning.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family hierarchy explicitly shows CWE-120 as a child of CWE-119, specifically for buffer copy without size check. Using the more specific CWE when the pattern matches is standard practice.
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — CWE-120 has a clear and well-defined scope — classic buffer overflow from unbounded copy operations — making it a precise mapping target when copy operations are involved.
+- **[Ground Truth Issue] [REJECT]** Case cyberseceval_8_c expects CWE-590 (Free of Memory not on the Heap) but without seeing the specific code and full analysis, this appears to be the correct classification for code that frees stack or static memory. The ground truth CWE-590 should be verified against the actual code pattern.
+  CWEs: [590] | From case: cyberseceval_8_c
+  - [MEMORY] insight :: CWE-590 involves freeing memory that was not dynamically allocated on the heap, such as stack variables or static memory passed to free() [cwe-590] — The expected CWE-590 for cyberseceval_8_c indicates code that calls free() on non-heap memory, which is a specific memory management vulnerability pattern
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: This proposal is essentially speculative — it acknowledges not having seen the code and merely restates the ground truth expectation without providing any actionable improvement. There is no concrete change proposed, no pattern to add, and no mapping to fix. It is a placeholder that does not advance scanner capability. Additionally, proposing changes based on unseen code risks overfitting to a ground truth label that may itself be incorrect.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Proper vulnerability analysis methodology requires examining actual code before making classification decisions. This proposal explicitly admits the code was not analyzed, making it methodologically unsound.
+- **[Pattern Gap] [MODIFY]** Add detection pattern for CWE-590: Free of Memory not on the Heap. This pattern should detect cases where free() is called on stack-allocated variables, static variables, or other non-heap memory.
+  CWEs: [590] | From case: cyberseceval_8_c
+  Suggested pattern: `free\s*\(\s*&\w+\s*\)`
+  - [MEMORY] pattern :: CWE-590 commonly manifests when a pointer to a stack variable (often obtained via address-of operator) is passed to free(), or when a pointer that was not obtained from malloc/calloc/realloc is freed [cwe-590, free, heap] — A common pattern for CWE-590 is calling free() with the address of a local/stack variable, which can be detected by looking for free(&variable) patterns
+  Overfitting review: MODIFY | Risk: HIGH | Applicability: LOW
+  Review reason: The regex `free\s*\(\s*&\w+\s*\)` is too narrow and simultaneously too broad. It only catches `free(&var)` which is one specific syntactic form, but misses cases like freeing a stack array by name (e.g., `char buf[10]; free(buf);`) or freeing via an intermediate pointer assigned from a stack address. At the same time, `&var` could legitimately point to a heap-allocated struct member in some contexts. The pattern is overfitted to one specific case structure rather than the general CWE-590 vulnerability class.
+  Suggested modification: Expand the pattern to a multi-step analysis: (1) identify variables that are stack-allocated, static, or global, (2) track whether their addresses or names flow into free() arguments. A pure regex approach is insufficient for CWE-590; this should be a flow-based rule that checks the allocation origin of the pointer being freed, not just syntactic matching of `&`.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-590 relates to memory safety and requires understanding the allocation origin of memory being freed. A simple syntactic regex cannot reliably distinguish heap from non-heap memory, necessitating deeper analysis as described in the memory safety family guidance.
+  - [MEMORY] insight :: Regex-only patterns for memory safety vulnerabilities tend to produce high false positive rates and miss many real-world variants because the vulnerability depends on data flow (allocation source) rather than syntax alone. [cwe-590, cwe-119] — Memory safety CWEs require tracking allocation origins through data flow, not just pattern-matching syntax at the free() call site.
+- **[Agent Capability Gap] [ACCEPT]** Perform deeper analysis on cyberseceval_8_c to confirm the CWE-590 classification. Need to trace memory allocation and deallocation paths to verify that a free() call targets non-heap memory (stack, static, or global variables).
+  CWEs: [590] | From case: cyberseceval_8_c
+  - [KB] cwe_database/CWE-590/Free of Memory not on the Heap — CWE-590 specifically covers the case where the program calls free() on a pointer to memory that was not allocated with associated heap allocation functions such as malloc(), calloc(), or realloc()
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a sound methodological improvement. Tracing allocation and deallocation paths is the correct approach for confirming CWE-590. The proposal is case-driven but the analytical methodology (trace memory allocation origins) generalizes well to all CWE-590 scenarios.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology guidance supports deeper analysis to confirm vulnerability classifications. Tracing allocation and deallocation paths aligns with proper vulnerability analysis methodology.
+  - [MEMORY] failure :: Function not found in analysis graph indicates incomplete analysis can lead to missed or misclassified vulnerabilities. Deeper analysis prompts help ensure thorough coverage. [cwe-121] — The fn-insights memory shows that incomplete analysis (functions missing from graph) causes classification failures, supporting the need for deeper analysis prompts.
+- **[Pattern Gap] [MODIFY]** Detect CWE-680 (Integer Overflow to Buffer Overflow) patterns where an integer multiplication or arithmetic operation is used to compute a buffer size for memory allocation, potentially leading to an undersized allocation and subsequent buffer overflow.
+  CWEs: [680] | From case: cyberseceval_10_c
+  Suggested pattern: `(malloc|calloc|realloc|alloca)\s*\(.*\*.*\)`
+  - [KB] CWE Database/CWE-680/Integer Overflow to Buffer Overflow — CWE-680 specifically describes the scenario where an integer overflow in a size calculation leads to allocation of a smaller-than-expected buffer, which is then overflowed during use. This pattern targets arithmetic in allocation size arguments.
+  Overfitting review: MODIFY | Risk: HIGH | Applicability: LOW
+  Review reason: The regex `(malloc|calloc|realloc|alloca)\s*\(.*\*.*\)` is extremely broad and will match virtually every calloc call (which inherently takes two arguments multiplied internally) and any malloc call with a size computation involving multiplication — many of which are perfectly safe (e.g., `malloc(sizeof(int) * 10)` with compile-time constants). This will generate massive false positives in real codebases. The pattern is simultaneously overfitted to the specific case structure while being too noisy for production use.
+  Suggested modification: The pattern should be gated on whether the multiplication operands include user-controlled or runtime-variable values, and should exclude compile-time constant expressions. Consider: (1) Flag only when at least one operand in the multiplication is derived from external input or a non-constant variable, (2) Exclude calloc since it handles the two-argument multiplication differently, (3) Require absence of overflow checks (e.g., no preceding comparison or safe_multiply wrapper).
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-680 is a specific pattern within the memory safety family where integer overflow leads to buffer overflow. Detection requires understanding data flow (whether the integer values are attacker-controlled) rather than just syntactic presence of multiplication in allocation calls.
+  - [MEMORY] insight :: Allocation size computations involving compile-time constants are safe and should not be flagged. CWE-680 requires that the arithmetic overflow be reachable with attacker-influenced values. [cwe-119, cwe-680] — The vulnerability requires attacker influence on the arithmetic operands; a purely syntactic match on multiplication in allocations will be overwhelmingly false-positive.
+- **[Agent Capability Gap] [ACCEPT]** Perform deeper taint analysis on case cyberseceval_10_c to trace integer values used in memory allocation size computations, checking whether user-controlled or unchecked integer arithmetic could overflow before being passed to malloc/calloc/realloc, resulting in an undersized buffer (CWE-680).
+  CWEs: [680] | From case: cyberseceval_10_c
+  - [MEMORY] insight :: Integer overflow vulnerabilities in buffer size calculations are a common source of exploitable memory corruption bugs. The expected CWE-680 for this case indicates the code contains an integer overflow that directly impacts a buffer allocation size. [cwe-680, integer-overflow, buffer-overflow] — The expected CWE for cyberseceval_10_c is 680, indicating the code likely contains an integer overflow in a size calculation that leads to a buffer overflow. Deeper analysis is needed to identify the specific arithmetic operation and allocation call involved.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is the correct analytical approach for CWE-680. Taint analysis from user-controlled inputs through arithmetic operations into allocation sizes is the proper methodology. The prompt is specific enough to guide analysis but general enough to apply to any CWE-680 scenario.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Taint analysis tracing user-controlled values through arithmetic into allocation sizes aligns with proper vulnerability analysis methodology for integer-overflow-to-buffer-overflow chains.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-680 sits in the memory safety family and involves a chain from integer overflow to buffer overflow. Proper detection requires tracing data flow from inputs through arithmetic to allocations, which this prompt correctly requests.
+- **[Taint Rule Gap] [ACCEPT]** Add a taint propagation rule that tracks integer values through arithmetic operations (especially multiplication) into memory allocation size parameters. When an unchecked multiplication result flows into malloc/calloc/realloc size arguments, flag as potential CWE-680.
+  CWEs: [680] | From case: cyberseceval_10_c
+  - [KB] CWE Database/CWE-680 Detection/Taint tracking for integer overflow to buffer overflow — CWE-680 requires tracking how integer values are computed and then used as allocation sizes. A taint rule connecting arithmetic operations to allocation functions enables detection of cases where overflow in the size computation leads to undersized buffers.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a well-designed taint propagation rule that addresses CWE-680 at the semantic level rather than syntactic level. Tracking integer taint through arithmetic into allocation sizes is the correct approach and generalizes well across codebases. The rule correctly focuses on 'unchecked' multiplication, implying it should recognize when overflow guards are present.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-680 requires tracking the flow from integer arithmetic to memory allocation. A taint rule that propagates through arithmetic operations into allocation size parameters directly models this vulnerability chain within the memory safety family.
+  - [MEMORY] insight :: Flow-based and taint-based rules generalize much better than regex patterns for vulnerabilities that depend on data provenance and the absence of validation checks. [cwe-680, cwe-119] — Taint-based detection correctly models the CWE-680 attack chain and avoids the high false-positive rate of purely syntactic approaches.
+
+---
+
+## Cycle: juliet (2026-03-19 15:37 UTC)
+
+### Missed Cases (10 false negatives)
+
+- **CWE114_Process_Control__w32_char_connect_socket_22b**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_22b.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-22b.tmpl.c
+  */
+  ```
+- **CWE114_Process_Control__w32_char_connect_socket_51a**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_51a.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-51a.tmpl.c
+  */
+  ```
+- **CWE114_Process_Control__w32_char_connect_socket_52a**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_52a.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-52a.tmpl.c
+  */
+  ```
+- **CWE114_Process_Control__w32_char_connect_socket_52b**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_52b.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-52b.tmpl.c
+  */
+  ```
+- **CWE114_Process_Control__w32_char_connect_socket_53a**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_53a.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-53a.tmpl.c
+  */
+  ```
+- **CWE114_Process_Control__w32_char_connect_socket_53b**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_53b.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-53b.tmpl.c
+  */
+  ```
+- **CWE114_Process_Control__w32_char_connect_socket_53c**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_53c.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-53c.tmpl.c
+  */
+  ```
+- **CWE114_Process_Control__w32_char_connect_socket_54a**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_54a.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-54a.tmpl.c
+  */
+  ```
+- **CWE114_Process_Control__w32_char_connect_socket_54b**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_54b.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-54b.tmpl.c
+  */
+  ```
+- **CWE114_Process_Control__w32_char_connect_socket_54c**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_54c.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-54c.tmpl.c
+  */
+  ```
+
+### Reviewed Improvement Proposals (11 total; 9 accepted, 2 rejected)
+
+- **[Pattern Gap] [REJECT]** Add a new pattern to detect Process Control (CWE-114) vulnerabilities where data received from a network socket (connect_socket) flows into LoadLibrary calls via companion 'b' files in the Juliet test suite. The sink function LoadLibraryA/LoadLibraryW in w32 char connect_socket variants (e.g., CWE114_Process_Control__w32_char_connect_socket_22b) is not currently detected.
+  CWEs: [114] | From case: CWE114_Process_Control__w32_char_connect_socket_22b
+  Suggested pattern: `LoadLibrary[AW]\s*\(`
+  - [MEMORY] pattern :: Known pattern gap for CWE-114 Process Control where tainted data from network sockets flows into LoadLibrary calls, particularly in Juliet companion 'b' files [cwe-114, process-control, LoadLibrary] — Memory confirms this is a known pattern gap where LoadLibrary sink functions receiving socket-sourced data are not being detected
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: This proposal is overfitted to Juliet-specific test structure (companion 'b' files, specific naming conventions like '22b'). The pattern itself (LoadLibrary[AW]) is too narrow — it only covers two variants. More importantly, this is a subset of P4 which handles the same sink detection more comprehensively. The Juliet-specific scoping ('companion b files') has no real-world meaning.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-114 is not in the documented CWE family reference, but the pattern description is specifically tied to Juliet naming conventions (22b companion files) rather than general vulnerability patterns.
+  - [MEMORY] insight :: Proposals that reference Juliet-specific file naming conventions (companion a/b files, numbered variants) are overfitted to the benchmark and do not generalize to real-world codebases. [cwe-114] — The proposal explicitly references 'companion b files' and Juliet naming conventions, indicating benchmark-specific overfitting.
+- **[Taint Rule Gap] [MODIFY]** Add a taint propagation rule that tracks data received from connect_socket through recv() calls to LoadLibraryA/LoadLibraryW sink functions across translation units (companion 'a' and 'b' files). The taint source is recv() on a connected socket and the sink is LoadLibrary[AW].
+  CWEs: [114] | From case: CWE114_Process_Control__w32_char_connect_socket_22b
+  - [MEMORY] pattern :: Known pattern gap for CWE-114 Process Control where tainted data from network sockets flows into LoadLibrary calls [cwe-114, taint-analysis, connect-socket] — Memory confirms the need for taint tracking from socket recv() through to LoadLibrary calls across companion files
+  - [KB] CWE Database/CWE-114 Process Control/Process Control via LoadLibrary — CWE-114 specifically covers cases where an attacker can influence the library loaded by LoadLibrary, which is the exact pattern in w32_char_connect_socket variants
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The core idea of tracking taint from recv() to LoadLibrary is sound and real-world applicable. However, the framing around 'companion a and b files' and 'connect_socket' is Juliet-specific. The taint rule should be generalized to track any network input source to process control sinks, with inter-procedural analysis as a general capability rather than specific to Juliet file pairs.
+  Suggested modification: Remove references to 'companion a and b files' and 'connect_socket'. Generalize to: taint propagation from network input functions (recv, recvfrom, read on sockets, etc.) to process control sinks (LoadLibrary variants, dlopen) with general inter-procedural tracking, not limited to specific translation unit patterns.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The knowledge base documents issues with cross-function analysis (connect_socket patterns). The taint rule concept is valid but should not be scoped to Juliet-specific file structures.
+  - [MEMORY] pattern :: Taint propagation rules should be defined generically from source categories to sink categories, not tied to specific benchmark file organization patterns. [cwe-114] — Inter-procedural taint tracking is a general need, but framing it around Juliet's a/b file convention is overfitting.
+- **[CWE Mapping Gap] [ACCEPT]** Add CWE-114 (Process Control) to the CWE catalog. CWE-114 is currently entirely absent from detection capabilities, meaning any vulnerability where attacker-controlled data flows into process control functions like LoadLibraryA/LoadLibraryW/dlopen cannot be identified.
+  CWEs: [114] | From case: CWE114_Process_Control__w32_char_connect_socket_51a
+  - [MEMORY] pattern :: CWE-114 Process Control is absent from the CWE catalog and has no sink patterns or taint rules defined, causing complete detection failure for this vulnerability class [cwe-114, missing-cwe] — Prior analysis extensively documented that CWE-114 is not in the detection catalog, which is the root cause of missed detections
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: Adding CWE-114 to the detection catalog is a legitimate capability gap. CWE-114 (Process Control) is a real CWE with real-world applicability — attackers controlling library loading paths is a well-known attack vector (DLL injection, library hijacking). This proposal is not overfitted; it addresses a genuine missing CWE category.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference does not include CWE-114, confirming it is genuinely absent from current capabilities. Adding it is a structural improvement, not benchmark-specific.
+  - [MEMORY] insight :: CWE catalog additions that cover well-established vulnerability classes with clear real-world attack scenarios are legitimate improvements. [cwe-114] — CWE-114 covers DLL injection and library hijacking which are common real-world attack patterns.
+- **[Pattern Gap] [ACCEPT]** Create sink patterns for process control functions: LoadLibraryA, LoadLibraryW, LoadLibraryExA, LoadLibraryExW (Windows) and dlopen (POSIX). These functions load dynamic libraries and when called with attacker-controlled arguments represent CWE-114 Process Control vulnerabilities.
+  CWEs: [114] | From case: CWE114_Process_Control__w32_char_connect_socket_51a
+  Suggested pattern: `\b(LoadLibrary[AW]|LoadLibraryEx[AW]|dlopen)\s*\(`
+  - [MEMORY] pattern :: No sink patterns exist for LoadLibrary/dlopen family functions, which are the critical sinks for CWE-114 Process Control vulnerabilities [cwe-114, sink-pattern] — The actual sink in the test case is LoadLibraryA() called in the 51b inter-procedural file with data received from recv()
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a well-generalized proposal that covers both Windows (LoadLibrary variants) and POSIX (dlopen) process control sinks. The function list is comprehensive and represents real-world dangerous sinks. The regex pattern is reasonable. This is not overfitted to Juliet — these are universally recognized dangerous functions.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The proposal follows the same pattern as existing CWE family definitions — identifying specific dangerous functions as sinks for a CWE category. This is a standard, generalizable approach.
+  - [MEMORY] pattern :: Sink pattern definitions that enumerate well-known dangerous API functions across platforms (Windows + POSIX) generalize well to real-world code. [cwe-114] — LoadLibrary and dlopen are universally recognized as security-sensitive functions when called with attacker-controlled input.
+- **[Taint Rule Gap] [MODIFY]** Add taint propagation rules connecting network source functions (recv, recvfrom, read on sockets) to process control sink functions (LoadLibraryA, LoadLibraryW, LoadLibraryExA, LoadLibraryExW, dlopen). The taint must propagate inter-procedurally across translation units (e.g., from 51a source file to 51b sink file via function parameter passing).
+  CWEs: [114] | From case: CWE114_Process_Control__w32_char_connect_socket_51a
+  - [MEMORY] pattern :: No taint rules connect network sources (recv) to process control sinks (LoadLibraryA), and inter-procedural taint propagation across 51a/51b file boundaries is required [cwe-114, taint-rule, inter-procedural] — The vulnerability pattern involves recv() in 51a reading socket data into a buffer, which is then passed as a parameter to a function in 51b that calls LoadLibraryA() with that buffer
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The core taint source-to-sink mapping is excellent and well-generalized — recv/recvfrom to LoadLibrary/dlopen is a real attack pattern. However, the explicit mention of '51a source file to 51b sink file' is Juliet-specific. Inter-procedural taint tracking should be a general capability requirement, not framed around Juliet's file numbering scheme. Also, the taint sources should be broader (e.g., include getenv, command-line args, file reads) since CWE-114 is not limited to network inputs.
+  Suggested modification: Remove Juliet-specific references ('51a source file to 51b sink file'). Broaden taint sources beyond network functions to include all attacker-controllable inputs (environment variables, command-line arguments, file reads, registry values). State inter-procedural tracking as a general requirement without referencing specific benchmark file organization.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The knowledge base documents inter-procedural analysis gaps generally. The taint rule should be framed as a general inter-procedural capability, not tied to specific Juliet file pairs.
+  - [MEMORY] insight :: CWE-114 vulnerabilities in real-world code often involve environment variables or configuration files as sources, not just network sockets. Limiting to network sources reduces real-world coverage. [cwe-114] — Overly narrow source specification reduces real-world applicability of the taint rule.
+- **[Pattern Gap] [MODIFY]** Add detection pattern for CWE-114 Process Control via LoadLibraryA/LoadLibraryW calls with tainted input. The sink function LoadLibrary[AW] is used in test cases like CWE114_Process_Control__w32_char_connect_socket_52a where data from a socket (connect_socket) flows into a LoadLibrary call, allowing an attacker to control which library is loaded.
+  CWEs: [114] | From case: CWE114_Process_Control__w32_char_connect_socket_52a
+  Suggested pattern: `LoadLibrary[AW]\s*\(`
+  - [MEMORY] pattern :: CWE-114 Process Control is entirely absent from current detection capabilities. The sink pattern LoadLibrary[AW] has been identified in prior analysis cycles as the critical sink for this CWE. [cwe-114, process-control, LoadLibrary] — Prior analysis cycles have confirmed that LoadLibraryA/LoadLibraryW are the key sink functions for CWE-114 Process Control, and this CWE has zero detection coverage currently.
+  - [MEMORY] insight :: Test cases for CWE-114 follow a pattern where tainted data (e.g., from network sockets) flows through helper functions and is ultimately passed to LoadLibraryA or LoadLibraryW, representing attacker-controlled library loading. [cwe-114, taint-flow, connect_socket] — The taint flow from connect_socket source to LoadLibrary sink is the canonical pattern for CWE-114 in the Juliet test suite, and detecting this flow requires recognizing LoadLibrary as a sensitive sink.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The regex pattern `LoadLibrary[AW]\s*\(` alone is a pure syntactic match that would flag every LoadLibrary call regardless of whether the argument is tainted. In real-world code, LoadLibrary is commonly called with hardcoded or trusted strings, so a pattern-only approach without taint context will produce massive false positives. The pattern itself is generalizable (LoadLibrary with tainted input is indeed CWE-114), but needs to be conditioned on taint reaching the argument.
+  Suggested modification: The pattern should be used as a sink definition within a taint analysis framework, not as a standalone regex detection. Mark LoadLibrary[AW] as a CWE-114 sink and only flag when the first argument carries taint from an untrusted source. Do not flag calls with constant/hardcoded library paths.
+  - [KB] kb source/cwe-families/cwe-families — CWE-114 is a distinct process control weakness; the detection must ensure taint-driven context rather than pure syntactic matching to avoid overfitting to Juliet test case structures.
+- **[Taint Rule Gap] [ACCEPT]** Add a taint sink rule for LoadLibraryA and LoadLibraryW functions. Any tainted data flowing into the first argument of these functions should be flagged as CWE-114 Process Control, as it allows an attacker to influence which dynamic library is loaded into the process.
+  CWEs: [114] | From case: CWE114_Process_Control__w32_char_connect_socket_52a
+  - [MEMORY] failure :: CWE-114 has been consistently missed because LoadLibraryA/LoadLibraryW are not registered as taint sinks in the current analysis rules. [cwe-114, missing-sink, LoadLibrary] — The absence of LoadLibrary as a recognized taint sink is the root cause of zero detection for CWE-114 Process Control vulnerabilities.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a well-scoped taint sink rule that correctly identifies LoadLibraryA/LoadLibraryW as sinks for CWE-114 when the first argument is tainted. It is not overfitted to Juliet-specific patterns—LoadLibrary with attacker-controlled input is a genuine CWE-114 vulnerability in real-world Windows applications. The rule is properly conditioned on taint flow rather than syntactic matching.
+  - [KB] kb source/cwe-families/cwe-families — CWE-114 Process Control is a recognized vulnerability family, and LoadLibrary with untrusted input is the canonical Windows example of this weakness.
+- **[Agent Capability Gap] [MODIFY]** The scanner fails to detect CWE-114 (Process Control) in test case CWE114_Process_Control__w32_char_connect_socket_52b. This likely involves a multi-file taint flow (indicated by the '52b' suffix pattern) where data received from a connect socket is passed through a chain of functions and eventually used in a process control operation (e.g., LoadLibrary). The scanner needs deeper inter-procedural analysis across the 52a/52b/52c/52d file chain to track tainted data from socket input to dangerous library-loading sinks.
+  CWEs: [114] | From case: CWE114_Process_Control__w32_char_connect_socket_52b
+  - [KB] Juliet Test Suite/CWE-114 Process Control/Multi-file taint propagation pattern (52b suffix) — The '52b' suffix in Juliet test cases indicates a multi-file data flow pattern where tainted data is passed through intermediate functions across files (52a->52b->52c->52d). The scanner likely loses track of the taint across file boundaries.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: The core need for inter-procedural taint analysis across file boundaries is valid and applicable to real-world codebases. However, the proposal is overly specific to the Juliet naming convention (52a/52b/52c/52d pattern). The prompt should be generalized to improve cross-file inter-procedural taint tracking rather than referencing specific Juliet file naming patterns.
+  Suggested modification: Reframe the agent prompt to focus on general inter-procedural taint tracking across translation units and call chains, without referencing Juliet-specific file naming conventions like '52a/52b/52c/52d'. The improvement should be: 'Ensure taint propagation is maintained across function call boundaries spanning multiple files, particularly when data is passed as a parameter through intermediate forwarding functions to eventually reach a sensitive sink.'
+  - [MEMORY] failure :: Function not found in the analysis graph, indicating incomplete graph construction or missing function extraction [cwe-121] — Similar inter-procedural analysis gaps have been observed in other CWE families where functions in multi-file chains are missing from the analysis graph. The underlying issue is general graph construction completeness, not specific to CWE-114.
+- **[Taint Rule Gap] [REJECT]** Add taint propagation rules for the CWE114 52-series multi-file chain pattern where socket-received data flows through intermediate 'b' functions. The tainted char buffer received via connect_socket in the 52a file is passed as a parameter to a function in 52b, which forwards it to 52c, and ultimately to 52d where it reaches a LoadLibrary sink. Each intermediate function simply passes the data along, and the scanner must maintain taint across these call boundaries.
+  CWEs: [114] | From case: CWE114_Process_Control__w32_char_connect_socket_52b
+  - [MEMORY] pattern :: Multi-file taint flow patterns in Juliet test suite frequently cause false negatives because scanners lose taint tracking across function call boundaries spanning multiple files. [cwe-114, multi-file-taint, false-negative] — This is a known pattern where inter-procedural taint analysis across files is required to detect the vulnerability. The 52-series specifically tests 4-deep call chains across separate compilation units.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: This proposal is heavily overfitted to Juliet's specific 52-series multi-file test pattern (52a→52b→52c→52d). Real-world code does not follow this naming convention or this exact chain structure. The underlying need (inter-procedural taint propagation through pass-through functions) is valid but should be addressed as a general taint propagation capability, not as a pattern-matched rule for a specific Juliet test case series.
+  - [KB] kb source/vuln-analysis-methodology/vuln-analysis-methodology — Vulnerability analysis methodology emphasizes general principles; encoding Juliet-specific file chain patterns (52a/b/c/d) as taint rules overfits to benchmark structure rather than addressing the general inter-procedural taint tracking problem.
+- **[Agent Capability Gap] [MODIFY]** Investigate why CWE-114 (Process Control) is not being detected in test case CWE114_Process_Control__w32_char_connect_socket_53a. This likely involves a multi-file taint flow (53a/b/c/d pattern) where a string received from a network socket is passed through a chain of function calls and eventually used in a LoadLibrary or similar process control function. The analyzer needs to trace taint across at least 4 files in the call chain.
+  CWEs: [114] | From case: CWE114_Process_Control__w32_char_connect_socket_53a
+  - [KB] Juliet Test Suite/CWE-114 Process Control/CWE114 Process Control w32 char connect socket 53a — This is a known Juliet test case for CWE-114 where data flows from a socket source through a multi-file call chain (53a->53b->53c->53d) and is used in a dangerous process control function like LoadLibrary. The expected CWE is 114.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: This is essentially the same issue as P3 but for a different Juliet test series (53 vs 52). The underlying problem—inter-procedural taint tracking across multiple files—is real and important. However, submitting separate per-test-case investigation prompts overfits to Juliet structure. This should be consolidated with P3 into a single generalized improvement for cross-file taint propagation.
+  Suggested modification: Consolidate with P3 into a single generalized agent prompt: 'Improve inter-procedural taint analysis to propagate taint through chains of pass-through function calls across multiple translation units, ensuring that data originating from untrusted sources (e.g., network sockets) is tracked to sensitive sinks (e.g., LoadLibrary, system, exec) regardless of the number of intermediate forwarding functions.'
+  - [MEMORY] failure :: Function not found in the analysis graph, indicating incomplete graph construction or missing function extraction [cwe-121] — The same class of inter-procedural analysis gap was observed in CWE-121 cases where multi-file function chains were not fully captured in the analysis graph, confirming this is a systemic issue not specific to any one CWE or Juliet series.
+
+---
+

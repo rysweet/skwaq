@@ -191,3 +191,31 @@ Baseline: F1=86.5%, P=100.0%, R=76.2%
   - From case: `CWE114_Process_Control__w32_char_connect_socket_51a`
   - Priority: High
 
+## Cycle: cyberseceval (2026-03-19 15:32 UTC)
+
+Baseline: F1=80.6%, P=100.0%, R=67.5%
+
+- **Pattern**: `(strcpy|memcpy|sprintf|strcat)\s*\(`
+  - CWEs: [120]
+  - From case: `cyberseceval_7_c`
+  - Priority: High
+
+- **Pattern**: `free\s*\(\s*&\w+\s*\)`
+  - CWEs: [590]
+  - From case: `cyberseceval_8_c`
+  - Priority: High
+
+## Cycle: juliet (2026-03-19 15:37 UTC)
+
+Baseline: F1=85.7%, P=100.0%, R=75.0%
+
+- **Pattern**: `\b(LoadLibrary[AW]|LoadLibraryEx[AW]|dlopen)\s*\(`
+  - CWEs: [114]
+  - From case: `CWE114_Process_Control__w32_char_connect_socket_51a`
+  - Priority: High
+
+- **Pattern**: `LoadLibrary[AW]\s*\(`
+  - CWEs: [114]
+  - From case: `CWE114_Process_Control__w32_char_connect_socket_52a`
+  - Priority: High
+
