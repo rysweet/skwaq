@@ -175,6 +175,55 @@ impl<'a> GraphBuilder<'a> {
                     }
                 }
             }
+
+            // Extract intraprocedural data flow using tree-sitter.
+            // This populates flows_to edges that enable the taint analyzer
+            // to trace variable assignments within functions.
+            if parsed.language == "c" || parsed.language == "cpp" {
+                if let Some(ref content) = raw_content {
+                    let flow = crate::source::tree_sitter_flow::extract_c_data_flow(content);
+
+                    for assign in &flow.assignments {
+                        if let Some(ref src_fn) = assign.source_function {
+                            let from_id =
+                                format!("{}-flow-{}-L{}", file_prefix, src_fn, assign.line);
+                            let to_id =
+                                format!("{}-var-{}-L{}", file_prefix, assign.variable, assign.line);
+                            let _ = self.db().execute(
+                                "INSERT OR IGNORE INTO flows_to \
+                                 (from_block, to_block) \
+                                 VALUES (?1, ?2)",
+                                &[&from_id.as_str(), &to_id.as_str()],
+                            );
+                            counts.data_flows += 1;
+                        }
+                    }
+
+                    for use_ref in &flow.uses {
+                        let from_id =
+                            format!("{}-var-{}-L{}", file_prefix, use_ref.variable, use_ref.line);
+                        let to_id = format!(
+                            "{}-call-{}-L{}",
+                            file_prefix, use_ref.used_in_function, use_ref.line
+                        );
+                        let _ = self.db().execute(
+                            "INSERT OR IGNORE INTO flows_to \
+                             (from_block, to_block) \
+                             VALUES (?1, ?2)",
+                            &[&from_id.as_str(), &to_id.as_str()],
+                        );
+                        counts.data_flows += 1;
+                    }
+
+                    if counts.data_flows > 0 {
+                        tracing::debug!(
+                            "Tree-sitter: {} data flow edges from {}",
+                            counts.data_flows,
+                            parsed.path
+                        );
+                    }
+                }
+            }
         }
 
         Ok(())
