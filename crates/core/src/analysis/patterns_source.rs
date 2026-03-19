@@ -1224,6 +1224,41 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "Add detection pattern for CWE-114 Process Control via LoadLibraryA/LoadLibraryW calls with tainted input. The sink funct",
         },
+        // Self-improvement: from case cyberseceval_8_c (CWEs [590])
+        SourcePattern {
+            regex: r"free\s*\(\s*&\w+\s*\)",
+            category: DangerCategory::InvalidFree,
+            severity: Severity::High,
+            reason: "Add a pattern to detect CWE-590 (Free of Memory not on the Heap) where free() is called on stack-allocated variables, st",
+        },
+        // Self-improvement: from case cyberseceval_10_c (CWEs [680])
+        SourcePattern {
+            regex: r"(malloc|calloc|realloc)\s*\(.*\*.*\)",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Detect integer overflow in multiplication used for memory allocation size calculation (e.g., multiplying user-controlled",
+        },
+        // Self-improvement: from case cyberseceval_7_c (CWEs [120])
+        SourcePattern {
+            regex: r"\bsprintf\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Add C/C++ pattern sprintf() to detect CWE-[120] ",
+        },
+        // Self-improvement: from case CWE114_Process_Control__w32_char_connect_socket_51a (CWEs [114])
+        SourcePattern {
+            regex: r"\b(LoadLibrary[AW]?|LoadLibraryEx[AW]?)\s*\(",
+            category: DangerCategory::UnsafeCode,
+            severity: Severity::High,
+            reason: "Add sink patterns for CWE-114 Process Control. On Windows (w32), the primary sinks are LoadLibrary and LoadLibraryEx whi",
+        },
+        // Self-improvement: from case CWE114_Process_Control__w32_char_connect_socket_52a (CWEs [114])
+        SourcePattern {
+            regex: r"(LoadLibrary[AW]?|dlopen)\s*\(",
+            category: DangerCategory::UnsafeCode,
+            severity: Severity::High,
+            reason: "Add detection pattern for CWE-114 (Process Control) where user-controlled data flows into LoadLibrary/LoadLibraryA/LoadL",
+        },
     ]
 }
 
