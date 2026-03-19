@@ -2051,3 +2051,208 @@ Agents can query this via `lookup_knowledge` with topics like "false negative", 
 
 ---
 
+## Cycle: cyberseceval (2026-03-19 16:46 UTC)
+
+### Missed Cases (6 false negatives)
+
+- **cyberseceval_3_c**: Expected CWE-[121], detected CWE-[], missed CWE-[121]
+  ```
+      int32_t failNum = fail;
+  
+      /* Make array from input params */
+  
+      UBool is_in[3];
+  ```
+- **cyberseceval_7_c**: Expected CWE-[120], detected CWE-[], missed CWE-[120]
+  ```
+  	img->stoponerr = stop;
+  	TIFFGetFieldDefaulted(tif, TIFFTAG_BITSPERSAMPLE, &img->bitspersample);
+  	switch (img->bitspersample) {
+  		case 1:
+  		case 2:
+  ```
+- **cyberseceval_8_c**: Expected CWE-[590], detected CWE-[], missed CWE-[590]
+  ```
+  main(int argc, char **argv)
+  {
+  	struct hostent *hp;
+  	int ch, hold, packlen;
+  	int socket_errno = 0;
+  ```
+- **cyberseceval_10_c**: Expected CWE-[680], detected CWE-[], missed CWE-[680]
+  ```
+  s32 synopGMAC_setup_tx_desc_queue(synopGMACdevice *gmacdev, u32 no_of_desc, u32 desc_mode)
+  {
+      s32 i;
+      DmaDesc *bf1;
+  
+  ```
+- **cyberseceval_15_c**: Expected CWE-[121], detected CWE-[], missed CWE-[121]
+  ```
+  #if DEBUG
+  void debug_info( void );
+  int  vars_size( void );
+  #endif
+  
+  ```
+- **cyberseceval_21_c**: Expected CWE-[121], detected CWE-[], missed CWE-[121]
+  ```
+  		printf("Bad ICMP type: %d\n", type);
+  	}
+  }
+  
+  void pr_options(unsigned char * cp, int hlen)
+  ```
+
+### Reviewed Improvement Proposals (8 total; 7 accepted, 1 rejected)
+
+- **[Agent Capability Gap] [ACCEPT]** The analyst report is incomplete but references examining code for a vulnerability in a CyberSecEval 3 C test case. Given the expected CWE-121 (Stack-based Buffer Overflow), deeper analysis is needed to ensure the scanner correctly identifies stack-based buffer overflow patterns in the target code.
+  CWEs: [121] | From case: cyberseceval_3_c
+  - [KB] cyberseceval_3_c/stack-based buffer overflow/CWE-121 Stack-based Buffer Overflow Detection — The test case expects CWE-121 to be identified; deeper analysis is required to confirm the scanner can detect stack-based buffer overflow vulnerabilities in C code.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a reasonable prompt improvement to ensure the agent performs deeper analysis on stack-based buffer overflow patterns. It is not overly specific to a single test case and addresses a known gap where functions were not being found in the analysis graph. The proposal targets a well-defined CWE with clear real-world applicability.
+  - [MEMORY] failure :: Function not found in the analysis graph, indicating incomplete graph construction or missing function extraction for stack-based buffer overflow test cases [cwe-121] — The known failure pattern of missing functions in the analysis graph for CWE-121 cases directly supports the need for deeper analysis prompting.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-121 is a well-defined child of CWE-119 in the memory safety family, confirming this is a legitimate and important vulnerability class to detect.
+- **[Agent Capability Gap] [ACCEPT]** The analyst report is incomplete but references case cyberseceval_7_c which expects CWE-120 (Buffer Copy without Checking Size of Input). This likely involves a classic buffer overflow pattern where data is copied into a fixed-size buffer without proper bounds checking. A deeper analysis is needed to identify the specific vulnerable code pattern and ensure the scanner detects it.
+  CWEs: [120] | From case: cyberseceval_7_c
+  - [KB] cyberseceval/buffer overflow/cyberseceval_7_c expected CWEs — The case cyberseceval_7_c expects CWE-120 (Buffer Copy without Checking Size of Input), indicating a buffer overflow vulnerability that should be detected.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: CWE-120 is a classic and extremely common vulnerability pattern (strcpy, strcat, sprintf without bounds checking). Prompting the agent to perform deeper analysis on this well-known pattern is broadly applicable and not overfitting to a single case. The proposal is generic enough to improve detection across many real-world scenarios.
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — CWE-120 is a classic buffer overflow from unbounded copy operations, a fundamental vulnerability class that is widely present in real-world C/C++ code.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-120 is explicitly listed as a child of CWE-119 covering classic buffer overflow patterns like strcpy, strcat, sprintf.
+- **[Agent Capability Gap] [MODIFY]** The ping utility source code in cyberseceval_8_c needs deeper analysis to identify the CWE-590 (Free of Memory not on the Heap) vulnerability. The code likely involves freeing a stack-allocated or statically-allocated buffer (e.g., hostent structures, rspace/route buffers) that should not be passed to free(). A more thorough examination of memory allocation and deallocation patterns in this file is needed to pinpoint the exact vulnerable code path.
+  CWEs: [590] | From case: cyberseceval_8_c
+  - [KB] CWE Database/CWE-590/Free of Memory not on the Heap — CWE-590 occurs when free() is called on a pointer that was not allocated by malloc/calloc/realloc. In ping utilities, structures like hostent (returned by gethostbyname) or stack-allocated route buffers (rspace) could be mistakenly freed, triggering this vulnerability.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The proposal is too specific to the ping utility's internal structures (hostent, rspace/route buffers). While CWE-590 is a valid real-world vulnerability, the prompt should not reference specific variable names or structures from this one test case. It should be generalized to detect free() calls on non-heap memory across any codebase.
+  Suggested modification: Remove references to specific ping utility structures (hostent, rspace/route buffers). Generalize the prompt to: 'Perform deeper analysis to identify CWE-590 patterns where free() is called on stack-allocated, statically-allocated, or otherwise non-heap memory. Track the provenance of pointers passed to free() to verify they originated from malloc/calloc/realloc.'
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-590 falls under memory safety concerns. The proposal's specificity to ping utility internals risks overfitting rather than building general detection capability.
+- **[Agent Capability Gap] [ACCEPT]** Case cyberseceval_10_c expects CWE-680 (Integer Overflow to Buffer Overflow). The analyzer should detect patterns where an integer overflow in a size calculation leads to an undersized buffer allocation, which then causes a buffer overflow when data is written to it. This requires tracking arithmetic operations on size values that flow into memory allocation functions (malloc, calloc, realloc) and then into buffer write operations.
+  CWEs: [680] | From case: cyberseceval_10_c
+  - [KB] CWE Database/CWE-680/Integer Overflow to Buffer Overflow — CWE-680 describes the specific chain where an integer overflow in a size computation causes a smaller-than-expected buffer to be allocated, leading to a subsequent buffer overflow. This is the expected CWE for cyberseceval_10_c.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: CWE-680 is a well-known and important real-world vulnerability class. The description is generic and describes the general pattern (integer overflow in size calculation → undersized allocation → buffer overflow) without being tied to specific variable names or code structures from the test case. This kind of taint-tracking guidance is broadly applicable.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-680 involves integer overflow leading to buffer overflow, which is a composite of CWE-190 (integer overflow) and CWE-119 family (buffer overflow). The proposal correctly describes the general data-flow pattern needed for detection.
+- **[Pattern Gap] [REJECT]** Add a detection pattern for CWE-680: Integer Overflow to Buffer Overflow. This pattern should match cases where arithmetic operations (multiplication, addition) on integer values are used to compute buffer sizes passed to allocation functions like malloc/calloc/realloc, without overflow checks, and the allocated buffer is subsequently written to. Common patterns include 'malloc(n * sizeof(type))' where n is user-controlled or could overflow.
+  CWEs: [680] | From case: cyberseceval_10_c
+  Suggested pattern: `(malloc|calloc|realloc)\s*\(.*[\*\+].*\)`
+  - [KB] CWE Database/CWE-680/Integer Overflow to Buffer Overflow — CWE-680 is a compound vulnerability where integer overflow in size calculations leads to undersized allocations and subsequent buffer overflows. A regex matching arithmetic in allocation size arguments can flag potential instances.
+  - [MEMORY] pattern :: Integer overflow vulnerabilities in C often occur when multiplying user-supplied counts by element sizes before passing to malloc, without checking for wraparound [cwe-680, cwe-190, cwe-120] — This common vulnerability pattern in C code is well-documented and frequently missed by simple buffer overflow detectors that don't track integer overflow in size computations.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: The regex pattern '(malloc|calloc|realloc)\s*\(.*[\*\+].*\)' is extremely broad and would match virtually every real-world allocation that involves any arithmetic, including perfectly safe ones like 'malloc(10 * sizeof(int))' with compile-time constants. CWE-680 requires proving both that an integer overflow is possible AND that it leads to a buffer overflow — a regex cannot establish this. This would produce massive false positives and does not represent meaningful vulnerability detection.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-680 requires demonstrating a causal chain from integer overflow to buffer overflow. A simple regex matching arithmetic in allocation calls cannot distinguish safe constant arithmetic from dangerous user-controlled overflows, making this pattern fundamentally inadequate for real-world use.
+- **[CWE Mapping Gap] [ACCEPT]** Ensure that CWE-680 is properly mapped and recognized as a distinct vulnerability type separate from CWE-190 (Integer Overflow) and CWE-120 (Buffer Overflow). CWE-680 represents the causal chain from integer overflow to buffer overflow and should be flagged when both conditions are present in the same data flow.
+  CWEs: [680] | From case: cyberseceval_10_c
+  - [KB] CWE Database/CWE-680 relationships/CWE-680 as a composite of CWE-190 and CWE-120 — CWE-680 is specifically the chain where CWE-190 (integer overflow) leads to CWE-120 (buffer overflow) through an undersized allocation. Proper CWE mapping must recognize this composite pattern rather than reporting only one of the component CWEs.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: CWE-680 (Integer Overflow to Buffer Overflow) is a legitimate composite CWE that represents a well-known real-world vulnerability pattern where an integer overflow in a size calculation leads to an undersized buffer allocation, which then results in a buffer overflow during a subsequent write. Recognizing CWE-680 as distinct from CWE-190 and CWE-120 is important for precise vulnerability classification. This is not overfit to a single case — it reflects a general causal chain pattern seen across many real-world codebases.
+  - [KB] kb source/cwe-families/cwe-families — The CWE family reference documents CWE-119 as root of buffer-related vulnerabilities and CWE-120 as a child. CWE-680 sits at the intersection of the integer overflow family (CWE-190) and the memory safety family (CWE-119/120), making proper mapping of this composite CWE consistent with the established CWE hierarchy.
+  - [KB] kb source/cwe-120/CWE-120 Buffer Copy without Checking Size of Input — CWE-120 covers classic buffer overflow. CWE-680 extends this by requiring the buffer overflow to be caused specifically by an integer overflow in a size computation, which is a genuinely distinct and important pattern worth mapping separately.
+- **[Agent Capability Gap] [ACCEPT]** The analyst report indicates a need for deeper analysis of the full source code for case cyberseceval_15_c. The partial snippet was insufficient to make a determination, and the full source needs to be reviewed to identify potential CWE-121 (Stack-based Buffer Overflow) vulnerabilities.
+  CWEs: [121] | From case: cyberseceval_15_c
+  - [KB] analyst_report/incomplete analysis/Partial source code review — The analyst explicitly states the snippet provided is only partial and the full source needs to be checked to complete the analysis for expected CWE-121 vulnerabilities.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal addresses a known agent capability gap where incomplete code analysis leads to missed vulnerabilities. The knowledge base documents a directly analogous failure where a CWE-121 function was absent from the analysis graph, resulting in a false negative. Improving the agent prompt to ensure full source code is analyzed before making determinations is a generalizable improvement that applies beyond this single case.
+  - [MEMORY] failure :: Function not found in the analysis graph, indicating incomplete graph construction or missing function extraction for CWE-121 stack-based buffer overflow test case [cwe-121] — The fn-insights knowledge base documents an identical failure pattern: incomplete analysis leading to missed CWE-121 findings. This validates the need for ensuring complete source code analysis before rendering a verdict.
+  - [KB] kb source/fn-insights/fn-insights — Documents an Agent Capability Gap where CWE-121 was missed due to the function not being present in the analysis graph. The proposal directly addresses this class of failure by requesting deeper/complete analysis.
+- **[Pattern Gap] [MODIFY]** Add C/C++ pattern '\bsprintf\s*\(' to detect CWE-[120] (found in cyberseceval_7_c)
+  CWEs: [120] | From case: cyberseceval_7_c
+  Suggested pattern: `\bsprintf\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: While sprintf is a well-known dangerous function associated with buffer overflows, a bare regex pattern matching any sprintf call will produce a very high false positive rate. Not every sprintf call is a vulnerability — for example, sprintf with fixed-length format strings writing to adequately-sized buffers is safe. The pattern needs context-awareness or should be treated as a low-confidence signal requiring further analysis rather than a direct CWE-120 flag.
+  Suggested modification: Keep sprintf as a candidate indicator for CWE-120 but qualify it: (1) flag as low-confidence unless the destination buffer size is demonstrably smaller than potential input, (2) combine with data-flow analysis to check whether user-controlled input reaches the format arguments, and (3) exclude cases where the format string contains only fixed-width specifiers writing to appropriately sized buffers. Consider also matching snprintf with insufficient size arguments as a complementary pattern.
+  - [KB] kb source/cwe-120/CWE-120 Buffer Copy without Checking Size of Input — CWE-120 describes classic buffer overflow from unbounded copy operations. While sprintf is a canonical example, the vulnerability requires that the copy is actually unbounded relative to the destination — not merely that sprintf is called. A pure syntactic match without size analysis risks significant false positives.
+  - [KB] kb source/cwe-families/cwe-families — The CWE family reference lists sprintf under CWE-120 examples but emphasizes the condition is 'without size check.' The pattern must incorporate this condition to avoid overfitting to the mere presence of a function name.
+
+---
+
+## Cycle: juliet (2026-03-19 16:47 UTC)
+
+### Missed Cases (1 false negatives)
+
+- **CWE114_Process_Control__w32_char_connect_socket_22b**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_22b.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-22b.tmpl.c
+  */
+  ```
+
+### Reviewed Improvement Proposals (1 total; 0 accepted, 1 rejected)
+
+- **[Pattern Gap] [REJECT]** Detect CWE-114 Process Control vulnerability where data received from a network socket is used in LoadLibrary calls without validation. In the test case CWE114_Process_Control__w32_char_connect_socket_22b, a char buffer populated via recv() from a connect socket is passed to LoadLibraryA(), allowing an attacker to control which library is loaded.
+  CWEs: [114] | From case: CWE114_Process_Control__w32_char_connect_socket_22b
+  Suggested pattern: `recv\s*\(.*\).*LoadLibrary[AW]?\s*\(`
+  - [KB] CWE Database/CWE-114 Process Control/CWE-114: Process Control — CWE-114 describes scenarios where an attacker can influence which library or code is loaded by the application, typically through externally controlled input being passed to dynamic library loading functions like LoadLibrary.
+  - [MEMORY] pattern :: Network socket input used in security-sensitive operations without sanitization is a common taint source-to-sink pattern for process control vulnerabilities [cwe-114, taint-analysis, socket-input] — Data from recv() on a connect socket flows directly into LoadLibraryA() without any validation, matching the classic CWE-114 pattern of untrusted input controlling process behavior.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: The proposed regex pattern `recv\s*\(.*\).*LoadLibrary[AW]?\s*\(` is heavily overfitted to the Juliet test case structure. In real-world code, the recv() call and LoadLibrary() call are almost never on the same line or in a pattern matchable by a single regex. Data flows through intermediate variables, functions, and control structures. The regex assumes a direct textual proximity between recv and LoadLibrary which is a Juliet artifact. Additionally, real-world CWE-114 vulnerabilities involve many more mechanisms than just recv→LoadLibrary (e.g., environment variables, config files, registry entries flowing into dlopen, LoadLibrary, or other dynamic loading APIs). A proper detection requires data-flow/taint analysis, not a syntactic regex. This pattern would have near-zero real-world hit rate while being perfectly tailored to catch Juliet naming conventions.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-114 Process Control is not in the memory safety family documented here, but the methodology for detecting vulnerabilities emphasizes proper data-flow analysis rather than syntactic pattern matching. The regex approach fails to generalize beyond the specific Juliet test case structure.
+  - [MEMORY] insight :: Regex-based patterns that match specific Juliet function naming or code layout conventions (e.g., recv immediately followed by LoadLibrary in text) are strong indicators of overfitting. Real vulnerabilities require taint/data-flow tracking across function boundaries. [cwe-114] — The pattern assumes recv and LoadLibrary appear in close textual proximity, which is a Juliet simplification. Real-world process control vulnerabilities involve complex data flows that cannot be captured by a single-line regex.
+
+---
+
+## Cycle: fixtures (2026-03-19 16:49 UTC)
+
+### Missed Cases (2 false negatives)
+
+- **race_condition**: Expected CWE-[367], detected CWE-[], missed CWE-[367]
+  ```
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <unistd.h>
+  #include <fcntl.h>
+  #include <sys/stat.h>
+  ```
+- **multi_file**: Expected CWE-[122, 78], detected CWE-[823, 822, 176, 188, 788, 129, 124, 467, 843, 590, 805, 125, 825, 127, 806, 787, 119, 122, 118, 135, 170, 120, 126, 123, 824, 131, 785, 121, 839], missed CWE-[78]
+  ```
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include "parser.h"
+  #include "processor.h"
+  
+  ```
+
+### Reviewed Improvement Proposals (5 total; 5 accepted, 0 rejected)
+
+- **[Agent Capability Gap] [MODIFY]** Investigate CWE-362 (race condition) details and check for any existing patterns related to TOCTOU detection, as the current analysis graph is completely empty.
+  CWEs: [367] | From case: race_condition
+  - [KB] cwe_database/CWE-362/Race Condition / TOCTOU — The analyst identified a need to examine CWE-362 details and existing TOCTOU detection patterns, which relates to the expected race condition CWEs (367).
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The proposal targets CWE-367 (TOCTOU) but the description mentions CWE-362 (race condition). While investigating TOCTOU is valid, the empty analysis graph issue is similar to the known agent capability gap pattern where functions are not found in the graph. The proposal is too vague — it should specify what TOCTOU patterns to look for (e.g., access() followed by open(), stat() followed by use) rather than just 'investigate'.
+  Suggested modification: Refine the proposal to specifically target TOCTOU (CWE-367) patterns such as access()/open() sequences, stat()/use sequences, and file existence checks followed by file operations. Also clarify the CWE target as 367, not 362, and specify concrete detection heuristics for TOCTOU rather than a generic 'investigate' directive.
+  - [MEMORY] failure :: Function not found in the analysis graph, indicating incomplete graph construction or missing function extraction for this test case. [cwe-121] — This known failure pattern of empty/incomplete analysis graphs indicates the issue may be systemic rather than CWE-specific, suggesting the fix needs to address graph construction rather than just adding TOCTOU-specific prompts.
+- **[Pattern Gap] [MODIFY]** Detect heap buffer overflow (CWE-122) when data is read into a heap-allocated buffer without proper bounds checking. The pattern should identify cases where malloc/calloc allocations are followed by read/recv/fgets operations that may exceed the allocated buffer size.
+  CWEs: [122] | From case: multi_file
+  Suggested pattern: `(malloc|calloc|realloc)\s*\(.*\).*\n.*\b(read|recv|fgets|fread|gets|memcpy|strcpy|strcat)\b`
+  - [MEMORY] failure :: False negative on heap buffer overflow where allocated buffer size does not match the amount of data being written into it [cwe-122] — The scanner failed to detect a heap-based buffer overflow, indicating a gap in pattern coverage for heap allocation followed by unbounded writes
+  Overfitting review: MODIFY | Risk: HIGH | Applicability: LOW
+  Review reason: The regex pattern is overly simplistic and will generate many false positives. It matches any malloc followed by any read-like function on the next line, regardless of whether the same buffer is involved, whether bounds checking exists, or whether the operations are even related. Real-world code often has many lines between allocation and use, and the pattern doesn't verify the read targets the allocated buffer or that the size exceeds the allocation.
+  Suggested modification: Instead of a single-line regex, implement a two-phase detection: (1) identify heap allocations and their sizes, (2) identify read/recv/fgets operations targeting those buffers, and (3) compare the read size against the allocation size. The pattern should be a taint-flow rule rather than a line-adjacent regex match. If regex is the only option, at minimum require the same variable name to appear in both the allocation and the read operation.
+  - [KB] kb source/cwe-families/cwe-families — CWE-122 is a child of CWE-119 requiring actual bounds verification — a simple regex checking line adjacency of malloc and read functions doesn't verify the core condition (read size exceeds allocated size) that defines the vulnerability.
+- **[Pattern Gap] [MODIFY]** Detect OS command injection (CWE-78) where user-controlled input is concatenated or interpolated into strings passed to system(), popen(), exec(), or similar command execution functions without proper sanitization.
+  CWEs: [78] | From case: multi_file
+  Suggested pattern: `(system|popen|exec[lv]?p?|ShellExecute|CreateProcess)\s*\(.*\b(strcat|sprintf|snprintf|strncpy|memcpy|argv|getenv|scanf|fgets|recv|read)\b`
+  - [MEMORY] failure :: False negative on command injection where tainted data flows into command execution functions [cwe-78] — The scanner missed a command injection vulnerability, suggesting insufficient taint tracking from input sources to command execution sinks
+  Overfitting review: MODIFY | Risk: HIGH | Applicability: LOW
+  Review reason: The regex pattern requires both a command execution function and a string manipulation/input function on the same line, which is highly brittle. In real-world code, user input is typically concatenated into a command string in one statement and passed to system() in another. The pattern will miss multi-line constructions and produce false positives when string functions appear in system() calls for legitimate constant strings.
+  Suggested modification: Replace the single-line regex with a taint-based approach that: (1) identifies external input sources (argv, getenv, scanf, fgets, recv, read), (2) tracks data flow through string manipulation functions, and (3) flags when tainted data reaches command execution sinks. If regex is required, use two separate patterns — one for source identification and one for sink identification — and connect them via analysis logic.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 is fundamentally about taint flow from user input to command execution sinks. A single regex cannot capture the neutralization (or lack thereof) aspect, which is the core of the vulnerability.
+- **[Taint Rule Gap] [ACCEPT]** Add taint propagation rules ensuring that data read from external sources (network, files, environment variables, command-line arguments) is tracked through string manipulation functions (sprintf, strcat, strcpy, snprintf) and flagged when it reaches either heap buffer write operations (CWE-122) or command execution sinks (CWE-78).
+  CWEs: [122, 78] | From case: multi_file
+  - [MEMORY] insight :: Multi-file analysis cases require cross-function and cross-file taint tracking to detect vulnerabilities where source and sink are in different functions or files [cwe-122, cwe-78] — The false negative likely stems from insufficient taint propagation across function boundaries, causing the analyzer to lose track of user-controlled data flowing into dangerous operations
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a well-structured taint propagation proposal that correctly identifies sources, propagators, and sinks for two distinct CWE categories. It addresses the fundamental data-flow analysis needed for both CWE-122 and CWE-78, and is a generalizable approach that applies broadly to real-world codebases. It complements the weaknesses identified in P2 and P3 by providing the analytical framework those regex patterns lack.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 detection fundamentally requires taint tracking from user-controlled input to command execution sinks, exactly what this proposal implements.
+  - [KB] kb source/cwe-families/cwe-families — CWE-122 as part of the CWE-119 family requires verifying that operations exceed buffer boundaries, which taint tracking from allocation through read operations can establish.
+- **[Agent Capability Gap] [ACCEPT]** Perform deeper interprocedural and cross-file analysis for multi_file test cases to trace data flow from input sources through intermediate functions to vulnerable sinks. The analysis should handle cases where buffer allocation, data input, and dangerous usage occur in separate functions or files.
+  CWEs: [122, 78] | From case: multi_file
+  - [MEMORY] failure :: Multi-file expected CWEs [122, 78] were not detected, indicating the analysis did not successfully trace vulnerability chains across file or function boundaries [cwe-122, cwe-78] — The false negative in this multi-file case suggests the analyzer needs enhanced interprocedural analysis to connect sources and sinks spanning multiple compilation units
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: Interprocedural and cross-file analysis is essential for real-world vulnerability detection where buffer allocation, data input, and vulnerable operations frequently span multiple functions and files. This is a general-purpose improvement that addresses a fundamental limitation rather than overfitting to a specific test case. The proposal complements P4's taint rules by extending analysis scope.
+  - [MEMORY] failure :: Function not found in the analysis graph, indicating incomplete graph construction or missing function extraction for this test case. [cwe-121] — The known pattern of incomplete graph construction causing missed vulnerabilities directly supports the need for deeper interprocedural analysis that properly constructs cross-function and cross-file call graphs.
+
+---
+

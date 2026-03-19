@@ -1259,6 +1259,20 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "Add detection pattern for CWE-114 (Process Control) where user-controlled data flows into LoadLibrary/LoadLibraryA/LoadL",
         },
+        // Self-improvement: from case multi_file (CWEs [122])
+        SourcePattern {
+            regex: r"(malloc|calloc|realloc)\s*\(.*\).*\n.*\b(read|recv|fgets|fread|gets|memcpy|strcpy|strcat)\b",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Detect heap buffer overflow (CWE-122) when data is read into a heap-allocated buffer without proper bounds checking. The",
+        },
+        // Self-improvement: from case multi_file (CWEs [78])
+        SourcePattern {
+            regex: r"(system|popen|exec[lv]?p?|ShellExecute|CreateProcess)\s*\(.*\b(strcat|sprintf|snprintf|strncpy|memcpy|argv|getenv|scanf|fgets|recv|read)\b",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "Detect OS command injection (CWE-78) where user-controlled input is concatenated or interpolated into strings passed to ",
+        },
     ]
 }
 
