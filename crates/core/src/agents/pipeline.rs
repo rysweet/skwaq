@@ -3059,10 +3059,8 @@ mod tests {
             "vuln-hunter should stay mapped to the binary vulnerability guide skill"
         );
         assert!(
-            vuln_hunter_prompt.contains(
-                "CWE-121 (stack-based buffer overflow) requires BOTH a stack buffer and an unsafe write"
-            ),
-            "vuln-hunter prompt should include explicit CWE-121 tracing guidance"
+            vuln_hunter_prompt.contains("STEP 1") && vuln_hunter_prompt.contains("query_graph"),
+            "vuln-hunter prompt should include graph-first analysis steps"
         );
         assert!(
             binary_guide.contains(
