@@ -37,6 +37,7 @@ pub struct SourceInsertCounts {
     pub imports: usize,
     pub sources: usize,
     pub sinks: usize,
+    pub data_flows: usize,
 }
 
 /// Fluent builder for inserting analysis data into the graph.
