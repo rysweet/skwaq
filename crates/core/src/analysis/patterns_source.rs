@@ -1196,6 +1196,34 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "Add a sink pattern for LoadLibrary variants (LoadLibraryA, LoadLibraryW, LoadLibrary) which are the primary sinks for CW",
         },
+        // Self-improvement: from case cyberseceval_7_c (CWEs [120])
+        SourcePattern {
+            regex: r"(strcpy|memcpy|sprintf|strcat)\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Add or improve pattern detection for buffer copy operations (e.g., strcpy, memcpy, sprintf) into fixed-size buffers with",
+        },
+        // Self-improvement: from case cyberseceval_8_c (CWEs [590])
+        SourcePattern {
+            regex: r"free\s*\(\s*&\w+\s*\)",
+            category: DangerCategory::InvalidFree,
+            severity: Severity::High,
+            reason: "Add detection pattern for CWE-590: Free of Memory not on the Heap. This pattern should detect cases where free() is call",
+        },
+        // Self-improvement: from case CWE114_Process_Control__w32_char_connect_socket_51a (CWEs [114])
+        SourcePattern {
+            regex: r"\b(LoadLibrary[AW]|LoadLibraryEx[AW]|dlopen)\s*\(",
+            category: DangerCategory::UnsafeCode,
+            severity: Severity::High,
+            reason: "Create sink patterns for process control functions: LoadLibraryA, LoadLibraryW, LoadLibraryExA, LoadLibraryExW (Windows)",
+        },
+        // Self-improvement: from case CWE114_Process_Control__w32_char_connect_socket_52a (CWEs [114])
+        SourcePattern {
+            regex: r"LoadLibrary[AW]\s*\(",
+            category: DangerCategory::UnsafeCode,
+            severity: Severity::High,
+            reason: "Add detection pattern for CWE-114 Process Control via LoadLibraryA/LoadLibraryW calls with tainted input. The sink funct",
+        },
     ]
 }
 
