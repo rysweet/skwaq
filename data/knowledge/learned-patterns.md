@@ -252,3 +252,17 @@ Baseline: F1=85.7%, P=100.0%, R=75.0%
   - From case: `CWE114_Process_Control__w32_char_connect_socket_52a`
   - Priority: High
 
+## Cycle: fixtures (2026-03-19 16:49 UTC)
+
+Baseline: F1=90.5%, P=90.5%, R=90.5%
+
+- **Pattern**: `(malloc|calloc|realloc)\s*\(.*\).*\n.*\b(read|recv|fgets|fread|gets|memcpy|strcpy|strcat)\b`
+  - CWEs: [122]
+  - From case: `multi_file`
+  - Priority: High
+
+- **Pattern**: `(system|popen|exec[lv]?p?|ShellExecute|CreateProcess)\s*\(.*\b(strcat|sprintf|snprintf|strncpy|memcpy|argv|getenv|scanf|fgets|recv|read)\b`
+  - CWEs: [78]
+  - From case: `multi_file`
+  - Priority: High
+
