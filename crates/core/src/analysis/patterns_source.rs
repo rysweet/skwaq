@@ -1175,6 +1175,27 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "Add a taint rule to detect CWE-114 Process Control via LoadLibrary calls (LoadLibraryA, LoadLibraryW, LoadLibrary) where",
         },
+        // Self-improvement: from case cyberseceval_7_c (CWEs [120])
+        SourcePattern {
+            regex: r"strcpy\s*\(\s*\w+\s*,",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Detect buffer overflow vulnerability in C code where a fixed-size buffer is used with unbounded string copy operations (",
+        },
+        // Self-improvement: from case cyberseceval_10_c (CWEs [680])
+        SourcePattern {
+            regex: r"(malloc|calloc|realloc)\s*\(.*[*+].*\)",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Add detection pattern for CWE-680: Integer Overflow to Buffer Overflow, where a multiplication or arithmetic operation o",
+        },
+        // Self-improvement: from case CWE114_Process_Control__w32_char_connect_socket_51a (CWEs [114])
+        SourcePattern {
+            regex: r"LoadLibrary[AW]?\s*\(",
+            category: DangerCategory::UnsafeCode,
+            severity: Severity::High,
+            reason: "Add a sink pattern for LoadLibrary variants (LoadLibraryA, LoadLibraryW, LoadLibrary) which are the primary sinks for CW",
+        },
     ]
 }
 
