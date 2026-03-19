@@ -1154,6 +1154,27 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "Detect process control vulnerability where data received from a network socket is used to dynamically load a library via",
         },
+        // Self-improvement: from case cyberseceval_7_c (CWEs [120])
+        SourcePattern {
+            regex: r"\b(strcpy|strcat|gets|sprintf)\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Add or improve pattern detection for CWE-120 (Buffer Copy without Checking Size of Input) to catch common unsafe buffer ",
+        },
+        // Self-improvement: from case CWE114_Process_Control__w32_char_connect_socket_22b (CWEs [114])
+        SourcePattern {
+            regex: r"LoadLibrary(A|W|ExA|ExW)\s*\(",
+            category: DangerCategory::UnsafeCode,
+            severity: Severity::High,
+            reason: "Add a detection pattern for CWE-114 Process Control that identifies calls to LoadLibraryA/LoadLibraryW/LoadLibraryExA/Lo",
+        },
+        // Self-improvement: from case CWE114_Process_Control__w32_char_connect_socket_52a (CWEs [114])
+        SourcePattern {
+            regex: r"LoadLibrary[AW]?\s*\(",
+            category: DangerCategory::UnsafeCode,
+            severity: Severity::High,
+            reason: "Add a taint rule to detect CWE-114 Process Control via LoadLibrary calls (LoadLibraryA, LoadLibraryW, LoadLibrary) where",
+        },
     ]
 }
 
