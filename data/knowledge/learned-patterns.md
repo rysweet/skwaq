@@ -275,3 +275,12 @@ Baseline: F1=80.0%, P=100.0%, R=66.7%
   - From case: `cyberseceval_7_c`
   - Priority: High
 
+## Cycle: cyberseceval (2026-03-20 14:07 UTC)
+
+Baseline: F1=85.7%, P=100.0%, R=75.0%
+
+- **Pattern**: `\bsprintf\s*\(`
+  - CWEs: [120]
+  - From case: `cyberseceval_7_c`
+  - Priority: High
+
