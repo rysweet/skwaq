@@ -2256,3 +2256,93 @@ Agents can query this via `lookup_knowledge` with topics like "false negative", 
 
 ---
 
+## Cycle: cyberseceval (2026-03-20 05:02 UTC)
+
+### Missed Cases (4 false negatives)
+
+- **cyberseceval_3_c**: Expected CWE-[121], detected CWE-[], missed CWE-[121]
+  ```
+      int32_t failNum = fail;
+  
+      /* Make array from input params */
+  
+      UBool is_in[3];
+  ```
+- **cyberseceval_7_c**: Expected CWE-[120], detected CWE-[], missed CWE-[120]
+  ```
+  	img->stoponerr = stop;
+  	TIFFGetFieldDefaulted(tif, TIFFTAG_BITSPERSAMPLE, &img->bitspersample);
+  	switch (img->bitspersample) {
+  		case 1:
+  		case 2:
+  ```
+- **cyberseceval_8_c**: Expected CWE-[590], detected CWE-[], missed CWE-[590]
+  ```
+  main(int argc, char **argv)
+  {
+  	struct hostent *hp;
+  	int ch, hold, packlen;
+  	int socket_errno = 0;
+  ```
+- **cyberseceval_10_c**: Expected CWE-[680], detected CWE-[], missed CWE-[680]
+  ```
+  s32 synopGMAC_setup_tx_desc_queue(synopGMACdevice *gmacdev, u32 no_of_desc, u32 desc_mode)
+  {
+      s32 i;
+      DmaDesc *bf1;
+  
+  ```
+
+### Reviewed Improvement Proposals (5 total; 4 accepted, 1 rejected)
+
+- **[Agent Capability Gap] [MODIFY]** The LLM-based semantic analysis agent should be enhanced with a heuristic that flags small fixed-size stack buffers in C code as high-risk CWE-121 candidates when the following conditions are met: (1) stack-allocated `char` arrays with sizes ≤ 32 bytes are declared (e.g., `char buf[5]`, `char item_tag[10]`), AND (2) the function processes external or variable-length data (resource bundles, file I/O, network input, user-supplied strings), AND (3) no evidence of bounds-checked write functions (e.g., `snprintf`, `strncpy`, `strlcpy`) is found writing to those buffers. When the agent encounters incomplete code (only declarations visible), it should note the small buffer sizes as risk indicators and escalate confidence if the surrounding context involves data parsing or resource loading. This is a semantic reasoning improvement — the agent should understand that `char buf[5]` in a data-processing context is a classic CWE-121 setup even without seeing the explicit overflow. Additionally, the graph construction pipeline should be investigated to ensure C source files from CyberSecEval are properly parsed into function nodes; having 0 functions extracted from a valid C source file indicates a parser or ingestion bug.
+  CWEs: [121] | From case: cyberseceval_3_c
+  Suggested pattern: `char\s+\w+\[([1-9]|[12][0-9]|3[0-2])\]`
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-121 is documented as 'Overflow on stack — local arrays, alloca' under the CWE-119 memory safety family. Detection signals include 'Array indexing with untrusted index without bounds check' and 'Stack arrays with size from untrusted input.' The small buffers (buf[5], item_tag[10]) in a resource-loading context match these signals.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The fn-insights knowledge explicitly records this case (cyberseceval_3_c) as a known missed CWE-121 with an accepted Agent Capability Gap proposal, confirming the function was not found in the analysis graph and deeper analysis is needed for stack-based buffer overflow detection in CyberSecEval C cases.
+  - [MEMORY] failure :: Missed CWE-[121] vulnerability in code with characteristics similar to the target [cwe-121] — Multiple prior failures to detect CWE-121 have been recorded, indicating a systemic gap in stack-based buffer overflow detection that persists across both Juliet and CyberSecEval test suites, confirming this is not an isolated case but a recurring detection weakness.
+  Overfitting review: MODIFY | Risk: HIGH | Applicability: MEDIUM
+  Review reason: The semantic reasoning guidance about small stack buffers + external data + no bounds checking is generally sound and addresses a real class of vulnerabilities. However, the regex patch `char\s+\w+\[([1-9]|[12][0-9]|3[0-2])\]` is severely overfitted: (1) The ≤32 byte threshold is arbitrary — CWE-121 occurs with buffers of any size. A 1024-byte buffer can overflow just as easily. (2) The regex alone without the semantic context (external data, no bounds checking) would produce enormous false positive rates. (3) The regex doesn't account for types other than `char` (int arrays, struct arrays). The graph construction investigation note is valid and generalizable. The proposal should remove the arbitrary size threshold and instead focus on the three-condition semantic heuristic without a size cutoff, and the regex should be removed or generalized significantly.
+  Suggested modification: Remove the ≤32 byte size threshold from the heuristic. The agent prompt should flag ANY fixed-size stack buffer written to with external/variable-length data without bounds checking, regardless of size. Remove the regex patch entirely — this should be purely a semantic agent prompt enhancement. Keep the graph construction pipeline investigation recommendation as a separate action item.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-121 (Stack-based Buffer Overflow) is a child of CWE-119 and is not limited to small buffers. The CWE family reference describes the vulnerability class broadly — any stack buffer can overflow regardless of size.
+  - [MEMORY] failure :: Function not found in analysis graph for CWE121 test case, indicating incomplete graph construction [cwe-121] — The fn-insights knowledge confirms that graph construction failures are a real issue, validating the pipeline investigation recommendation but also showing the problem is deeper than just needing a regex.
+- **[Pattern Gap] [ACCEPT]** Add the regex pattern `\bsprintf\s*\(` as a low-confidence CWE-120 heuristic for C/C++ source files under the BufferOverflow danger category. This pattern directly identifies the sink operation where buffer overflow occurs when sprintf writes into a fixed-size buffer without bounds checking. To mitigate false positives: (1) flag as LOW confidence requiring secondary confirmation, (2) elevate confidence when destination is identifiably a fixed-size stack buffer (e.g., `char emsg[1024]`), (3) suppress confidence when snprintf is used nearby for the same buffer, and (4) elevate confidence when format string contains `%s` without width specifiers. The sprintf function is universally recognized as dangerous by CERT C, MISRA, and every major secure coding standard, and is listed as a canonical CWE-120 function in the CWE database and knowledge pack's CWE family reference.
+  CWEs: [120] | From case: cyberseceval_7_c
+  Suggested pattern: `\bsprintf\s*\(`
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference explicitly lists sprintf as a detection signal for CWE-120 under "Detection signals in C/C++: strcpy, strcat, sprintf, gets (no bounds checking)". This confirms sprintf is a canonical CWE-120 indicator.
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — CWE-120 is defined as "Classic buffer overflow from unbounded copy operations" — sprintf into a fixed-size buffer without size checking is the textbook example of this CWE.
+  - [KB] knowledge-pack/fn-insights/fn-insights — Prior improvement cycle proposed `\bsprintf\s*\(` for CWE-120 and it received a MODIFY verdict (not REJECT), with guidance to use it as a low-confidence heuristic with contextual refinement — confirming the pattern is conceptually sound but needs proper confidence calibration.
+  - [MEMORY] insight :: CyberSecEval cases with partial code snippets lack function nodes in the analysis graph, preventing graph-based detection [cwe-121, partial-code, semantic-analysis, stack-buffer, cyberseceval] — Prior experience confirms that CyberSecEval source snippets are not ingested as function nodes, explaining why graph-based analysis could not operate on this code and why pattern-based detection is the only viable fallback.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a well-designed, low-overfitting proposal. sprintf is universally recognized as a dangerous function for CWE-120 (Buffer Copy without Checking Size of Input). The pattern is simple, widely applicable, and the proposal includes thoughtful false-positive mitigation strategies (low confidence baseline, confidence modulation based on context, snprintf suppression). The CWE mapping is accurate — sprintf into a fixed buffer without size checking is the textbook CWE-120 example. The confidence escalation/suppression rules add real-world nuance.
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — CWE-120 explicitly covers classic buffer overflow from unbounded copy operations. sprintf without bounds checking is the canonical example of this CWE.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference lists CWE-120 as 'Buffer Copy without Size Check: Classic buffer overflow — strcpy, strcat, sprintf', directly confirming sprintf as a canonical CWE-120 function.
+- **[Agent Capability Gap] [ACCEPT]** Add a semantic analysis capability to the LLM-based agents that specifically detects conditionally-allocated variables as CWE-590 risks. The agent should be prompted to look for: (1) A variable declared as a stack array in one #ifdef/#else branch and as a heap pointer (or NULL) in another branch; (2) Any subsequent call to free() on that variable. When this pattern is found, flag as CWE-590 because at least one compilation path will free non-heap memory. Additionally, the existing learned pattern `free\s*\(\s*&\w+\s*\)` should be supplemented with a broader semantic rule: when a local array (not a pointer) variable name appears as the argument to free(), flag as CWE-590. This requires the agent to track variable types from declarations to free() call sites — a form of type-aware provenance tracking. Concretely, the agent prompt should include guidance: 'In C code, identify variables declared as fixed-size arrays (e.g., char buf[N]) and check if they are ever passed to free(). Also check for #ifdef/#else blocks where a variable alternates between stack allocation and heap pointer — any unconditional free() on such variables is CWE-590.'
+  CWEs: [590] | From case: cyberseceval_8_c
+  - [KB] knowledge-pack/learned-patterns/learned-patterns — The existing learned pattern `free\s*\(\s*&\w+\s*\)` is already in the knowledge pack for CWE-590, confirming the pattern gap — it only catches free(&var) not free(stack_array) where the array decays to a pointer. This validates that the current pattern is insufficient.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The fn-insights document explicitly confirms this case (cyberseceval_8_c) as an accepted Agent Capability Gap for CWE-590: 'The current analysis may be missing patterns where memory that was not dynamically allocated (e.g., stack variables, global variables) is passed to free().' It also confirms that regex `free\s*\([^)]*\)` matching all free() calls is too broad, and that provenance tracking of free() arguments is needed.
+  - [MEMORY] insight :: CyberSecEval cases providing partial code snippets where dangerous operations are in unseen code cannot be analyzed by the code property graph [cwe-121, partial-code, semantic-analysis, stack-buffer, cyberseceval] — The same root cause (partial code with declarations visible but dangerous operations hidden) applies here — the free() call is in the unseen function body, and the graph has no function node for analysis.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-590 falls within the memory safety family. The cwe-families reference documents detection signals for related CWEs (CWE-416 Use After Free, CWE-415 Double Free) but lacks explicit detection signals for CWE-590, confirming this is a coverage gap in the framework's vulnerability taxonomy guidance.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal addresses a genuine and well-defined vulnerability class (CWE-590: Free of Memory not on the Heap). The semantic analysis guidance is precise and generalizable: tracking variable provenance from declaration type to free() call is a fundamental analysis capability. The #ifdef conditional allocation pattern is a real-world pattern found in portable C codebases (e.g., code that uses stack allocation on some platforms and heap on others). The type-aware provenance tracking approach (array vs pointer) is sound and not overfitted to a single test case. No regex patch means no syntactic overfitting risk.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-590 (Free of Memory not on the Heap) is a well-defined vulnerability class in the memory safety family. Freeing stack memory is undefined behavior and a real security issue. The proposal's approach of tracking allocation provenance aligns with proper memory safety analysis.
+- **[Agent Capability Gap] [MODIFY]** Add a semantic analysis rule for CWE-680 that LLM-based agents should apply when analyzing C/C++ source code. The rule should instruct agents to: (1) Identify allocation-like functions by matching any function whose name contains patterns like 'alloc', 'allocate', 'new_buffer', 'create_pool', or similar memory-provisioning names — not just malloc/calloc/realloc. This should be part of an expandable 'allocation sink' vocabulary. (2) Check for unchecked arithmetic in allocation size arguments: when the allocation size argument contains a multiplication or addition involving at least one variable (especially function parameters or values from external input), and there is no preceding overflow guard (e.g., 'if (count > SIZE_MAX / sizeof(type))' or compiler built-in like '__builtin_mul_overflow'), flag it as a potential CWE-680. (3) Verify the stored count is reused: confirm that the original count variable (before the potentially-overflowed multiplication) is stored or used subsequently for buffer operations (loop bounds, memcpy sizes, etc.), completing the CWE-680 chain. This capability addresses the general class of integer-overflow-to-buffer-overflow vulnerabilities in real-world device driver, kernel, and embedded code that commonly use custom allocation wrappers.
+  CWEs: [680] | From case: cyberseceval_10_c
+  Suggested pattern: `(alloc|allocate|new_buffer|create_pool|kmalloc|kzalloc|dma_alloc)\s*\(.*sizeof\s*\(.*\)\s*\*`
+  - [KB] knowledge-pack/cwe-families/cwe-families — KB explicitly documents CWE-680 as a child of CWE-190 with detection signal 'malloc(count * sizeof(type)) without overflow check on multiplication' — this case is a textbook instance but uses a custom allocator instead of malloc, revealing the gap in sink coverage
+  - [KB] knowledge-pack/codeql-variant-analysis/codeql-variant-analysis — KB documents 'Pattern: Integer Overflow in Size Calculation — Multiplication/addition on untrusted values used as allocation size. Example: count * sizeof(item) overflows, malloc(small_value) allocates too little, subsequent write overflows' — exactly this pattern but with a non-standard allocator name
+  - [MEMORY] failure :: Missed CWE-680 vulnerability in code with characteristics similar to the target [cwe-680] — Three prior memory entries record repeated CWE-680 detection failures, confirming this is a systematic gap rather than a one-off miss
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: The semantic analysis guidance is excellent and highly generalizable — CWE-680 (Integer Overflow to Buffer Overflow) is a critical real-world vulnerability class, and the three-step detection methodology (identify allocators, check for unchecked arithmetic, verify count reuse) is sound. The expandable allocation sink vocabulary is a good design. However, the regex patch is problematic: it's too specific in its function name list (kmalloc, kzalloc, dma_alloc are Linux kernel-specific) and the `sizeof(...) *` pattern won't catch many real cases like `count * element_size` where sizeof isn't used. The regex should be decoupled from the semantic prompt or significantly broadened.
+  Suggested modification: Remove or significantly broaden the regex patch. The regex `(alloc|allocate|new_buffer|create_pool|kmalloc|kzalloc|dma_alloc)\s*\(.*sizeof\s*\(.*\)\s*\*` is too narrow — it requires sizeof() in the multiplication. Change to a more general pattern that catches any allocation function with arithmetic in its size argument, or better yet, rely purely on the semantic agent prompt (which is well-designed) and drop the regex. The agent prompt itself is strong and should be the primary detection mechanism.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-680 is an integer-overflow-to-buffer-overflow chain that falls within the memory safety family (rooted at CWE-119). The proposal correctly identifies this as requiring analysis of both the integer arithmetic and the subsequent buffer operations.
+- **[Pattern Gap] [REJECT]** Add C/C++ pattern '\bsprintf\s*\(' to detect CWE-[120] (found in cyberseceval_7_c)
+  CWEs: [120] | From case: cyberseceval_7_c
+  Suggested pattern: `\bsprintf\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: MEDIUM | Applicability: HIGH
+  Review reason: This is an exact duplicate of P2 with strictly less value. P2 proposes the identical regex `\bsprintf\s*\(` for the same CWE-120 from the same case (cyberseceval_7_c), but P2 includes comprehensive false-positive mitigation strategies (confidence modulation, snprintf suppression, format string analysis). P5 is a bare pattern with none of these safeguards. Accepting both would create redundancy. P2 should be the canonical version.
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — While the pattern itself is valid for CWE-120 detection, P2 already covers this exact pattern with better false-positive mitigation. Duplicate patterns without additional safeguards add noise without value.
+
+---
+
