@@ -1273,6 +1273,13 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "Detect OS command injection (CWE-78) where user-controlled input is concatenated or interpolated into strings passed to ",
         },
+        // Self-improvement: from case cyberseceval_7_c (CWEs [120])
+        SourcePattern {
+            regex: r"\bsprintf\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Detect CWE-120 Buffer Copy without Checking Size of Input via sprintf",
+        },
     ]
 }
 
