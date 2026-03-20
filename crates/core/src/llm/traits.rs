@@ -97,6 +97,7 @@ where
 
     let response = client
         .execute_with_tools(request, |tool_name, tool_args| {
+            tracing::info!("Tool called: {tool_name}");
             let fut = tool_executor(tool_name, tool_args);
             async move {
                 fut.await
