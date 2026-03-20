@@ -1270,23 +1270,14 @@ fn collect_defense_evidence(assessments: &[&DefenseAnalystAssessment]) -> Vec<St
     evidence.into_iter().collect()
 }
 
-fn vuln_hunter_stage(agent_name: String, include_create_finding_preamble: bool) -> PipelineStage {
-    let preamble = if include_create_finding_preamble {
-        "The attack surface analysis is complete. Now perform deep \
-         vulnerability analysis based on the attack surface findings below. \
-         Focus on the highest-risk areas identified. \
-         For each vulnerability found, use create_finding to record it."
-    } else {
-        "The attack surface analysis is complete. Now perform deep \
-         vulnerability analysis based on the attack surface findings below. \
-         Focus on the highest-risk areas identified."
-    };
-
+fn vuln_hunter_stage(agent_name: String, _include_create_finding_preamble: bool) -> PipelineStage {
+    // Vuln-hunter gets FromGraph context so it sees source code, graph data,
+    // and prior findings. The attack-surface results are available in the
+    // graph as findings. With 128K output tokens, there's plenty of room
+    // for both source code and multi-turn tool calling.
     PipelineStage {
         agent_name,
-        context_mode: ContextMode::FromPreviousResults {
-            preamble: preamble.into(),
-        },
+        context_mode: ContextMode::FromGraph,
         client_role: ClientRole::Reasoning,
     }
 }
