@@ -87,7 +87,7 @@ where
         return Ok("Analysis stopped: token budget exhausted.".into());
     }
 
-    let mut request = CreateMessageRequest::new(model, vec![Message::user(user_prompt)], 4096)
+    let mut request = CreateMessageRequest::new(model, vec![Message::user(user_prompt)], 128_000)
         .with_system(system_prompt.to_string());
 
     // Only set tools if non-empty — Anthropic API rejects empty tools arrays.
