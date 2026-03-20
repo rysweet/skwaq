@@ -2618,3 +2618,33 @@ This is a general-purpose CWE-590 detection capability applicable to any C/C++ c
 
 ---
 
+## Cycle: owasp (2026-03-20 15:42 UTC)
+
+### Missed Cases (1 false negatives)
+
+- **BenchmarkTest00007**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+
+### Reviewed Improvement Proposals (1 total; 1 accepted, 0 rejected)
+
+- **[Taint Rule Gap] [MODIFY]** Add a taint rule for Java CWE-78 detection with the following components: (1) Taint sources for Java servlets: request.getHeader(), request.getParameter(), request.getCookies(), request.getQueryString(), request.getInputStream(), request.getReader(). (2) Taint sinks for Runtime.exec(): mark ALL parameters of Runtime.getRuntime().exec() as CWE-78 sinks — not just the command string (1st parameter), but also the environment array (2nd parameter) in the exec(String[], String[]) and exec(String[], String[], File) overloads. (3) Taint propagation through URLDecoder.decode(), String.trim(), String.replace() and similar string transformation methods that do not sanitize OS command metacharacters — these should propagate taint, not clear it. (4) Prerequisite: Java source files must be ingested into the code property graph. The current pipeline produces an empty graph for Java source-only targets, blocking all analysis.
+  CWEs: [78] | From case: BenchmarkTest00007
+  Suggested pattern: `Runtime\.getRuntime\(\)\.exec\s*\([^)]*,[^)]*\)`
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference explicitly lists "Runtime.getRuntime().exec() in Java with user-controlled args" as a detection signal for CWE-78 OS Command Injection. The current framework has this knowledge but cannot apply it because (a) Java source files are not ingested and (b) the environment parameter of exec() is not treated as a sink.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 covers OS command injection where user input is incorporated into OS commands without sanitization. The environment variables parameter of Runtime.exec() allows an attacker to control the execution environment of the launched process, which falls within the scope of CWE-78.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology explicitly identifies "OS command injection (CWE-78): system(), exec(), popen() with user input" as a target for injection analysis. The exec() call in this case receives user input via the environment parameter, confirming this is a recognized injection vector.
+  - [MEMORY] pattern :: Source-only C/Java files not ingested into code property graph resulting in empty graphs with 0 functions, 0 sinks, 0 findings [empty-graph, source-code-not-ingested, cwe-121, cwe-114] — Multiple prior experiences confirm the recurring failure pattern where source-only files (C and now Java) are not ingested into the code property graph, resulting in 0 analysis nodes and 100% false negative rate regardless of detection rules.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The proposal is mostly sound and well-structured for real-world CWE-78 detection. Components (1), (3), and (4) are generalizable and correct. However, component (2) — marking the environment array parameter of Runtime.exec() as a CWE-78 sink — is overfitting. Passing tainted data into the environment array (String[] envp) of exec(String[], String[], File) does not constitute OS command injection (CWE-78). The environment array sets environment variables for the subprocess; it does not control what command is executed. Treating it as a CWE-78 sink would produce false positives. Additionally, the regex patch `Runtime\.getRuntime\(\)\.exec\s*\([^)]*,[^)]*\)` specifically targets multi-argument exec overloads, which further suggests this was derived from a specific benchmark pattern rather than a general principle. The 1st parameter (command string or command array) is the correct CWE-78 sink; the 2nd and 3rd parameters are not.
+  Suggested modification: Restrict the CWE-78 sink definition to only the first parameter (command string or command array) of all Runtime.exec() overloads: exec(String), exec(String[]), exec(String, String[], File), exec(String[], String[], File). Do NOT mark the environment array (2nd parameter) or working directory (3rd parameter) as CWE-78 sinks. The regex patch should cover all exec overloads, not just multi-argument forms. Components (1), (3), and (4) are fine as-is.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 is specifically about injection into OS commands. The environment array parameter of Runtime.exec() does not form part of the OS command itself, so marking it as a CWE-78 sink is semantically incorrect and would cause false positives.
+  - [MEMORY] insight :: Taint sink precision is critical — over-broad sink definitions (marking non-command parameters as command injection sinks) lead to false positives that erode trust in the analysis and indicate overfitting to specific test cases rather than the actual vulnerability pattern. [cwe-78] — The proposal's inclusion of environment array parameters as CWE-78 sinks suggests it was derived from a specific benchmark case (BenchmarkTest00007) where tainted data happened to flow into a multi-argument exec call, rather than from a principled understanding of what constitutes an OS command injection sink.
+
+---
+
