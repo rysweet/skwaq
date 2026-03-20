@@ -2346,3 +2346,144 @@ Agents can query this via `lookup_knowledge` with topics like "false negative", 
 
 ---
 
+## Cycle: juliet (2026-03-20 06:55 UTC)
+
+### Missed Cases (10 false negatives)
+
+- **CWE114_Process_Control__w32_char_connect_socket_22b**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_22b.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-22b.tmpl.c
+  */
+  ```
+- **CWE114_Process_Control__w32_char_connect_socket_51a**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_51a.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-51a.tmpl.c
+  */
+  ```
+- **CWE114_Process_Control__w32_char_connect_socket_52a**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_52a.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-52a.tmpl.c
+  */
+  ```
+- **CWE114_Process_Control__w32_char_connect_socket_52b**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_52b.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-52b.tmpl.c
+  */
+  ```
+- **CWE114_Process_Control__w32_char_connect_socket_53a**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_53a.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-53a.tmpl.c
+  */
+  ```
+- **CWE114_Process_Control__w32_char_connect_socket_53b**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_53b.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-53b.tmpl.c
+  */
+  ```
+- **CWE114_Process_Control__w32_char_connect_socket_53c**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_53c.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-53c.tmpl.c
+  */
+  ```
+- **CWE114_Process_Control__w32_char_connect_socket_54a**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_54a.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-54a.tmpl.c
+  */
+  ```
+- **CWE114_Process_Control__w32_char_connect_socket_54b**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_54b.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-54b.tmpl.c
+  */
+  ```
+- **CWE114_Process_Control__w32_char_connect_socket_54c**: Expected CWE-[114], detected CWE-[], missed CWE-[114]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE114_Process_Control__w32_char_connect_socket_54c.c
+  Label Definition File: CWE114_Process_Control__w32.label.xml
+  Template File: sources-sink-54c.tmpl.c
+  */
+  ```
+
+### Reviewed Improvement Proposals (5 total; 1 accepted, 4 rejected)
+
+- **[Taint Rule Gap] [ACCEPT]** Add a complete CWE-114 taint rule with the following components: **Sources**: `recv`, `recvfrom`, `read` (on socket FDs), `getenv`, `fgets` (from stdin/files), `fread` — any function that introduces externally-controlled string data. **Sinks**: `LoadLibraryA`, `LoadLibraryW`, `LoadLibraryExA`, `LoadLibraryExW` (Windows), `dlopen` (POSIX) — functions that dynamically load code/libraries based on a string path argument. **Taint propagation**: The first argument to the sink functions must be tracked as tainted from any of the source functions. The taint must propagate through function parameters inter-procedurally (the source and sink are commonly in different functions or files). **CWE mapping**: Register CWE-114 (Process Control) in the weakness catalog with semantic class `untrusted_search_path`. **Sink regex for pattern matching** (low-confidence heuristic to supplement taint analysis): `\b(LoadLibrary[AW]|LoadLibraryEx[AW]|dlopen)\s*\(` — this should trigger deeper taint analysis, not standalone findings, to avoid false positives on hardcoded safe library paths.
+  CWEs: [114] | From case: CWE114_Process_Control__w32_char_connect_socket_22b
+  Suggested pattern: `\b(LoadLibrary[AW]|LoadLibraryEx[AW]|dlopen)\s*\(`
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-114 is explicitly documented with detection signals: "LoadLibrary(), dlopen() with user-controlled path" and "Dynamic class loading with untrusted class name", confirming the sink functions and taint-based detection approach
+  - [KB] knowledge-pack/learned-patterns/learned-patterns — Multiple learned patterns already exist for `LoadLibrary[AW]?\s*\(` mapped to CWE-114 at high priority, but these patterns are not being applied — confirming the detection pipeline does not process CWE-114 patterns
+  - [KB] knowledge-pack/codeql-variant-analysis/codeql-variant-analysis — The methodology prescribes "Follow data from untrusted sources to dangerous sinks" with Sources including "network input (recv, read)" and Sinks including "system calls (system, exec)" — LoadLibrary is an analogous code-execution sink that should follow the same taint tracking methodology
+  - [MEMORY] pattern :: CWE-114 Process Control: tainted data from network sources (recv, recvfrom) flows through multi-file function call chains to dynamic library loading sinks (LoadLibraryA, LoadLibraryW, dlopen). The entire CWE-114 category is absent from detection. [cwe-114, process-control, LoadLibrary, dlopen, taint-rule, network-source] — Prior analysis confirmed the three-layer fix needed: (1) Register CWE-114, (2) Add sink patterns for LoadLibrary/dlopen, (3) Add taint rules connecting network sources to these sinks — exactly matching this proposal
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a well-structured taint rule proposal for CWE-114. The sources, sinks, and propagation requirements are clearly defined and map to real-world vulnerability patterns. The explicit caveat that the regex should trigger deeper taint analysis rather than standalone findings demonstrates awareness of false positive risk. The semantic class 'untrusted_search_path' is appropriate. The rule generalizes well beyond Juliet — real-world code frequently loads libraries from user-controlled or network-controlled paths.
+  - [KB] kb source/cwe-families/cwe-families — CWE-114 is a recognized weakness involving process control through untrusted library loading. The proposal correctly identifies the sink functions (LoadLibrary*, dlopen) and sources that are standard external input vectors, aligning with CWE taxonomy principles.
+  - [MEMORY] insight :: Taint rules for library loading sinks are a well-established vulnerability pattern in static analysis tools [cwe-114] — The proposal defines a general taint flow pattern (external input → library loading) that is not specific to any benchmark naming convention or test structure.
+- **[Taint Rule Gap] [REJECT]** Add a CWE-114 taint rule with the following components: **Sources**: `recv`, `recvfrom`, `read` (on socket file descriptors), `getenv`, `fgets`/`fread` (from untrusted files), `WSARecv`. **Sinks**: `LoadLibraryA`, `LoadLibraryW`, `LoadLibraryExA`, `LoadLibraryExW` (Windows); `dlopen` (POSIX). **Rule**: When tainted data from any of these sources flows into the first argument of any of these sinks without intervening validation (e.g., path canonicalization, allowlist check), flag as CWE-114. The taint must propagate inter-procedurally through function arguments. As a complementary lower-confidence heuristic, register `\b(LoadLibrary[AW]|LoadLibraryEx[AW]|dlopen)\s*\(` as a CWE-114 sink pattern that triggers deeper taint analysis when encountered, but do NOT flag it as a standalone finding without confirming the argument is tainted.
+  CWEs: [114] | From case: CWE114_Process_Control__w32_char_connect_socket_51a
+  Suggested pattern: `\b(LoadLibrary[AW]|LoadLibraryEx[AW]|dlopen)\s*\(`
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE families reference explicitly lists CWE-114 Process Control with detection signals "LoadLibrary(), dlopen() with user-controlled path" and "Plugin systems loading from untrusted paths", confirming these are the correct sinks for this vulnerability class.
+  - [KB] knowledge-pack/learned-patterns/learned-patterns — The learned-patterns KB already contains `LoadLibrary[AW]?\s*\(` mapped to CWE-114 from prior analysis cycles, but these patterns are not being applied in the detection pipeline, confirming the gap is in rule activation not pattern discovery.
+  - [MEMORY] pattern :: CWE-114 Process Control is entirely absent from the detection pipeline. LoadLibrary/dlopen sinks with tainted input from network sources require a taint rule approach, not standalone regex. [cwe-114, process-control, LoadLibrary, dlopen, taint-rule, inter-procedural] — Durable memory from multiple prior failed cases (10+) consistently confirms CWE-114 has zero detection coverage and that a taint-rule approach (source→sink with inter-procedural tracking) is required to avoid false positives on safe hardcoded LoadLibrary paths.
+  Overfitting review: REJECT | Risk: MEDIUM | Applicability: HIGH
+  Review reason: This proposal is essentially a duplicate of P1 with nearly identical sources, sinks, regex, and CWE target. Accepting both P1 and P2 would create redundant rules in the detection framework. P1 already covers all the same functionality including WSARecv-equivalent coverage and the same heuristic approach. Consolidation is needed rather than separate rules per test case.
+  - [KB] kb source/vuln-analysis-methodology/vuln-analysis-methodology — Methodology should avoid duplicating detection rules across test cases. One well-defined taint rule for CWE-114 is sufficient; creating separate rules per Juliet variant suggests overfitting to individual test cases rather than generalizing the vulnerability class.
+  - [MEMORY] pattern :: Multiple proposals targeting the same CWE with identical logic from different Juliet variants indicate test-case-level duplication rather than genuinely distinct detection needs [cwe-114] — Duplicate rules bloat the detection framework without improving coverage and suggest the proposals are derived per-case rather than per-vulnerability-class.
+- **[Taint Rule Gap] [REJECT]** Define a CWE-114 Process Control taint rule. Sources: recv, recvfrom, read (on socket FDs), getenv, fgets, fread, WSARecv — functions that introduce external/untrusted data. Sinks: LoadLibraryA, LoadLibraryW, LoadLibraryExA, LoadLibraryExW (Windows), dlopen (POSIX) — functions that load dynamic libraries from a caller-supplied path. Propagation: Inter-procedural taint through function parameters (the data flows through 3 function calls across files before reaching the sink). Sanitizers: Path validation/allowlisting of the library path against a known set of safe libraries. The taint rule should flag CWE-114 when untrusted input reaches a dynamic library loading function without sanitization. This also requires resolving the prerequisite infrastructure issue: source-only C files must be ingested into the code property graph to create function nodes, data flow edges, and call relationships. Without graph ingestion, no taint rule can execute.
+  CWEs: [114] | From case: CWE114_Process_Control__w32_char_connect_socket_52a
+  Suggested pattern: `(LoadLibrary[AW]?(Ex[AW])?|dlopen)\s*\(`
+  - [KB] knowledge-pack/learned-patterns/learned-patterns — The learned patterns knowledge pack already contains `LoadLibrary[AW]?\s*\(` mapped to CWE-114 from prior analysis cycles, confirming this is a known gap that has been identified but not resolved because the patterns cannot fire on an empty graph.
+  - [KB] knowledge-pack/codeql-variant-analysis/codeql-variant-analysis — The CodeQL methodology explicitly defines the taint tracking pattern (Source → Sink with no Sanitizer) and lists `recv`/`read` as sources and `system`/`exec` as sinks. The same pattern applies here with `LoadLibrary`/`dlopen` as process-control-specific sinks.
+  - [MEMORY] pattern :: CWE-114 Process Control: The entire CWE category is absent from the detection pipeline. The vulnerability pattern involves tainted data flowing into dynamic library loading functions. Detection requires three layers: CWE-114 registered as a known weakness, sink patterns for LoadLibrary/dlopen family, and taint rules connecting untrusted input sources to these sinks. [cwe-114, process-control, LoadLibrary, dlopen, taint-rule, sink-pattern, inter-procedural] — Prior memory with 0.95 confidence confirms this is a systematic gap where the entire CWE-114 category lacks detection, the code property graph must ingest source-only C files, and a taint rule (not just a regex pattern) is required to avoid false positives on safe hardcoded paths.
+  Overfitting review: REJECT | Risk: MEDIUM | Applicability: HIGH
+  Review reason: Duplicate of P1 with the same CWE-114 taint rule logic. The specific mention of '3 function calls across files' is an overfitting detail tied to the Juliet _52a test case structure (which uses a chain of forwarding functions). Real-world code may have any number of intermediary calls. The infrastructure prerequisite note is valid but should be filed separately as an infrastructure issue, not bundled into every CWE-114 taint rule proposal.
+  - [KB] kb source/fn-insights/fn-insights — The knowledge base notes that functions missing from the analysis graph indicate incomplete graph construction. The infrastructure issue mentioned in P3 is a known problem, but embedding it in each rule proposal is redundant and the fixed call-depth of 3 is benchmark-specific.
+  - [MEMORY] insight :: Hardcoding specific call chain depths (e.g., 3 levels) to match Juliet test case structures is a form of overfitting to benchmark topology [cwe-114] — Real-world propagation depths vary; the rule should not constrain or optimize for a specific depth matching the test case.
+- **[Taint Rule Gap] [REJECT]** Define a CWE-114 taint rule connecting externally-controlled string data sources to dynamic library loading sinks. Sources: recv, recvfrom, read (on socket FDs), WSARecv, getenv, fgets, fread — any function that introduces externally-controlled string data. Sinks: LoadLibraryA, LoadLibraryW, LoadLibraryExA, LoadLibraryExW (Windows), dlopen (POSIX) — functions that dynamically load code based on a string path argument. Propagation: Taint must propagate through function parameters across call boundaries (interprocedural), including when data is passed as a char* argument through intermediary forwarding functions across separate translation units. Sanitizers: Path validation against an allowlist of known library paths, or use of a hardcoded full pathname. The taint rule fires when tainted data from a source reaches the first argument of a sink function without passing through a sanitizer. This requires the graph infrastructure to first ingest source-only C files so function nodes exist for analysis. The rule is independent of any benchmark naming convention and would detect real-world CWE-114 in production code where user/network input controls dynamic library loading.
+  CWEs: [114] | From case: CWE114_Process_Control__w32_char_connect_socket_52b
+  Suggested pattern: `LoadLibrary[AW]?\s*\(|LoadLibraryEx[AW]?\s*\(|dlopen\s*\(`
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-114 Process Control is explicitly documented with detection signals: 'LoadLibrary(), dlopen() with user-controlled path' and 'Plugin systems loading from untrusted paths.' This confirms the taint rule source-sink model is the correct detection approach.
+  - [KB] knowledge-pack/learned-patterns/learned-patterns — Multiple learned patterns for `LoadLibrary[AW]?\s*\(` already exist mapped to CWE-114, but they are never applied because the graph contains no ingested code. The patterns validate the sink identification; what is missing is the taint infrastructure and graph ingestion.
+  - [KB] knowledge-pack/codeql-variant-analysis/codeql-variant-analysis — The methodology explicitly describes the 'Source-Sink with No Sanitizer' pattern and lists recv() as a taint source and system calls as sinks, confirming the taint-tracking approach. It instructs to 'Find all paths where data originates from an untrusted source, flows through the program, reaches a dangerous sink, and no sanitizer exists.'
+  - [MEMORY] pattern :: CWE-114 Process Control missed detection in multi-file variant where data flows from socket recv through function parameters across files to LoadLibrary sink. Graph was empty with 0 functions. [cwe-114, process-control, empty-graph, source-code-not-ingested, LoadLibrary, dlopen, taint-rule, inter-procedural, multi-file] — Prior analysis of identical CWE-114 multi-file variants confirmed the two-layer gap: (1) source C files not ingested into graph, (2) no taint rule connecting recv sources to LoadLibrary sinks. This memory directly validates the proposed fix.
+  Overfitting review: REJECT | Risk: LOW | Applicability: HIGH
+  Review reason: This is the fourth duplicate CWE-114 taint rule proposal with identical sources, sinks, and logic as P1. While it explicitly states independence from benchmark naming conventions (a positive note), it adds no substantive new detection capability beyond P1. The mention of 'separate translation units' is slightly benchmark-flavored (Juliet splits functions across _52a/_52b/_52c/_52d files). Consolidate with P1.
+  - [KB] kb source/vuln-analysis-methodology/vuln-analysis-methodology — Methodology dictates consolidating equivalent detection rules. P4 covers the same vulnerability class as P1 with no additional detection surface.
+  - [MEMORY] pattern :: Repeated near-identical proposals from different Juliet variant files should be consolidated into a single rule [cwe-114] — Each Juliet variant (51a, 52a, 52b, 53a) tests the same vulnerability class with different data flow patterns; one comprehensive taint rule handles all variants.
+- **[Taint Rule Gap] [REJECT]** Add a CWE-114 (Process Control) taint rule to the detection framework. Sources: recv, recvfrom, read (on socket FDs), fgets, fread, getenv, WSARecv — any function that reads data from an untrusted external channel. Sinks: LoadLibraryA, LoadLibraryW, LoadLibraryExA, LoadLibraryExW (Windows), dlopen (POSIX) — functions that dynamically load code based on a string argument. Propagation: Taint must flow through function parameter passing (inter-procedural), including across translation units, with sufficient depth (≥4 call levels to cover common real-world indirection). Sanitizers: Validation against a whitelist of known-good library paths, or path canonicalization + prefix check against a trusted directory. This taint rule directly models CWE-114 (Process Control) where an attacker can influence which library is loaded. Prerequisite: Source-only C files must be ingested into the code property graph to produce function nodes that the taint engine can analyze.
+  CWEs: [114] | From case: CWE114_Process_Control__w32_char_connect_socket_53a
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE families document explicitly lists CWE-114 Process Control with detection signals: "LoadLibrary(), dlopen() with user-controlled path" — confirming the exact source-sink pair needed for this taint rule.
+  - [KB] knowledge-pack/learned-patterns/learned-patterns — Multiple learned patterns for `LoadLibrary[AW]?\s*\(` mapped to CWE-114 already exist in the knowledge pack at high priority, but they are sink-only patterns without active taint rules connecting them to untrusted sources. This confirms the detection logic is partially defined but incomplete.
+  - [MEMORY] pattern :: CWE-114 Process Control missed detection in multi-file variant. The code property graph was completely empty (0 functions, 0 sinks, 0 findings). Learned patterns for LoadLibrary[AW] exist but cannot fire because source-only C files are not ingested. [cwe-114, process-control, empty-graph, source-code-not-ingested, LoadLibrary, dlopen, taint-rule, inter-procedural, multi-file] — Prior analysis of identical CWE-114 variants confirmed the same two-layered failure: empty graph + missing taint rule. The taint rule specification (Source={recv,recvfrom,getenv,fgets,fread} → Sink={LoadLibraryA,LoadLibraryW,LoadLibraryExA,LoadLibraryExW,dlopen}) from this memory is the exact fix needed.
+  Overfitting review: REJECT | Risk: MEDIUM | Applicability: HIGH
+  Review reason: Fifth duplicate of the CWE-114 taint rule. The '≥4 call levels' specification is directly derived from the Juliet _53a variant which uses a chain of 4 forwarding functions (a→b→c→d). While framed as 'common real-world indirection,' this specific threshold is benchmark-derived. The core rule is identical to P1. All five proposals should be consolidated into a single CWE-114 taint rule (P1).
+  - [KB] kb source/vuln-analysis-methodology/vuln-analysis-methodology — Methodology requires avoiding benchmark-specific tuning. The ≥4 call depth matches the Juliet _53 series structure and suggests the threshold was derived from that specific test case pattern.
+  - [MEMORY] insight :: Juliet _53 variants use exactly 4 forwarding functions; specifying ≥4 as the propagation depth is a direct artifact of this test structure [cwe-114] — Real-world interprocedural taint analysis should not have an artificial minimum depth requirement; it should follow all reachable paths regardless of depth.
+
+---
+
