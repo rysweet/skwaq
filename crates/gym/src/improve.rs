@@ -12,9 +12,15 @@
 
 use crate::adapters::{BenchmarkAdapter, BenchmarkConfig};
 use crate::scoring::{self, AggregateScore};
+use regex::RegexBuilder;
 use serde::Deserialize;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+
+/// Maximum compiled regex size (bytes) for LLM-proposed patterns.
+/// Mirrors the limit in patterns_source.rs to prevent ReDoS.
+/// Uses the same 200KB limit as the core pattern engine.
+const PROPOSAL_REGEX_SIZE_LIMIT: usize = 200_000;
 
 const IMPROVE_KB_MAX_CWE_QUERIES: usize = 6;
 const IMPROVE_KB_HITS_PER_QUERY: usize = 2;
@@ -2096,8 +2102,37 @@ pub fn apply_accepted_proposals(cycle: &ImprovementCycle) -> anyhow::Result<usiz
         let new_content = if proposal.patch.find.is_empty() {
             // Append mode: generate a proper SourcePattern struct and insert
             // before the closing `]` of the c_cpp_patterns() array.
+            //
+            // Safety gate: validate the proposed regex compiles within size_limit
+            // before writing it into source code. This prevents both invalid regex
+            // syntax and ReDoS patterns from reaching the codebase.
+            let regex_str = &proposal.patch.replace;
+            // Reject patterns containing double quotes — they would break
+            // the r"..." raw string literal in generated Rust source.
+            if regex_str.contains('"') {
+                tracing::warn!(
+                    "Rejecting proposal '{}': regex contains double quote",
+                    proposal.description.chars().take(60).collect::<String>(),
+                );
+                continue;
+            }
+
+            match RegexBuilder::new(regex_str)
+                .size_limit(PROPOSAL_REGEX_SIZE_LIMIT)
+                .build()
+            {
+                Ok(_) => {} // valid, proceed
+                Err(e) => {
+                    tracing::warn!(
+                        "Rejecting proposal '{}': regex fails safety validation: {}",
+                        proposal.description.chars().take(60).collect::<String>(),
+                        e
+                    );
+                    continue;
+                }
+            }
+
             if let Some(insert_pos) = content.rfind("    ]\n}") {
-                let regex_str = &proposal.patch.replace;
                 let category = infer_danger_category(&proposal.target_cwes);
                 let reason = proposal
                     .description
@@ -2816,5 +2851,304 @@ analysis
         let reviews = result.unwrap();
         assert_eq!(reviews.len(), 1);
         assert!(reviews[0].evidence_refs.is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // TDD: Structured SourcePattern insertion safety
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_apply_proposals_uses_structured_insertion_not_raw_interpolation() {
+        // Create a temp file that mimics c_cpp_patterns()
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let content = "fn c_cpp_patterns() -> &'static [SourcePattern] {\n    &[\n    ]\n}";
+        std::fs::write(tmp.path(), content).unwrap();
+
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: make_score(vec![(78, 0.5)]),
+            false_negatives: vec![],
+            reviewed_proposals: vec![],
+            proposals: vec![Improvement {
+                kind: ImprovementKind::NewPattern,
+                description: "Detect execvp command injection".to_string(),
+                target_cwes: vec![78],
+                target_file: tmp.path().to_path_buf(),
+                patch: Patch {
+                    find: String::new(),
+                    replace: r"\bexecvp\s*\(".to_string(),
+                },
+                source_case: "test_execvp".to_string(),
+                priority: Priority::High,
+                supporting_evidence: Vec::new(),
+                review: None,
+            }],
+            holdout_case_count: 0,
+            training_case_count: 0,
+            cross_validation_pending: vec![],
+        };
+
+        let applied = apply_accepted_proposals(&cycle).unwrap();
+        assert_eq!(applied, 1);
+
+        let result = std::fs::read_to_string(tmp.path()).unwrap();
+
+        // The inserted code MUST be a proper SourcePattern struct, not raw text
+        assert!(
+            result.contains("SourcePattern {"),
+            "Must insert typed SourcePattern struct"
+        );
+        assert!(
+            result.contains("DangerCategory::"),
+            "Must use typed DangerCategory enum"
+        );
+        assert!(
+            result.contains("Severity::"),
+            "Must use typed Severity enum"
+        );
+        // The regex must be inside a string literal
+        assert!(
+            result.contains(r#"regex: r"\bexecvp\s*\(""#),
+            "Regex must be in a string literal field, not interpolated: {result}"
+        );
+    }
+
+    #[test]
+    fn test_apply_proposals_truncates_long_descriptions() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let content = "fn c_cpp_patterns() -> &'static [SourcePattern] {\n    &[\n    ]\n}";
+        std::fs::write(tmp.path(), content).unwrap();
+
+        let long_desc = "A".repeat(200); // 200 chars, should be truncated to 120
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: make_score(vec![(119, 0.5)]),
+            false_negatives: vec![],
+            reviewed_proposals: vec![],
+            proposals: vec![Improvement {
+                kind: ImprovementKind::NewPattern,
+                description: long_desc.clone(),
+                target_cwes: vec![119],
+                target_file: tmp.path().to_path_buf(),
+                patch: Patch {
+                    find: String::new(),
+                    replace: r"\bgets\s*\(".to_string(),
+                },
+                source_case: "test".to_string(),
+                priority: Priority::High,
+                supporting_evidence: Vec::new(),
+                review: None,
+            }],
+            holdout_case_count: 0,
+            training_case_count: 0,
+            cross_validation_pending: vec![],
+        };
+
+        apply_accepted_proposals(&cycle).unwrap();
+        let result = std::fs::read_to_string(tmp.path()).unwrap();
+
+        // The reason field should not contain the full 200-char description
+        // (apply_accepted_proposals truncates to 120 chars)
+        assert!(
+            !result.contains(&long_desc),
+            "Description should be truncated to 120 chars in the reason field"
+        );
+    }
+
+    #[test]
+    fn test_apply_proposals_escapes_quotes_in_description() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let content = "fn c_cpp_patterns() -> &'static [SourcePattern] {\n    &[\n    ]\n}";
+        std::fs::write(tmp.path(), content).unwrap();
+
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: make_score(vec![(119, 0.5)]),
+            false_negatives: vec![],
+            reviewed_proposals: vec![],
+            proposals: vec![Improvement {
+                kind: ImprovementKind::NewPattern,
+                description: r#"Detect "dangerous" sprintf calls"#.to_string(),
+                target_cwes: vec![119],
+                target_file: tmp.path().to_path_buf(),
+                patch: Patch {
+                    find: String::new(),
+                    replace: r"\bsprintf\s*\(".to_string(),
+                },
+                source_case: "test".to_string(),
+                priority: Priority::High,
+                supporting_evidence: Vec::new(),
+                review: None,
+            }],
+            holdout_case_count: 0,
+            training_case_count: 0,
+            cross_validation_pending: vec![],
+        };
+
+        apply_accepted_proposals(&cycle).unwrap();
+        let result = std::fs::read_to_string(tmp.path()).unwrap();
+
+        // Quotes in the description must be escaped to single quotes
+        assert!(
+            !result.contains(r#"reason: "Detect "dangerous""#),
+            "Double quotes in description must be escaped: {result}"
+        );
+        assert!(
+            result.contains("'dangerous'"),
+            "Quotes should be replaced with single quotes: {result}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // TDD: infer_danger_category completeness
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_infer_danger_category_covers_all_mapped_cwes() {
+        let mappings = vec![
+            (vec![78], "Injection"),
+            (vec![77], "Injection"),
+            (vec![119], "Memory"),
+            (vec![121], "Memory"),
+            (vec![122], "Memory"),
+            (vec![787], "Memory"),
+            (vec![134], "FormatString"),
+            (vec![190], "IntegerOverflow"),
+            (vec![416], "UseAfterFree"),
+            (vec![476], "NullDeref"),
+            (vec![22], "PathTraversal"),
+            (vec![362], "Race"),
+            (vec![377], "TempFile"),
+            (vec![400], "ResourceExhaustion"),
+            (vec![401], "ResourceLeak"),
+            (vec![457], "UninitializedVar"),
+            (vec![502], "Deserialization"),
+            (vec![590], "InvalidFree"),
+            (vec![843], "TypeConfusion"),
+            (vec![272], "AccessControl"),
+            (vec![226], "InformationExposure"),
+            (vec![666], "ErrorHandling"),
+        ];
+
+        for (cwes, expected_category) in mappings {
+            let result = infer_danger_category(&cwes);
+            assert_eq!(
+                result, expected_category,
+                "CWE {:?} should map to {expected_category}, got {result}",
+                cwes
+            );
+        }
+    }
+
+    #[test]
+    fn test_infer_danger_category_defaults_to_memory() {
+        assert_eq!(
+            infer_danger_category(&[9999]),
+            "Memory",
+            "Unknown CWE should default to Memory"
+        );
+        assert_eq!(
+            infer_danger_category(&[]),
+            "Memory",
+            "Empty CWE list should default to Memory"
+        );
+    }
+
+    #[test]
+    fn test_infer_danger_category_uses_first_recognized_cwe() {
+        // Multiple CWEs: first recognized one wins
+        assert_eq!(
+            infer_danger_category(&[9999, 78, 119]),
+            "Injection",
+            "Should use first recognized CWE (78=Injection), skipping unknown 9999"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // TDD: Regex safety gate for LLM proposals — EXPECTED TO FAIL
+    // -----------------------------------------------------------------------
+
+    /// Phase B1 contract: when applying LLM-proposed patterns, the regex
+    /// must be validated with RegexBuilder::size_limit BEFORE writing to
+    /// patterns_source.rs. Patterns exceeding the limit should be skipped.
+    #[test]
+    fn test_apply_proposals_rejects_oversized_regex() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let content = "fn c_cpp_patterns() -> &'static [SourcePattern] {\n    &[\n    ]\n}";
+        std::fs::write(tmp.path(), content).unwrap();
+
+        // \w{200} with Unicode generates massive NFA exceeding 200KB
+        let huge_regex = r"\w{200}";
+
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: make_score(vec![(119, 0.5)]),
+            false_negatives: vec![],
+            reviewed_proposals: vec![],
+            proposals: vec![Improvement {
+                kind: ImprovementKind::NewPattern,
+                description: "Oversized regex".to_string(),
+                target_cwes: vec![119],
+                target_file: tmp.path().to_path_buf(),
+                patch: Patch {
+                    find: String::new(),
+                    replace: huge_regex.to_string(),
+                },
+                source_case: "test".to_string(),
+                priority: Priority::High,
+                supporting_evidence: Vec::new(),
+                review: None,
+            }],
+            holdout_case_count: 0,
+            training_case_count: 0,
+            cross_validation_pending: vec![],
+        };
+
+        let applied = apply_accepted_proposals(&cycle).unwrap();
+        assert_eq!(
+            applied, 0,
+            "Oversized regex proposals should be rejected (not written to source)"
+        );
+
+        let result = std::fs::read_to_string(tmp.path()).unwrap();
+        assert!(
+            !result.contains("{200}"),
+            "Oversized regex should not appear in output file"
+        );
+    }
+
+    /// Phase B1 contract: invalid regex (syntax error) should be rejected.
+    #[test]
+    fn test_apply_proposals_rejects_invalid_regex() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let content = "fn c_cpp_patterns() -> &'static [SourcePattern] {\n    &[\n    ]\n}";
+        std::fs::write(tmp.path(), content).unwrap();
+
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: make_score(vec![(119, 0.5)]),
+            false_negatives: vec![],
+            reviewed_proposals: vec![],
+            proposals: vec![Improvement {
+                kind: ImprovementKind::NewPattern,
+                description: "Invalid regex".to_string(),
+                target_cwes: vec![119],
+                target_file: tmp.path().to_path_buf(),
+                patch: Patch {
+                    find: String::new(),
+                    replace: r"[invalid(regex".to_string(), // unclosed bracket
+                },
+                source_case: "test".to_string(),
+                priority: Priority::High,
+                supporting_evidence: Vec::new(),
+                review: None,
+            }],
+            holdout_case_count: 0,
+            training_case_count: 0,
+            cross_validation_pending: vec![],
+        };
+
+        let applied = apply_accepted_proposals(&cycle).unwrap();
+        assert_eq!(applied, 0, "Invalid regex proposals should be rejected");
     }
 }

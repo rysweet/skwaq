@@ -1922,4 +1922,159 @@ mod tests {
             }
         }
     }
+
+    // -----------------------------------------------------------------------
+    // TDD: Regression gate edge cases
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_cwe_regressions_returns_delta_details() {
+        let baseline = make_score(vec![(119, 0.80), (78, 0.70), (134, 0.60)]);
+        let new = make_score(vec![(119, 0.75), (78, 0.70), (134, 0.55)]);
+
+        let regressions = cwe_regressions(&baseline, &new);
+
+        // CWE-119: -0.05 (beyond 0.02 margin)
+        // CWE-78: 0.0 (no change)
+        // CWE-134: -0.05 (beyond 0.02 margin)
+        assert_eq!(regressions.len(), 2, "Two CWEs regressed");
+
+        let cwe_ids: Vec<u32> = regressions.iter().map(|r| r.cwe_id).collect();
+        assert!(cwe_ids.contains(&119));
+        assert!(cwe_ids.contains(&134));
+
+        for r in &regressions {
+            assert!(
+                r.delta_detection_rate < 0.0,
+                "Delta should be negative for regressions"
+            );
+            assert!(
+                r.delta_detection_rate.abs() > CWE_REGRESSION_NOISE_MARGIN,
+                "Delta should exceed noise margin"
+            );
+        }
+    }
+
+    #[test]
+    fn test_cwe_regressions_ignores_improvements() {
+        let baseline = make_score(vec![(119, 0.50)]);
+        let improved = make_score(vec![(119, 0.90)]); // +40% improvement
+
+        let regressions = cwe_regressions(&baseline, &improved);
+        assert!(
+            regressions.is_empty(),
+            "Improvements should not appear as regressions"
+        );
+    }
+
+    #[test]
+    fn test_precision_regression_no_negative_cases_returns_none() {
+        let mut baseline = AggregateScore::default();
+        baseline.negative_calibration.total_negative_cases = 0;
+
+        let mut new = AggregateScore::default();
+        new.negative_calibration.total_negative_cases = 10;
+        new.negative_calibration.false_positive_rate = 0.50;
+
+        assert!(
+            precision_regression(&baseline, &new).is_none(),
+            "Should return None when baseline has no negative cases"
+        );
+
+        assert!(
+            precision_regression(&new, &baseline).is_none(),
+            "Should return None when new score has no negative cases"
+        );
+    }
+
+    #[test]
+    fn test_has_any_regression_false_when_both_pass() {
+        let mut baseline = make_score(vec![(119, 0.80)]);
+        baseline.negative_calibration = NegativeCaseCalibration {
+            total_negative_cases: 10,
+            true_negatives: 9,
+            false_positives: 1,
+            false_positive_rate: 0.10,
+            per_semantic_fps: HashMap::new(),
+        };
+
+        // Better on everything
+        let mut improved = make_score(vec![(119, 0.90)]);
+        improved.negative_calibration = NegativeCaseCalibration {
+            total_negative_cases: 10,
+            true_negatives: 10,
+            false_positives: 0,
+            false_positive_rate: 0.0,
+            per_semantic_fps: HashMap::new(),
+        };
+
+        assert!(
+            !has_any_regression(&baseline, &improved),
+            "All-improved scores should not trigger regression"
+        );
+    }
+
+    #[test]
+    fn test_aggregate_empty_outcomes_returns_defaults() {
+        let score = aggregate(&[]);
+        assert_eq!(score.true_positives, 0);
+        assert_eq!(score.false_positives, 0);
+        assert_eq!(score.false_negatives, 0);
+        assert!(
+            score.f1.is_nan() || score.f1 == 0.0,
+            "F1 should be 0 or NaN for empty"
+        );
+    }
+
+    #[test]
+    fn test_aggregate_single_true_positive() {
+        let outcome = CaseOutcome {
+            case_id: "test".to_string(),
+            suite: "fixtures".to_string(),
+            expected_cwes: vec![119],
+            detected_cwes: vec![119],
+            matched_finding_ids: vec!["f1".to_string()],
+            unmatched_finding_ids: vec![],
+            cwe_hits: {
+                let mut m = HashMap::new();
+                m.insert(119, true);
+                m
+            },
+        };
+
+        let score = aggregate(&[outcome]);
+        assert_eq!(score.true_positives, 1);
+        assert_eq!(score.false_negatives, 0);
+        assert!(score.recall > 0.99, "Recall should be ~1.0 for perfect TP");
+    }
+
+    #[test]
+    fn test_aggregate_single_false_negative() {
+        let outcome = CaseOutcome {
+            case_id: "test".to_string(),
+            suite: "fixtures".to_string(),
+            expected_cwes: vec![119],
+            detected_cwes: vec![],
+            matched_finding_ids: vec![],
+            unmatched_finding_ids: vec![],
+            cwe_hits: {
+                let mut m = HashMap::new();
+                m.insert(119, false);
+                m
+            },
+        };
+
+        let score = aggregate(&[outcome]);
+        assert_eq!(score.false_negatives, 1);
+        assert_eq!(score.true_positives, 0);
+    }
+
+    /// Verify the 2% constant is exactly 0.02 — code depends on this value.
+    #[test]
+    fn test_regression_noise_margin_constant() {
+        assert!(
+            (CWE_REGRESSION_NOISE_MARGIN - 0.02).abs() < f64::EPSILON,
+            "CWE_REGRESSION_NOISE_MARGIN must be exactly 0.02"
+        );
+    }
 }

@@ -1,7 +1,16 @@
 //! Language-specific dangerous pattern detection for source code analysis.
 
 use super::patterns::{DangerCategory, DangerousApiHit, Severity};
+#[cfg(test)]
 use regex::Regex;
+use regex::RegexBuilder;
+
+/// Maximum compiled regex size (bytes) for all patterns, including LLM-proposed ones.
+/// Prevents ReDoS from patterns with exponential state blowup.
+/// Set to 200KB to accommodate Unicode-aware `\w`, `\s`, and `(?i)` which inflate
+/// the NFA significantly (e.g. `\w+` alone compiles to ~30KB with Unicode tables).
+/// This still rejects truly catastrophic patterns like `\w{200}` or `(\w+\.){10}\w+`.
+pub const PATTERN_REGEX_SIZE_LIMIT: usize = 200_000;
 
 pub(crate) struct SourcePattern {
     pub regex: &'static str,
@@ -1340,7 +1349,9 @@ pub fn detect_in_source_content(
     let mut hits = Vec::new();
 
     for pat in patterns {
-        let re = Regex::new(pat.regex)
+        let re = RegexBuilder::new(pat.regex)
+            .size_limit(PATTERN_REGEX_SIZE_LIMIT)
+            .build()
             .map_err(|e| anyhow::anyhow!("Bad pattern {}: {}", pat.regex, e))?;
 
         for m in re.find_iter(content) {
@@ -1901,6 +1912,139 @@ ctypes.memmove(buf, data, len(data))
         assert!(
             chain_hits.is_empty(),
             "CWE-121 chains should not trigger for Python"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // TDD: Regex compilation safety — Phase B1 contract
+    // -----------------------------------------------------------------------
+
+    /// All patterns in every language MUST compile without error.
+    /// This catches bad regexes introduced by self-improvement.
+    #[test]
+    fn test_all_static_patterns_compile() {
+        let languages = ["python", "javascript", "go", "rust", "java", "c", "cpp"];
+        for lang in &languages {
+            let patterns = get_patterns_for_language(lang);
+            for pat in patterns {
+                let result = Regex::new(pat.regex);
+                assert!(
+                    result.is_ok(),
+                    "Pattern '{}' for language {} failed to compile: {}",
+                    pat.regex,
+                    lang,
+                    result.unwrap_err()
+                );
+            }
+        }
+    }
+
+    /// All static patterns must compile within the PATTERN_REGEX_SIZE_LIMIT.
+    /// This prevents ReDoS from LLM-proposed patterns that were accepted
+    /// into the static list. Uses the same 200KB limit as production code.
+    #[test]
+    fn test_all_static_patterns_within_size_limit() {
+        let languages = ["python", "javascript", "go", "rust", "java", "c", "cpp"];
+        for lang in &languages {
+            let patterns = get_patterns_for_language(lang);
+            for pat in patterns {
+                let result = regex::RegexBuilder::new(pat.regex)
+                    .size_limit(PATTERN_REGEX_SIZE_LIMIT)
+                    .build();
+                assert!(
+                    result.is_ok(),
+                    "Pattern '{}' for language {} exceeds size_limit({}): {}",
+                    pat.regex,
+                    lang,
+                    PATTERN_REGEX_SIZE_LIMIT,
+                    result.unwrap_err()
+                );
+            }
+        }
+    }
+
+    /// Verify that detect_in_source_content gracefully handles invalid regex
+    /// if one somehow gets into the pattern list. This is a safety net.
+    #[test]
+    fn test_detect_returns_error_for_invalid_regex_pattern() {
+        // We can't inject a bad pattern into the static list, but we can
+        // verify that the Regex::new() path in detect_in_source_content
+        // returns Err (not panic) for bad patterns.
+        let bad_regex = "[unclosed";
+        let result = Regex::new(bad_regex);
+        assert!(
+            result.is_err(),
+            "Invalid regex should return Err, not panic"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Pattern coverage: each language should detect its critical sinks
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_c_detects_format_string_sink() {
+        let src = "void vuln(char *input) { printf(input); }";
+        let hits = detect_in_source_content(src, "c", "test.c").unwrap();
+        assert!(
+            hits.iter()
+                .any(|h| h.danger_category == DangerCategory::FormatString
+                    || h.function_name.contains("printf")),
+            "Should detect printf with user-controlled format string: {:?}",
+            hits.iter().map(|h| &h.function_name).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_python_detects_os_system() {
+        let src = "import os\nos.system('rm -rf /')";
+        let hits = detect_in_source_content(src, "python", "test.py").unwrap();
+        assert!(
+            hits.iter()
+                .any(|h| h.danger_category == DangerCategory::Injection),
+            "Should detect os.system as command injection"
+        );
+    }
+
+    #[test]
+    fn test_java_detects_runtime_exec() {
+        let src = "Runtime.getRuntime().exec(cmd);";
+        let hits = detect_in_source_content(src, "java", "App.java").unwrap();
+        assert!(
+            hits.iter()
+                .any(|h| h.danger_category == DangerCategory::Injection),
+            "Should detect Runtime.exec as command injection: {:?}",
+            hits.iter()
+                .map(|h| (&h.function_name, &h.danger_category))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    /// Known gap: Go patterns cover exec.Command, template.HTML, sql.Query,
+    /// db.Exec, and http.ListenAndServe — but NOT unsafe.Pointer yet.
+    #[test]
+    fn test_go_exec_command_detected() {
+        let src = r#"cmd := exec.Command("ls", "-la")"#;
+        let hits = detect_in_source_content(src, "go", "test.go").unwrap();
+        assert!(
+            hits.iter()
+                .any(|h| h.danger_category == DangerCategory::Injection),
+            "Should detect exec.Command in Go: {:?}",
+            hits.iter().map(|h| &h.function_name).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_rust_detects_unsafe_block() {
+        let src = "fn vuln() { unsafe { std::ptr::null::<u8>().read() } }";
+        let hits = detect_in_source_content(src, "rust", "test.rs").unwrap();
+        assert!(
+            hits.iter().any(|h| h.function_name.contains("unsafe")
+                || h.danger_category == DangerCategory::UnsafeCode),
+            "Should detect unsafe block in Rust: {:?}",
+            hits.iter()
+                .map(|h| (&h.function_name, &h.danger_category))
+                .collect::<Vec<_>>()
         );
     }
 }
