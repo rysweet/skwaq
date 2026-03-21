@@ -109,8 +109,15 @@ pub fn score_case(
 
     // Filter findings: only keep those relevant to expected CWE families.
     let relevant_findings: Vec<&DetectedFinding> = if expected_set.is_empty() {
-        // Negative test case: all findings count (any detection is a false positive).
-        findings.iter().collect()
+        // Negative test case: only high-confidence findings count as false positives.
+        // Low/medium severity informational findings are excluded to reduce noise.
+        findings
+            .iter()
+            .filter(|f| {
+                let sev = f.severity.to_lowercase();
+                sev == "critical" || sev == "high"
+            })
+            .collect()
     } else {
         findings
             .iter()

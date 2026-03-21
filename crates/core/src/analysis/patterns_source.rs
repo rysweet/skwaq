@@ -430,11 +430,11 @@ fn java_patterns() -> &'static [SourcePattern] {
                 "SQL query built with string concatenation; use PreparedStatement with parameters",
         },
         SourcePattern {
-            regex: r"\.createQuery\s*\(",
+            regex: r"\.createQuery\s*\([^)]*\+",
             category: DangerCategory::Injection,
             severity: Severity::High,
             reason:
-                "Dynamic query creation may be vulnerable to injection; use parameterized queries",
+                "Query creation with string concatenation; use parameterized queries",
         },
         // XSS patterns
         SourcePattern {
@@ -456,10 +456,10 @@ fn java_patterns() -> &'static [SourcePattern] {
             reason: "Writing directly to response; encode output to prevent XSS",
         },
         SourcePattern {
-            regex: r"\.getWriter\(\)\.\w+\s*\(",
+            regex: r"\.getWriter\(\)\.\w+\s*\([^)]*\+",
             category: DangerCategory::Xss,
             severity: Severity::Medium,
-            reason: "Writing to response writer; encode output to prevent XSS",
+            reason: "Writing to response writer with concatenation; encode output to prevent XSS",
         },
         // Insecure cookie (CWE-614)
         SourcePattern {
@@ -490,7 +490,7 @@ fn java_patterns() -> &'static [SourcePattern] {
         },
         // Weak random
         SourcePattern {
-            regex: r"\bjava\.util\.Random\b",
+            regex: r"\bnew\s+(?:java\.util\.)?Random\s*\(",
             category: DangerCategory::Crypto,
             severity: Severity::Medium,
             reason: "java.util.Random is not cryptographically secure; use SecureRandom",
