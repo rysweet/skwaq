@@ -303,3 +303,12 @@ Baseline: F1=50.0%, P=100.0%, R=33.3%
   - From case: `cse_classic_bufovf_gets`
   - Priority: High
 
+## Cycle: fixtures (2026-03-21 17:16 UTC)
+
+Baseline: F1=95.0%, P=100.0%, R=90.5%
+
+- **Pattern**: `\baccess\s*\(`
+  - CWEs: [367]
+  - From case: `race_condition`
+  - Priority: High
+

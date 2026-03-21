@@ -1301,6 +1301,13 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "Detect scanf usage (CWE-120) which can cause buffer overflow when used with unbounded format specifiers like %s",
         },
+        // Self-improvement: from case race_condition (CWEs [367])
+        SourcePattern {
+            regex: r"\baccess\s*\(",
+            category: DangerCategory::Race,
+            severity: Severity::High,
+            reason: "Detect access() TOCTOU race condition (CWE-367) — access() checks are inherently vulnerable to time-of-check-time-of-use attacks",
+        },
     ]
 }
 
