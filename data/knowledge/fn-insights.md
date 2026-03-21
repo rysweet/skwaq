@@ -2795,3 +2795,41 @@ This is a general-purpose CWE-590 detection capability applicable to any C/C++ c
 
 ---
 
+## Cycle: owasp (2026-03-21 07:40 UTC)
+
+### Missed Cases (1 false negatives)
+
+- **BenchmarkTest00007**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+
+### Reviewed Improvement Proposals (1 total; 1 accepted, 0 rejected)
+
+- **[Taint Rule Gap] [MODIFY]** Define a comprehensive Java taint rule for CWE-78 command injection via Runtime.exec() that covers all parameters of all overloads. The critical addition is recognizing the environment variables parameter (2nd argument of exec(String[], String[]) and exec(String, String[])) as a CWE-78 sink. Attacker-controlled environment variables enable PATH hijacking, LD_PRELOAD injection, and other command execution manipulation.
+
+Taint sources: HttpServletRequest.getHeader(), HttpServletRequest.getParameter(), HttpServletRequest.getCookies(), HttpServletRequest.getQueryString(), HttpServletRequest.getInputStream().
+
+Taint propagators (not sanitizers): URLDecoder.decode(), String.trim(), String.substring(), String.replace().
+
+Taint sinks: Runtime.exec(String) arg 1 (command), Runtime.exec(String[]) arg 1 (command array), Runtime.exec(String[], String[]) arg 1 (command array) AND arg 2 (environment variables), Runtime.exec(String, String[]) arg 1 (command) AND arg 2 (environment variables), ProcessBuilder constructor args and environment() map.
+
+Infrastructure prerequisite: Java source files must be ingested into the code property graph for any graph-based analysis to fire.
+  CWEs: [78] | From case: BenchmarkTest00007
+  Suggested pattern: `Runtime\.getRuntime\(\)\.exec\s*\(`
+  - [KB] knowledge-pack/cwe-families/cwe-families — KB explicitly lists Runtime.getRuntime().exec() in Java with user-controlled args as a CWE-78 detection signal, confirming this is a recognized sink. However, the current signal description only mentions 'user-controlled args' generically without distinguishing the environment variables parameter, which is the specific gap.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Methodology guidance identifies OS command injection (CWE-78) via exec() with user input as a core injection pattern for static code review, and emphasizes tracing untrusted data from sources to sinks — the exact analysis path that failed here due to missing Java ingestion.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 covers OS command injection where special elements in OS commands are not properly neutralized. Attacker-controlled environment variables passed to exec() fall squarely within this CWE since environment variables directly influence OS command behavior.
+  - [MEMORY] pattern :: Java OWASP Benchmark servlet code for CWE-78 where user-controlled HTTP header value flows through URLDecoder.decode() into the environment variable array (argsEnv) parameter of Runtime.exec(). Code property graph is completely empty. [cwe-78, command-injection, java, owasp-benchmark, runtime-exec, environment-variables, empty-graph] — Prior analysis of this exact case confirmed two root causes: (1) Java source files not ingested into graph, and (2) the environment variables parameter of exec() is an overlooked CWE-78 sink requiring explicit taint sink definition.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The core taint rule for Runtime.exec() command argument (arg 1) as a CWE-78 sink is well-established and sound. However, the proposal's 'critical addition' of treating the environment variables parameter (arg 2) as an equally weighted CWE-78 sink carries significant overfitting risk. While environment variable injection (PATH hijacking, LD_PRELOAD) is a real attack vector, it is a substantially different and more indirect attack than direct command injection. Treating envp as a first-class CWE-78 sink at the same confidence level as the command string itself will generate false positives in real-world codebases where environment variables are constructed from user input for legitimate purposes (e.g., setting LANG, TZ, or application-specific config). The envp vector is better classified under CWE-77 (Command Injection) or flagged at lower confidence. Additionally, the propagators listed (URLDecoder.decode, String.trim, etc.) are correctly identified as non-sanitizers, which is good. The regex patch 'Runtime\.getRuntime\(\)\.exec\s*\(' is overly broad as it matches any exec call regardless of taint, suggesting the detection logic may fire on non-tainted paths. The proposal should be narrowed to treat envp as a secondary/lower-confidence sink and ensure the regex-based matching is supplemented by actual taint flow verification.
+  Suggested modification: Split the sink definitions into primary (high confidence) and secondary (medium confidence) tiers. Primary sinks: Runtime.exec() arg 1 (command/command array) and ProcessBuilder constructor args. Secondary sinks (lower confidence, separate rule or flag): Runtime.exec() arg 2 (environment variables). The environment variable sink should require additional evidence of exploitability (e.g., the environment array being directly constructed from user input without validation). The regex patch should not be the sole detection mechanism; it must be paired with confirmed taint flow from source to sink. Remove envp from the same CWE-78 rule or create a separate rule with distinct severity.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 specifically concerns injection of OS command elements. The command string parameter of exec() is the canonical sink. Environment variable manipulation, while exploitable, is an indirect vector that does not fit the core CWE-78 pattern as cleanly and risks conflating distinct vulnerability classes.
+  - [MEMORY] insight :: Benchmark test cases often have specific patterns (like BenchmarkTest00007) that may not represent the diversity of real-world code. Rules designed to match specific benchmark patterns risk overfitting to synthetic test structure rather than generalizing to production codebases. [cwe-78] — The proposal appears driven by a single benchmark case (BenchmarkTest00007). Elevating envp to a primary CWE-78 sink based on benchmark coverage needs could cause false positives in real-world applications where environment parameters are legitimately user-influenced.
+
+---
+
