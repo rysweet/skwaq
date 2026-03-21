@@ -2833,3 +2833,173 @@ Infrastructure prerequisite: Java source files must be ingested into the code pr
 
 ---
 
+## Cycle: juliet (2026-03-21 07:48 UTC)
+
+### Missed Cases (8 false negatives)
+
+- **CWE127_Buffer_Underread__CWE839_connect_socket_01**: Expected CWE-[127], detected CWE-[], missed CWE-[127]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE127_Buffer_Underread__CWE839_connect_socket_01.c
+  Label Definition File: CWE127_Buffer_Underread__CWE839.label.xml
+  Template File: sources-sinks-01.tmpl.c
+  */
+  ```
+- **CWE127_Buffer_Underread__CWE839_connect_socket_02**: Expected CWE-[127], detected CWE-[], missed CWE-[127]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE127_Buffer_Underread__CWE839_connect_socket_02.c
+  Label Definition File: CWE127_Buffer_Underread__CWE839.label.xml
+  Template File: sources-sinks-02.tmpl.c
+  */
+  ```
+- **CWE127_Buffer_Underread__CWE839_connect_socket_03**: Expected CWE-[127], detected CWE-[], missed CWE-[127]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE127_Buffer_Underread__CWE839_connect_socket_03.c
+  Label Definition File: CWE127_Buffer_Underread__CWE839.label.xml
+  Template File: sources-sinks-03.tmpl.c
+  */
+  ```
+- **CWE127_Buffer_Underread__CWE839_connect_socket_04**: Expected CWE-[127], detected CWE-[], missed CWE-[127]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE127_Buffer_Underread__CWE839_connect_socket_04.c
+  Label Definition File: CWE127_Buffer_Underread__CWE839.label.xml
+  Template File: sources-sinks-04.tmpl.c
+  */
+  ```
+- **CWE127_Buffer_Underread__CWE839_connect_socket_05**: Expected CWE-[127], detected CWE-[], missed CWE-[127]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE127_Buffer_Underread__CWE839_connect_socket_05.c
+  Label Definition File: CWE127_Buffer_Underread__CWE839.label.xml
+  Template File: sources-sinks-05.tmpl.c
+  */
+  ```
+- **CWE127_Buffer_Underread__CWE839_connect_socket_06**: Expected CWE-[127], detected CWE-[], missed CWE-[127]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE127_Buffer_Underread__CWE839_connect_socket_06.c
+  Label Definition File: CWE127_Buffer_Underread__CWE839.label.xml
+  Template File: sources-sinks-06.tmpl.c
+  */
+  ```
+- **CWE127_Buffer_Underread__CWE839_connect_socket_07**: Expected CWE-[127], detected CWE-[], missed CWE-[127]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE127_Buffer_Underread__CWE839_connect_socket_07.c
+  Label Definition File: CWE127_Buffer_Underread__CWE839.label.xml
+  Template File: sources-sinks-07.tmpl.c
+  */
+  ```
+- **CWE127_Buffer_Underread__CWE839_connect_socket_08**: Expected CWE-[127], detected CWE-[], missed CWE-[127]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE127_Buffer_Underread__CWE839_connect_socket_08.c
+  Label Definition File: CWE127_Buffer_Underread__CWE839.label.xml
+  Template File: sources-sinks-08.tmpl.c
+  */
+  ```
+
+### Reviewed Improvement Proposals (13 total; 5 accepted, 8 rejected)
+
+- **[Taint Rule Gap] [ACCEPT]** Add a taint propagation rule for the pattern class 'network-sourced integer used as array index with incomplete bounds validation (CWE-127/CWE-129/CWE-839)':
+
+**Source**: recv(), recvfrom(), read() on socket file descriptors — any data received from a network socket.
+
+**Propagation through**: Integer conversion functions atoi(), atol(), strtol(), strtoul(), sscanf() — these convert tainted string data into tainted integer values. The taint must propagate through these conversions.
+
+**Sink**: Array subscript operations (array[tainted_index]) where the array is a fixed-size local or heap buffer.
+
+**Sanitizer recognition**: The rule must recognize COMPLETE bounds validation as a sanitizer. A complete sanitizer for array indexing requires BOTH: (a) lower bound check: index >= 0 (for signed types), AND (b) upper bound check: index < array_size. A check that only validates ONE bound (e.g., if (data < 10) without data >= 0) is an INCOMPLETE sanitizer and must NOT suppress the finding. This is the critical detection logic: the code has a bounds check, but it's insufficient because it doesn't check the lower bound on a signed integer.
+
+**CWE mapping**: Flag as CWE-127 (Buffer Under-read) when the incomplete check allows negative indices, and CWE-121/CWE-787 when it allows indices above the upper bound. The root cause is CWE-839 (Numeric Range Comparison Without Minimum Check).
+
+This taint rule generalizes to all real-world code where network/user input flows through integer parsing to array indexing with incomplete validation — a common vulnerability pattern in protocol parsers, network services, and command processors.
+  CWEs: [127] | From case: CWE127_Buffer_Underread__CWE839_connect_socket_01
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-127 (Buffer Under-read) is explicitly listed as a child of CWE-119 (Memory Safety family). The knowledge base identifies 'Array indexing with untrusted index without bounds check' as a detection signal for this family. This case is precisely that pattern — a network-sourced untrusted index used without complete bounds validation.
+  - [KB] knowledge-pack/codeql-variant-analysis/codeql-variant-analysis — The CodeQL variant analysis guidance explicitly lists recv() as a taint source and describes the 'Source-Sink with No Sanitizer' pattern. This case is a variant: Source (recv) → Sink (array[index]) with an INCOMPLETE sanitizer (only upper bound check). The guidance to evaluate 'Does a sanitizer exist that the analysis missed?' is directly relevant — the analysis must determine whether the existing bounds check is sufficient.
+  - [MEMORY] pattern :: CWE-127 Buffer Under-read caused by CWE-839 incomplete bounds check where network socket data flows through atoi to array index with only upper bound validation [cwe-127, cwe-839, cwe-129, buffer-underread, negative-index, incomplete-bounds-check, array-index, network-source, recv, atoi, source-code-not-ingested, empty-graph, taint-rule] — This is the first recorded instance of this specific vulnerability pattern (incomplete lower-bound check on signed array index). The pattern generalizes broadly: any signed integer from untrusted input used as array index where validation checks < N but not >= 0 enables buffer under-read. This is distinct from buffer over-read (CWE-125/126) and requires separate detection logic focused on missing minimum bound checks.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a well-structured, general-purpose taint rule that addresses a genuine and common vulnerability pattern. The source/propagation/sink/sanitizer model is standard and generalizable. The incomplete sanitizer detection for signed integer bounds checking is a real-world concern (CWE-839). The CWE mapping is accurate: CWE-127 for under-read via negative indices, CWE-121/CWE-787 for over-bound access. The rule is not overfitted to Juliet-specific code patterns — it describes a general class of vulnerabilities found in protocol parsers, network services, and data processing code.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference confirms CWE-121 is a child of CWE-119 (memory safety family). The proposal correctly maps the vulnerability chain from CWE-839 (incomplete range check) through CWE-129 (improper array index validation) to CWE-127 (under-read) and CWE-121/CWE-787 (overflow/out-of-bounds write), all within the memory safety family.
+  - [MEMORY] failure :: Function not found in analysis graph for CWE121 stack-based buffer overflow via connect socket with improper validation of array index [cwe-121] — The known failure for CWE121/CWE129 connect_socket cases confirms this is a known detection gap. The proposal addresses the root cause by defining the taint rule that would detect this class of vulnerabilities.
+- **[Agent Capability Gap] [ACCEPT]** Implement a taint-aware incomplete bounds check detector for array index operations. The detection logic should: (1) Identify taint sources where network/external data is converted to an integer (recv/recvfrom/read → atoi/atol/strtol/strtoul/sscanf with %d). (2) Track the tainted integer to array subscript operations (array[tainted_var]). (3) At the array subscript, check if a bounds validation exists. (4) If only an upper-bound check exists (e.g., if (data < N)) without a corresponding lower-bound check (e.g., data >= 0), flag as CWE-127/CWE-129 (improper validation of array index / buffer under-read). The key insight is that if (data < N) { array[data]; } is a partial sanitizer that guards against over-read but not under-read when data is a signed integer. The complete sanitizer is if (data >= 0 && data < N). This pattern is common in real-world C code that receives integer indices from external sources (protocol parsers, network services, file format parsers) and applies to the entire CWE-129 → CWE-121/CWE-127 family. Prerequisite: Source C file ingestion into the code property graph must be fixed first, as the empty graph blocks all analysis.
+  CWEs: [127] | From case: CWE127_Buffer_Underread__CWE839_connect_socket_02
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-127 (Buffer Under-read) is explicitly listed as a child of CWE-119 under the Memory Safety Family. The KB notes 'Array indexing with untrusted index without bounds check' as a detection signal for this family. This case is a specific variant where the bounds check exists but is incomplete (upper-bound only, missing lower-bound), which current detection signals don't cover.
+  - [KB] knowledge-pack/codeql-variant-analysis/codeql-variant-analysis — The CodeQL methodology identifies recv/read as taint sources and bounds checks as sanitizers. This case demonstrates the need for partial sanitizer recognition — the bounds check if (data < 10) exists but is incomplete for signed integers. The analysis must recognize that an upper-bound-only check on a signed int does NOT sanitize the negative-index attack vector.
+  - [MEMORY] pattern :: CWE-127 (Buffer Under-read) caused by CWE-839 (Numeric Range Comparison Without Minimum Check): Network socket data (recv → atoi) used as array index with only upper bound check (data < 10) but no lower bound check (data >= 0). [cwe-127, cwe-839, cwe-129, buffer-underread, negative-index, incomplete-bounds-check, array-index, network-source, recv, atoi, source-code-not-ingested, empty-graph, taint-rule] — Prior analysis of the identical vulnerability pattern confirmed the dual-layer failure: empty graph from un-ingested source files + missing taint rule for network-sourced integers flowing to array indices with incomplete bounds validation. This is a recurring pattern across multiple Juliet CWE-127 and CWE-121 variants.
+  - [MEMORY] pattern :: Source-only C files result in empty graphs, causing 100% false negative rate regardless of patterns or taint rules. [cwe-114, process-control, empty-graph, source-code-not-ingested] — Confirms the fundamental infrastructure blocker: without C source file ingestion, zero analysis is possible. This must be addressed as a prerequisite before any taint rules or semantic analysis improvements can take effect.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal is essentially equivalent to P1 but framed as an agent prompt rather than a taint rule. It describes the same general-purpose detection logic for incomplete bounds checking on signed integers from external sources. The prerequisite about source file ingestion is a valid infrastructure concern that adds practical value. The detection pattern is generalizable to real-world code.
+  - [MEMORY] failure :: Function not found in analysis graph for CWE121 stack-based buffer overflow via connect socket with improper validation of array index [cwe-121] — The known failure confirms the empty graph problem this proposal's prerequisite addresses. The incomplete bounds check detection logic is a generalized pattern applicable beyond Juliet.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family hierarchy confirms the vulnerability chain CWE-129 → CWE-127/CWE-121 is well-established in the memory safety family, validating the proposal's CWE mapping.
+- **[Taint Rule Gap] [MODIFY]** Define a taint rule for CWE-127/CWE-129 (Improper Validation of Array Index leading to Buffer Under-read): **Source** = {recv, recvfrom, read} (network socket input functions). **Propagator** = {atoi, atol, atoll, strtol, strtoul, strtoll, sscanf} (string-to-integer conversion functions that propagate taint from string input to integer output). **Sink** = array subscript operator array[tainted_index] where the index is a signed integer derived from an untrusted source. **Incomplete sanitizer detection**: A bounds check that only validates the upper bound (if (data < N)) but NOT the lower bound (data >= 0) should NOT be treated as a sanitizer. The system must recognize that for signed integer array indices, BOTH >= 0 and < array_size checks are required to constitute a valid sanitizer. This is CWE-839 (Numeric Range Comparison Without Minimum Check). This taint rule is broadly applicable to any C/C++ code where network-received or user-provided integers are used as array indices — a common pattern in protocol parsers, network services, and data processing code. **Prerequisite**: Source C files must be ingested into the code property graph for any taint rule to apply.
+  CWEs: [127] | From case: CWE127_Buffer_Underread__CWE839_connect_socket_03
+  Suggested pattern: `\brecv\b.*\batoi\b.*\[\s*data\s*\]`
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-127 (Buffer Under-read) is explicitly listed as a child of CWE-119 in the memory safety family. The knowledge pack states 'Array indexing with untrusted index without bounds check' as a detection signal for this family, directly matching this vulnerability pattern.
+  - [KB] knowledge-pack/codeql-variant-analysis/codeql-variant-analysis — The CodeQL methodology describes the exact taint tracking approach needed: Sources (recv, read) → Sinks (memory operations, array access) → Sanitizers (bounds checks), and emphasizes checking 'Does a sanitizer exist that the analysis missed?' — which maps to the incomplete bounds check (upper-only, no lower) in this case.
+  - [MEMORY] pattern :: CWE-127 (Buffer Under-read) caused by CWE-839 (Numeric Range Comparison Without Minimum Check): Network socket data (recv → atoi) used as array index with only upper bound check but no lower bound check. Code property graph was completely empty because source-only C files are not ingested. [cwe-127, cwe-839, cwe-129, buffer-underread, negative-index, incomplete-bounds-check, array-index, network-source, recv, atoi, source-code-not-ingested, empty-graph, taint-rule] — Prior analysis of an identical vulnerability pattern (same CWE-127/CWE-839 class) confirmed the dual-layer failure: (1) source C files not ingested, (2) no taint rule for recv→atoi→array index with incomplete sanitizer detection. This recurring pattern validates the proposed taint rule.
+  Overfitting review: MODIFY | Risk: HIGH | Applicability: LOW
+  Review reason: The taint rule description itself is well-generalized and equivalent to P1, which is acceptable. However, the Patch field contains a regex pattern `\brecv\b.*\batoi\b.*\[\s*data\s*\]` that is overfitted to the specific Juliet test case variable name 'data'. Real-world code will not use the variable name 'data' in this exact pattern. The regex-based patch approach is too brittle and specific to be useful for general detection.
+  Suggested modification: Remove the regex-based Patch field entirely. The taint rule description is already well-specified and should be implemented as a proper taint analysis rule in the code property graph, not as a regex pattern match. The rule should track taint flow through any variable name, not just 'data'.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The vulnerability analysis methodology emphasizes generalized detection over pattern matching. A regex tied to a specific variable name 'data' violates this principle and would miss virtually all real-world instances of this vulnerability class.
+  - [MEMORY] insight :: Regex-based patches that match specific variable names from benchmark test cases are a classic overfitting pattern that fails to generalize to real-world code [cwe-127, cwe-129] — The regex `\brecv\b.*\batoi\b.*\[\s*data\s*\]` matches only the exact Juliet naming convention and would produce zero findings in production codebases.
+- **[Agent Capability Gap] [ACCEPT]** Two-layered fix needed. **Layer 1 (Infrastructure):** Source-only C files must be ingested into the code property graph to enable any analysis. Without function nodes, no detection pipeline can fire. **Layer 2 (Taint Analysis):** Add a taint rule for the "network integer to array index" vulnerability class: Source = `recv`, `recvfrom`, `read` on socket descriptors → Propagation through integer conversion functions (`atoi`, `strtol`, `strtoul`, `sscanf`) → Sink = array subscript operation `array[tainted_index]`. The sanitizer model must recognize that checking only `data < N` is incomplete for signed integers — a complete sanitizer requires BOTH `data >= 0` AND `data < N`. This incomplete-sanitizer detection capability is critical: when a signed integer from an untrusted source is used as an array index, the analysis must verify that both upper AND lower bounds are checked. The pattern `if (data < N) { array[data] }` without a `data >= 0` guard is the signature of CWE-839 leading to CWE-127 (under-read) or CWE-121/CWE-787 (out-of-bounds write if the index is also used for writes). This generalizes to all real-world C/C++ code where network-sourced integers are used as array indices with one-sided bounds checks.
+  CWEs: [127] | From case: CWE127_Buffer_Underread__CWE839_connect_socket_04
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-127 (Buffer Under-read) is documented as a child of CWE-119, and the detection signal "Array indexing with untrusted index without bounds check" directly matches this vulnerability pattern. The KB confirms this is a well-known vulnerability class requiring taint tracking from untrusted sources to array index operations.
+  - [KB] knowledge-pack/codeql-variant-analysis/codeql-variant-analysis — The KB describes the source-sink-sanitizer pattern: "Sources: network input (recv, read)... Sinks: memory operations... Sanitizers: bounds checks, input validation." This case requires recognizing an INCOMPLETE sanitizer (only upper bound check, missing lower bound), which is a refinement of the standard taint tracking model.
+  - [MEMORY] pattern :: CWE-127 Buffer Under-read caused by CWE-839 Numeric Range Comparison Without Minimum Check: Network socket data used as array index with only upper bound check but no lower bound check. Code property graph was completely empty because source-only C files are not ingested. [cwe-127, cwe-839, cwe-129, buffer-underread, negative-index, incomplete-bounds-check, array-index, network-source, recv, atoi, source-code-not-ingested, empty-graph, taint-rule] — Prior memory from an identical vulnerability pattern confirms this is a recurring detection gap with two root causes: (1) source C files not ingested into graph, and (2) missing taint rule for network-sourced integers flowing to array index sinks with incomplete bounds checking. The same pattern has been seen across multiple Juliet CWE-121/CWE-127/CWE-129 variants.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal is substantively identical to P1 and P2, with the added value of explicitly calling out the infrastructure prerequisite (graph ingestion) as Layer 1. The two-layer approach is practical and well-organized. The taint rule is general-purpose, the CWE mapping is correct, and the incomplete sanitizer detection logic is a genuinely useful capability for real-world code analysis. No overfitting to Juliet-specific patterns.
+  - [MEMORY] failure :: Function not found in analysis graph for CWE121 stack-based buffer overflow via connect socket with improper validation of array index [cwe-121] — The known failure directly validates Layer 1 of this proposal — the infrastructure gap of missing function nodes in the graph is a confirmed blocking issue.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The memory safety family hierarchy (CWE-119 → CWE-121) confirms the proposal's CWE mapping chain from CWE-839 through CWE-129 to CWE-127/CWE-121/CWE-787 is accurate and well-founded.
+- **[Agent Capability Gap] [ACCEPT]** Two changes are needed: (1) Infrastructure: Enable ingestion of source-only C files into the code property graph so that functions, variables, and control flow are available for analysis. This is the blocking root cause for all Juliet C test cases. (2) Taint rule for incomplete array index validation: Define a taint rule where: Source = network input functions (recv, recvfrom, read on socket FDs) and integer conversion functions receiving tainted strings (atoi, strtol, strtoul, sscanf). Sink = array subscript operator array[index] where index is a signed integer derived from tainted input. Incomplete sanitizer detection = If a bounds check exists on the index but only checks the upper bound (index < N) without also checking the lower bound (index >= 0), the sanitizer should be considered incomplete and the finding should still fire. This pattern detects CWE-127 (Buffer Under-read) / CWE-129 (Improper Validation of Array Index) / CWE-839 (Numeric Range Comparison Without Minimum Check). The specific code pattern to flag is: if (data < N) { array[data] } where data is a signed type from untrusted input — this is missing data >= 0.
+  CWEs: [127] | From case: CWE127_Buffer_Underread__CWE839_connect_socket_05
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-127 (Buffer Under-read) is explicitly listed as a child of CWE-119. The KB notes 'Array indexing with untrusted index without bounds check' as a detection signal for this family. The vulnerability here is exactly this pattern — a network-sourced integer used as an array index with an incomplete bounds check.
+  - [KB] knowledge-pack/codeql-variant-analysis/codeql-variant-analysis — The CodeQL methodology describes taint tracking as 'Find all paths where data originates from untrusted source, flows through the program, reaches a dangerous sink, and no sanitizer exists on the path.' Here the sanitizer (upper-bound-only check) is incomplete, which is a known challenge for taint analysis requiring partial-sanitizer recognition.
+  - [MEMORY] pattern :: CWE-127 (Buffer Under-read) caused by CWE-839 (Numeric Range Comparison Without Minimum Check): Network socket data (recv → atoi) used as array index with only upper bound check but no lower bound check. The code property graph was completely empty because source-only C files are not ingested. [cwe-127, cwe-839, cwe-129, buffer-underread, negative-index, incomplete-bounds-check, array-index, network-source, recv, atoi, source-code-not-ingested, empty-graph, taint-rule] — This exact vulnerability pattern was previously analyzed and recorded. The memory confirms both the infrastructure gap (empty graph from non-ingested C source) and the taint rule gap (need to track recv→atoi→array index with incomplete bounds check detection). The current case is another variant (_05 vs prior variants) of the identical underlying issue.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is another well-formulated variant of the same general taint rule seen in P1, P2, and P4. It correctly identifies the infrastructure blocker and proposes the same generalizable incomplete-sanitizer detection for signed integer array indices from untrusted sources. The CWE mapping (CWE-127/CWE-129/CWE-839) is accurate. While there is significant redundancy with the other proposals, this one stands on its own merits as a correctly generalized detection rule. The mention of 'if (data < N) { array[data] }' is illustrative of the pattern class, not overfitted to a specific variable name.
+  - [MEMORY] failure :: Function not found in analysis graph for CWE121 stack-based buffer overflow via connect socket with improper validation of array index [cwe-121] — Confirms the infrastructure gap (point 1 of the proposal) is a known blocking issue that must be resolved before any taint analysis can proceed.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE-119 memory safety family tree validates that the proposal's CWE chain (CWE-839 → CWE-129 → CWE-127) correctly maps to the established vulnerability taxonomy for buffer-related issues.
+- **[Pattern Gap] [REJECT]** Add C/C++ pattern '\brecv\s*\(' to detect CWE-[127] (found in CWE127_Buffer_Underread__CWE839_connect_socket_01)
+  CWEs: [127] | From case: CWE127_Buffer_Underread__CWE839_connect_socket_01
+  Suggested pattern: `\brecv\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: The pattern '\brecv\s*\(' matches any call to recv(), which is an extremely common networking function used in virtually all socket-based C/C++ programs. This pattern has no specificity to CWE-127 (Buffer Under-read). The vulnerability in these Juliet cases arises from using an unvalidated external value as a negative array index, not from recv() itself. Flagging every recv() call as CWE-127 would produce massive false positives in any real-world codebase.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-127 is a buffer under-read within the CWE-119 memory safety family. The actual vulnerability pattern involves improper validation of array indices (CWE-839), not the mere presence of recv(). The pattern conflates a data source with the actual flaw.
+  - [MEMORY] failure :: Function-level analysis for CWE121 connect_socket cases showed that the vulnerability is in the validation logic after receiving data, not in the recv call itself. [cwe-121, cwe-127] — Prior analysis of similar connect_socket Juliet cases confirms that recv() is just the input vector; the actual bug is missing bounds validation of the received value before using it as an index.
+- **[Pattern Gap] [REJECT]** Add C/C++ pattern '\brecv\s*\(' to detect CWE-[127] (found in CWE127_Buffer_Underread__CWE839_connect_socket_02)
+  CWEs: [127] | From case: CWE127_Buffer_Underread__CWE839_connect_socket_02
+  Suggested pattern: `\brecv\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: Duplicate of P1. Same overly broad pattern matching any recv() call. This would flag all socket receive operations as buffer under-reads, producing extreme false positive rates. The vulnerability is in missing validation of received data used as an index, not in recv() itself.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-127 requires actual out-of-bounds read below the buffer boundary. recv() is merely a data input function and does not indicate this vulnerability class on its own.
+- **[Pattern Gap] [REJECT]** Add C/C++ pattern '\brecv\s*\(' to detect CWE-[127] (found in CWE127_Buffer_Underread__CWE839_connect_socket_03)
+  CWEs: [127] | From case: CWE127_Buffer_Underread__CWE839_connect_socket_03
+  Suggested pattern: `\brecv\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: Duplicate of P1/P2. Matching recv() alone provides no signal for CWE-127. Every networked C application uses recv(). This is a textbook example of overfitting to a Juliet test case structure rather than capturing the actual vulnerability pattern.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE-119 family requires out-of-bounds memory access. A simple function call to recv() does not constitute or reliably predict such access.
+- **[Pattern Gap] [REJECT]** Add C/C++ pattern '\brecv\s*\(' to detect CWE-[127] (found in CWE127_Buffer_Underread__CWE839_connect_socket_04)
+  CWEs: [127] | From case: CWE127_Buffer_Underread__CWE839_connect_socket_04
+  Suggested pattern: `\brecv\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: Duplicate of P1-P3. Same fundamentally flawed approach of equating recv() presence with CWE-127. No specificity to the actual vulnerability (use of unvalidated negative index from external input).
+  - [MEMORY] insight :: Juliet connect_socket test cases use recv() as a common input vector across many different CWE categories. Matching recv() alone cannot distinguish between CWE-121, CWE-127, CWE-129, or any other CWE that uses network input. [cwe-127, cwe-121, cwe-129] — The same recv() pattern would match CWE-121, CWE-129, and many other Juliet categories, proving it has no discriminative power for CWE-127 specifically.
+- **[Pattern Gap] [REJECT]** Add C/C++ pattern '\brecv\s*\(' to detect CWE-[127] (found in CWE127_Buffer_Underread__CWE839_connect_socket_05)
+  CWEs: [127] | From case: CWE127_Buffer_Underread__CWE839_connect_socket_05
+  Suggested pattern: `\brecv\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: Duplicate of P1-P4. All five proposals are identical patterns from different control-flow variants of the same Juliet test case. The pattern is far too broad, matching every recv() call in any C/C++ codebase regardless of whether it relates to buffer under-reads.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The knowledge base notes that deeper analysis is needed for connect_socket cases to properly identify the actual vulnerability mechanism. Simply matching recv() does not constitute proper analysis.
+
+---
+
