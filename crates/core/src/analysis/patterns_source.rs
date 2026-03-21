@@ -1280,6 +1280,13 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "Detect CWE-120 Buffer Copy without Checking Size of Input via sprintf",
         },
+        // Self-improvement: scanf without field width for CWE-119/120
+        SourcePattern {
+            regex: r"\b[fs]?scanf\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Detect CWE-119/120 via scanf/fscanf/sscanf without bounded field width",
+        },
     ]
 }
 
