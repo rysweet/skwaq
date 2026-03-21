@@ -2304,3 +2304,166 @@ Agents can query this via `lookup_knowledge` with topics like "false negative", 
 
 ---
 
+## Cycle: fixtures (2026-03-21 16:59 UTC)
+
+### Missed Cases (2 false negatives)
+
+- **race_condition**: Expected CWE-[367], detected CWE-[], missed CWE-[367]
+  ```
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <unistd.h>
+  #include <fcntl.h>
+  #include <sys/stat.h>
+  ```
+- **multi_file**: Expected CWE-[122, 78], detected CWE-[124, 131, 824, 188, 127, 590, 839, 126, 843, 123, 120, 122, 787, 822, 825, 176, 135, 125, 806, 119, 129, 785, 805, 170, 467, 788, 823, 118, 121], missed CWE-[78]
+  ```
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include "parser.h"
+  #include "processor.h"
+  
+  ```
+
+### Reviewed Improvement Proposals (6 total; 6 accepted, 0 rejected)
+
+- **[Pattern Gap] [ACCEPT]** Source-only C files are not being ingested into the analysis graph. A new pattern or ingestion rule is needed to ensure C files containing TOCTOU/race condition patterns are properly analyzed.
+  CWEs: [367] | From case: race_condition
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This addresses a genuine agent capability gap similar to the known pattern where functions are absent from the analysis graph (CWE-121 case). Ensuring C source files are ingested is a fundamental infrastructure fix that generalizes well — it affects all vulnerability classes, not just TOCTOU. The proposal is not overfitting to a single test case; file ingestion is a prerequisite for any analysis.
+  - [MEMORY] failure :: Function not found in the analysis graph, indicating incomplete graph construction or missing function extraction for this test case. [cwe-121] — The known failure pattern of functions being absent from the analysis graph directly parallels this proposal. Both indicate an ingestion/graph construction gap that must be fixed at the infrastructure level.
+- **[Agent Capability Gap] [ACCEPT]** Verify that the knowledge base contains guidance on TOCTOU (Time-of-check Time-of-use) race condition patterns, and confirm that relevant CWE-367 detection rules are in place for C source files.
+  CWEs: [367] | From case: race_condition
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a reasonable knowledge-base audit proposal. TOCTOU/CWE-367 is a well-known vulnerability class with clear real-world patterns (access/open, stat/open, etc.). Ensuring the KB has coverage for it is a valid and generalizable improvement. It complements P1 by addressing the detection logic rather than just ingestion.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference currently covers memory safety (CWE-119 family) but does not mention CWE-367 (race conditions). This confirms a gap in KB coverage that this proposal would address.
+- **[Pattern Gap] [MODIFY]** Detect heap buffer overflow (CWE-122) in cases where a fixed-size heap buffer is allocated and then written to without proper bounds checking, particularly when string manipulation functions like strcat or strcpy are used on heap-allocated buffers with user-controlled input.
+  CWEs: [122] | From case: multi_file
+  Suggested pattern: `malloc\s*\(.*\).*str(cat|cpy)\s*\(`
+  - [KB] CWE Database/CWE-122/Heap-based Buffer Overflow — CWE-122 describes heap buffer overflows where data written to a heap-allocated buffer exceeds the allocated size. The scanner needs patterns to detect when heap allocations are followed by unchecked writes.
+  Overfitting review: MODIFY | Risk: HIGH | Applicability: LOW
+  Review reason: The pattern concept is sound and generalizable — malloc followed by unchecked strcat/strcpy is a classic CWE-122 scenario. However, the regex patch `malloc\s*\(.*\).*str(cat|cpy)\s*\(` is overly simplistic: (1) it assumes malloc and the string operation appear on the same line or in close proximity matchable by `.*`, which is rarely the case in real code; (2) it doesn't account for heap allocation via calloc, realloc, or wrapper functions; (3) it would produce many false positives on safe code. The detection should be flow-based, not regex-based.
+  Suggested modification: Replace the regex-based patch with a flow-sensitive pattern that tracks heap allocations (malloc, calloc, realloc) to string manipulation sinks (strcpy, strcat, sprintf, memcpy) without intervening bounds checks. This should work across multiple statements and functions, not via single-line regex matching.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-122 is a child of CWE-119 (memory safety family). Proper detection requires understanding buffer sizes and write operations across code flow, not just co-occurrence on a single line. The KB confirms this is about 'operations within bounds of a memory buffer' requiring proper restriction analysis.
+- **[Pattern Gap] [MODIFY]** Detect OS command injection (CWE-78) where user-controlled input or insufficiently validated data is concatenated into strings that are passed to system(), popen(), exec(), or similar command execution functions.
+  CWEs: [78] | From case: multi_file
+  Suggested pattern: `(system|popen|exec[lv]?p?)\s*\(`
+  - [KB] CWE Database/CWE-78/OS Command Injection — CWE-78 covers cases where external input is used to construct OS commands without proper neutralization. The scanner must trace tainted data into command execution sinks.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The description is accurate and generalizable — CWE-78 is a critical real-world vulnerability class. However, the regex patch `(system|popen|exec[lv]?p?)\s*\(` merely matches any call to these functions regardless of whether the argument contains user-controlled data. This would produce massive false positives in real codebases where these functions are called with hardcoded strings. The pattern needs taint awareness to be useful.
+  Suggested modification: The pattern should be a sink-only rule that is combined with taint analysis (as proposed in P5). The regex alone should not trigger CWE-78; it should only flag when a tainted input reaches these sinks. Mark this as a sink definition rather than a standalone detection pattern.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 specifically requires that 'special elements' from external input reach command execution. The mere presence of system() calls is not sufficient — the vulnerability requires externally influenced input in the command string.
+- **[Taint Rule Gap] [ACCEPT]** Add taint propagation rule so that data read from external sources (e.g., argv, stdin, file reads, environment variables) is tracked through string concatenation operations (strcat, sprintf, snprintf, strncat) into both heap buffer writes (CWE-122 sink) and command execution functions (CWE-78 sink).
+  CWEs: [122, 78] | From case: multi_file
+  - [MEMORY] failure :: False negatives often occur when taint is lost across string manipulation functions that concatenate user input into buffers or command strings. Multi-CWE cases require tracking the same tainted source to multiple distinct sinks. [cwe-122, cwe-78] — The false negative in this multi_file case suggests the scanner failed to propagate taint from user-controlled input through string operations to both the heap buffer overflow sink and the command injection sink.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is the most generalizable and architecturally sound proposal of the set. Taint propagation from external sources through string operations to dangerous sinks is the foundation of detecting both CWE-78 and CWE-122 in real-world code. It addresses the weaknesses identified in P3 and P4 by providing the flow-sensitive analysis those patterns lack. The sources and sinks listed are comprehensive and standard.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 detection fundamentally requires tracking untrusted input to command execution sinks, which is exactly what this taint rule provides.
+  - [KB] cwe/CWE-787/CWE-787 Out-of-bounds Write — CWE-122 (heap buffer overflow) is a specific form of out-of-bounds write. Tracking tainted data through string operations to heap buffers is the correct approach for detecting these vulnerabilities with low false positive rates.
+- **[Agent Capability Gap] [MODIFY]** For multi-file analysis cases, ensure inter-procedural and cross-file taint tracking is performed. When a function in one file receives tainted data and passes it to a function defined in another file, the taint must persist across the call boundary. This is critical for detecting both CWE-122 (heap buffer overflow) and CWE-78 (command injection) when the vulnerability spans multiple translation units.
+  CWEs: [122, 78] | From case: multi_file
+  - [MEMORY] insight :: Multi-file vulnerability cases frequently result in false negatives because taint analysis does not cross file boundaries. The scanner needs to build a cross-file call graph and propagate taint accordingly. [cwe-122, cwe-78, multi-file] — This case is explicitly labeled as multi_file, indicating the vulnerability chain spans multiple files. Cross-file analysis is essential to detect both expected CWEs.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: The core principle of cross-file inter-procedural taint tracking is sound and broadly applicable to real-world vulnerability detection. However, the proposal ties this general capability specifically to CWE-122 and CWE-78, which appears to be fitted to the specific 'multi_file' test case rather than representing the full breadth of vulnerabilities that benefit from cross-file taint analysis (e.g., CWE-121, CWE-89, CWE-787, etc.). The proposal should be generalized to not enumerate specific CWEs as the primary beneficiaries, since cross-file taint tracking is a foundational capability that impacts nearly all taint-dependent vulnerability classes.
+  Suggested modification: Generalize the prompt to state: 'For multi-file analysis cases, ensure inter-procedural and cross-file taint tracking is performed. When a function in one file receives tainted data and passes it to a function defined in another file, the taint must persist across the call boundary. This is critical for detecting any taint-dependent vulnerability class including but not limited to buffer overflows (CWE-119 family), injection flaws (CWE-78, CWE-89), and other input-validation issues.' Remove the exclusive focus on CWE-122 and CWE-78 to avoid over-specialization to a single test case.
+  - [KB] kb source/cwe-families/cwe-families — The CWE family reference shows CWE-119 as the root of all buffer-related vulnerabilities with multiple children (CWE-120, CWE-121, CWE-787, etc.), demonstrating that cross-file taint tracking benefits far more CWEs than just CWE-122. Narrowing to only CWE-122 and CWE-78 risks overfitting to the specific test case.
+  - [MEMORY] failure :: Function not found in analysis graph due to incomplete graph construction, indicating that cross-file/inter-procedural analysis gaps are a known systemic issue affecting multiple CWE classes, not just CWE-122 and CWE-78. [cwe-121] — The fn-insights memory shows that missing functions in the analysis graph is a known failure mode for CWE-121 as well, confirming that the cross-file analysis improvement should not be scoped narrowly to only two CWEs.
+
+---
+
+## Cycle: fixtures (2026-03-21 17:06 UTC)
+
+### Missed Cases (3 false negatives)
+
+- **cse_classic_bufovf_gets**: Expected CWE-[120, 676], detected CWE-[823, 590, 788, 122, 824, 467, 118, 806, 120, 805, 125, 121, 127, 839, 176, 135, 131, 843, 170, 822, 129, 126, 787, 785, 188, 124, 119, 825, 123], missed CWE-[676]
+  ```
+  /* CWE-120: Buffer Copy without Checking Size (gets + scanf patterns)
+   * Multiple classic buffer overflow patterns. */
+  #include <stdio.h>
+  #include <string.h>
+  
+  ```
+- **cse_dangerous_func**: Expected CWE-[676, 120], detected CWE-[125, 787, 822, 127, 131, 467, 788, 823, 825, 806, 121, 129, 188, 124, 839, 590, 122, 119, 170, 843, 824, 120, 785, 135, 805, 176, 118, 126, 123], missed CWE-[676]
+  ```
+  /* CWE-676: Use of Potentially Dangerous Function
+   * Uses gets(), sprintf(), strcat() and other banned functions. */
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <string.h>
+  ```
+- **cse_dangerous_func_tmpfile**: Expected CWE-[676, 377], detected CWE-[], missed CWE-[676, 377]
+  ```
+  /* CWE-676: Use of Potentially Dangerous Function (temp file pattern)
+   * Uses mktemp, tmpnam, and other insecure temp file functions. */
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <string.h>
+  ```
+
+### Reviewed Improvement Proposals (7 total; 6 accepted, 1 rejected)
+
+- **[CWE Mapping Gap] [MODIFY]** Add CWE-676 (Use of Potentially Dangerous Function) as a recognized CWE with an `unsafe_api_usage` semantic class. Map the following function call patterns to CWE-676: `\bgets\s*\(` (always dangerous, banned in C11), `\bscanf\s*\(\s*"[^"]*%s` (scanf with unbounded %s — no width specifier), `\bscanf\s*\(\s*"[^"]*%\[` (scanf with unbounded %[ scanset), `\bstrcpy\s*\(` (no bounds check), `\bstrcat\s*\(` (no bounds check), `\bsprintf\s*\(` (no bounds check on output). These functions are universally recognized as dangerous by CERT C (MSC24-C, STR31-C), MISRA C, and the CWE taxonomy. The key distinction from CWE-120: CWE-676 flags the function *choice* as inherently risky (the API itself provides no bounds-checking mechanism), while CWE-120 flags the actual buffer overflow *outcome*. Both should be reported independently. The semantic class `unsafe_api_usage` should be a new classification orthogonal to `buffer_overflow` — a function can be flagged as unsafe_api_usage even if the specific call doesn't result in a proven overflow (e.g., strcpy where the source happens to fit the destination). `\bgets\s*\(` should be HIGH confidence since gets() is unconditionally dangerous and was removed from C11. The others should be MEDIUM confidence since they have safe alternatives but aren't always exploitable.
+  CWEs: [120, 676] | From case: cse_classic_bufovf_gets
+  Suggested pattern: `\bgets\s*\(|\bscanf\s*\(\s*"[^"]*%s|\bscanf\s*\(\s*"[^"]*%\[|\bstrcpy\s*\(|\bstrcat\s*\(|\bsprintf\s*\(`
+  - [KB] knowledge-pack/cwe-families/cwe-families — The knowledge pack explicitly documents "Dangerous Function Family (Root: CWE-676)" as a CWE family separate from the Memory Safety Family (Root: CWE-119), confirming CWE-676 is a recognized vulnerability class that requires its own detection mapping.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology documentation lists "strcpy, sprintf, gets, memcpy without bounds" as Memory Safety detection signals under CWE-119/120/121/122, but does not separately classify them under CWE-676, confirming the mapping gap between dangerous-function-usage and buffer-overflow-outcome classifications.
+  - [MEMORY] pattern :: C code using scanf with unbounded %s format specifier, recurring pattern across multiple CyberSecEval cases with proposed pattern `\bscanf\s*\(\s*"[^"]*%s` [cwe-119, cwe-120, scanf, buffer-overflow, format-string, unbounded-read, recurring-pattern, NEW_PATTERN] — Prior analysis across 4+ cases established that scanf with %s is a recurring dangerous API pattern mapped only to CWE-120 (buffer overflow outcome) but never to CWE-676 (dangerous function choice), confirming the semantic class gap for unsafe_api_usage.
+  Overfitting review: MODIFY | Risk: LOW | Applicability: HIGH
+  Review reason: The proposal is well-reasoned and the CWE-676 vs CWE-120 distinction is correct and valuable. However, flagging `strcpy`, `strcat`, and `sprintf` as CWE-676 at MEDIUM confidence will generate enormous volumes of findings in real-world codebases where these functions are used safely (e.g., strcpy with compile-time known short strings, sprintf with %d only). The proposal needs confidence calibration: `gets` is HIGH (correct), but `strcpy`/`strcat`/`sprintf` should be LOW confidence for CWE-676 and only escalated to MEDIUM/HIGH when combined with taint or size analysis. The scanf patterns are well-scoped and appropriate at MEDIUM.
+  Suggested modification: Keep gets() at HIGH confidence. Keep scanf patterns at MEDIUM. Lower strcpy/strcat/sprintf to LOW confidence for standalone CWE-676 detection (informational), and only escalate to MEDIUM when combined with dataflow evidence (e.g., user-controlled source, destination size mismatch). This prevents flooding real-world codebases with thousands of low-value findings while still tracking the API risk.
+  - [KB] knowledge-pack/cwe-families/cwe-families — KB confirms CWE-120 is 'Classic buffer overflow — strcpy, strcat, sprintf' which validates the CWE-120 side. CWE-676 as a separate cause-CWE is a legitimate addition orthogonal to CWE-120.
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — CWE-120 covers the outcome (buffer overflow from unbounded copy). CWE-676 covers the cause (dangerous function choice). The dual-reporting model is sound per CWE taxonomy.
+- **[CWE Mapping Gap] [MODIFY]** Add CWE-676 (Use of Potentially Dangerous Function) as a recognized CWE in the detection framework, and add `unsafe_api_usage` as a semantic class. When any of the following functions are detected in C/C++ code, emit CWE-676 alongside the existing buffer overflow CWEs: `gets`, `strcpy`, `strcat`, `sprintf`, `scanf` with `%s` (unbounded), `vsprintf`, `getwd`, `mktemp`. The mapping should ensure that a finding for `gets(buf)` produces BOTH CWE-120 (buffer overflow) with `buffer_overflow` semantic class AND CWE-676 (dangerous function) with `unsafe_api_usage` semantic class. This is a mapping/taxonomy fix, not a new detection pattern — the dangerous functions are already being detected by the existing analysis, they just lack the CWE-676 label. The list of dangerous functions should be based on Microsoft's SDL banned function list and CERT C's MSC24-C guideline, which are industry-standard and applicable to all real-world C codebases.
+  CWEs: [676, 120] | From case: cse_dangerous_func
+  Suggested pattern: `\b(gets|strcpy|strcat|sprintf|vsprintf|getwd|mktemp)\s*\(`
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference lists `strcpy`, `strcat`, `sprintf`, `gets` as detection signals for CWE-120 under the Memory Safety Family, confirming these functions are already known dangerous sinks. The gap is that CWE-676 is not represented as a separate classification dimension in the framework's taxonomy.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology documentation lists "Buffer overflow (CWE-119/120/121/122): strcpy, sprintf, gets, memcpy without bounds" as memory safety signals, confirming these patterns are recognized. The methodology does not mention CWE-676 as a separate classification, confirming the mapping gap.
+  - [MEMORY] pattern :: Detection system found buffer overflow CWEs but missed CWE-676 and unsafe_api_usage semantic class. The detection correctly identifies the EFFECT (buffer overflow) but misses the CAUSE classification (use of dangerous function). [cwe-676, cwe-120, unsafe_api_usage, semantic-class-gap, cwe-mapping] — This is the second confirmed instance of the exact same CWE-676 mapping gap. Prior analysis established that CWE-676 is fundamentally different from CWE-120 and both should be emitted simultaneously when dangerous functions are found. The recurring nature confirms this is a systemic framework taxonomy gap, not a one-off.
+  Overfitting review: MODIFY | Risk: LOW | Applicability: HIGH
+  Review reason: This is largely duplicative with P1 but framed as a taxonomy/mapping fix rather than a new detection pattern, which is more appropriate. The inclusion of `getwd` and `mktemp` extends beyond buffer overflow into other CWE families (CWE-377 for mktemp, CWE-120/CWE-785 for getwd). Mixing these different vulnerability classes under a single undifferentiated CWE-676 umbrella without mapping to the specific effect-CWEs loses precision. Also, `mktemp` should map to CWE-676+CWE-377, not CWE-676+CWE-120.
+  Suggested modification: Split the mapping table so each dangerous function maps to CWE-676 plus its specific effect-CWE: buffer functions → CWE-676+CWE-120, mktemp → CWE-676+CWE-377, getwd → CWE-676+CWE-120 (or CWE-785). This is consistent with P4's more structured approach. Also, deduplicate with P1 — only one of P1/P2 should be accepted as the primary CWE-676 mapping proposal.
+  - [KB] knowledge-pack/cwe-families/cwe-families — KB shows CWE-119 family hierarchy. Lumping mktemp (which causes temp file race conditions, not buffer overflows) under the same CWE-120 effect-CWE is taxonomically incorrect.
+- **[Pattern Gap] [ACCEPT]** Add regex pattern `\b(mktemp|tmpnam|tempnam)\s*\(` with DangerCategory `InsecureTempFile` mapping to CWE-676 and CWE-377. These three functions are ALWAYS dangerous — they are officially deprecated by POSIX, generate compiler warnings, and have no safe usage pattern. Unlike functions like `fopen()` or `sprintf()` which may be used safely with proper arguments, `mktemp`/`tmpnam`/`tempnam` have no safe invocation mode; the only correct action is to replace them with `mkstemp()`/`tmpfile()`. This makes them high-precision candidates for pattern-based detection with negligible false positive risk. The pattern should emit both CWE-676 (dangerous function) and CWE-377 (insecure temp file) findings.
+  CWEs: [676, 377] | From case: cse_dangerous_func_tmpfile
+  Suggested pattern: `\b(mktemp|tmpnam|tempnam)\s*\(`
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE families reference documents the Race Condition Family (CWE-362) with TOCTOU (CWE-367) detection signals including "File existence check followed by file operation" — mktemp/tmpnam create exactly this TOCTOU pattern. The reference also documents "Check-then-act patterns on shared resources" which describes the mktemp→fopen race.
+  - [MEMORY] pattern :: Detection system correctly identifies buffer overflow effects but fails to emit CWE-676 and unsafe_api_usage semantic class. CWE-676 is orthogonal to effect CWEs. [cwe-676, cwe-120, unsafe_api_usage, semantic-class-gap, cwe-mapping, gets, strcpy, strcat, sprintf, dangerous-function, recurring-pattern] — Prior memory confirms CWE-676 is a known gap in the framework — the CWE ID is not recognized and the unsafe_api_usage semantic class does not exist. This same gap affects mktemp/tmpnam detection: even if patterns existed, the CWE-676 classification layer is missing.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a high-quality, low-overfitting proposal. The three functions are unconditionally dangerous with zero safe usage patterns, making regex-based detection appropriate with minimal false positive risk. The dual CWE mapping (CWE-676 for cause, CWE-377 for effect) is taxonomically correct. The justification is strong — POSIX deprecation, compiler warnings, and no safe alternatives. This generalizes perfectly to all real-world C/C++ codebases.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-676 and CWE-377 are distinct from the CWE-119 memory safety family. This proposal correctly identifies a different vulnerability class that needs its own detection path.
+- **[CWE Mapping Gap] [ACCEPT]** Add CWE-676 (Use of Potentially Dangerous Function) and CWE-377 (Insecure Temporary File) as recognized CWE IDs in the detection framework. Add `unsafe_api_usage` and `insecure_temp_file` as recognized semantic classes. Create a mapping table that associates specific dangerous functions with their applicable CWEs and semantic classes: (a) `mktemp`, `tmpnam`, `tempnam` → CWE-676 + CWE-377 → `unsafe_api_usage` + `insecure_temp_file`; (b) `gets`, `strcpy`, `strcat`, `sprintf` → CWE-676 + CWE-120 → `unsafe_api_usage` + `buffer_overflow` (this extends the existing CWE-676 mapping gap documented in prior memory). CWE-676 is a "cause" CWE (the function itself is dangerous) while CWE-377/CWE-120 are "effect" CWEs (what happens as a result). Both dimensions should be reported.
+  CWEs: [676, 377] | From case: cse_dangerous_func_tmpfile
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The vulnerability analysis methodology documents attack surface analysis including file I/O and race conditions. CWE-377 (insecure temp files) is a file I/O vulnerability class that should be cataloged in the detection framework's CWE taxonomy to support this methodology.
+  - [MEMORY] pattern :: Detection system correctly identifies buffer overflow effects (CWE-120, CWE-119, CWE-121, CWE-787, etc.) from dangerous C functions like gets(), strcpy(), strcat(), sprintf(), but fails to emit CWE-676 (Use of Potentially Dangerous Function) and the 'unsafe_api_usage' semantic class. This is the second confirmed instance of this exact pattern. [cwe-676, cwe-120, unsafe_api_usage, semantic-class-gap, cwe-mapping, gets, strcpy, strcat, sprintf, dangerous-function, recurring-pattern] — This is now the third+ confirmed instance where CWE-676 is missing from the framework. The gap affects both buffer-overflow-related dangerous functions (gets, strcpy) and temp-file-related dangerous functions (mktemp, tmpnam). A unified CWE-676 mapping layer is needed.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is the best-structured proposal of the set. It provides a clean taxonomy framework (cause CWE vs effect CWE), proper semantic class separation, and a structured mapping table. It subsumes P1-P3's intent in a more organized way. The cause/effect distinction is correct per CWE taxonomy design principles. The proposal is a framework/mapping addition rather than a brittle pattern, giving it excellent generalization properties.
+  - [KB] knowledge-pack/cwe-families/cwe-families — KB documents the CWE-119 family hierarchy with parent/child relationships. P4's cause/effect mapping model (CWE-676 as cause, CWE-120/CWE-377 as effects) is consistent with how the CWE taxonomy organizes related weaknesses.
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — CWE-120 is the effect-CWE for buffer-related dangerous functions, validating the mapping structure in this proposal.
+- **[Pattern Gap] [REJECT]** Add C/C++ pattern '\bmemcpy\s*\(' to detect CWE-[120] (found in cse_classic_bufovf_gets)
+  CWEs: [120] | From case: cse_classic_bufovf_gets
+  Suggested pattern: `\bmemcpy\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: This proposal has extremely high overfitting risk. `memcpy` is a fundamental, heavily-used function that is NOT inherently dangerous — unlike `gets()`, `memcpy` takes an explicit size parameter and is safe when used correctly. Flagging every `memcpy` call as CWE-120 would produce massive false positive volumes in any real-world codebase. The vulnerability in CWE-120 is about buffer copy *without checking size of input*, but `memcpy` explicitly requires a size argument. A CWE-120 finding for memcpy requires dataflow analysis showing the size argument is incorrect (e.g., larger than destination buffer), not a simple regex match on the function name. This appears to be directly overfitting to a specific test case where memcpy happened to be the overflow mechanism.
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — CWE-120 is about buffer copy WITHOUT checking size. memcpy explicitly takes a size parameter and is safe when the size is correct. A regex-only match cannot determine if the size parameter is wrong — this requires dataflow/semantic analysis.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-120 is 'Buffer Copy without Size Check' — memcpy has a size check built into its API signature. Unlike strcpy/gets which have no mechanism for bounds checking, memcpy's safety depends on whether the size argument is correct, which cannot be determined by regex.
+- **[Pattern Gap] [MODIFY]** Add C/C++ pattern '\bscanf\s*\(' to detect CWE-[120] (found in cse_classic_bufovf_gets)
+  CWEs: [120] | From case: cse_classic_bufovf_gets
+  Suggested pattern: `\bscanf\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: scanf is indeed a dangerous function that can cause buffer overflows when used without field-width specifiers on %s or %[ conversions. However, the bare pattern \bscanf\s*\( will also match fscanf, sscanf, vscanf, etc. (due to \b matching word boundaries), and will flag all scanf calls including safe ones with proper width limits (e.g., scanf("%19s", buf)). The pattern should be narrowed to reduce false positives — at minimum, it should be a heuristic that checks for %s without a width specifier, or the pattern should be documented as a low-confidence indicator requiring secondary analysis. Also, the case name references 'gets' but the proposal is about scanf, suggesting possible case mismatch.
+  Suggested modification: Refine pattern to target scanf with unbounded %s: \bscanf\s*\(\s*"[^"]*%[^0-9]*s to catch cases where %s lacks a width specifier, or keep the broad pattern but mark it as LOW confidence requiring secondary validation of format string contents.
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — CWE-120 specifically covers buffer copy without checking size of input. scanf without width limits fits this category, but scanf with proper width specifiers does not, so the pattern is over-broad.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference confirms CWE-120 is about classic buffer overflow from unbounded copy operations. scanf is relevant but only when format specifiers lack bounds.
+- **[Pattern Gap] [ACCEPT]** Add C/C++ pattern '\bsprintf\s*\(' to detect CWE-[120] (found in cse_dangerous_func)
+  CWEs: [120] | From case: cse_dangerous_func
+  Suggested pattern: `\bsprintf\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: sprintf is a canonical example of CWE-120 — it performs buffer copy without checking size, writing a formatted string into a destination buffer with no bounds checking. This is explicitly listed in CWE-120 examples. The pattern \bsprintf\s*\( is well-scoped: the \b word boundary prevents matching snprintf (which has size limits), and virtually every use of sprintf is a potential vulnerability since there is no safe usage pattern (unlike scanf where field widths help). The pattern has strong real-world applicability as sprintf is one of the most commonly flagged dangerous functions.
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — CWE-120 description explicitly lists sprintf as a classic example of buffer copy without size checking. This is a textbook match.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-120 under the Memory Safety Family is described as 'Classic buffer overflow — strcpy, strcat, sprintf', directly naming sprintf as a canonical example.
+
+---
+

@@ -1273,6 +1273,34 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "Detect OS command injection (CWE-78) where user-controlled input is concatenated or interpolated into strings passed to ",
         },
+        // Self-improvement: from case multi_file (CWEs [122])
+        SourcePattern {
+            regex: r"malloc\s*\(.*\).*str(cat|cpy)\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Detect heap buffer overflow (CWE-122) in cases where a fixed-size heap buffer is allocated and then written to without p",
+        },
+        // Self-improvement: from case multi_file (CWEs [78])
+        SourcePattern {
+            regex: r"(system|popen|exec[lv]?p?)\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "Detect OS command injection (CWE-78) where user-controlled input or insufficiently validated data is concatenated into s",
+        },
+        // Self-improvement: from case cse_dangerous_func_tmpfile (CWEs [676, 377])
+        SourcePattern {
+            regex: r"\b(mktemp|tmpnam|tempnam)\s*\(",
+            category: DangerCategory::TempFile,
+            severity: Severity::High,
+            reason: "Detect insecure temp file creation (CWE-676, CWE-377) via mktemp/tmpnam/tempnam which are always dangerous and deprecated by POSIX",
+        },
+        // Self-improvement: from case cse_classic_bufovf_gets (CWEs [120])
+        SourcePattern {
+            regex: r"\bscanf\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Detect scanf usage (CWE-120) which can cause buffer overflow when used with unbounded format specifiers like %s",
+        },
     ]
 }
 
