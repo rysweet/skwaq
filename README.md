@@ -128,6 +128,20 @@ skwaq gym preflight           # Verify Copilot benchmark readiness
 skwaq version                  # Show version
 ```
 
+### Gym Self-Improvement
+```bash
+skwaq gym run fixtures --quick        # Baseline benchmark
+skwaq gym improve fixtures            # Run improvement cycle
+skwaq gym run fixtures --quick        # Verify improvement
+skwaq gym compare                     # Show score delta
+skwaq gym case-diff                   # Per-case outcome changes
+```
+
+The `gym improve` command analyzes detection failures, proposes targeted fixes
+(new patterns, CWE mappings, taint rules), reviews them for overfitting via an
+LLM reviewer agent, and applies accepted patches. See
+[docs/gym-self-improvement.md](docs/gym-self-improvement.md) for the full guide.
+
 ## Architecture
 
 Three Rust crates:
