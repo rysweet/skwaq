@@ -120,6 +120,18 @@ pub enum GymSub {
         /// Filter to specific CWE (e.g., CWE-121). Only analyze cases matching this CWE.
         #[arg(long)]
         cwe: Option<String>,
+
+        /// Fraction of cases to hold out for validation (0.0-0.5, default 0.2)
+        #[arg(long, default_value = "0.2")]
+        holdout_fraction: f64,
+
+        /// Maximum improvement proposals to accept per cycle (1-10, default 5)
+        #[arg(long, default_value = "5")]
+        max_improvements: usize,
+
+        /// Timeout in seconds per case analysis (5-600, default 30)
+        #[arg(long, default_value = "30")]
+        timeout: u64,
     },
 
     /// Compare per-case outcomes between the latest two finished runs for a suite
@@ -583,7 +595,27 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             suite,
             max_cases,
             cwe,
+            holdout_fraction,
+            max_improvements,
+            timeout,
         } => {
+            // Validate CLI arg ranges
+            anyhow::ensure!(
+                *holdout_fraction > 0.0 && *holdout_fraction <= 0.5,
+                "holdout_fraction must be in (0.0, 0.5], got {}",
+                holdout_fraction
+            );
+            anyhow::ensure!(
+                *max_improvements >= 1 && *max_improvements <= 10,
+                "max_improvements must be in [1, 10], got {}",
+                max_improvements
+            );
+            anyhow::ensure!(
+                *timeout >= 5 && *timeout <= 600,
+                "timeout must be in [5, 600] seconds, got {}",
+                timeout
+            );
+
             let cwe_filter = cwe.as_ref().and_then(|c| {
                 let num_str = c.trim_start_matches("CWE-").trim_start_matches("cwe-");
                 num_str.parse::<u32>().ok().map(|n| vec![n])
@@ -600,9 +632,9 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 parallelism: 4,
                 skip: 0,
                 concurrency: 1,
-                timeout_secs: 30,
-                holdout_fraction: 0.2,
-                max_improvements_per_cycle: 5,
+                timeout_secs: *timeout,
+                holdout_fraction: *holdout_fraction,
+                max_improvements_per_cycle: *max_improvements,
             };
 
             // Find the matching adapter

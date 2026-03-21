@@ -397,10 +397,17 @@ git add -A && git commit -m "gym: improve fixtures F1 85.2%→86.3% (+1.1%)"
 
 ## Security Considerations
 
-- LLM-generated regex patterns use the `regex` crate (linear-time guarantee)
-  — ReDoS is impossible by construction
-- All LLM output is validated before application: proposal structure, regex
-  syntax, and patch target strings are checked
+- **Regex size limits** — LLM-proposed patterns are compiled with
+  `RegexBuilder::size_limit(200_000)` to prevent NFA memory exhaustion, in
+  addition to the `regex` crate's linear-time guarantee (no ReDoS)
+- **Structured pattern insertion** — LLM output is never interpolated into
+  Rust source via `format!()`. Proposals use typed `SourcePattern` struct
+  construction with validated fields
+- **CLI argument validation** — Numeric arguments enforce ranges at parse time
+  (`holdout_fraction ∈ (0.0, 0.5]`, `max_improvements ∈ [1, 10]`,
+  `timeout ∈ [5, 600]`) to prevent degenerate configurations
+- **Regression gate as security control** — The 2% regression threshold
+  (`CWE_REGRESSION_NOISE_MARGIN`) is a compile-time constant, not a CLI flag
 - API keys come from environment variables only — never logged, committed, or
   stored in the history database
 - Fixture source code is wrapped in XML delimiters in agent prompts to reduce
@@ -409,6 +416,11 @@ git add -A && git commit -m "gym: improve fixtures F1 85.2%→86.3% (+1.1%)"
   applying patches, before any commit
 - History database is `.gitignore`d — no API metadata is committed
 - Knowledge file writes are capped at 50KB per operation
+- Path validation on fixture manifests rejects `..` traversals and absolute
+  paths
+- SQL queries use parameterized `?` placeholders exclusively (no `format!()`)
+
+For the full security model, see [Gym Safety Hardening](gym-safety-hardening.md).
 
 ## Troubleshooting
 

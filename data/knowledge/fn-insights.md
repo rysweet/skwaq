@@ -3239,3 +3239,34 @@ This taint rule generalizes to all real-world code where network/user input flow
 
 ---
 
+## Cycle: fixtures (2026-03-21 17:42 UTC)
+
+### Missed Cases (1 false negatives)
+
+- **multi_file**: Expected CWE-[122, 78], detected CWE-[135, 170, 824, 129, 843, 123, 825, 124, 839, 126, 176, 131, 823, 467, 805, 119, 785, 120, 188, 127, 122, 822, 121, 590, 118, 125, 788, 806, 787], missed CWE-[78]
+  ```
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include "parser.h"
+  #include "processor.h"
+  
+  ```
+
+### Reviewed Improvement Proposals (1 total; 1 accepted, 0 rejected)
+
+- **[Agent Capability Gap] [MODIFY]** **Multi-file source code ingestion and cross-file analysis**: When analyzing a C source file that includes project-local headers (e.g., `#include "parser.h"`, `#include "processor.h"`), the analysis pipeline must: (1) Resolve included headers to find sibling `.c` implementation files in the same directory (e.g., `parser.h` → `parser.c`, `processor.h` → `processor.c`). (2) Ingest ALL discovered project source files into both the CPG and the LLM analysis context. (3) Apply existing regex patterns (like `(system|popen|exec[lv]?p?)\s*\(`) across ALL ingested files, not just the entry point. (4) For the LLM semantic analyzer, provide the concatenated source of all project files so it can trace taint from `argv[1]` in main.c through `parse_input()` in parser.c to `process_data()` in processor.c and identify both the heap overflow sink AND the command injection sink. This is a general-purpose capability needed for any real-world C project where vulnerabilities span multiple compilation units.
+  CWEs: [122, 78] | From case: multi_file
+  - [KB] knowledge-pack/learned-patterns/learned-patterns — The knowledge pack already contains the pattern `(system|popen|exec[lv]?p?)\s*\(` mapped to CWE-78, proving the detection rule exists but cannot fire because processor.c is never ingested into the analysis scope
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-78 detection signals are well-documented: "system(), popen(), exec*() with string from untrusted source". The signals exist in the KB but the multi-file sink is invisible without cross-file analysis
+  - [KB] knowledge-pack/codeql-variant-analysis/codeql-variant-analysis — CodeQL variant analysis methodology defines argv as a taint source and system/exec as sinks, requiring taint tracking across function boundaries — exactly what fails here due to single-file visibility
+  - [MEMORY] insight :: Multi-file C projects where the LLM sees only the entry point file and cannot detect vulnerabilities whose sinks are in separate files [multi-file, cross-file-analysis, command-injection, cwe-78, incomplete-analysis, taint-propagation] — Prior memory confirms this exact failure mode: "Command injection (CWE-78) requires seeing the actual call to system()/popen()/exec*() to classify it. A function named 'process_data()' does not inherently signal command injection without seeing its implementation."
+  - [MEMORY] pattern :: Source-only C files not ingested into CPG resulting in empty graph and 100% false negative rate for cross-file vulnerabilities [cwe-78, command-injection, multi-file, inter-procedural, source-code-not-ingested, empty-graph, cross-file-taint, argv-taint] — Prior pattern confirms the CPG is completely empty for source C files, preventing any graph-based or regex-based detection from operating on the companion files where the actual sinks reside
+  Overfitting review: MODIFY | Risk: HIGH | Applicability: MEDIUM
+  Review reason: The core idea of multi-file analysis is genuinely important and broadly applicable to real-world C projects. However, the proposal is overfitting in several ways: (1) It prescribes an extremely specific file resolution heuristic (header.h → header.c in the same directory) that won't generalize to real-world projects with complex directory structures, build systems, or naming conventions. (2) It hardcodes specific function names (parse_input, process_data) and a specific taint flow (argv[1] → parse_input → process_data) that mirrors the exact test case rather than defining a general cross-file taint tracking capability. (3) Concatenating all source files into an LLM context is a brittle approach that won't scale and may hit context window limits. (4) The regex pattern list is too narrow and fixture-specific. The proposal should be generalized to describe a proper multi-file ingestion framework without encoding the specific test case's structure.
+  Suggested modification: Generalize to: 'When analyzing C projects with multiple compilation units, the pipeline should: (1) Discover all project source files using build system integration, directory scanning, or include graph traversal—not just header-name-to-source-name heuristics. (2) Build a unified CPG/call graph across all compilation units. (3) Apply all vulnerability detection patterns (regex, semantic, taint) across the full project scope. (4) Support cross-file taint tracking from sources (e.g., user input) through function call boundaries to sinks (e.g., memory operations, OS command APIs) regardless of which file they reside in.' Remove specific function names, specific file naming conventions, and the concatenation approach.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 detection requires general taint tracking from user input to command execution sinks—the proposal correctly identifies this need but encodes it too specifically around one test case's function names and file layout.
+  - [MEMORY] failure :: Function not found in analysis graph due to incomplete graph construction—demonstrates the real need for multi-file analysis but the fix should be general, not tied to specific naming conventions [cwe-121] — The fn-insights knowledge base documents a case where a function was missing from the analysis graph entirely. This validates the general need for better multi-file ingestion but the solution should not be overfit to a specific test case's file structure.
+  - [KB] cwe/CWE-787/CWE-787 Out-of-bounds Write — The heap overflow (CWE-122, child of CWE-787) detection also requires cross-file analysis, but the proposal's specific heuristics (header.h → source.c) are too narrow for general applicability.
+
+---
+

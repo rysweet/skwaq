@@ -301,12 +301,28 @@ pub struct BenchmarkConfig {
 }
 ```
 
-| Field | Description |
-|-------|-------------|
-| `quick_mode` | Pattern-only analysis (no LLM agents) |
-| `llm_only` | LLM agents only (no pattern detection) |
-| `holdout_fraction` | Fraction of cases reserved for cross-validation (default: 0.2) |
-| `max_improvements_per_cycle` | Cap on accepted proposals per cycle (default: 5) |
+| Field | Default | Valid Range | Description |
+|-------|---------|-------------|-------------|
+| `quick_mode` | false | — | Pattern-only analysis (no LLM agents) |
+| `llm_only` | false | — | LLM agents only (no pattern detection) |
+| `holdout_fraction` | 0.2 | (0.0, 0.5] | Fraction of cases reserved for cross-validation |
+| `max_improvements_per_cycle` | 5 | [1, 10] | Cap on accepted proposals per cycle |
+| `max_cases` | 20 | [1, 50] | Maximum cases to evaluate per suite |
+| `parallelism` | 5 | [1, 50] | Parallel processes per suite |
+| `concurrency` | 2 | [1, 16] | In-process async concurrency |
+| `timeout_secs` | 120 | [5, 600] | Per-case analysis timeout in seconds |
+
+Range constraints are enforced at CLI parse time. Out-of-range values produce
+an immediate error with the valid range displayed.
+
+### Pattern Safety
+
+LLM-proposed regex patterns are compiled with `RegexBuilder::size_limit(200_000)`
+before acceptance. This prevents NFA memory exhaustion from pathological patterns.
+The `regex` crate additionally guarantees linear-time matching (no backtracking).
+
+Patterns are inserted into `patterns_source.rs` using typed `SourcePattern` struct
+construction — LLM output is never interpolated via `format!()` into Rust source.
 
 ### `DetectedFinding`
 
