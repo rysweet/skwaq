@@ -83,6 +83,26 @@ fn python_source_sinks() -> &'static [SourceSinkPattern] {
             category: "stdin",
         },
         SourceSinkPattern {
+            regex: r#"\bsocket\..*\.recv\w*\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "network",
+        },
+        SourceSinkPattern {
+            regex: r#"\burllib\.\w+\.urlopen\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "network",
+        },
+        SourceSinkPattern {
+            regex: r#"\brequests\.\w+\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "network",
+        },
+        SourceSinkPattern {
+            regex: r#"\bfileinput\.input\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "file_read",
+        },
+        SourceSinkPattern {
             regex: r#"\bcursor\.execute\s*\("#,
             kind: SourceSinkKind::Sink,
             category: "sql_query",
@@ -116,6 +136,70 @@ fn python_source_sinks() -> &'static [SourceSinkPattern] {
             regex: r#"\bopen\s*\([^)]+,\s*['"]w"#,
             kind: SourceSinkKind::Sink,
             category: "file_write",
+        },
+        // Additional Python sinks
+        SourceSinkPattern {
+            regex: r#"\bos\.popen\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bsubprocess\.run\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\brender_template_string\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "template_injection",
+        },
+        SourceSinkPattern {
+            regex: r#"\bsqlalchemy\.\w+\.execute\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        // Deserialization sinks (CWE-502)
+        SourceSinkPattern {
+            regex: r#"\byaml\.load\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "deserialization",
+        },
+        SourceSinkPattern {
+            regex: r#"\bjsonpickle\.decode\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "deserialization",
+        },
+        SourceSinkPattern {
+            regex: r#"\bmarshal\.loads?\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "deserialization",
+        },
+        SourceSinkPattern {
+            regex: r#"\bshelve\.open\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "deserialization",
+        },
+        // Additional SQL sinks
+        SourceSinkPattern {
+            regex: r#"\bpsycopg2\..*\.execute\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        SourceSinkPattern {
+            regex: r#"\bmysql\.connector\..*\.execute\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        // Additional sources
+        SourceSinkPattern {
+            regex: r#"\bflask\.request\.cookies"#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"\bflask\.request\.headers"#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
         },
     ]
 }
@@ -197,6 +281,70 @@ fn javascript_source_sinks() -> &'static [SourceSinkPattern] {
             kind: SourceSinkKind::Sink,
             category: "http_response",
         },
+        // Additional command exec sinks
+        SourceSinkPattern {
+            regex: r#"\bchild_process\.spawn\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bchild_process\.execSync\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bchild_process\.execFile\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        // SQL sinks
+        SourceSinkPattern {
+            regex: r#"\bmysql\.\w*\.?query\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        SourceSinkPattern {
+            regex: r#"\bpg\.\w*\.?query\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        SourceSinkPattern {
+            regex: r#"\bsequelize\.query\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        // Deserialization sinks
+        SourceSinkPattern {
+            regex: r#"\bJSON\.parse\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "deserialization",
+        },
+        SourceSinkPattern {
+            regex: r#"\bserialize-javascript\b"#,
+            kind: SourceSinkKind::Sink,
+            category: "deserialization",
+        },
+        // Additional sources
+        SourceSinkPattern {
+            regex: r#"req\.headers"#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"req\.cookies"#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"\bfs\.readFileSync\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "file_read",
+        },
+        SourceSinkPattern {
+            regex: r#"\bfs\.readFile\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "file_read",
+        },
     ]
 }
 
@@ -257,6 +405,49 @@ fn go_source_sinks() -> &'static [SourceSinkPattern] {
             kind: SourceSinkKind::Sink,
             category: "http_response",
         },
+        // Additional Go sources
+        SourceSinkPattern {
+            regex: r#"\bnet\.Conn\b.*\bRead\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "network",
+        },
+        SourceSinkPattern {
+            regex: r#"\bhttp\.Request\b.*\bBody\b"#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"\bioutil\.ReadAll\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "reader",
+        },
+        SourceSinkPattern {
+            regex: r#"\bio\.ReadAll\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "reader",
+        },
+        // Additional Go sinks
+        SourceSinkPattern {
+            regex: r#"\bdb\.QueryRow\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        SourceSinkPattern {
+            regex: r#"\bos\.Create\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "file_write",
+        },
+        // Deserialization
+        SourceSinkPattern {
+            regex: r#"\bjson\.Unmarshal\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "deserialization",
+        },
+        SourceSinkPattern {
+            regex: r#"\bgob\.NewDecoder\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "deserialization",
+        },
     ]
 }
 
@@ -288,6 +479,31 @@ fn java_source_sinks() -> &'static [SourceSinkPattern] {
             category: "stdin",
         },
         SourceSinkPattern {
+            regex: r#"request\.getHeader\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"request\.getCookies\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"request\.getQueryString\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"\bBufferedReader\b[^;]*\.readLine\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "file_read",
+        },
+        SourceSinkPattern {
+            regex: r#"\bProperties\b[^;]*\.getProperty\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "config_input",
+        },
+        SourceSinkPattern {
             regex: r#"\bstatement\.execute\s*\("#,
             kind: SourceSinkKind::Sink,
             category: "sql_query",
@@ -311,6 +527,87 @@ fn java_source_sinks() -> &'static [SourceSinkPattern] {
             regex: r#"\bresponse\.getWriter\(\)\.write\s*\("#,
             kind: SourceSinkKind::Sink,
             category: "http_response",
+        },
+        // Additional Java sinks
+        SourceSinkPattern {
+            regex: r#"\bPreparedStatement\.\w+\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        SourceSinkPattern {
+            regex: r#"\bRuntime\.getRuntime\(\)\.exec\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bScriptEngine\b.*\beval\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "code_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bObjectInputStream\b.*\breadObject\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "deserialization",
+        },
+        SourceSinkPattern {
+            regex: r#"\.getWriter\(\)\.\w+\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "http_response",
+        },
+        // Additional Java deserialization sinks (CWE-502)
+        SourceSinkPattern {
+            regex: r#"\bXMLDecoder\b"#,
+            kind: SourceSinkKind::Sink,
+            category: "deserialization",
+        },
+        SourceSinkPattern {
+            regex: r#"\bXStream\b.*\bfromXML\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "deserialization",
+        },
+        // Additional Java SQL sinks (CWE-89)
+        SourceSinkPattern {
+            regex: r#"\bStatement\b.*\.executeQuery\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        SourceSinkPattern {
+            regex: r#"\bStatement\b.*\.executeUpdate\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        SourceSinkPattern {
+            regex: r#"\bConnection\b.*\.prepareStatement\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        // Additional Java sources
+        SourceSinkPattern {
+            regex: r#"\bServletRequest\b.*\.getParameterValues\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"\bServletRequest\b.*\.getAttribute\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"\bResultSet\b.*\.getString\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "database_result",
+        },
+        // JNDI injection (CWE-074)
+        SourceSinkPattern {
+            regex: r#"\bInitialContext\b.*\.lookup\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "jndi_injection",
+        },
+        // LDAP injection
+        SourceSinkPattern {
+            regex: r#"\bDirContext\b.*\.search\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "ldap_injection",
         },
     ]
 }
@@ -351,6 +648,38 @@ fn rust_source_sinks() -> &'static [SourceSinkPattern] {
             regex: r#"\bstd::fs::write\s*\("#,
             kind: SourceSinkKind::Sink,
             category: "file_write",
+        },
+        // Additional Rust sources
+        SourceSinkPattern {
+            regex: r#"\bTcpStream\b.*\.read\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "network",
+        },
+        SourceSinkPattern {
+            regex: r#"\bhyper::body::to_bytes\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"\bstd::fs::read_to_string\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "file_read",
+        },
+        // Additional Rust sinks
+        SourceSinkPattern {
+            regex: r#"\bsqlx::query\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        SourceSinkPattern {
+            regex: r#"\bserde_json::from_str\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "deserialization",
+        },
+        SourceSinkPattern {
+            regex: r#"\bunsafe\s*\{"#,
+            kind: SourceSinkKind::Sink,
+            category: "unsafe_block",
         },
     ]
 }
@@ -402,6 +731,61 @@ fn c_cpp_source_sinks() -> &'static [SourceSinkPattern] {
             regex: r#"\bargv\b"#,
             kind: SourceSinkKind::Source,
             category: "command_line",
+        },
+        SourceSinkPattern {
+            regex: r#"\brecvmsg\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "network",
+        },
+        SourceSinkPattern {
+            regex: r#"\baccept\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "network",
+        },
+        SourceSinkPattern {
+            regex: r#"\bread\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "file_read",
+        },
+        SourceSinkPattern {
+            regex: r#"\bgetchar\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "stdin",
+        },
+        SourceSinkPattern {
+            regex: r#"\bgetline\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "stdin",
+        },
+        SourceSinkPattern {
+            regex: r#"\bfscanf\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "file_read",
+        },
+        SourceSinkPattern {
+            regex: r#"\bsscanf\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "string_parse",
+        },
+        SourceSinkPattern {
+            regex: r#"\bfgetc\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "file_read",
+        },
+        SourceSinkPattern {
+            regex: r#"\bgetc\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "file_read",
+        },
+        SourceSinkPattern {
+            regex: r#"\bpread\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "file_read",
+        },
+        SourceSinkPattern {
+            regex: r#"\breaddir\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "file_read",
         },
         // --- Sinks (where data reaches dangerous operations) ---
         SourceSinkPattern {
@@ -473,6 +857,224 @@ fn c_cpp_source_sinks() -> &'static [SourceSinkPattern] {
             regex: r#"\bfprintf\s*\([^,]+,\s*[a-zA-Z_]"#,
             kind: SourceSinkKind::Sink,
             category: "format_string",
+        },
+        // SQL query sinks (CWE-89)
+        SourceSinkPattern {
+            regex: r#"\bmysql_query\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        SourceSinkPattern {
+            regex: r#"\bsqlite3_exec\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        SourceSinkPattern {
+            regex: r#"\bPQexec\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        // File write sinks (CWE-73)
+        SourceSinkPattern {
+            regex: r#"\bfwrite\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "file_write",
+        },
+        SourceSinkPattern {
+            regex: r#"\bfputs\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "file_write",
+        },
+        SourceSinkPattern {
+            regex: r#"\bwrite\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "file_write",
+        },
+        // Additional exec sinks (CWE-78)
+        SourceSinkPattern {
+            regex: r#"\bexecve\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bexeclp\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bexecle\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bexecv\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        // Format string sinks (CWE-134)
+        SourceSinkPattern {
+            regex: r#"\bsprintf\s*\(\s*[a-zA-Z_]"#,
+            kind: SourceSinkKind::Sink,
+            category: "format_string",
+        },
+        SourceSinkPattern {
+            regex: r#"\bsnprintf\s*\([^,]+,\s*[^,]+,\s*[a-zA-Z_]"#,
+            kind: SourceSinkKind::Sink,
+            category: "format_string",
+        },
+        SourceSinkPattern {
+            regex: r#"\bsyslog\s*\([^,]+,\s*[a-zA-Z_]"#,
+            kind: SourceSinkKind::Sink,
+            category: "format_string",
+        },
+        // Deserialization sinks
+        SourceSinkPattern {
+            regex: r#"\bunserialize\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "deserialization",
+        },
+        // Additional memory sinks (CWE-120, CWE-126)
+        SourceSinkPattern {
+            regex: r#"\bstrncpy\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "memory",
+        },
+        SourceSinkPattern {
+            regex: r#"\bstrncat\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "memory",
+        },
+        SourceSinkPattern {
+            regex: r#"\bwcscpy\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "memory",
+        },
+        SourceSinkPattern {
+            regex: r#"\bwcscat\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "memory",
+        },
+        SourceSinkPattern {
+            regex: r#"\brealloc\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "memory_lifecycle",
+        },
+        // Additional format string sinks (CWE-134)
+        SourceSinkPattern {
+            regex: r#"\bvprintf\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "format_string",
+        },
+        SourceSinkPattern {
+            regex: r#"\bvfprintf\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "format_string",
+        },
+        SourceSinkPattern {
+            regex: r#"\bvsprintf\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "format_string",
+        },
+        SourceSinkPattern {
+            regex: r#"\bvsnprintf\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "format_string",
+        },
+        // Windows process creation (CWE-78)
+        SourceSinkPattern {
+            regex: r#"\bCreateProcess[AW]?\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bShellExecute[AW]?\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bWinExec\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        // Additional exec family
+        SourceSinkPattern {
+            regex: r#"\bexecvpe\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bfexecve\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        // Additional SQL sinks
+        SourceSinkPattern {
+            regex: r#"\bsqlite3_prepare\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        SourceSinkPattern {
+            regex: r#"\bmysql_real_query\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        SourceSinkPattern {
+            regex: r#"\bPQexecParams\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "sql_query",
+        },
+        // Additional C/C++ sources
+        SourceSinkPattern {
+            regex: r#"\bmmap\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "memory_mapped",
+        },
+        SourceSinkPattern {
+            regex: r#"\breadv\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "file_read",
+        },
+        SourceSinkPattern {
+            regex: r#"\bgetaddrinfo\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "network",
+        },
+        // IPC sources
+        SourceSinkPattern {
+            regex: r#"\bshmget\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "ipc",
+        },
+        SourceSinkPattern {
+            regex: r#"\bshmat\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "ipc",
+        },
+        SourceSinkPattern {
+            regex: r#"\bmsgrcv\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "ipc",
+        },
+        SourceSinkPattern {
+            regex: r#"\bpipe\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "ipc",
+        },
+        // Windows-specific sources
+        SourceSinkPattern {
+            regex: r#"\bReadFile\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "file_read",
+        },
+        SourceSinkPattern {
+            regex: r#"\bRegQueryValueEx[AW]?\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "registry",
+        },
+        SourceSinkPattern {
+            regex: r#"\bGetEnvironmentVariable[AW]?\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "environment",
         },
     ]
 }

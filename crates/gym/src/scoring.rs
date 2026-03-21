@@ -109,8 +109,19 @@ pub fn score_case(
 
     // Filter findings: only keep those relevant to expected CWE families.
     let relevant_findings: Vec<&DetectedFinding> = if expected_set.is_empty() {
-        // Negative test case: all findings count (any detection is a false positive).
-        findings.iter().collect()
+        // Negative test case: only high-confidence, specific findings count as FPs.
+        // Requirements:
+        //   1. Severity must be "critical" (not "high" — too many FPs from pattern matches)
+        //   2. Finding must have at least one specific CWE ID (vague findings are noise)
+        // This dual filter dramatically reduces false positives on negative cases.
+        findings
+            .iter()
+            .filter(|f| {
+                let sev = f.severity.to_lowercase();
+                let has_specific_cwes = !finding_to_cwes(f).is_empty();
+                sev == "critical" && has_specific_cwes
+            })
+            .collect()
     } else {
         findings
             .iter()
@@ -851,8 +862,8 @@ mod tests {
     }
 
     #[test]
-    fn test_score_case_negative_case_counts_all() {
-        // Negative test case: any finding is a false positive
+    fn test_score_case_negative_case_critical_only() {
+        // Negative test case: only critical findings with specific CWEs count as FP
         let case = TestCase {
             id: "negative".to_string(),
             path: "clean.c".to_string(),
@@ -861,12 +872,47 @@ mod tests {
             is_negative: true,
             language: "c".to_string(),
         };
-        let findings = vec![make_finding("memory", vec![119])];
 
-        let outcome = score_case(&case, &findings, &|f| f.cwes.clone());
-        // All findings count for negative cases
+        // High-severity finding should NOT count as FP (only critical does)
+        let high_findings = vec![make_finding("memory", vec![119])];
+        let outcome = score_case(&case, &high_findings, &|f| f.cwes.clone());
+        assert!(
+            outcome.detected_cwes.is_empty(),
+            "high severity should be filtered out for negative cases"
+        );
+        assert_eq!(outcome.unmatched_finding_ids.len(), 0);
+
+        // Critical-severity finding WITH specific CWEs SHOULD count as FP
+        let critical_finding = DetectedFinding {
+            id: uuid::Uuid::new_v4().to_string(),
+            category: "memory".to_string(),
+            severity: "critical".to_string(),
+            cwes: vec![119],
+            file: "test.c".to_string(),
+            function: "main".to_string(),
+            line: Some(10),
+            title: "test finding".to_string(),
+        };
+        let outcome = score_case(&case, &[critical_finding], &|f| f.cwes.clone());
         assert_eq!(outcome.detected_cwes, vec![119]);
         assert_eq!(outcome.unmatched_finding_ids.len(), 1);
+
+        // Critical-severity finding WITHOUT CWEs should NOT count as FP
+        let vague_finding = DetectedFinding {
+            id: uuid::Uuid::new_v4().to_string(),
+            category: "suspicious".to_string(),
+            severity: "critical".to_string(),
+            cwes: vec![],
+            file: "test.c".to_string(),
+            function: "main".to_string(),
+            line: Some(10),
+            title: "vague finding".to_string(),
+        };
+        let outcome = score_case(&case, &[vague_finding], &|f| f.cwes.clone());
+        assert!(
+            outcome.detected_cwes.is_empty(),
+            "findings without CWEs should be filtered for negative cases"
+        );
     }
 
     #[test]

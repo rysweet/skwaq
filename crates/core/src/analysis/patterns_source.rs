@@ -430,11 +430,11 @@ fn java_patterns() -> &'static [SourcePattern] {
                 "SQL query built with string concatenation; use PreparedStatement with parameters",
         },
         SourcePattern {
-            regex: r"\.createQuery\s*\(",
+            regex: r"\.createQuery\s*\([^)]*\+",
             category: DangerCategory::Injection,
             severity: Severity::High,
             reason:
-                "Dynamic query creation may be vulnerable to injection; use parameterized queries",
+                "Query creation with string concatenation; use parameterized queries",
         },
         // XSS patterns
         SourcePattern {
@@ -456,10 +456,10 @@ fn java_patterns() -> &'static [SourcePattern] {
             reason: "Writing directly to response; encode output to prevent XSS",
         },
         SourcePattern {
-            regex: r"\.getWriter\(\)\.\w+\s*\(",
+            regex: r"\.getWriter\(\)\.\w+\s*\([^)]*\+",
             category: DangerCategory::Xss,
             severity: Severity::Medium,
-            reason: "Writing to response writer; encode output to prevent XSS",
+            reason: "Writing to response writer with concatenation; encode output to prevent XSS",
         },
         // Insecure cookie (CWE-614)
         SourcePattern {
@@ -490,7 +490,7 @@ fn java_patterns() -> &'static [SourcePattern] {
         },
         // Weak random
         SourcePattern {
-            regex: r"\bjava\.util\.Random\b",
+            regex: r"\bnew\s+(?:java\.util\.)?Random\s*\(",
             category: DangerCategory::Crypto,
             severity: Severity::Medium,
             reason: "java.util.Random is not cryptographically secure; use SecureRandom",
@@ -1273,6 +1273,27 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "Detect OS command injection (CWE-78) where user-controlled input is concatenated or interpolated into strings passed to ",
         },
+        // Self-improvement: from case multi_file (CWEs [122])
+        SourcePattern {
+            regex: r"malloc\s*\(.*\).*str(cat|cpy)\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Detect heap buffer overflow (CWE-122) in cases where a fixed-size heap buffer is allocated and then written to without p",
+        },
+        // Self-improvement: from case multi_file (CWEs [78])
+        SourcePattern {
+            regex: r"(system|popen|exec[lv]?p?)\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "Detect OS command injection (CWE-78) where user-controlled input or insufficiently validated data is concatenated into s",
+        },
+        // Self-improvement: from case cse_dangerous_func_tmpfile (CWEs [676, 377])
+        SourcePattern {
+            regex: r"\b(mktemp|tmpnam|tempnam)\s*\(",
+            category: DangerCategory::TempFile,
+            severity: Severity::High,
+            reason: "Detect insecure temp file creation (CWE-676, CWE-377) via mktemp/tmpnam/tempnam which are always dangerous and deprecated by POSIX",
+        },
         // Self-improvement: from case cyberseceval_7_c (CWEs [120])
         SourcePattern {
             regex: r"\bsprintf\s*\(",
@@ -1286,6 +1307,13 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::Memory,
             severity: Severity::High,
             reason: "Detect CWE-119/120 via scanf/fscanf/sscanf without bounded field width",
+        },
+        // Self-improvement: from case race_condition (CWEs [367])
+        SourcePattern {
+            regex: r"\baccess\s*\(",
+            category: DangerCategory::Race,
+            severity: Severity::High,
+            reason: "Detect access() TOCTOU race condition (CWE-367) — access() checks are inherently vulnerable to time-of-check-time-of-use attacks",
         },
     ]
 }

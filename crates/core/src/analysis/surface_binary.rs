@@ -58,7 +58,8 @@ const INPUT_PATTERNS: &[&str] = &[
 /// Source patterns: functions that read external data into the program.
 pub const SOURCE_PATTERNS: &[&str] = &[
     "recv", "recvfrom", "recvmsg", "accept", "read", "fread", "fgets", "gets", "getenv", "scanf",
-    "sscanf", "fscanf", "getchar", "getline", "readline", "fopen", "open",
+    "sscanf", "fscanf", "getchar", "getline", "readline", "fopen", "open", "pread", "fgetc",
+    "getc", "readdir",
 ];
 
 /// Sink patterns: dangerous functions that consume tainted data.
@@ -85,6 +86,21 @@ pub const SINK_PATTERNS: &[&str] = &[
     "vprintf",
     "vfprintf",
     "vsnprintf",
+    "write",
+    "fwrite",
+    "fputs",
+    "send",
+    "sendto",
+    "sendmsg",
+    "mysql_query",
+    "sqlite3_exec",
+    "PQexec",
+    "execl",
+    "execlp",
+    "execle",
+    "execv",
+    "syslog",
+    "dlopen",
 ];
 
 /// Analyze the attack surface of a binary by categorizing its imports.

@@ -266,6 +266,7 @@ Baseline: F1=90.5%, P=90.5%, R=90.5%
   - From case: `multi_file`
   - Priority: High
 
+## Cycle: cyberseceval (2026-03-21 15:55 UTC)
 ## Cycle: cyberseceval (2026-03-20 05:02 UTC)
 
 Baseline: F1=80.0%, P=100.0%, R=66.7%
@@ -284,6 +285,41 @@ Baseline: F1=85.7%, P=100.0%, R=75.0%
   - From case: `cyberseceval_7_c`
   - Priority: High
 
+## Cycle: fixtures (2026-03-21 16:59 UTC)
+
+Baseline: F1=95.0%, P=100.0%, R=90.5%
+
+- **Pattern**: `malloc\s*\(.*\).*str(cat|cpy)\s*\(`
+  - CWEs: [122]
+  - From case: `multi_file`
+  - Priority: High
+
+- **Pattern**: `(system|popen|exec[lv]?p?)\s*\(`
+  - CWEs: [78]
+  - From case: `multi_file`
+  - Priority: High
+
+## Cycle: fixtures (2026-03-21 17:06 UTC)
+
+Baseline: F1=50.0%, P=100.0%, R=33.3%
+
+- **Pattern**: `\b(mktemp|tmpnam|tempnam)\s*\(`
+  - CWEs: [676, 377]
+  - From case: `cse_dangerous_func_tmpfile`
+  - Priority: High
+
+- **Pattern**: `\bscanf\s*\(`
+  - CWEs: [120]
+  - From case: `cse_classic_bufovf_gets`
+  - Priority: High
+
+## Cycle: fixtures (2026-03-21 17:16 UTC)
+
+Baseline: F1=95.0%, P=100.0%, R=90.5%
+
+- **Pattern**: `\baccess\s*\(`
+  - CWEs: [367]
+  - From case: `race_condition`
 ## Cycle: cyberseceval (2026-03-21 07:36 UTC)
 
 Baseline: F1=25.0%, P=100.0%, R=14.3%

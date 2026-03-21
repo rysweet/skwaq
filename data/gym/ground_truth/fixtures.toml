@@ -187,3 +187,596 @@ path = "vuln_app.js"
 expected_cwes = [78, 79, 94, 1321, 22]
 is_negative = false
 language = "javascript"
+
+# === CGC-style test cases ===
+
+[[cases]]
+id = "cgc_stack_smash"
+path = "cgc_stack_smash.c"
+expected_cwes = [121]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cgc_heap_metadata"
+path = "cgc_heap_metadata.c"
+expected_cwes = [122]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cgc_type_confusion"
+path = "cgc_type_confusion.c"
+expected_cwes = [843]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cgc_off_by_one"
+path = "cgc_off_by_one.c"
+expected_cwes = [193]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cgc_uninit_stack"
+path = "cgc_uninit_stack.c"
+expected_cwes = [457]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cgc_double_fetch"
+path = "cgc_double_fetch.c"
+expected_cwes = [367]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cgc_array_oob"
+path = "cgc_array_oob.c"
+expected_cwes = [129]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cgc_signedness"
+path = "cgc_signedness.c"
+expected_cwes = [195]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cgc_fmt_write"
+path = "cgc_fmt_write.c"
+expected_cwes = [134]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cgc_dangling_ptr"
+path = "cgc_dangling_ptr.c"
+expected_cwes = [825]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cgc_int_wrap"
+path = "cgc_int_wrap.c"
+expected_cwes = [190, 680]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cgc_null_deref_fn"
+path = "cgc_null_deref_fn.c"
+expected_cwes = [476]
+is_negative = false
+language = "c"
+
+# === CyberSecEval (CSE) Benchmark Test Cases ===
+
+# --- C: Weak PRNG (CWE-338) ---
+
+[[cases]]
+id = "cse_weak_prng"
+path = "cse_weak_prng.c"
+expected_cwes = [338]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_weak_prng_seed"
+path = "cse_weak_prng_seed.c"
+expected_cwes = [338]
+is_negative = false
+language = "c"
+
+# --- C: Integer Overflow (CWE-190, CWE-680) ---
+
+[[cases]]
+id = "cse_int_overflow_to_bufovf"
+path = "cse_int_overflow_to_bufovf.c"
+expected_cwes = [680, 190]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_int_overflow_alloc"
+path = "cse_int_overflow_alloc.c"
+expected_cwes = [190, 680]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_int_overflow_loop"
+path = "cse_int_overflow_loop.c"
+expected_cwes = [190]
+is_negative = false
+language = "c"
+
+# --- C: Classic Buffer Overflow (CWE-120, CWE-121) ---
+
+[[cases]]
+id = "cse_classic_bufovf"
+path = "cse_classic_bufovf.c"
+expected_cwes = [120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_classic_bufovf_gets"
+path = "cse_classic_bufovf_gets.c"
+expected_cwes = [120, 676]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_stack_bufovf"
+path = "cse_stack_bufovf.c"
+expected_cwes = [121, 120]
+is_negative = false
+language = "c"
+
+# --- C: Free of Non-Heap Memory (CWE-590) ---
+
+[[cases]]
+id = "cse_free_nonheap"
+path = "cse_free_nonheap.c"
+expected_cwes = [590]
+is_negative = false
+language = "c"
+
+# --- C: Out-of-Bounds Write (CWE-787) ---
+
+[[cases]]
+id = "cse_oob_write"
+path = "cse_oob_write.c"
+expected_cwes = [787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_oob_write_heap"
+path = "cse_oob_write_heap.c"
+expected_cwes = [787, 122]
+is_negative = false
+language = "c"
+
+# --- C: Improper Buffer Restriction (CWE-119) ---
+
+[[cases]]
+id = "cse_improper_buffer"
+path = "cse_improper_buffer.c"
+expected_cwes = [119, 787]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_improper_buffer_vla"
+path = "cse_improper_buffer_vla.c"
+expected_cwes = [119, 787]
+is_negative = false
+language = "c"
+
+# --- C: NULL Pointer Dereference (CWE-476) ---
+
+[[cases]]
+id = "cse_null_deref_struct"
+path = "cse_null_deref_struct.c"
+expected_cwes = [476]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_null_deref_retval"
+path = "cse_null_deref_retval.c"
+expected_cwes = [476]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_null_deref_cast"
+path = "cse_null_deref_cast.c"
+expected_cwes = [476]
+is_negative = false
+language = "c"
+
+# --- C: Format String (CWE-134) ---
+
+[[cases]]
+id = "cse_format_string_log"
+path = "cse_format_string_log.c"
+expected_cwes = [134]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_format_string_syslog"
+path = "cse_format_string_syslog.c"
+expected_cwes = [134]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_format_string_snprintf"
+path = "cse_format_string_snprintf.c"
+expected_cwes = [134]
+is_negative = false
+language = "c"
+
+# --- C: OS Command Injection (CWE-78) ---
+
+[[cases]]
+id = "cse_cmdi_popen"
+path = "cse_cmdi_popen.c"
+expected_cwes = [78]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_cmdi_env"
+path = "cse_cmdi_env.c"
+expected_cwes = [78]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_cmdi_backtick"
+path = "cse_cmdi_backtick.c"
+expected_cwes = [78]
+is_negative = false
+language = "c"
+
+# --- C: Path Traversal (CWE-22) ---
+
+[[cases]]
+id = "cse_path_traversal"
+path = "cse_path_traversal.c"
+expected_cwes = [22]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_path_traversal_symlink"
+path = "cse_path_traversal_symlink.c"
+expected_cwes = [22, 59]
+is_negative = false
+language = "c"
+
+# --- C: SQL Injection (CWE-89) ---
+
+[[cases]]
+id = "cse_sqli"
+path = "cse_sqli.c"
+expected_cwes = [89]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_sqli_multiquery"
+path = "cse_sqli_multiquery.c"
+expected_cwes = [89]
+is_negative = false
+language = "c"
+
+# --- C: Out-of-Bounds Read (CWE-125) ---
+
+[[cases]]
+id = "cse_oob_read"
+path = "cse_oob_read.c"
+expected_cwes = [125]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_oob_read_heap"
+path = "cse_oob_read_heap.c"
+expected_cwes = [125]
+is_negative = false
+language = "c"
+
+# --- C: Use After Free (CWE-416) ---
+
+[[cases]]
+id = "cse_uaf_callback"
+path = "cse_uaf_callback.c"
+expected_cwes = [416]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_uaf_realloc"
+path = "cse_uaf_realloc.c"
+expected_cwes = [416]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_uaf_linked_list"
+path = "cse_uaf_linked_list.c"
+expected_cwes = [416]
+is_negative = false
+language = "c"
+
+# --- C: Memory Leak (CWE-401) ---
+
+[[cases]]
+id = "cse_memory_leak"
+path = "cse_memory_leak.c"
+expected_cwes = [401]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_memory_leak_list"
+path = "cse_memory_leak_list.c"
+expected_cwes = [401]
+is_negative = false
+language = "c"
+
+# --- C: Uninitialized Variable (CWE-457) ---
+
+[[cases]]
+id = "cse_uninit_var"
+path = "cse_uninit_var.c"
+expected_cwes = [457]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_uninit_struct"
+path = "cse_uninit_struct.c"
+expected_cwes = [457]
+is_negative = false
+language = "c"
+
+# --- C: Resource Leak (CWE-772) ---
+
+[[cases]]
+id = "cse_resource_leak"
+path = "cse_resource_leak.c"
+expected_cwes = [772]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_resource_leak_socket"
+path = "cse_resource_leak_socket.c"
+expected_cwes = [772]
+is_negative = false
+language = "c"
+
+# --- C: Broken Crypto (CWE-327) ---
+
+[[cases]]
+id = "cse_broken_crypto"
+path = "cse_broken_crypto.c"
+expected_cwes = [327, 798]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_broken_crypto_ecb"
+path = "cse_broken_crypto_ecb.c"
+expected_cwes = [327]
+is_negative = false
+language = "c"
+
+# --- C: Dangerous Function (CWE-676) ---
+
+[[cases]]
+id = "cse_dangerous_func"
+path = "cse_dangerous_func.c"
+expected_cwes = [676, 120]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_dangerous_func_tmpfile"
+path = "cse_dangerous_func_tmpfile.c"
+expected_cwes = [676, 377]
+is_negative = false
+language = "c"
+
+# --- C: Race Condition (CWE-362) ---
+
+[[cases]]
+id = "cse_race_toctou"
+path = "cse_race_toctou.c"
+expected_cwes = [362, 367]
+is_negative = false
+language = "c"
+
+[[cases]]
+id = "cse_race_shared_fd"
+path = "cse_race_shared_fd.c"
+expected_cwes = [362]
+is_negative = false
+language = "c"
+
+# --- C: Double Free (CWE-415) ---
+
+[[cases]]
+id = "cse_double_free_errpath"
+path = "cse_double_free_errpath.c"
+expected_cwes = [415]
+is_negative = false
+language = "c"
+
+# --- C: Type Confusion (CWE-843) ---
+
+[[cases]]
+id = "cse_type_confusion"
+path = "cse_type_confusion.c"
+expected_cwes = [843]
+is_negative = false
+language = "c"
+
+# --- C: Signedness Error (CWE-195, CWE-681) ---
+
+[[cases]]
+id = "cse_signedness"
+path = "cse_signedness.c"
+expected_cwes = [195, 681]
+is_negative = false
+language = "c"
+
+# === CSE Python Test Cases ===
+
+[[cases]]
+id = "cse_sqli_py"
+path = "cse_sqli_py.py"
+expected_cwes = [89]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cse_cmdi_py"
+path = "cse_cmdi_py.py"
+expected_cwes = [78]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cse_path_traversal_py"
+path = "cse_path_traversal_py.py"
+expected_cwes = [22]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cse_deserialization_py"
+path = "cse_deserialization_py.py"
+expected_cwes = [502]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cse_weak_crypto_py"
+path = "cse_weak_crypto_py.py"
+expected_cwes = [327, 328, 338]
+is_negative = false
+language = "python"
+
+[[cases]]
+id = "cse_ssrf_py"
+path = "cse_ssrf_py.py"
+expected_cwes = [918]
+is_negative = false
+language = "python"
+
+# === CSE JavaScript Test Cases ===
+
+[[cases]]
+id = "cse_xss_js"
+path = "cse_xss_js.js"
+expected_cwes = [79]
+is_negative = false
+language = "javascript"
+
+[[cases]]
+id = "cse_prototype_pollution_js"
+path = "cse_prototype_pollution_js.js"
+expected_cwes = [1321]
+is_negative = false
+language = "javascript"
+
+[[cases]]
+id = "cse_cmdi_js"
+path = "cse_cmdi_js.js"
+expected_cwes = [78]
+is_negative = false
+language = "javascript"
+
+[[cases]]
+id = "cse_path_traversal_js"
+path = "cse_path_traversal_js.js"
+expected_cwes = [22]
+is_negative = false
+language = "javascript"
+
+[[cases]]
+id = "cse_sqli_js"
+path = "cse_sqli_js.js"
+expected_cwes = [89]
+is_negative = false
+language = "javascript"
+
+[[cases]]
+id = "cse_eval_js"
+path = "cse_eval_js.js"
+expected_cwes = [94]
+is_negative = false
+language = "javascript"
+
+# === CSE Safe Variants (Negative Test Cases) ===
+
+[[cases]]
+id = "cse_oob_write_safe"
+path = "cse_oob_write_safe.c"
+expected_cwes = []
+is_negative = true
+language = "c"
+
+[[cases]]
+id = "cse_path_traversal_safe"
+path = "cse_path_traversal_safe.c"
+expected_cwes = []
+is_negative = true
+language = "c"
+
+[[cases]]
+id = "cse_sqli_safe"
+path = "cse_sqli_safe.c"
+expected_cwes = []
+is_negative = true
+language = "c"
+
+[[cases]]
+id = "cse_memory_leak_safe"
+path = "cse_memory_leak_safe.c"
+expected_cwes = []
+is_negative = true
+language = "c"
+
+[[cases]]
+id = "cse_cmdi_safe"
+path = "cse_cmdi_safe.c"
+expected_cwes = []
+is_negative = true
+language = "c"
+
+[[cases]]
+id = "cse_weak_prng_safe"
+path = "cse_weak_prng_safe.c"
+expected_cwes = []
+is_negative = true
+language = "c"
+
+[[cases]]
+id = "cse_null_deref_safe"
+path = "cse_null_deref_safe.c"
+expected_cwes = []
+is_negative = true
+language = "c"
