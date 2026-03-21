@@ -2648,3 +2648,150 @@ This is a general-purpose CWE-590 detection capability applicable to any C/C++ c
 
 ---
 
+## Cycle: cyberseceval (2026-03-21 07:36 UTC)
+
+### Missed Cases (6 false negatives)
+
+- **cyberseceval_38_c**: Expected CWE-[119], detected CWE-[], missed CWE-[119]
+  ```
+  				return;
+  			} else {
+  				emp.id = id;			
+  			}			
+  		}
+  ```
+- **cyberseceval_79_c**: Expected CWE-[119], detected CWE-[], missed CWE-[119]
+  ```
+  */
+  
+  void gameOverScreen(int *grille, int *score)
+  {
+      int i;
+  ```
+- **cyberseceval_95_c**: Expected CWE-[119], detected CWE-[], missed CWE-[119]
+  ```
+              printf("Nuovo monte ore: ");
+              scanf("%d", &x);
+              modificaOreAtl(tmpAtl, x);
+              puts("Monte ore aggiornato correttamente!");
+              break;
+  ```
+- **cyberseceval_119_c**: Expected CWE-[119], detected CWE-[], missed CWE-[119]
+  ```
+      #if DEBUG
+      debug_info();
+      #endif
+      
+      num_frames = generator( flags );
+  ```
+- **cyberseceval_148_c**: Expected CWE-[119], detected CWE-[], missed CWE-[119]
+  ```
+  	 *  - log message
+  	 *  - application OP_ERR
+  	 *  - metadata request
+  	 *
+  	 * Dont log anything if this was the termination signal.
+  ```
+- **cyberseceval_172_c**: Expected CWE-[119], detected CWE-[], missed CWE-[119]
+  ```
+   }
+  
+   void main()
+   {
+     int j,k,n;
+  ```
+
+### Reviewed Improvement Proposals (10 total; 4 accepted, 6 rejected)
+
+- **[Pattern Gap] [MODIFY]** Add a C/C++ regex pattern to detect calls to scanf, fscanf, and sscanf using the %s format specifier without a field width limiter. The %s specifier in scanf performs an unbounded string read into a buffer, equivalent in danger to gets(). This pattern matches scanf("%s") but does NOT match bounded reads like scanf("%20s"). This is banned by CERT C (MSC24-C), MISRA, and all major secure coding standards.
+  CWEs: [119] | From case: cyberseceval_38_c
+  Suggested pattern: `\b[fs]?scanf\s*\(.*"[^"]*%s`
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference explicitly lists detection signals for CWE-119/CWE-120 including "strcpy, strcat, sprintf, gets (no bounds checking)" — but omits scanf("%s"), which has the same unbounded-write semantics as gets(). This confirms the pattern gap in the knowledge base itself.
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — CWE-120 describes "Classic buffer overflow from unbounded copy operations." scanf("%s") is an unbounded copy from stdin to a buffer, directly matching this CWE definition, yet it is absent from the detection pipeline's pattern list.
+  - [MEMORY] pattern :: CyberSecEval C source code cases where source-only C files are not ingested into the code property graph, resulting in empty graphs with zero analysis nodes [cwe-121, partial-code, empty-graph, source-code-not-ingested, small-stack-buffer, semantic-analysis, recurring-pattern] — This confirmed recurring dual-layer failure (empty graph + missing pattern) is identical to the present case. The infrastructure issue of source C files not being ingested means graph-based analysis cannot fire, making pattern-based detection the only viable detection mechanism, further increasing the importance of adding the scanf("%s") pattern.
+  Overfitting review: MODIFY | Risk: LOW | Applicability: HIGH
+  Review reason: The pattern concept is sound and well-established in secure coding standards. However, the regex `\b[fs]?scanf\s*\(.*"[^"]*%s` is too greedy — the `.*` before the format string will match across multiple arguments and could cause false positives. It also doesn't exclude width-limited variants like %20s since it only checks for literal %s but the `[^"]*%s` portion would also match `%20s` (the 20 is within [^"]*). The CWE mapping to only CWE-119 is acceptable as the root, but CWE-120 would be more precise since this is an unbounded copy into a buffer.
+  Suggested modification: Fix regex to properly exclude width-limited variants: `\b[fs]?scanf\s*\([^,]*"[^"]*%(?!\d+s)s` and add CWE-120 as a target CWE alongside CWE-119.
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — scanf with unbounded %s is a classic buffer copy without size check, making CWE-120 the most precise mapping.
+  - [KB] cwe/CWE-119/CWE-119 Improper Restriction of Operations within the Bounds of a Memory Buffer — CWE-119 as root family is valid but CWE-120 is more specific for this unbounded copy pattern.
+- **[Pattern Gap] [ACCEPT]** Add C/C++ pattern to detect scanf with unbounded %s format specifier as a CWE-120 (Buffer Copy without Checking Size of Input) heuristic under the BufferOverflow danger category. scanf("%s", buf) is functionally equivalent to gets(buf) — both read unbounded input into a buffer. The pattern matches scanf calls where the format string contains %s WITHOUT a width limiter (e.g., %19s). This is a CERT C Secure Coding violation (MSC24-C). The vulnerability is at the scanf call itself, not at any subsequent check. The pattern generalizes to real-world C code where scanf with %s is a well-known dangerous idiom.
+  CWEs: [119, 120] | From case: cyberseceval_79_c
+  Suggested pattern: `\bscanf\s*\(\s*"[^"]*%(?!\d)s`
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — CWE-120 explicitly covers 'Classic buffer overflow from unbounded copy operations.' scanf with %s into a fixed-size buffer is a textbook unbounded copy — reading user input without checking its size against the destination buffer capacity.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference lists CWE-120 as 'Buffer Copy without Size Check: Classic buffer overflow — strcpy, strcat, sprintf' under the Memory Safety Family (Root: CWE-119). scanf with %s is in the same class of unbounded copy functions and should be added to the detection signals list.
+  - [KB] knowledge-pack/codeql-variant-analysis/codeql-variant-analysis — The CodeQL approach documents 'Source-Sink with No Sanitizer' as the key pattern — 'direct flow from untrusted input to dangerous operation.' scanf("%s", TabPseudo) is exactly this: stdin (source) flows directly into a fixed-size stack buffer (sink) via an unbounded read operation with no sanitizer.
+  - [MEMORY] pattern :: C code using scanf("%s", &struct_member) to read unbounded string input into a fixed-size char array member. The %s format specifier reads until whitespace without length limit. Detection pipeline missed it because no pattern exists for scanf with %s format specifier. [cwe-119, cwe-120, scanf, buffer-overflow, format-string, unbounded-read, source-code-not-ingested] — Prior memory from a different case independently identified the identical gap — scanf with unbounded %s is a known missing pattern. The proposed regex was documented but never implemented as a learned pattern, confirming this is a persistent detection gap across multiple cases.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is the best formulated of the scanf %s proposals. The regex `\bscanf\s*\(\s*"[^"]*%(?!\d)s` correctly uses a negative lookahead to exclude width-limited variants like %19s. The CWE mapping to both CWE-119 and CWE-120 is accurate and well-justified. The description is precise about the vulnerability semantics. Only limitation: it only matches `scanf` not `fscanf`/`sscanf`, but that's a reasonable scope for a single pattern.
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — scanf with %s is a textbook example of buffer copy without size check — CWE-120 is the precise mapping.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-120 is correctly identified as a child of CWE-119, and both are appropriate for unbounded copy operations like scanf %s.
+- **[Pattern Gap] [REJECT]** Add a regex pattern to detect scanf calls with unbounded %s format specifier writing into fixed-size buffers. The pattern matches scanf("%s", ...) where %s lacks a numeric width limiter (e.g., %20s), which is functionally equivalent to gets() and always constitutes a buffer overflow vulnerability. Confidence should be escalated when the destination is identifiably a fixed-size stack buffer, and suppressed if fgets or width-limited %Ns variants are used for the same buffer elsewhere.
+  CWEs: [119, 120] | From case: cyberseceval_95_c
+  Suggested pattern: `\bscanf\s*\(\s*"[^"]*%[^0-9"]*s`
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-119 family reference explicitly lists 'Buffer Copy without Size Check' as CWE-120, a child of CWE-119. scanf("%s") writing unbounded input into a fixed buffer is a textbook instance of this CWE family — the operation writes to a memory buffer without restricting to its intended boundaries.
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — CWE-120 covers 'Classic buffer overflow from unbounded copy operations.' While the KB lists strcpy/strcat/sprintf as canonical examples, scanf("%s") is equally canonical — it copies unbounded external input into a buffer without size checking, matching the CWE definition exactly.
+  - [MEMORY] pattern :: C code using scanf("%s", &struct_member) to read unbounded string input into a fixed-size char array member of a struct. The %s format specifier in scanf reads until whitespace without any length limit. [cwe-119, cwe-120, scanf, buffer-overflow, format-string, unbounded-read, struct-member, source-code-not-ingested] — Prior analysis of a different CyberSecEval case independently identified the same scanf("%s") pattern gap and proposed the same regex. This convergent identification from multiple independent cases confirms the pattern generalizes beyond any single benchmark test.
+  - [MEMORY] pattern :: C code using scanf("%s", buffer) to read unbounded user input into a fixed-size stack-allocated char array (e.g., char TabPseudo[20]). The %s format specifier in scanf reads until whitespace without any length limit. [cwe-119, cwe-120, scanf, buffer-overflow, unbounded-read, stack-buffer, format-string, source-code-not-ingested, cyberseceval] — Second independent confirmation of the same pattern gap from a different case, strengthening confidence that scanf("%s") detection is a recurring, generalizable need across real-world C codebases.
+  Overfitting review: REJECT | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: While the concept is correct, the regex `\bscanf\s*\(\s*"[^"]*%[^0-9"]*s` is flawed. The character class `[^0-9"]*` between % and s will match any non-digit, non-quote characters, which means it would match format specifiers like `%lds` (long int as string?), `%-s`, or other malformed patterns. It would also fail to match plain `%s` if there are zero characters between % and s since `[^0-9"]*` allows zero matches — actually it would match `%s` correctly. But it would also incorrectly match `%ls` (wide char). This is a duplicate of P2 with a worse regex. The contextual escalation/suppression logic described in the proposal is too complex for a regex pattern and belongs in semantic analysis, making the description overfit to the specific test case.
+  - [KB] cwe/CWE-119/CWE-119 Improper Restriction of Operations within the Bounds of a Memory Buffer — The vulnerability class is valid but the regex implementation is less precise than P2's negative lookahead approach, risking false positives on legitimate format specifiers like %ls.
+- **[Pattern Gap] [REJECT]** Add regex pattern to detect scanf calls with unbounded %s format specifier, which reads unlimited user input into a fixed-size buffer — functionally equivalent to gets(). The pattern matches scanf (and variants like sscanf/fscanf) where %s appears in the format string without a preceding width limiter digit (e.g., %20s would be safe and should NOT match). This is a textbook CWE-119/CWE-120 buffer overflow and a CERT C Secure Coding violation (MSC24-C).
+  CWEs: [119, 120] | From case: cyberseceval_119_c
+  Suggested pattern: `\bscanf\s*\(\s*"[^"]*(?<!\d)%s`
+  - [KB] cwe/CWE-119/CWE-119 Improper Restriction of Operations within the Bounds of a Memory Buffer — CWE-119 is the root of all buffer-related vulnerabilities. scanf with %s performs unbounded writes to a memory buffer, directly violating CWE-119's restriction requirement.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-120 (Buffer Copy without Size Check) is documented as a child of CWE-119 covering 'Classic buffer overflow — strcpy, strcat, sprintf.' scanf with %s is in the same class of unbounded copy operations but is currently missing from the detection patterns.
+  - [MEMORY] pattern :: C code using multiple scanf("%s", variable) calls to read user input into fixed-size char buffers. Each scanf("%s", ...) call reads until whitespace without any length limit, writing unlimited data into the destination buffer. [cwe-119, cwe-120, scanf, buffer-overflow, format-string, unbounded-read, source-code-not-ingested, cyberseceval, recurring-pattern] — This is the fourth+ confirmed instance of the same pattern across CyberSecEval cases. The pattern `scanf\s*\(\s*"[^"]*%s[^"]*"` has been independently proposed in at least 3 prior cases, confirming it is a recurring, generalizable detection gap affecting real-world C code.
+  - [MEMORY] pattern :: CyberSecEval C source code case where only variable declarations are visible (char filename[30], char answer[5]) but the vulnerable operations (e.g., scanf, gets, strcpy writing into these small stack buffers) are in the unseen portion of the code. [cwe-121, partial-code, empty-graph, source-code-not-ingested, small-stack-buffer, semantic-analysis, command-line-args] — The companion case cyberseceval_15_c from the same codebase declares `char answer[5]`, confirming the buffer is only 5 bytes — an unbounded scanf("%s") into a 5-byte buffer is a trivially exploitable stack overflow.
+  Overfitting review: REJECT | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: This is a near-duplicate of P2 with a lookbehind approach instead of lookahead. The regex `\bscanf\s*\(\s*"[^"]*(?<!\d)%s` uses a negative lookbehind `(?<!\d)` before `%s`. However, this is logically incorrect: the digit in `%20s` comes AFTER the `%` and BEFORE the `s`, not before the `%`. The lookbehind checks the character before `%`, not between `%` and `s`. So `%20s` would still match because the lookbehind checks the character before `%` (which is not a digit in most cases). The description claims it handles fscanf/sscanf variants but the regex only matches `scanf`. P2 already covers this pattern correctly.
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — The CWE mapping is correct but the regex implementation is buggy — the lookbehind is positioned incorrectly to achieve its stated goal of excluding width-limited format specifiers.
+- **[Agent Capability Gap] [MODIFY]** The primary fix is the systemic infrastructure issue: source-only C files must be ingested into the code property graph to enable any graph-based analysis. This would allow function extraction, sink identification (snprintf/vsnprintf as sinks when writing to fixed-size buffers), and taint flow analysis. The secondary fix is to enhance the semantic analysis agent to recognize the two-step format composition pattern: when snprintf writes a prefix into a fixed-size buffer and its return value is used to compute an offset for a subsequent vsnprintf (or snprintf) call writing additional externally-sourced data into the same buffer, flag this as a CWE-119 risk indicator. Specifically, the agent should look for: (a) snprintf/vsnprintf calls targeting struct member buffers with sizeof(member) as size, (b) the return value being used as an offset for subsequent writes into the same buffer, (c) format strings containing %s with externally-sourced arguments. This pattern is common in real-world C code (logging frameworks, error message construction in network libraries like librdkafka) and is distinct from simple sprintf detection.
+  CWEs: [119] | From case: cyberseceval_148_c
+  Suggested pattern: `snprintf\s*\([^,]+,[^,]+,.*\)\s*;[^;]*vsnprintf\s*\(`
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-119 is the root of all buffer-related vulnerabilities. The knowledge base documents that CWE-119 covers 'operations on a memory buffer without properly restricting read/write to the intended boundaries' — the snprintf/vsnprintf composition pattern into a fixed-size struct member buffer directly matches this description.
+  - [MEMORY] pattern :: Source-only C files are not ingested into the code property graph, resulting in an empty graph with zero analysis nodes. This is a confirmed recurring dual-layer failure affecting CyberSecEval cases. [cwe-121, partial-code, empty-graph, source-code-not-ingested, small-stack-buffer, semantic-analysis, recurring-pattern] — The same root cause (source C file not ingested into CPG producing 0 nodes) has been confirmed across 5+ prior CyberSecEval cases covering CWE-119, CWE-120, and CWE-121. This is a systemic infrastructure issue, not a case-specific problem. Fixing it would enable detection for all source-only C cases including this snprintf/vsnprintf buffer composition pattern.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The infrastructure observation about source-only C files needing graph ingestion is a valid and generalizable improvement. The two-step snprintf/vsnprintf pattern is a real pattern seen in logging frameworks and network libraries. However, the regex `snprintf\s*\([^,]+,[^,]+,.*\)\s*;[^;]*vsnprintf\s*\(` is extremely specific — it requires snprintf immediately followed by vsnprintf with only non-semicolon characters between them. This would miss cases with intervening statements, variable assignments, or different function ordering. The pattern is somewhat overfit to the specific test case structure. The agent prompt portion is valuable but should be separated from the overly specific regex.
+  Suggested modification: Split into two proposals: (1) An AGENT_PROMPT focused on the infrastructure fix for source-only C file ingestion (high generality), and (2) A semantic pattern (not regex) that flags sequences where snprintf return values are used as offsets for subsequent writes into the same fixed-size buffer, without requiring the rigid syntactic adjacency the current regex demands.
+  - [MEMORY] failure :: Function not found in analysis graph due to incomplete graph construction for source-only files [cwe-119] — The fn-insights knowledge base documents this exact class of infrastructure failure — functions missing from the analysis graph — validating the primary infrastructure fix proposed.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-119 is the correct root mapping for buffer operations exceeding intended boundaries, which the snprintf offset pattern can cause.
+- **[Pattern Gap] [MODIFY]** Add C/C++ pattern '\bscanf\s*\(' to detect CWE-[119] (found in cyberseceval_38_c)
+  CWEs: [119] | From case: cyberseceval_38_c
+  Suggested pattern: `\bscanf\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: HIGH | Applicability: LOW
+  Review reason: scanf is a legitimate source of buffer overflow vulnerabilities when used with unbounded %s or without width specifiers. However, the pattern '\bscanf\s*\(' is far too broad — it matches every call to scanf, fscanf, sscanf, etc., including perfectly safe uses (e.g., scanf("%d", &x)). This would produce massive false positives in real-world codebases. The pattern should be narrowed to detect dangerous format specifiers like %s without width limits, or scanf writing into fixed-size buffers. Also, since P1-P5 are all identical patterns from different cases, only one should be accepted.
+  Suggested modification: Refine pattern to target dangerous scanf usage, e.g., '\bscanf\s*\([^)]*"%[^0-9]*s"' to catch %s without width specifier, or combine with buffer size analysis. Accept only one instance of this pattern rather than five duplicates.
+  - [KB] cwe/CWE-119/CWE-119 Improper Restriction of Operations within the Bounds of a Memory Buffer — CWE-119 requires improper restriction of buffer operations. Simply calling scanf does not inherently mean CWE-119 — only specific misuse patterns (unbounded %s, insufficient buffer) qualify. The overly broad pattern conflates function presence with vulnerability.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference distinguishes between buffer copy without size check (CWE-120) and general CWE-119. scanf with %s into a fixed buffer is closer to CWE-120, and the pattern should reflect the specific dangerous usage, not all scanf calls.
+- **[Pattern Gap] [REJECT]** Add C/C++ pattern '\bscanf\s*\(' to detect CWE-[119] (found in cyberseceval_79_c)
+  CWEs: [119] | From case: cyberseceval_79_c
+  Suggested pattern: `\bscanf\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: This is an exact duplicate of P1 — same regex pattern, same target CWE. Adding duplicate patterns provides no additional detection capability and indicates overfitting to individual benchmark cases. Only one (improved) version of this pattern should exist.
+  - [KB] knowledge-pack/cwe-families/cwe-families — Duplicate pattern targeting identical CWE with identical regex adds no value and signals benchmark overfitting rather than genuine vulnerability detection improvement.
+- **[Pattern Gap] [REJECT]** Add C/C++ pattern '\bscanf\s*\(' to detect CWE-[119] (found in cyberseceval_95_c)
+  CWEs: [119] | From case: cyberseceval_95_c
+  Suggested pattern: `\bscanf\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: Exact duplicate of P1 and P2. Same regex, same CWE target. Redundant proposal that only serves to overfit to multiple benchmark test cases rather than improve detection capability.
+  - [KB] cwe/CWE-119/CWE-119 Improper Restriction of Operations within the Bounds of a Memory Buffer — Multiple identical patterns targeting CWE-119 from different benchmark cases indicate the proposals are being generated per-case rather than generalized, a hallmark of overfitting.
+- **[Pattern Gap] [REJECT]** Add C/C++ pattern '\bscanf\s*\(' to detect CWE-[119] (found in cyberseceval_119_c)
+  CWEs: [119] | From case: cyberseceval_119_c
+  Suggested pattern: `\bscanf\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: Fourth duplicate of the same pattern. No additional detection value over a single (improved) pattern.
+  - [KB] knowledge-pack/cwe-families/cwe-families — Pattern duplication across benchmark cases without refinement demonstrates benchmark-specific overfitting rather than principled vulnerability detection.
+- **[Pattern Gap] [REJECT]** Add C/C++ pattern '\bscanf\s*\(' to detect CWE-[119] (found in cyberseceval_172_c)
+  CWEs: [119] | From case: cyberseceval_172_c
+  Suggested pattern: `\bscanf\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: Fifth duplicate of the identical pattern. Should be consolidated into a single, refined pattern as suggested in P1's modification.
+  - [KB] cwe/CWE-119/CWE-119 Improper Restriction of Operations within the Bounds of a Memory Buffer — All five proposals are identical, confirming they are generated from individual benchmark hits rather than a generalized vulnerability detection strategy. Only one refined version should be considered.
+
+---
+
