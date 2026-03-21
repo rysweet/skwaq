@@ -300,10 +300,10 @@ fn extract_key_points(output: &str) -> Vec<String> {
 
 /// Maximum characters for the analysis context sent to the LLM.
 ///
-/// GitHub Models gpt-4o-mini has an ~8000 token request limit.  We keep the
-/// context small (~750 tokens) to leave room for system prompt + tool
-/// definitions.
-const DEFAULT_MAX_CONTEXT_CHARS: usize = 3000;
+/// With 128K output tokens and ~250K input token budgets, agents can handle
+/// substantial context. We include source code, graph data, and prior
+/// findings to give agents enough information for real tool-calling analysis.
+const DEFAULT_MAX_CONTEXT_CHARS: usize = 100_000;
 
 /// Build context for the analysis from the graph database.
 ///
@@ -322,6 +322,40 @@ pub fn build_analysis_context_with_limit(
     max_context_chars: usize,
 ) -> String {
     let mut parts = vec![format!("Analyze target: {target}\n\nGraph DB summary:\n")];
+
+    // Include source code if available — agents need to SEE the code to analyze it.
+    // Look up the target path from the investigation and read it.
+    if let Ok(mut stmt) = db
+        .conn()
+        .prepare("SELECT target FROM investigations WHERE id = ?1")
+    {
+        if let Ok(file_path) = stmt.query_row([investigation_id], |row| row.get::<_, String>(0)) {
+            let path = std::path::Path::new(&file_path);
+            if path.exists() {
+                if let Ok(source) = std::fs::read_to_string(path) {
+                    let max_source = 40_000; // ~10K tokens of source code
+                    let display = if source.len() > max_source {
+                        format!(
+                            "{}...[truncated at {} chars]",
+                            &source[..max_source],
+                            max_source
+                        )
+                    } else {
+                        source
+                    };
+                    parts.push(format!(
+                        "\n## SOURCE CODE ({})\n\
+                         Analyze this code carefully for vulnerabilities.\n\
+                         ```\n{}\n```\n",
+                        path.file_name()
+                            .map(|n| n.to_string_lossy().to_string())
+                            .unwrap_or_else(|| file_path.clone()),
+                        display,
+                    ));
+                }
+            }
+        }
+    }
 
     // Summarize functions with confidence indicators
     if let Ok(mut stmt) = db.conn().prepare(

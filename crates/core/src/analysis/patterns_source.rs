@@ -1294,12 +1294,19 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "Detect insecure temp file creation (CWE-676, CWE-377) via mktemp/tmpnam/tempnam which are always dangerous and deprecated by POSIX",
         },
-        // Self-improvement: from case cse_classic_bufovf_gets (CWEs [120])
+        // Self-improvement: from case cyberseceval_7_c (CWEs [120])
         SourcePattern {
-            regex: r"\bscanf\s*\(",
+            regex: r"\bsprintf\s*\(",
             category: DangerCategory::Memory,
             severity: Severity::High,
-            reason: "Detect scanf usage (CWE-120) which can cause buffer overflow when used with unbounded format specifiers like %s",
+            reason: "Detect CWE-120 Buffer Copy without Checking Size of Input via sprintf",
+        },
+        // Self-improvement: scanf without field width for CWE-119/120
+        SourcePattern {
+            regex: r"\b[fs]?scanf\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Detect CWE-119/120 via scanf/fscanf/sscanf without bounded field width",
         },
         // Self-improvement: from case race_condition (CWEs [367])
         SourcePattern {

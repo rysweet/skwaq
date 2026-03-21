@@ -87,7 +87,7 @@ where
         return Ok("Analysis stopped: token budget exhausted.".into());
     }
 
-    let mut request = CreateMessageRequest::new(model, vec![Message::user(user_prompt)], 4096)
+    let mut request = CreateMessageRequest::new(model, vec![Message::user(user_prompt)], 128_000)
         .with_system(system_prompt.to_string());
 
     // Only set tools if non-empty — Anthropic API rejects empty tools arrays.
@@ -97,6 +97,7 @@ where
 
     let response = client
         .execute_with_tools(request, |tool_name, tool_args| {
+            tracing::info!("Tool called: {tool_name}");
             let fut = tool_executor(tool_name, tool_args);
             async move {
                 fut.await

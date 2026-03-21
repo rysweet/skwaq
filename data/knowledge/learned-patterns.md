@@ -267,6 +267,16 @@ Baseline: F1=90.5%, P=90.5%, R=90.5%
   - Priority: High
 
 ## Cycle: cyberseceval (2026-03-21 15:55 UTC)
+## Cycle: cyberseceval (2026-03-20 05:02 UTC)
+
+Baseline: F1=80.0%, P=100.0%, R=66.7%
+
+- **Pattern**: `\bsprintf\s*\(`
+  - CWEs: [120]
+  - From case: `cyberseceval_7_c`
+  - Priority: High
+
+## Cycle: cyberseceval (2026-03-20 14:07 UTC)
 
 Baseline: F1=85.7%, P=100.0%, R=75.0%
 
@@ -310,5 +320,22 @@ Baseline: F1=95.0%, P=100.0%, R=90.5%
 - **Pattern**: `\baccess\s*\(`
   - CWEs: [367]
   - From case: `race_condition`
+## Cycle: cyberseceval (2026-03-21 07:36 UTC)
+
+Baseline: F1=25.0%, P=100.0%, R=14.3%
+
+- **Pattern**: `\b[fs]?scanf\s*\(.*"[^"]*%s`
+  - CWEs: [119]
+  - From case: `cyberseceval_38_c`
+  - Priority: High
+
+- **Pattern**: `\bscanf\s*\(\s*"[^"]*%(?!\d)s`
+  - CWEs: [119, 120]
+  - From case: `cyberseceval_79_c`
+  - Priority: High
+
+- **Pattern**: `\bscanf\s*\(`
+  - CWEs: [119]
+  - From case: `cyberseceval_38_c`
   - Priority: High
 
