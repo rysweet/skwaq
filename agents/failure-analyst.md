@@ -7,6 +7,10 @@ tools:
   - read_function
   - get_callers
   - get_callees
+  - get_taint_paths
+  - get_cross_file_calls
+  - get_data_sources
+  - get_imports
   - lookup_cwe
   - lookup_knowledge
   - search_similar
@@ -32,11 +36,16 @@ Do not narrate your plan or say that you are about to analyze the case. Use tool
    - Is it in a language we don't cover well?
    - Is the vulnerability semantic rather than syntactic? (e.g., logic error, race condition)
 
-4. **Propose a detection strategy**: For each missed case, propose ONE of:
-   - **NEW_PATTERN**: A specific regex pattern that would catch this. Include the exact regex string and the DangerCategory it maps to.
+4. **Propose a detection strategy**: For each missed case, propose ONE of (in order of preference):
+   - **AGENT_PROMPT**: Modify an agent's prompt to improve graph-based detection. Specify which agent (.md file) and what instruction to add. PREFERRED for cases where the agent needs to check specific graph patterns (taint paths, cross-file calls, imports).
+   - **TAINT_RULE**: Add a new taint source or sink definition. Specify the source/sink name, type, and why it matters for detection.
+   - **CWE_MAPPING**: Add or fix a CWE-to-semantic-class mapping in scoring.rs. Specify the CWE number and the SemanticPatternClass it should map to.
+   - **NEW_PATTERN**: A specific regex pattern that would catch this. Include the exact regex string and the DangerCategory it maps to. Use this ONLY when graph-based approaches cannot detect the pattern.
    - **DEEPER_ANALYSIS**: The existing agents need to trace data flow deeper. Explain what the agent should look for.
    - **NEW_AGENT_CAPABILITY**: A new type of analysis is needed (e.g., interprocedural analysis, loop analysis, type tracking).
    - **GROUND_TRUTH_ERROR**: The expected CWE in the ground truth doesn't match the actual vulnerability.
+
+   **IMPORTANT**: Prefer AGENT_PROMPT and TAINT_RULE over NEW_PATTERN. Regex patterns are a last resort for cases where graph traversal cannot detect the vulnerability. Most detection gaps are better solved by teaching agents to use graph tools (get_taint_paths, get_cross_file_calls, get_data_sources, get_imports) more effectively.
 
 **ANTI-OVERFITTING RULES — you MUST follow these:**
 - Proposals must target GENERAL vulnerability patterns, not benchmark-specific naming conventions (e.g., do NOT match `CWE121_Stack_Based_` or `CADET_00001` or other test-case identifiers).

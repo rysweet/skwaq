@@ -333,7 +333,7 @@ pub fn build_analysis_context_with_limit(
             let path = std::path::Path::new(&file_path);
             if path.exists() {
                 if let Ok(source) = std::fs::read_to_string(path) {
-                    let max_source = 40_000; // ~10K tokens of source code
+                    let max_source = 30_000; // ~10K tokens of source code
                     let display = if source.len() > max_source {
                         format!(
                             "{}...[truncated at {} chars]",
@@ -392,6 +392,92 @@ pub fn build_analysis_context_with_limit(
                          Treat findings in these functions with extra skepticism.",
                         low_confidence_count
                     ));
+                }
+            }
+        }
+    }
+
+    // Imports and symbols from the investigation
+    if let Ok(mut stmt) = db.conn().prepare(
+        "SELECT name, symbol_type FROM symbols WHERE investigation_id = ?1 ORDER BY name LIMIT 50",
+    ) {
+        if let Ok(rows) = stmt.query_map([investigation_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        }) {
+            let symbols: Vec<(String, String)> =
+                rows.collect::<Result<Vec<_>, _>>().unwrap_or_default();
+            if !symbols.is_empty() {
+                parts.push(format!(
+                    "\n## IMPORTS & SYMBOLS ({} shown):\n",
+                    symbols.len()
+                ));
+                for (name, sym_type) in &symbols {
+                    parts.push(format!("- {name} [{sym_type}]"));
+                }
+            }
+        }
+    }
+
+    // Data sources for the investigation
+    if let Ok(mut stmt) = db.conn().prepare(
+        "SELECT name, source_type, location FROM data_sources WHERE investigation_id = ?1 LIMIT 30",
+    ) {
+        if let Ok(rows) = stmt.query_map([investigation_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        }) {
+            let sources: Vec<(String, String, String)> =
+                rows.collect::<Result<Vec<_>, _>>().unwrap_or_default();
+            if !sources.is_empty() {
+                parts.push(format!("\n## DATA SOURCES ({}):\n", sources.len()));
+                for (name, src_type, location) in &sources {
+                    parts.push(format!("- {name} ({src_type}) @ {location}"));
+                }
+            }
+        }
+    }
+
+    // Cross-file call graph (2-hop chains)
+    if let Ok(mut stmt) = db.conn().prepare(
+        "SELECT f2.name, f3.name FROM calls c1 \
+         JOIN functions f2 ON c1.callee_id = f2.id \
+         JOIN calls c2 ON f2.id = c2.caller_id \
+         JOIN functions f3 ON c2.callee_id = f3.id \
+         WHERE f2.investigation_id = ?1 LIMIT 30",
+    ) {
+        if let Ok(rows) = stmt.query_map([investigation_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        }) {
+            let chains: Vec<(String, String)> =
+                rows.collect::<Result<Vec<_>, _>>().unwrap_or_default();
+            if !chains.is_empty() {
+                parts.push("\n## CROSS-FILE CALL GRAPH (2-hop chains):\n".into());
+                for (hop1, hop2) in &chains {
+                    parts.push(format!("- {hop1} -> {hop2}"));
+                }
+            }
+        }
+    }
+
+    // String literal references
+    if let Ok(mut stmt) = db.conn().prepare(
+        "SELECT f.name, sl.value FROM func_references_string frs \
+         JOIN functions f ON frs.function_id = f.id \
+         JOIN string_literals sl ON frs.string_id = sl.id \
+         WHERE f.investigation_id = ?1 LIMIT 30",
+    ) {
+        if let Ok(rows) = stmt.query_map([investigation_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        }) {
+            let refs: Vec<(String, String)> =
+                rows.collect::<Result<Vec<_>, _>>().unwrap_or_default();
+            if !refs.is_empty() {
+                parts.push("\n## STRING LITERAL REFERENCES:\n".into());
+                for (func_name, value) in &refs {
+                    parts.push(format!("- {func_name}: \"{value}\""));
                 }
             }
         }
@@ -601,5 +687,278 @@ mod tests {
             .key_points
             .iter()
             .any(|point| point.contains("Overflow")));
+    }
+
+    // ===== Task 1: ENRICH-CONTEXT TDD tests =====
+    // These tests define the contract for the 4 new context sections.
+    // They will FAIL until build_analysis_context is updated.
+
+    #[test]
+    fn context_includes_symbols_imports_section() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv";
+
+        // Set up investigation
+        db.execute(
+            "INSERT INTO investigations (id, name, target) VALUES (?1, ?2, ?3)",
+            &[
+                &inv_id as &dyn rusqlite::types::ToSql,
+                &"test",
+                &"/nonexistent",
+            ],
+        )
+        .unwrap();
+
+        // Insert symbols
+        db.execute(
+            "INSERT INTO symbols (id, name, symbol_type, investigation_id) VALUES (?1, ?2, ?3, ?4)",
+            &[
+                &"s1" as &dyn rusqlite::types::ToSql,
+                &"malloc",
+                &"import",
+                &inv_id,
+            ],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO symbols (id, name, symbol_type, investigation_id) VALUES (?1, ?2, ?3, ?4)",
+            &[
+                &"s2" as &dyn rusqlite::types::ToSql,
+                &"free",
+                &"import",
+                &inv_id,
+            ],
+        )
+        .unwrap();
+
+        let ctx = build_analysis_context_with_limit("target.c", inv_id, &db, 100_000);
+
+        assert!(
+            ctx.contains("IMPORTS") || ctx.contains("SYMBOLS"),
+            "Context must include an imports/symbols section"
+        );
+        assert!(ctx.contains("malloc"), "Context must list symbol 'malloc'");
+        assert!(ctx.contains("free"), "Context must list symbol 'free'");
+    }
+
+    #[test]
+    fn context_includes_data_sources_section() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv";
+
+        db.execute(
+            "INSERT INTO investigations (id, name, target) VALUES (?1, ?2, ?3)",
+            &[
+                &inv_id as &dyn rusqlite::types::ToSql,
+                &"test",
+                &"/nonexistent",
+            ],
+        )
+        .unwrap();
+
+        db.execute(
+            "INSERT INTO data_sources (id, name, source_type, location, investigation_id) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            &[
+                &"ds1" as &dyn rusqlite::types::ToSql,
+                &"user_input",
+                &"stdin",
+                &"main.c:42",
+                &inv_id,
+            ],
+        )
+        .unwrap();
+
+        let ctx = build_analysis_context_with_limit("target.c", inv_id, &db, 100_000);
+
+        assert!(
+            ctx.contains("DATA SOURCES"),
+            "Context must include a data sources section"
+        );
+        assert!(
+            ctx.contains("user_input"),
+            "Context must list the data source name"
+        );
+        assert!(ctx.contains("stdin"), "Context must list the source type");
+    }
+
+    #[test]
+    fn context_includes_cross_file_call_graph() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv";
+
+        db.execute(
+            "INSERT INTO investigations (id, name, target) VALUES (?1, ?2, ?3)",
+            &[
+                &inv_id as &dyn rusqlite::types::ToSql,
+                &"test",
+                &"/nonexistent",
+            ],
+        )
+        .unwrap();
+
+        // Create 3 functions for 2-hop call chain: f1 -> f2 -> f3
+        for (id, name, addr) in &[
+            ("f1", "main", "file_a.c:0x1000"),
+            ("f2", "helper", "file_b.c:0x2000"),
+            ("f3", "sink_func", "file_c.c:0x3000"),
+        ] {
+            db.execute(
+                "INSERT INTO functions (id, name, address, investigation_id) \
+                 VALUES (?1, ?2, ?3, ?4)",
+                &[id as &dyn rusqlite::types::ToSql, name, addr, &inv_id],
+            )
+            .unwrap();
+        }
+        db.execute(
+            "INSERT INTO calls (caller_id, callee_id) VALUES (?1, ?2)",
+            &[&"f1" as &dyn rusqlite::types::ToSql, &"f2"],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO calls (caller_id, callee_id) VALUES (?1, ?2)",
+            &[&"f2" as &dyn rusqlite::types::ToSql, &"f3"],
+        )
+        .unwrap();
+
+        let ctx = build_analysis_context_with_limit("target.c", inv_id, &db, 100_000);
+
+        assert!(
+            ctx.contains("CROSS-FILE") || ctx.contains("CALL GRAPH"),
+            "Context must include a cross-file call graph section"
+        );
+        // The 2-hop chain should show helper -> sink_func (from f2 -> f3)
+        assert!(
+            ctx.contains("helper") && ctx.contains("sink_func"),
+            "Context must show the 2-hop call chain"
+        );
+    }
+
+    #[test]
+    fn context_includes_string_references() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv";
+
+        db.execute(
+            "INSERT INTO investigations (id, name, target) VALUES (?1, ?2, ?3)",
+            &[
+                &inv_id as &dyn rusqlite::types::ToSql,
+                &"test",
+                &"/nonexistent",
+            ],
+        )
+        .unwrap();
+
+        // Insert a function, a string literal, and the reference
+        db.execute(
+            "INSERT INTO functions (id, name, address, investigation_id) VALUES (?1, ?2, ?3, ?4)",
+            &[
+                &"f1" as &dyn rusqlite::types::ToSql,
+                &"parse_cmd",
+                &"main.c:0x1000",
+                &inv_id,
+            ],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO string_literals (id, value, investigation_id) VALUES (?1, ?2, ?3)",
+            &[&"sl1" as &dyn rusqlite::types::ToSql, &"/bin/sh", &inv_id],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO func_references_string (function_id, string_id) VALUES (?1, ?2)",
+            &[&"f1" as &dyn rusqlite::types::ToSql, &"sl1"],
+        )
+        .unwrap();
+
+        let ctx = build_analysis_context_with_limit("target.c", inv_id, &db, 100_000);
+
+        assert!(
+            ctx.contains("STRING") || ctx.contains("LITERAL"),
+            "Context must include a string references section"
+        );
+        assert!(
+            ctx.contains("/bin/sh"),
+            "Context must show the referenced string literal"
+        );
+    }
+
+    #[test]
+    fn context_source_code_budget_reduced_to_30k() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv";
+
+        // Create a temp file with 35K of source code
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let big_source = "x".repeat(35_000);
+        std::fs::write(tmp.path(), &big_source).unwrap();
+
+        db.execute(
+            "INSERT INTO investigations (id, name, target) VALUES (?1, ?2, ?3)",
+            &[
+                &inv_id as &dyn rusqlite::types::ToSql,
+                &"test",
+                &tmp.path().to_str().unwrap(),
+            ],
+        )
+        .unwrap();
+
+        let ctx = build_analysis_context_with_limit("target.c", inv_id, &db, 100_000);
+
+        // With max_source=30K, 35K source should be truncated
+        assert!(
+            ctx.contains("truncated"),
+            "35K source should be truncated at 30K limit"
+        );
+        // The context should NOT contain the full 35K
+        let source_section_end = ctx.find("truncated").unwrap();
+        let source_start = ctx.find("SOURCE CODE").unwrap_or(0);
+        let source_section = &ctx[source_start..source_section_end + 20];
+        // Verify truncation happened at ~30K, not 40K
+        assert!(
+            source_section.len() < 32_000,
+            "Source section should be truncated around 30K, not 40K"
+        );
+    }
+
+    #[test]
+    fn context_symbols_section_respects_limit() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv";
+
+        db.execute(
+            "INSERT INTO investigations (id, name, target) VALUES (?1, ?2, ?3)",
+            &[
+                &inv_id as &dyn rusqlite::types::ToSql,
+                &"test",
+                &"/nonexistent",
+            ],
+        )
+        .unwrap();
+
+        // Insert 60 symbols — should be capped at 50
+        for i in 0..60 {
+            db.execute(
+                "INSERT INTO symbols (id, name, symbol_type, investigation_id) \
+                 VALUES (?1, ?2, ?3, ?4)",
+                &[
+                    &format!("s{i}") as &dyn rusqlite::types::ToSql,
+                    &format!("sym_{i}"),
+                    &"import",
+                    &inv_id,
+                ],
+            )
+            .unwrap();
+        }
+
+        let ctx = build_analysis_context_with_limit("target.c", inv_id, &db, 100_000);
+
+        // Should contain sym_0 (early entries)
+        assert!(ctx.contains("sym_0"), "Should include early symbols");
+        // Should NOT contain sym_59 (beyond the 50-row limit)
+        assert!(
+            !ctx.contains("sym_59"),
+            "Should respect 50-row limit on symbols"
+        );
     }
 }

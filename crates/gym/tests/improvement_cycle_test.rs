@@ -88,7 +88,7 @@ fn make_new_pattern_proposal(regex: &str, cwes: Vec<u32>, target: PathBuf) -> Im
 #[test]
 fn test_apply_empty_cycle_returns_zero() {
     let cycle = make_cycle_with_proposals(vec![]);
-    let applied = apply_accepted_proposals(&cycle).unwrap();
+    let applied = apply_accepted_proposals(&cycle, None).unwrap();
     assert_eq!(applied, 0, "Empty cycle should apply zero proposals");
 }
 
@@ -109,7 +109,7 @@ fn test_apply_skips_non_pattern_proposals() {
         review: None,
     }]);
 
-    let applied = apply_accepted_proposals(&cycle).unwrap();
+    let applied = apply_accepted_proposals(&cycle, None).unwrap();
     assert_eq!(applied, 0, "AgentPrompt proposals should be skipped");
 }
 
@@ -130,7 +130,7 @@ fn test_apply_skips_empty_replace_proposals() {
         review: None,
     }]);
 
-    let applied = apply_accepted_proposals(&cycle).unwrap();
+    let applied = apply_accepted_proposals(&cycle, None).unwrap();
     assert_eq!(applied, 0, "Empty-replace proposals should be skipped");
 }
 
@@ -142,7 +142,7 @@ fn test_apply_skips_nonexistent_target_file() {
         PathBuf::from("/nonexistent/path/patterns_source.rs"),
     )]);
 
-    let applied = apply_accepted_proposals(&cycle).unwrap();
+    let applied = apply_accepted_proposals(&cycle, None).unwrap();
     assert_eq!(applied, 0, "Non-existent target file should be skipped");
 }
 
@@ -172,7 +172,7 @@ fn test_apply_inserts_structured_source_pattern() {
         tmp.path().to_path_buf(),
     )]);
 
-    let applied = apply_accepted_proposals(&cycle).unwrap();
+    let applied = apply_accepted_proposals(&cycle, None).unwrap();
     assert_eq!(applied, 1, "Should apply one proposal");
 
     let result = std::fs::read_to_string(tmp.path()).unwrap();
@@ -225,7 +225,7 @@ fn test_apply_preserves_existing_patterns() {
         tmp.path().to_path_buf(),
     )]);
 
-    apply_accepted_proposals(&cycle).unwrap();
+    apply_accepted_proposals(&cycle, None).unwrap();
     let result = std::fs::read_to_string(tmp.path()).unwrap();
 
     // Original pattern must still be present
@@ -265,7 +265,7 @@ fn test_apply_replace_mode() {
         review: None,
     }]);
 
-    let applied = apply_accepted_proposals(&cycle).unwrap();
+    let applied = apply_accepted_proposals(&cycle, None).unwrap();
     assert_eq!(applied, 1);
 
     let result = std::fs::read_to_string(tmp.path()).unwrap();
@@ -292,7 +292,7 @@ fn test_apply_replace_mode_skips_when_find_text_missing() {
         review: None,
     }]);
 
-    let applied = apply_accepted_proposals(&cycle).unwrap();
+    let applied = apply_accepted_proposals(&cycle, None).unwrap();
     assert_eq!(applied, 0, "Should skip when find text is not present");
 }
 
@@ -373,7 +373,7 @@ fn test_apply_infers_injection_category_for_cwe78() {
         tmp.path().to_path_buf(),
     )]);
 
-    apply_accepted_proposals(&cycle).unwrap();
+    apply_accepted_proposals(&cycle, None).unwrap();
     let result = std::fs::read_to_string(tmp.path()).unwrap();
     assert!(
         result.contains("DangerCategory::Injection"),
@@ -396,7 +396,7 @@ fn test_apply_infers_memory_category_for_cwe121() {
         tmp.path().to_path_buf(),
     )]);
 
-    apply_accepted_proposals(&cycle).unwrap();
+    apply_accepted_proposals(&cycle, None).unwrap();
     let result = std::fs::read_to_string(tmp.path()).unwrap();
     assert!(
         result.contains("DangerCategory::Memory"),
@@ -419,7 +419,7 @@ fn test_apply_infers_format_string_category_for_cwe134() {
         tmp.path().to_path_buf(),
     )]);
 
-    apply_accepted_proposals(&cycle).unwrap();
+    apply_accepted_proposals(&cycle, None).unwrap();
     let result = std::fs::read_to_string(tmp.path()).unwrap();
     assert!(
         result.contains("DangerCategory::FormatString"),
@@ -442,7 +442,7 @@ fn test_apply_defaults_to_memory_for_unknown_cwe() {
         tmp.path().to_path_buf(),
     )]);
 
-    apply_accepted_proposals(&cycle).unwrap();
+    apply_accepted_proposals(&cycle, None).unwrap();
     let result = std::fs::read_to_string(tmp.path()).unwrap();
     assert!(
         result.contains("DangerCategory::Memory"),

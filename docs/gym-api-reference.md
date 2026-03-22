@@ -22,6 +22,32 @@ proposals, review for overfitting, and return accepted proposals.
 **Returns** an `ImprovementCycle` containing the baseline score, false
 negative cases, and all proposals (both reviewed and accepted).
 
+### `apply_accepted_proposals`
+
+```rust
+pub fn apply_accepted_proposals(
+    cycle: &ImprovementCycle,
+    db: Option<&GraphDb>,
+) -> Result<usize>
+```
+
+Applies accepted proposals from a completed improvement cycle. Handles all
+five proposal types:
+
+| Kind | Strategy | Target |
+|------|----------|--------|
+| `NewPattern` | Source patch | `patterns_source.rs` |
+| `AgentPrompt` | File patch (append or find/replace) | `agents/*.md` |
+| `CweMapping` | Source patch | `scoring.rs` |
+| `TaintRule` | Database INSERT | `data_sources` / `data_sinks` table |
+| `GroundTruthFix` | Source patch | `fixtures.toml` |
+
+The `db` parameter is required for `TaintRule` proposals. Pass `None` if
+no database is available — `TaintRule` proposals will be skipped with a
+warning.
+
+**Returns** the count of successfully applied proposals.
+
 ### Types
 
 #### `ImprovementCycle`
@@ -338,6 +364,89 @@ pub struct DetectedFinding {
     pub title: String,
 }
 ```
+
+---
+
+## Agent Tools (`tool_definitions.rs`, `tool_executor.rs`)
+
+### Graph Query Tools
+
+Four tools for querying the Code Property Graph. All accept function names
+(strings, max 256 chars) or investigation IDs. Implemented as SQL queries
+against the SQLite CPG database.
+
+#### `get_taint_paths`
+
+```json
+{
+  "name": "get_taint_paths",
+  "parameters": {
+    "function": { "type": "string", "description": "Function name to trace" }
+  }
+}
+```
+
+Returns taint flow paths involving the function: source name, sink name, and
+path through the function. Joins `taint_flows`, `data_sources`, `data_sinks`,
+and `functions` tables.
+
+#### `get_cross_file_calls`
+
+```json
+{
+  "name": "get_cross_file_calls",
+  "parameters": {
+    "function": { "type": "string", "description": "Function name to query" }
+  }
+}
+```
+
+Returns callers and callees in different files. Extracts file prefix from
+`functions.address` and filters to cross-file relationships only.
+
+#### `get_data_sources`
+
+```json
+{
+  "name": "get_data_sources",
+  "parameters": {
+    "investigation": { "type": "string", "description": "Investigation ID" }
+  }
+}
+```
+
+Returns all `data_sources` rows (name, source_type, location) for the
+investigation.
+
+#### `get_imports`
+
+```json
+{
+  "name": "get_imports",
+  "parameters": {
+    "investigation": { "type": "string", "description": "Investigation ID" }
+  }
+}
+```
+
+Returns all `symbols` rows where `symbol_type = 'import'` for the
+investigation.
+
+### SQL Passthrough (`tool_translate.rs`)
+
+The `query_graph` tool accepts both Cypher and SQL queries. SQL `SELECT`
+statements are validated through a three-layer defense:
+
+1. **Keyword blocklist** — Rejects DML keywords, `LOAD_EXTENSION`, `PRAGMA`,
+   comments (`--`, `/*`), and semicolons
+2. **Table whitelist** — Only 18 CPG tables are allowed (functions, calls,
+   data_sources, data_sinks, taint_flows, symbols, string_literals,
+   func_references_string, investigations, findings, analysis_runs,
+   function_analysis, finding_cwes, finding_evidence, agent_memory,
+   investigation_files, knowledge_entries, analysis_hints)
+3. **`stmt.readonly()` check** — SQLite's built-in read-only verification
+
+Non-SQL input falls through to the existing Cypher-to-SQL translator.
 
 ---
 

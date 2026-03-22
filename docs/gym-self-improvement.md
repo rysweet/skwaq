@@ -39,17 +39,23 @@ generalize and are not overfit to specific test inputs.
 
 ### Phase 2: Failure Analysis
 
-The **failure-analyst** LLM agent examines each false negative:
+The **failure-analyst** LLM agent examines each false negative using
+enriched graph context (imports, data sources, cross-file call graph, and
+string references):
 
-- Reads the vulnerable source code
+- Reads the vulnerable source code and graph context
 - Queries the knowledge base for relevant CWE patterns
-- Identifies why the vulnerability was missed (missing pattern, incomplete
-  taint rule, unmapped CWE, etc.)
-- Produces structured improvement proposals
+- Checks for graph context gaps (missing taint flows, sparse call graph,
+  absent data sources)
+- Identifies why the vulnerability was missed and produces structured
+  improvement proposals
+- Prioritizes graph-aware proposals (`AgentPrompt`, `TaintRule`) over regex
+  patterns (`NewPattern`)
 
-A heuristic analyzer runs in parallel, catching common patterns that don't
-require LLM reasoning (e.g., missing CWE family mappings visible from the
-scoring tables).
+A heuristic analyzer runs in parallel, checking for graph context gaps
+before falling back to regex-based analysis. It detects: missing taint flows
+for functions handling external data, sparse cross-file call graphs, missing
+data source entries, and unmapped CWE families.
 
 ### Phase 3: Overfitting Review
 
@@ -66,18 +72,26 @@ logged to `data/knowledge/fn-insights.md` for future reference.
 
 ### Phase 4: Patch Application
 
-Accepted proposals are applied as find/replace patches to the appropriate
-source files:
+Accepted proposals are applied automatically. Each proposal type has its own
+application strategy:
 
-| Proposal Kind     | Target File                              |
-|-------------------|------------------------------------------|
-| `NewPattern`      | `crates/core/src/analysis/patterns_source.rs` |
-| `CweMapping`      | `crates/gym/src/scoring.rs`              |
-| `TaintRule`       | `crates/core/src/analysis/taint.rs`      |
-| `GroundTruthFix`  | `data/gym/ground_truth/fixtures.toml`    |
+| Proposal Kind     | Target | Strategy |
+|-------------------|--------|----------|
+| `NewPattern`      | `crates/core/src/analysis/patterns_source.rs` | Find/replace or append to pattern array |
+| `AgentPrompt`     | `agents/*.md` | Find/replace or append after last `##` heading |
+| `CweMapping`      | `crates/gym/src/scoring.rs` | Find/replace patch on CWE mapping functions |
+| `TaintRule`       | SQLite database (`data_sources` / `data_sinks` table) | `INSERT OR IGNORE` via parameterized SQL |
+| `GroundTruthFix`  | `data/gym/ground_truth/fixtures.toml` | Find/replace |
 
-Each patch uses exact string matching. If the target string is not found, the
-patch is skipped with a warning — never a partial apply.
+**File-based proposals** (`NewPattern`, `AgentPrompt`, `CweMapping`,
+`GroundTruthFix`) use exact string matching. If the target string is not
+found, the patch is skipped with a warning — never a partial apply. File
+paths are canonicalized and directory-checked to prevent traversal attacks.
+
+**Database proposals** (`TaintRule`) use pipe-delimited format
+(`name|source_type|location`) and insert directly into the CPG database.
+The database ID is generated server-side. Strictly validated: exactly 3
+fields with length limits (name: 256, type: 64, location: 512).
 
 ### Phase 5: Verification
 
@@ -196,22 +210,33 @@ Example: Map CWE-367 → CWE-362 family (race conditions)
 
 ### TaintRule
 
-Adds taint sources or sinks to expand dataflow analysis coverage.
+Adds taint sources or sinks to the CPG database to expand dataflow analysis
+coverage. Unlike other proposal types, TaintRule proposals modify the database
+directly rather than patching source files.
 
 ```
 Kind: TaintRule
-Target: crates/core/src/analysis/taint.rs
-Example: Add mktemp() as taint source for CWE-377 (insecure temp file)
+Target: SQLite database (data_sources / data_sinks table)
+Format: name|source_type|location (pipe-delimited, 3 fields required)
+Example: mktemp|function|libc_tempfile → adds mktemp() as taint source
+Security: Server-side UUID, parameterized SQL, field length validation
 ```
 
 ### AgentPrompt
 
-Modifies an agent's role card to improve its detection behavior.
+Modifies an agent's Markdown role card to improve its graph traversal
+strategy or detection behavior. Supports two modes:
+
+- **Append mode** (empty `patch.find`): New content is inserted after the
+  last `##` heading in the file, or at EOF if no headings exist
+- **Replace mode** (`patch.find` contains text): Exact find/replace on
+  the agent file
 
 ```
 Kind: AgentPrompt
 Target: agents/*.md
-Example: Add TOCTOU awareness to vuln-hunter.md
+Example: Add TOCTOU graph-traversal instructions to vuln-hunter.md
+Security: File path canonicalized and verified within agents/ directory
 ```
 
 ### GroundTruthFix

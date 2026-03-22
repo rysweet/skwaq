@@ -658,7 +658,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             skwaq_gym::improve::append_learned_patterns(&cycle);
 
             // Apply accepted NewPattern proposals to the codebase
-            let applied = skwaq_gym::improve::apply_accepted_proposals(&cycle)?;
+            let applied = skwaq_gym::improve::apply_accepted_proposals(&cycle, None)?;
             if applied > 0 {
                 println!(
                     "\n  {} proposal(s) applied to source code. Run `cargo test` to validate.",
