@@ -3270,3 +3270,40 @@ This taint rule generalizes to all real-world code where network/user input flow
 
 ---
 
+## Cycle: fixtures (2026-03-22 17:48 UTC)
+
+### Missed Cases (1 false negatives)
+
+- **multi_file**: Expected CWE-[122, 78], detected CWE-[118, 825, 188, 119, 467, 129, 822, 127, 806, 123, 125, 120, 176, 839, 787, 823, 121, 124, 170, 126, 135, 590, 843, 785, 131, 805, 824, 122, 788], missed CWE-[78]
+  ```
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include "parser.h"
+  #include "processor.h"
+  
+  ```
+
+### Reviewed Improvement Proposals (2 total; 2 accepted, 0 rejected)
+
+- **[Agent Capability Gap] [MODIFY]** Modify the LLM semantic analysis agent prompt to add the following instruction: "When analyzing C/C++ source files that include project-local headers (using `#include "header.h"` with double quotes rather than angle brackets), recognize that the actual function implementations are likely in sibling `.c` files in the same directory. Use `get_cross_file_calls()` to resolve external function calls. When user-controlled data (argv, stdin, environment variables, network input) flows into an external function whose implementation is NOT visible in the current file, you MUST: (1) Flag this as a potential cross-file taint sink requiring inter-procedural analysis. (2) Classify the call as a potential injection vector (command injection CWE-78, SQL injection CWE-89, etc.) if the function's purpose involves 'processing', 'executing', 'running', or 'handling' data — since the actual dangerous operation (system, popen, exec, SQL query) may be hidden in the implementation. (3) Report an analysis coverage warning noting that the vulnerability assessment is incomplete due to missing visibility into cross-file function implementations. The principle: absence of a visible sink in the current file does not mean the sink doesn't exist when tainted data crosses a compilation unit boundary."
+  CWEs: [122, 78] | From case: multi_file
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-78 is documented under the Injection Family requiring detection of system(), popen(), exec*() with user input — these sinks exist in processor.c but the agent never sees that file
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology explicitly states "OS command injection (CWE-78): system(), exec(), popen() with user input" and "trace untrusted data from sources to sinks" — the agent must trace tainted argv[1] across file boundaries to the sink in processor.c
+  - [MEMORY] pattern :: Multi-file C project where the LLM semantic analyzer only sees the main entry point file. External functions contain the actual vulnerability sinks hidden in separate compilation units. [cwe-78, command-injection, multi-file, cross-file-taint, source-code-not-ingested] — Prior analysis of this exact case confirmed the root cause: the LLM correctly identifies buffer overflow but cannot infer command injection when the sink is in an opaque external function
+  - [KB] knowledge-pack/codeql-variant-analysis/codeql-variant-analysis — Taint tracking methodology specifies Sources (argv) → Sinks (system, exec) with no sanitizer — but this requires cross-file visibility to connect argv[1] in main.c to system() in processor.c
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The core principle of cross-file taint tracking is sound and addresses a real gap. However, rule (2) introduces significant overfitting risk: classifying any external function whose name contains 'processing', 'executing', 'running', or 'handling' as a potential injection vector is an overly heuristic approach that will generate false positives in real-world codebases where such function names are ubiquitous and benign. Additionally, the double-quote vs angle-bracket include heuristic is fragile — many projects use double quotes for system headers or angle brackets for project headers depending on build configuration. The proposal should focus on leveraging `get_cross_file_calls()` for inter-procedural analysis rather than speculative classification based on function naming conventions.
+  Suggested modification: Keep the core instruction about using `get_cross_file_calls()` to resolve cross-file function implementations when tainted data flows to an external call. Remove rule (2)'s speculative classification based on function name patterns. Instead, instruct the agent to: (1) Use `get_cross_file_calls()` to resolve the actual implementation of the called function, (2) If the implementation is resolved, analyze it for dangerous sinks, (3) If the implementation cannot be resolved, flag as 'incomplete analysis — unresolved cross-file taint flow' without speculating on specific CWE classifications. Remove the double-quote vs angle-bracket heuristic and instead rely on the tool's actual cross-file resolution capabilities.
+  - [MEMORY] failure :: Function not found in analysis graph indicating incomplete graph construction or missing function extraction [cwe-121] — The fn-insights memory documents a pattern where functions absent from the analysis graph lead to missed findings. This validates the need for cross-file resolution, but also shows the fix should be about improving graph completeness rather than speculative classification.
+  - [KB] kb source/cwe-families/cwe-families — CWE-78 (OS command injection) requires actual evidence of tainted data reaching a command execution sink. Speculating based on function names violates the principle of precise CWE mapping — the actual sink must be identified, not assumed.
+- **[Agent Capability Gap] [ACCEPT]** Enhance agent graph traversal for CWE-[122, 78] detection — case multi_file has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [122, 78] | From case: multi_file
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[122, 78].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal is well-scoped and generalizable. It instructs the agent to use existing tools (`get_cross_file_calls` and `get_taint_paths`) to trace data flow through wrapper functions when standard API pattern matching fails. This is a sound analysis methodology improvement that addresses real-world scenarios where dangerous sinks are wrapped in project-specific functions across compilation units. The proposal does not introduce speculative heuristics or case-specific patterns — it simply extends the analysis depth using available tooling.
+  - [MEMORY] failure :: Function not found in analysis graph indicating incomplete graph construction or missing function extraction [cwe-121] — The documented pattern of missed vulnerabilities due to incomplete graph traversal directly supports the need for deeper cross-file call graph analysis as proposed.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 command injection often manifests through indirect paths where user input flows through wrapper functions before reaching system/popen/exec calls. Cross-file taint tracing is essential for detecting these patterns in real-world codebases.
+
+---
+
