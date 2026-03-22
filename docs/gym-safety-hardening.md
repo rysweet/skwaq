@@ -111,7 +111,7 @@ outside the benchmark data directory.
 
 ## SQL Safety
 
-The history database (`rusqlite`) uses parameterized queries exclusively:
+All database access (`rusqlite`) uses parameterized queries exclusively:
 
 ```rust
 // Correct: parameterized
@@ -120,6 +120,52 @@ conn.execute("INSERT INTO runs (suite, f1) VALUES (?1, ?2)", params![suite, f1])
 // NEVER: format!() SQL
 // conn.execute(&format!("INSERT INTO runs (suite) VALUES ('{}')", suite), [])?;
 ```
+
+### SQL Passthrough Defense-in-Depth
+
+The `query_graph` tool allows agents to issue SQL SELECT queries directly
+against the CPG database. Three layers of defense prevent abuse:
+
+| Layer | Control | Purpose |
+|-------|---------|---------|
+| 1 | Keyword blocklist | Rejects DML (`INSERT`, `UPDATE`, `DELETE`, `DROP`, etc.), `LOAD_EXTENSION`, `PRAGMA`, comments (`--`, `/*`), and semicolons (`;`) |
+| 2 | Table whitelist | Only 18 CPG tables are allowed — rejects references to `sqlite_master` or any non-CPG table |
+| 3 | `stmt.readonly()` | SQLite's built-in read-only check as final guard |
+
+Error messages from failed SQL queries are sanitized before returning to
+the agent. Raw SQLite error text (which may reveal schema details) is never
+exposed.
+
+### Proposal Path Validation
+
+File-based proposals (`AgentPrompt`, `CweMapping`) validate their target
+paths:
+
+| Proposal Kind | Allowed Directory | Validation |
+|---------------|-------------------|------------|
+| `AgentPrompt` | `agents/` | Canonicalize path, verify prefix is `agents/` |
+| `CweMapping` | `crates/gym/src/` | Canonicalize path, verify prefix is `crates/gym/src/` |
+| `NewPattern` | `crates/core/src/analysis/` | Canonicalize path, verify prefix |
+
+This prevents directory traversal attacks where a malicious proposal targets
+`../../sensitive_file`.
+
+### TaintRule Database Safety
+
+`TaintRule` proposals insert into the CPG database, not source files:
+
+| Control | Description |
+|---------|-------------|
+| Pipe-delimited parsing | Exactly 3 fields required (`name\|type\|location`) |
+| Field length limits | name: 256, type: 64, location: 512 characters |
+| Server-side UUIDs | IDs generated via `uuid::Uuid::new_v4()`, never from proposals |
+| `INSERT OR IGNORE` | Duplicate entries silently ignored |
+| Parameterized SQL | All fields bound via `?` placeholders |
+
+### Function Name Length Cap
+
+All graph tool arguments (function names, investigation IDs) are capped at
+256 characters to prevent oversized query parameters.
 
 ## API Key Hygiene
 

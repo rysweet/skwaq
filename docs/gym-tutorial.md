@@ -54,10 +54,10 @@ Common false negative categories:
 
 | Category | Example Cases | Typical Cause |
 |----------|--------------|---------------|
-| Multi-file vulnerabilities | `multi_file` | Cross-compilation-unit analysis not yet supported |
-| Subtle race conditions | `race_condition` | Pattern misses non-obvious TOCTOU |
-| Complex integer flows | `int_wrap`, `signedness` | Requires dataflow, not just pattern |
-| Language-specific idioms | `cpp_vulns` | Missing C++-specific patterns |
+| Multi-file vulnerabilities | `multi_file` | Cross-file taint paths not fully traced |
+| Subtle race conditions | `race_condition` | Agent lacks TOCTOU graph traversal instructions |
+| Complex integer flows | `int_wrap`, `signedness` | Missing taint sources for integer conversion APIs |
+| Language-specific idioms | `cpp_vulns` | Missing data source/sink entries for C++ APIs |
 
 ## Step 3: Run the Improvement Cycle
 
@@ -81,17 +81,20 @@ Phase 5: Verification ............... done (no regression)
 cases are shown to the failure analyst.
 
 **Phase 2** sends each false negative to the `failure-analyst` LLM agent with
-the vulnerable source code and knowledge base context. The analyst produces
-structured `Improvement` proposals.
+the vulnerable source code, graph context (imports, data sources, cross-file
+call graph, string references), and knowledge base context. The analyst
+checks for graph context gaps first, then produces structured `Improvement`
+proposals prioritized as: `AgentPrompt` > `TaintRule` > `CweMapping` >
+`NewPattern`.
 
 **Phase 3** runs every proposal through the `overfitting-reviewer` agent,
 which assigns a verdict (`Accept`, `Reject`, `Modify`) and overfitting risk
 rating (`Low`, `Medium`, `High`).
 
-**Phase 4** applies accepted proposals as find/replace patches to the
-appropriate source files. Proposals targeting `patterns_source.rs` use
-structured `SourcePattern` insertion — LLM output is never interpolated
-directly into Rust source.
+**Phase 4** applies accepted proposals. File-based proposals (`NewPattern`,
+`AgentPrompt`, `CweMapping`) use find/replace patching. Database proposals
+(`TaintRule`) insert directly into the CPG. All file paths are
+canonicalized and directory-checked.
 
 **Phase 5** re-runs the benchmark on the full case set (including holdout) and
 checks the regression gate: F1 must not decrease, precision drop ≤ 2%, no
@@ -177,6 +180,7 @@ tail -20 data/knowledge/learned-patterns.md
 ```bash
 git add crates/core/src/analysis/patterns_source.rs \
        crates/gym/src/scoring.rs \
+       agents/ \
        data/knowledge/fn-insights.md \
        data/knowledge/learned-patterns.md
 
@@ -199,9 +203,10 @@ Improvement cycle results:
 Phase 2: Failure analysis ........... done (0 proposals)
 ```
 
-This happens when all false negatives are caused by limitations that pattern
-changes cannot address (e.g., multi-file analysis, binary-only cases). Check
-`fn-insights.md` for the analyst's reasoning.
+This happens when all false negatives are caused by limitations that neither
+graph context enrichment nor pattern changes can address (e.g., binary-only
+cases, aliased function pointers). Check `fn-insights.md` for the analyst's
+reasoning.
 
 ### Verification fails — automatic rollback
 

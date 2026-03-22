@@ -223,6 +223,52 @@ pub fn agent_tools() -> Vec<ToolDefinition> {
                 "required": ["query"]
             }),
         ),
+        ToolDefinition::new(
+            "get_taint_paths",
+            "Get all taint flow paths involving a specific function. Returns source, sink, and path for each taint flow where the function's location matches the data source or sink location.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "function": {
+                        "type": "string",
+                        "description": "Function name to find taint paths for"
+                    }
+                },
+                "required": ["function"]
+            }),
+        ),
+        ToolDefinition::new(
+            "get_cross_file_calls",
+            "Get all cross-file call relationships for a function. Returns callers and callees where the address indicates a different source file.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "function": {
+                        "type": "string",
+                        "description": "Function name to find cross-file calls for"
+                    }
+                },
+                "required": ["function"]
+            }),
+        ),
+        ToolDefinition::new(
+            "get_data_sources",
+            "Get all data sources for the current investigation. Returns name, source type, and location of each external data input.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {},
+                "required": []
+            }),
+        ),
+        ToolDefinition::new(
+            "get_imports",
+            "Get all import symbols for the current investigation. Returns name and symbol type for symbols classified as imports.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {},
+                "required": []
+            }),
+        ),
     ]
 }
 
@@ -352,5 +398,59 @@ mod tests {
         let all = agent_tools();
         let filtered = filter_tools(&all, &[]);
         assert_eq!(filtered.len(), all.len());
+    }
+
+    // ===== Task 2: GRAPH-TOOLS registration TDD tests =====
+    // These tests verify the 4 new graph tools are registered with correct schemas.
+    // They will FAIL until the tools are added to agent_tools().
+
+    #[test]
+    fn agent_tools_includes_get_taint_paths() {
+        let tools = agent_tools();
+        let tool = tools.iter().find(|t| t.name == "get_taint_paths");
+        assert!(
+            tool.is_some(),
+            "get_taint_paths must be registered in agent_tools()"
+        );
+        let schema = &tool.unwrap().input_schema;
+        assert!(
+            schema["properties"]["function"].is_object(),
+            "get_taint_paths must accept a 'function' parameter"
+        );
+    }
+
+    #[test]
+    fn agent_tools_includes_get_cross_file_calls() {
+        let tools = agent_tools();
+        let tool = tools.iter().find(|t| t.name == "get_cross_file_calls");
+        assert!(
+            tool.is_some(),
+            "get_cross_file_calls must be registered in agent_tools()"
+        );
+        let schema = &tool.unwrap().input_schema;
+        assert!(
+            schema["properties"]["function"].is_object(),
+            "get_cross_file_calls must accept a 'function' parameter"
+        );
+    }
+
+    #[test]
+    fn agent_tools_includes_get_data_sources() {
+        let tools = agent_tools();
+        let tool = tools.iter().find(|t| t.name == "get_data_sources");
+        assert!(
+            tool.is_some(),
+            "get_data_sources must be registered in agent_tools()"
+        );
+    }
+
+    #[test]
+    fn agent_tools_includes_get_imports() {
+        let tools = agent_tools();
+        let tool = tools.iter().find(|t| t.name == "get_imports");
+        assert!(
+            tool.is_some(),
+            "get_imports must be registered in agent_tools()"
+        );
     }
 }

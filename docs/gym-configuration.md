@@ -72,6 +72,23 @@ the database, or written to knowledge files.
 | KB results per query | 2 | Hits returned per lookup |
 | KB fixed queries | `["methodology", "cwe-families"]` | Always-queried topics |
 
+## Analysis Context Budgets
+
+The agent analysis context has a total 100K character limit, split across
+six sections. Empty sections are omitted entirely:
+
+| Section | Budget | Row Limit | Description |
+|---------|--------|-----------|-------------|
+| Functions | 10K chars | — | Function names and addresses |
+| Imports & Symbols | 5K chars | 50 rows | `symbols` table entries |
+| Data Sources | 3K chars | 30 rows | `data_sources` table entries |
+| Cross-File Call Graph | 8K chars | 40 paths | 2-hop cross-file call chains |
+| String References | 4K chars | 30 strings | String literals referenced by functions |
+| Source Code | 30K chars | — | Raw source with line numbers |
+
+These are compile-time constants. The source code budget was reduced from
+40K to 30K to accommodate the graph context sections (~20K total).
+
 ## Regression Gate Thresholds
 
 These are compile-time constants, not configurable at runtime — they are

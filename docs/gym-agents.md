@@ -55,12 +55,26 @@ You are [Agent], a [specialist]. Your job is to [task].
 
 | Tool | Description |
 |------|-------------|
-| `query_graph` | Query the Code Property Graph (functions, calls, data flows) |
-| `read_function` | Read source/decompiled code for a specific function |
-| `lookup_knowledge` | Search the CWE knowledge base |
+| `query_graph` | Query the Code Property Graph (Cypher or SQL SELECT) |
+| `read_function` | Get source/decompiled code by name or address |
+| `get_taint_paths` | Trace taint flows through a function (source → sink paths) |
+| `get_cross_file_calls` | Find callers/callees in different files |
+| `get_data_sources` | List all data sources for an investigation |
+| `get_imports` | List all imported symbols for an investigation |
+| `get_callers` | Return all functions calling a specified function |
+| `get_callees` | Return all functions called by a specified function |
+| `lookup_cwe` | Look up CWE by ID with description and mitigations |
+| `lookup_knowledge` | Search the CWE knowledge base and knowledge packs |
 | `store_memory` | Persist findings/insights for other agents |
 | `recall_memory` | Retrieve findings stored by other agents |
 | `create_finding` | Register a vulnerability finding |
+| `search_similar` | Find code patterns similar to a snippet |
+
+The graph-query tools (`get_taint_paths`, `get_cross_file_calls`,
+`get_data_sources`, `get_imports`) are the primary discovery mechanism.
+Agents should use these tools first, then fall back to `query_graph` for
+custom queries and `read_function` for source-level confirmation. See
+[Graph-Agent Architecture](graph-agent-architecture.md) for details.
 
 ## Improvement Loop Agents
 
@@ -70,24 +84,46 @@ You are [Agent], a [specialist]. Your job is to [task].
 
 **Model:** claude-opus-4.6 | **Max turns:** 25
 
-**Input:** False negative cases with source code, expected CWEs, and
+**Input:** False negative cases with source code, expected CWEs, graph
+context (imports, data sources, call graph, string references), and
 knowledge base context.
 
-**Output:** Structured JSON proposals:
+**Output:** Structured JSON proposals, prioritized by type:
 
 ```json
 [
   {
-    "kind": "NewPattern",
-    "description": "Add TOCTOU race condition pattern",
+    "kind": "AgentPrompt",
+    "description": "Add TOCTOU detection instructions to vuln-hunter",
     "target_cwes": [367],
-    "regex": "\\baccess\\s*\\(",
+    "target_file": "agents/vuln-hunter.md",
     "source_case": "race_condition_toctou",
     "priority": "High",
-    "rationale": "access() followed by open() is classic TOCTOU"
+    "rationale": "vuln-hunter lacks instructions to trace access/open sequences"
+  },
+  {
+    "kind": "TaintRule",
+    "description": "Add mktemp as taint source",
+    "target_cwes": [377],
+    "source_case": "insecure_tmpfile",
+    "priority": "Medium",
+    "rationale": "mktemp return value is untrusted but not tracked as taint source"
   }
 ]
 ```
+
+**Proposal priority order:**
+1. `AgentPrompt` — improve agent graph traversal strategy
+2. `TaintRule` — expand taint coverage with missing sources/sinks
+3. `CweMapping` — fix CWE family mapping gaps
+4. `NewPattern` — add regex patterns only when graph detection is insufficient
+
+**Graph gap detection** (heuristic fallback):
+- Missing taint flows for functions handling external data → `TaintRule`
+- Sparse cross-file call graph → `AgentPrompt`
+- No data sources in investigation → `TaintRule`
+- Unmapped CWE family → `CweMapping`
+- No graph gap found → `NewPattern` (fallback)
 
 **Anti-overfitting rules** (built into the prompt):
 - Reject patterns that match benchmark-specific naming (e.g., `test_case_*`)
@@ -124,9 +160,23 @@ knowledge base context.
 
 ### vuln-hunter
 
-Primary vulnerability discovery agent. Graph-first approach: queries taint
-paths, reads code, traces callers. Rejects theoretical issues without a
-concrete trigger path.
+Primary vulnerability discovery agent. Uses graph traversal as its primary
+detection method:
+
+1. Survey imports, data sources, and cross-file call graph from context
+2. Trace taint paths with `get_taint_paths` for functions handling external data
+3. Follow cross-file calls with `get_cross_file_calls` to trace data across files
+4. Read suspicious code with `read_function` for source-level confirmation
+5. Create findings only with graph-backed evidence chains
+
+Regex pattern hits appear as hints in context but are never treated as
+confirmed vulnerabilities. Every finding requires a concrete path from
+untrusted input to dangerous operation.
+
+**Tools:** `query_graph`, `read_function`, `get_taint_paths`,
+`get_cross_file_calls`, `get_data_sources`, `get_imports`, `get_callers`,
+`get_callees`, `lookup_cwe`, `lookup_knowledge`, `store_memory`,
+`recall_memory`, `create_finding`, `search_similar`
 
 ### exploit-analyst
 
@@ -153,6 +203,23 @@ exploit-analyst and defense-analyst. Handles confidence threshold hints:
 
 Validates and corrects CWE classifications on findings. Ensures detected
 CWEs match the actual vulnerability type.
+
+### attack-surface
+
+Maps entry points and external interfaces using graph structure:
+
+1. Identify entry points — functions with no callers (graph roots) or
+   functions referenced by data sources
+2. Map external interfaces — use `get_imports` to find network, file, and
+   environment APIs
+3. Trace inbound data — use `get_taint_paths` and `get_cross_file_calls`
+   to map how external data reaches internal functions
+4. Assess exposure by taint path count and sink sensitivity
+
+**Tools:** `query_graph`, `read_function`, `get_taint_paths`,
+`get_cross_file_calls`, `get_data_sources`, `get_imports`, `get_callers`,
+`get_callees`, `lookup_knowledge`, `store_memory`, `recall_memory`,
+`create_finding`
 
 ### critic
 

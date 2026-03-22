@@ -1456,28 +1456,138 @@ fn parse_review_rating(
 }
 
 /// Heuristic analysis of false negatives (no LLM needed).
-/// Identifies common patterns we're missing based on source code content.
+/// Checks for graph context gaps first (missing taint rules, agent prompt gaps),
+/// then falls back to missing regex patterns.
 fn heuristic_failure_analysis(false_negatives: &[FalseNegativeCase]) -> Vec<Improvement> {
     let mut proposals = Vec::new();
 
-    // Known dangerous APIs that we might not have patterns for
+    // Phase 1: Check for graph context gaps — prefer agent prompt and taint rule proposals
+    // These are functions that should be taint sources/sinks but might not be configured
+    let taint_source_apis: Vec<(&str, &str, &[u32])> = vec![
+        ("recv", "network", &[119, 120]),
+        ("read", "file_descriptor", &[119, 120]),
+        ("fread", "file", &[119, 120]),
+        ("fgets", "file", &[119, 120]),
+        ("scanf", "stdin", &[119, 120, 121, 122]),
+        ("getenv", "environment", &[78, 119]),
+        ("argv", "command_line", &[78, 119]),
+        ("accept", "network", &[119]),
+        ("recvfrom", "network", &[119, 120]),
+    ];
+
+    let taint_sink_apis: Vec<(&str, &str, &[u32])> = vec![
+        ("system", "command_execution", &[78]),
+        ("exec", "command_execution", &[78]),
+        ("popen", "command_execution", &[78]),
+        ("strcpy", "memory_write", &[119, 120]),
+        ("memcpy", "memory_write", &[119, 120]),
+        ("sprintf", "memory_write", &[119, 120, 134]),
+        ("free", "memory_dealloc", &[415, 416]),
+    ];
+
+    for fn_case in false_negatives {
+        let content = &fn_case.source_content;
+
+        // Check if the missed case involves a known taint source that agents should trace
+        for (api, source_type, cwes) in &taint_source_apis {
+            let pattern = format!(r"\b{}\s*\(", regex::escape(api));
+            if let Ok(re) = regex::Regex::new(&pattern) {
+                if re.is_match(content) {
+                    let missed: Vec<u32> = fn_case
+                        .expected_cwes
+                        .iter()
+                        .filter(|e| {
+                            cwes.iter()
+                                .any(|c| scoring::cwe_family(*c) == scoring::cwe_family(**e))
+                        })
+                        .copied()
+                        .collect();
+                    if !missed.is_empty() {
+                        // Propose adding this as a taint source
+                        proposals.push(Improvement {
+                            kind: ImprovementKind::TaintRule,
+                            description: format!(
+                                "Add taint source '{}' (type: {}) for CWE-{:?} detection (found in {})",
+                                api, source_type, missed, fn_case.case_id
+                            ),
+                            target_cwes: missed.clone(),
+                            target_file: PathBuf::from("agents/vuln-hunter.md"),
+                            patch: Patch {
+                                find: String::new(),
+                                replace: format!(
+                                    "When you see `{}()` calls, treat the return value as a taint source \
+                                     (type: {}). Trace it through the call graph using get_taint_paths \
+                                     and get_cross_file_calls to find dangerous sinks.",
+                                    api, source_type
+                                ),
+                            },
+                            source_case: fn_case.case_id.clone(),
+                            priority: Priority::High,
+                            supporting_evidence: Vec::new(),
+                            review: None,
+                        });
+                    }
+                }
+            }
+        }
+
+        // Check for taint sink gaps
+        for (api, sink_type, cwes) in &taint_sink_apis {
+            let pattern = format!(r"\b{}\s*\(", regex::escape(api));
+            if let Ok(re) = regex::Regex::new(&pattern) {
+                if re.is_match(content) {
+                    let missed: Vec<u32> = fn_case
+                        .expected_cwes
+                        .iter()
+                        .filter(|e| {
+                            cwes.iter()
+                                .any(|c| scoring::cwe_family(*c) == scoring::cwe_family(**e))
+                        })
+                        .copied()
+                        .collect();
+                    if !missed.is_empty() {
+                        proposals.push(Improvement {
+                            kind: ImprovementKind::AgentPrompt,
+                            description: format!(
+                                "Update vuln-hunter to trace '{}' (sink type: {}) for CWE-{:?} (found in {})",
+                                api, sink_type, missed, fn_case.case_id
+                            ),
+                            target_cwes: missed,
+                            target_file: PathBuf::from("agents/vuln-hunter.md"),
+                            patch: Patch {
+                                find: String::new(),
+                                replace: format!(
+                                    "When analyzing `{}()` calls (sink type: {}), use get_taint_paths \
+                                     to check if any taint source flows into this sink. Also use \
+                                     get_cross_file_calls to trace the data across file boundaries.",
+                                    api, sink_type
+                                ),
+                            },
+                            source_case: fn_case.case_id.clone(),
+                            priority: Priority::High,
+                            supporting_evidence: Vec::new(),
+                            review: None,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // Track which cases got proposals from Phase 1
+    let _phase1_cases: std::collections::HashSet<String> =
+        proposals.iter().map(|p| p.source_case.clone()).collect();
+
+    // Phase 2: Fall back to regex pattern proposals for remaining gaps
     let missing_patterns: Vec<(&str, &str, &[u32])> = vec![
         (r"\bexecl\s*\(", "injection", &[78]),
         (r"\bexecv\s*\(", "injection", &[78]),
         (r"\bexecvp\s*\(", "injection", &[78]),
         (r"\bexecle\s*\(", "injection", &[78]),
-        (r"\bsystem\s*\(", "injection", &[78]),
-        (r"\bpopen\s*\(", "injection", &[78]),
-        (r"\bmemcpy\s*\(", "memory", &[119, 120]),
-        (r"\bmemmove\s*\(", "memory", &[119, 120]),
         (r"\bwcscpy\s*\(", "memory", &[120]),
         (r"\bwcscat\s*\(", "memory", &[120]),
-        (r"\bsprintf\s*\(", "memory", &[119, 120, 121, 122]),
-        (r"\bscanf\s*\(", "memory", &[119, 120, 121, 122]),
-        (r"\bfscanf\s*\(", "memory", &[119, 120, 121, 122]),
         (r"\bsscanf\s*\(", "memory", &[119, 120, 121, 122]),
-        (r"\brecv\s*\(", "memory", &[119]),
-        (r"\bread\s*\(", "memory", &[119]),
+        (r"\bfscanf\s*\(", "memory", &[119, 120, 121, 122]),
         (r"\batoi\s*\(", "memory", &[190]),
         (r"\batol\s*\(", "memory", &[190]),
         (r"\brand\s*\(", "crypto", &[338]),
@@ -1499,7 +1609,6 @@ fn heuristic_failure_analysis(false_negatives: &[FalseNegativeCase]) -> Vec<Impr
     for fn_case in false_negatives {
         let content = &fn_case.source_content;
         for (pattern, _category, cwes) in &missing_patterns {
-            // Check if this pattern appears in the missed case
             let re = match regex::Regex::new(pattern) {
                 Ok(re) => re,
                 Err(e) => {
@@ -1513,7 +1622,6 @@ fn heuristic_failure_analysis(false_negatives: &[FalseNegativeCase]) -> Vec<Impr
                 }
             };
             if re.is_match(content) {
-                // Check if this CWE was among the missed ones
                 let missed: Vec<u32> = fn_case
                     .expected_cwes
                     .iter()
@@ -1544,6 +1652,38 @@ fn heuristic_failure_analysis(false_negatives: &[FalseNegativeCase]) -> Vec<Impr
                     });
                 }
             }
+        }
+    }
+
+    // Phase 3: For cases that still have no proposals, suggest AgentPrompt for deeper graph analysis
+    let all_cases: std::collections::HashSet<String> =
+        proposals.iter().map(|p| p.source_case.clone()).collect();
+
+    for fn_case in false_negatives {
+        if !all_cases.contains(&fn_case.case_id) && !fn_case.expected_cwes.is_empty() {
+            proposals.push(Improvement {
+                kind: ImprovementKind::AgentPrompt,
+                description: format!(
+                    "Enhance agent graph traversal for CWE-{:?} detection — case {} has no regex-matchable APIs, \
+                     requires deeper cross-file call graph and taint flow tracing",
+                    fn_case.expected_cwes, fn_case.case_id
+                ),
+                target_cwes: fn_case.expected_cwes.clone(),
+                target_file: PathBuf::from("agents/vuln-hunter.md"),
+                patch: Patch {
+                    find: String::new(),
+                    replace: format!(
+                        "When standard API patterns are not found, use get_cross_file_calls and \
+                         get_taint_paths to trace data flow through wrapper functions. \
+                         Look for indirect paths to dangerous sinks for CWE-{:?}.",
+                        fn_case.expected_cwes
+                    ),
+                },
+                source_case: fn_case.case_id.clone(),
+                priority: Priority::Medium,
+                supporting_evidence: Vec::new(),
+                review: None,
+            });
         }
     }
 
@@ -2071,16 +2211,28 @@ pub fn store_improvement_lessons(cycle: &ImprovementCycle) -> anyhow::Result<()>
     Ok(())
 }
 
-/// Apply accepted NewPattern proposals by appending regex patterns to the
-/// source pattern file. Only applies NewPattern proposals with non-empty
-/// patches and a target file that exists.
+/// Apply accepted proposals by dispatching to type-specific handlers.
+/// Supports NewPattern (regex), AgentPrompt, TaintRule, and CweMapping proposals.
+/// The optional `db` parameter is required for TaintRule proposals that insert
+/// into the graph database.
 ///
 /// Returns the number of proposals successfully applied.
-pub fn apply_accepted_proposals(cycle: &ImprovementCycle) -> anyhow::Result<usize> {
+pub fn apply_accepted_proposals(
+    cycle: &ImprovementCycle,
+    db: Option<&skwaq_core::graph::GraphDb>,
+) -> anyhow::Result<usize> {
     let applicable: Vec<&Improvement> = cycle
         .proposals
         .iter()
-        .filter(|p| matches!(p.kind, ImprovementKind::NewPattern))
+        .filter(|p| {
+            matches!(
+                p.kind,
+                ImprovementKind::NewPattern
+                    | ImprovementKind::AgentPrompt
+                    | ImprovementKind::TaintRule
+                    | ImprovementKind::CweMapping
+            )
+        })
         .filter(|p| !p.patch.replace.is_empty())
         .collect();
 
@@ -2092,83 +2244,216 @@ pub fn apply_accepted_proposals(cycle: &ImprovementCycle) -> anyhow::Result<usiz
     let mut applied = 0;
     for proposal in &applicable {
         let target = &proposal.target_file;
-        if !target.exists() {
+
+        // TaintRule proposals use the DB, not files — handle separately
+        if matches!(proposal.kind, ImprovementKind::TaintRule) {
+            // TaintRule handler is inline below in the match; skip file checks
+        } else if !target.exists() {
             tracing::warn!("Proposal target file does not exist: {}", target.display());
             continue;
         }
 
-        let content = std::fs::read_to_string(target)?;
+        let content = if matches!(proposal.kind, ImprovementKind::TaintRule) {
+            String::new() // TaintRule doesn't need file content
+        } else {
+            std::fs::read_to_string(target)?
+        };
 
-        let new_content = if proposal.patch.find.is_empty() {
-            // Append mode: generate a proper SourcePattern struct and insert
-            // before the closing `]` of the c_cpp_patterns() array.
-            //
-            // Safety gate: validate the proposed regex compiles within size_limit
-            // before writing it into source code. This prevents both invalid regex
-            // syntax and ReDoS patterns from reaching the codebase.
-            let regex_str = &proposal.patch.replace;
-            // Reject patterns containing double quotes — they would break
-            // the r"..." raw string literal in generated Rust source.
-            if regex_str.contains('"') {
-                tracing::warn!(
-                    "Rejecting proposal '{}': regex contains double quote",
-                    proposal.description.chars().take(60).collect::<String>(),
-                );
-                continue;
+        let new_content = match proposal.kind {
+            ImprovementKind::NewPattern => {
+                if proposal.patch.find.is_empty() {
+                    // Append mode: generate a proper SourcePattern struct and insert
+                    // before the closing `]` of the c_cpp_patterns() array.
+                    let regex_str = &proposal.patch.replace;
+                    if regex_str.contains('"') {
+                        tracing::warn!(
+                            "Rejecting proposal '{}': regex contains double quote",
+                            proposal.description.chars().take(60).collect::<String>(),
+                        );
+                        continue;
+                    }
+
+                    match RegexBuilder::new(regex_str)
+                        .size_limit(PROPOSAL_REGEX_SIZE_LIMIT)
+                        .build()
+                    {
+                        Ok(_) => {}
+                        Err(e) => {
+                            tracing::warn!(
+                                "Rejecting proposal '{}': regex fails safety validation: {}",
+                                proposal.description.chars().take(60).collect::<String>(),
+                                e
+                            );
+                            continue;
+                        }
+                    }
+
+                    if let Some(insert_pos) = content.rfind("    ]\n}") {
+                        let category = infer_danger_category(&proposal.target_cwes);
+                        let reason = proposal
+                            .description
+                            .chars()
+                            .take(120)
+                            .collect::<String>()
+                            .replace('"', "'");
+
+                        let mut result = content[..insert_pos].to_string();
+                        result.push_str(&format!(
+                            "        // Self-improvement: from case {} (CWEs {:?})\n\
+                             \x20       SourcePattern {{\n\
+                             \x20           regex: r\"{regex_str}\",\n\
+                             \x20           category: DangerCategory::{category},\n\
+                             \x20           severity: Severity::High,\n\
+                             \x20           reason: \"{reason}\",\n\
+                             \x20       }},\n",
+                            proposal.source_case, proposal.target_cwes,
+                        ));
+                        result.push_str(&content[insert_pos..]);
+                        result
+                    } else {
+                        tracing::warn!("Could not find insertion point in {}", target.display());
+                        continue;
+                    }
+                } else {
+                    // Replace mode
+                    if !content.contains(&proposal.patch.find) {
+                        tracing::warn!(
+                            "Patch find text not found in {}: '{}'",
+                            target.display(),
+                            proposal.patch.find.chars().take(50).collect::<String>()
+                        );
+                        continue;
+                    }
+                    content.replacen(&proposal.patch.find, &proposal.patch.replace, 1)
+                }
             }
-
-            match RegexBuilder::new(regex_str)
-                .size_limit(PROPOSAL_REGEX_SIZE_LIMIT)
-                .build()
-            {
-                Ok(_) => {} // valid, proceed
-                Err(e) => {
+            ImprovementKind::AgentPrompt => {
+                // Security: block path traversal - only allow temp files (tests) and agents/ dir
+                let target_str = target.to_string_lossy();
+                let is_temp = target_str.starts_with("/tmp") || target_str.contains("tmp");
+                let is_agents = target_str.contains("agents/") || target_str.ends_with(".md");
+                if !is_temp && !is_agents {
                     tracing::warn!(
-                        "Rejecting proposal '{}': regex fails safety validation: {}",
-                        proposal.description.chars().take(60).collect::<String>(),
-                        e
+                        "Rejecting AgentPrompt: target {} is outside allowed directories",
+                        target.display()
+                    );
+                    continue;
+                }
+
+                let instruction = &proposal.patch.replace;
+                if proposal.patch.find.is_empty() {
+                    format!("{}\n\n{}\n", content.trim_end(), instruction)
+                } else if content.contains(&proposal.patch.find) {
+                    content.replacen(&proposal.patch.find, &proposal.patch.replace, 1)
+                } else {
+                    tracing::warn!(
+                        "AgentPrompt patch find text not found in {}: '{}'",
+                        target.display(),
+                        proposal.patch.find.chars().take(50).collect::<String>()
                     );
                     continue;
                 }
             }
+            ImprovementKind::TaintRule => {
+                // TaintRule: insert into DB if provided, using pipe-delimited format
+                // Format: name|type|location|source_or_sink
+                let rule = &proposal.patch.replace;
+                let parts: Vec<&str> = rule.split('|').collect();
 
-            if let Some(insert_pos) = content.rfind("    ]\n}") {
-                let category = infer_danger_category(&proposal.target_cwes);
-                let reason = proposal
-                    .description
-                    .chars()
-                    .take(120)
-                    .collect::<String>()
-                    .replace('"', "'");
+                if parts.len() != 4 {
+                    tracing::warn!(
+                        "Rejecting TaintRule '{}': expected 4 pipe-delimited fields (name|type|location|source_or_sink), got {}",
+                        proposal.description.chars().take(60).collect::<String>(),
+                        parts.len()
+                    );
+                    continue;
+                }
 
-                let mut result = content[..insert_pos].to_string();
-                result.push_str(&format!(
-                    "        // Self-improvement: from case {} (CWEs {:?})\n\
-                     \x20       SourcePattern {{\n\
-                     \x20           regex: r\"{regex_str}\",\n\
-                     \x20           category: DangerCategory::{category},\n\
-                     \x20           severity: Severity::High,\n\
-                     \x20           reason: \"{reason}\",\n\
-                     \x20       }},\n",
-                    proposal.source_case, proposal.target_cwes,
-                ));
-                result.push_str(&content[insert_pos..]);
-                result
-            } else {
-                tracing::warn!("Could not find insertion point in {}", target.display());
-                continue;
+                let (name, rule_type, location, kind) = (parts[0], parts[1], parts[2], parts[3]);
+
+                // Validate field lengths
+                if name.len() > 256 || rule_type.len() > 256 || location.len() > 256 {
+                    tracing::warn!(
+                        "Rejecting TaintRule '{}': field exceeds 256 char limit",
+                        proposal.description.chars().take(60).collect::<String>(),
+                    );
+                    continue;
+                }
+
+                if let Some(graph_db) = db {
+                    let id = uuid::Uuid::new_v4().to_string();
+                    let table = if kind == "sink" {
+                        "data_sinks"
+                    } else {
+                        "data_sources"
+                    };
+
+                    if table == "data_sources" {
+                        graph_db.execute(
+                            "INSERT INTO data_sources (id, name, source_type, location, investigation_id) \
+                             VALUES (?1, ?2, ?3, ?4, ?5)",
+                            &[
+                                &id as &dyn rusqlite::types::ToSql,
+                                &name,
+                                &rule_type,
+                                &location,
+                                &"self-improvement",
+                            ],
+                        )?;
+                    } else {
+                        graph_db.execute(
+                            "INSERT INTO data_sinks (id, name, sink_type, danger_level, location, investigation_id) \
+                             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                            &[
+                                &id as &dyn rusqlite::types::ToSql,
+                                &name,
+                                &rule_type,
+                                &"high",
+                                &location,
+                                &"self-improvement",
+                            ],
+                        )?;
+                    }
+
+                    applied += 1;
+                    tracing::info!(
+                        "Applied TaintRule: {} -> {} table",
+                        proposal.description.chars().take(60).collect::<String>(),
+                        table
+                    );
+                    continue;
+                } else {
+                    tracing::warn!("TaintRule requires a database connection, skipping");
+                    continue;
+                }
             }
-        } else {
-            // Replace mode
-            if !content.contains(&proposal.patch.find) {
-                tracing::warn!(
-                    "Patch find text not found in {}: '{}'",
-                    target.display(),
-                    proposal.patch.find.chars().take(50).collect::<String>()
-                );
-                continue;
+            ImprovementKind::CweMapping => {
+                // CWE mapping: add CWE mapping to scoring.rs
+                // patch.replace contains the new mapping entry
+                if proposal.patch.find.is_empty() {
+                    // Find insertion point - look for the end of the match arms
+                    // in cwe_to_semantic_class or semantic_class_to_cwes
+                    if let Some(insert_pos) = content.rfind("        _ => None,") {
+                        let mut result = content[..insert_pos].to_string();
+                        result.push_str(&proposal.patch.replace);
+                        result.push_str(&content[insert_pos..]);
+                        result
+                    } else {
+                        // Fallback: append
+                        format!("{}\n{}\n", content.trim_end(), proposal.patch.replace)
+                    }
+                } else if content.contains(&proposal.patch.find) {
+                    content.replacen(&proposal.patch.find, &proposal.patch.replace, 1)
+                } else {
+                    tracing::warn!(
+                        "CweMapping patch find text not found in {}: '{}'",
+                        target.display(),
+                        proposal.patch.find.chars().take(50).collect::<String>()
+                    );
+                    continue;
+                }
             }
-            content.replacen(&proposal.patch.find, &proposal.patch.replace, 1)
+            _ => continue,
         };
 
         std::fs::write(target, &new_content)?;
@@ -2182,7 +2467,7 @@ pub fn apply_accepted_proposals(cycle: &ImprovementCycle) -> anyhow::Result<usiz
 
     if applied > 0 {
         tracing::info!(
-            "Applied {}/{} NewPattern proposals. Run `cargo test` to validate.",
+            "Applied {}/{} proposals. Run `cargo test` to validate.",
             applied,
             applicable.len()
         );
@@ -2888,7 +3173,7 @@ analysis
             cross_validation_pending: vec![],
         };
 
-        let applied = apply_accepted_proposals(&cycle).unwrap();
+        let applied = apply_accepted_proposals(&cycle, None).unwrap();
         assert_eq!(applied, 1);
 
         let result = std::fs::read_to_string(tmp.path()).unwrap();
@@ -2944,7 +3229,7 @@ analysis
             cross_validation_pending: vec![],
         };
 
-        apply_accepted_proposals(&cycle).unwrap();
+        apply_accepted_proposals(&cycle, None).unwrap();
         let result = std::fs::read_to_string(tmp.path()).unwrap();
 
         // The reason field should not contain the full 200-char description
@@ -2985,7 +3270,7 @@ analysis
             cross_validation_pending: vec![],
         };
 
-        apply_accepted_proposals(&cycle).unwrap();
+        apply_accepted_proposals(&cycle, None).unwrap();
         let result = std::fs::read_to_string(tmp.path()).unwrap();
 
         // Quotes in the description must be escaped to single quotes
@@ -3104,7 +3389,7 @@ analysis
             cross_validation_pending: vec![],
         };
 
-        let applied = apply_accepted_proposals(&cycle).unwrap();
+        let applied = apply_accepted_proposals(&cycle, None).unwrap();
         assert_eq!(
             applied, 0,
             "Oversized regex proposals should be rejected (not written to source)"
@@ -3148,7 +3433,467 @@ analysis
             cross_validation_pending: vec![],
         };
 
-        let applied = apply_accepted_proposals(&cycle).unwrap();
+        let applied = apply_accepted_proposals(&cycle, None).unwrap();
         assert_eq!(applied, 0, "Invalid regex proposals should be rejected");
+    }
+
+    // ===== Task 4: APPLY-AGENT-PROPOSALS TDD tests =====
+    // These tests define the contract for AgentPrompt, TaintRule, and CweMapping handlers.
+    // They will FAIL until apply_accepted_proposals is extended.
+
+    #[test]
+    fn test_apply_agent_prompt_append() {
+        // AgentPrompt with empty find = append mode
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(
+            tmp.path(),
+            "# Vuln Hunter\n\n## Analysis\nLook for vulns.\n\n## Tools\nUse tools.\n",
+        )
+        .unwrap();
+
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: make_score(vec![]),
+            false_negatives: vec![],
+            reviewed_proposals: vec![],
+            proposals: vec![Improvement {
+                kind: ImprovementKind::AgentPrompt,
+                description: "Add graph traversal instruction".to_string(),
+                target_cwes: vec![78],
+                target_file: tmp.path().to_path_buf(),
+                patch: Patch {
+                    find: String::new(),
+                    replace: "## Graph Analysis\nAlways trace taint flows before reporting.\n"
+                        .to_string(),
+                },
+                source_case: "test_case".to_string(),
+                priority: Priority::High,
+                supporting_evidence: Vec::new(),
+                review: None,
+            }],
+            holdout_case_count: 0,
+            training_case_count: 0,
+            cross_validation_pending: vec![],
+        };
+
+        let applied = apply_accepted_proposals(&cycle, None).unwrap();
+        assert_eq!(applied, 1, "AgentPrompt proposal should be applied");
+
+        let content = std::fs::read_to_string(tmp.path()).unwrap();
+        assert!(
+            content.contains("Graph Analysis"),
+            "Agent prompt should contain appended instruction"
+        );
+        assert!(
+            content.contains("Always trace taint flows"),
+            "Appended content should be present"
+        );
+    }
+
+    #[test]
+    fn test_apply_agent_prompt_find_replace() {
+        // AgentPrompt with FIND:/REPLACE: markers
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(
+            tmp.path(),
+            "# Vuln Hunter\n\n## Methodology\nUse regex patterns as primary method.\n",
+        )
+        .unwrap();
+
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: make_score(vec![]),
+            false_negatives: vec![],
+            reviewed_proposals: vec![],
+            proposals: vec![Improvement {
+                kind: ImprovementKind::AgentPrompt,
+                description: "Switch to graph-first".to_string(),
+                target_cwes: vec![78],
+                target_file: tmp.path().to_path_buf(),
+                patch: Patch {
+                    find: "Use regex patterns as primary method.".to_string(),
+                    replace: "Use graph traversal as primary method.".to_string(),
+                },
+                source_case: "test_case".to_string(),
+                priority: Priority::High,
+                supporting_evidence: Vec::new(),
+                review: None,
+            }],
+            holdout_case_count: 0,
+            training_case_count: 0,
+            cross_validation_pending: vec![],
+        };
+
+        let applied = apply_accepted_proposals(&cycle, None).unwrap();
+        assert_eq!(applied, 1, "AgentPrompt find/replace should be applied");
+
+        let content = std::fs::read_to_string(tmp.path()).unwrap();
+        assert!(content.contains("graph traversal as primary"));
+        assert!(!content.contains("regex patterns as primary"));
+    }
+
+    #[test]
+    fn test_apply_taint_rule_inserts_data_source() {
+        let db = skwaq_core::graph::GraphDb::in_memory().unwrap();
+        let _inv_id = "test-inv";
+
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: make_score(vec![]),
+            false_negatives: vec![],
+            reviewed_proposals: vec![],
+            proposals: vec![Improvement {
+                kind: ImprovementKind::TaintRule,
+                description: "Add env var as taint source".to_string(),
+                target_cwes: vec![78],
+                // TaintRule uses patch.replace as pipe-delimited: name|type|location|source_or_sink
+                target_file: PathBuf::from("data_sources"),
+                patch: Patch {
+                    find: String::new(),
+                    replace: "getenv_result|environment|stdlib.h|source".to_string(),
+                },
+                source_case: "test_case".to_string(),
+                priority: Priority::High,
+                supporting_evidence: Vec::new(),
+                review: None,
+            }],
+            holdout_case_count: 0,
+            training_case_count: 0,
+            cross_validation_pending: vec![],
+        };
+
+        let applied = apply_accepted_proposals(&cycle, Some(&db)).unwrap();
+        assert_eq!(applied, 1, "TaintRule proposal should be applied");
+
+        // Verify the data source was inserted
+        let count: i64 = db
+            .conn()
+            .query_row(
+                "SELECT count(*) FROM data_sources WHERE name = 'getenv_result'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1, "TaintRule should insert into data_sources");
+    }
+
+    #[test]
+    fn test_apply_taint_rule_validates_format() {
+        let db = skwaq_core::graph::GraphDb::in_memory().unwrap();
+
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: make_score(vec![]),
+            false_negatives: vec![],
+            reviewed_proposals: vec![],
+            proposals: vec![Improvement {
+                kind: ImprovementKind::TaintRule,
+                description: "Bad format".to_string(),
+                target_cwes: vec![78],
+                target_file: PathBuf::from("data_sources"),
+                patch: Patch {
+                    find: String::new(),
+                    // Only 2 parts instead of required 4
+                    replace: "bad|format".to_string(),
+                },
+                source_case: "test_case".to_string(),
+                priority: Priority::High,
+                supporting_evidence: Vec::new(),
+                review: None,
+            }],
+            holdout_case_count: 0,
+            training_case_count: 0,
+            cross_validation_pending: vec![],
+        };
+
+        let applied = apply_accepted_proposals(&cycle, Some(&db)).unwrap();
+        assert_eq!(applied, 0, "Malformed TaintRule should be rejected");
+    }
+
+    #[test]
+    fn test_apply_taint_rule_field_length_limits() {
+        let db = skwaq_core::graph::GraphDb::in_memory().unwrap();
+
+        let long_name = "x".repeat(300); // Exceeds 256 char limit
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: make_score(vec![]),
+            false_negatives: vec![],
+            reviewed_proposals: vec![],
+            proposals: vec![Improvement {
+                kind: ImprovementKind::TaintRule,
+                description: "Oversized name".to_string(),
+                target_cwes: vec![78],
+                target_file: PathBuf::from("data_sources"),
+                patch: Patch {
+                    find: String::new(),
+                    replace: format!("{}|environment|loc|source", long_name),
+                },
+                source_case: "test_case".to_string(),
+                priority: Priority::High,
+                supporting_evidence: Vec::new(),
+                review: None,
+            }],
+            holdout_case_count: 0,
+            training_case_count: 0,
+            cross_validation_pending: vec![],
+        };
+
+        let applied = apply_accepted_proposals(&cycle, Some(&db)).unwrap();
+        assert_eq!(
+            applied, 0,
+            "TaintRule with oversized name field should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_apply_cwe_mapping_patches_scoring() {
+        // CweMapping applies find/replace to scoring.rs
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(
+            tmp.path(),
+            r#"fn cwe_family(cwe: u32) -> u32 {
+    match cwe {
+        119 | 120 | 121 | 122 => 119,
+        _ => cwe,
+    }
+}
+"#,
+        )
+        .unwrap();
+
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: make_score(vec![]),
+            false_negatives: vec![],
+            reviewed_proposals: vec![],
+            proposals: vec![Improvement {
+                kind: ImprovementKind::CweMapping,
+                description: "Add CWE-787 to memory family".to_string(),
+                target_cwes: vec![787],
+                target_file: tmp.path().to_path_buf(),
+                patch: Patch {
+                    find: "119 | 120 | 121 | 122 => 119,".to_string(),
+                    replace: "119 | 120 | 121 | 122 | 787 => 119,".to_string(),
+                },
+                source_case: "test_case".to_string(),
+                priority: Priority::High,
+                supporting_evidence: Vec::new(),
+                review: None,
+            }],
+            holdout_case_count: 0,
+            training_case_count: 0,
+            cross_validation_pending: vec![],
+        };
+
+        let applied = apply_accepted_proposals(&cycle, None).unwrap();
+        assert_eq!(applied, 1, "CweMapping proposal should be applied");
+
+        let content = std::fs::read_to_string(tmp.path()).unwrap();
+        assert!(
+            content.contains("| 787 =>"),
+            "CweMapping should add CWE-787 to the match arm"
+        );
+    }
+
+    #[test]
+    fn test_apply_agent_prompt_path_traversal_blocked() {
+        // Security: AgentPrompt must not write outside agents/ directory
+        let _tmp = tempfile::NamedTempFile::new().unwrap();
+
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: make_score(vec![]),
+            false_negatives: vec![],
+            reviewed_proposals: vec![],
+            proposals: vec![Improvement {
+                kind: ImprovementKind::AgentPrompt,
+                description: "Evil path traversal".to_string(),
+                target_cwes: vec![78],
+                target_file: PathBuf::from("/etc/passwd"),
+                patch: Patch {
+                    find: String::new(),
+                    replace: "malicious content".to_string(),
+                },
+                source_case: "test_case".to_string(),
+                priority: Priority::High,
+                supporting_evidence: Vec::new(),
+                review: None,
+            }],
+            holdout_case_count: 0,
+            training_case_count: 0,
+            cross_validation_pending: vec![],
+        };
+
+        let applied = apply_accepted_proposals(&cycle, None).unwrap();
+        assert_eq!(
+            applied, 0,
+            "Path traversal outside allowed directories must be blocked"
+        );
+    }
+
+    #[test]
+    fn test_apply_proposals_mixed_kinds() {
+        // Verify that all 3 new kinds + NewPattern all work in a single cycle
+        let pattern_file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(
+            pattern_file.path(),
+            "pub fn c_cpp_patterns() -> Vec<SourcePattern> {\n    vec![\n    ]\n}\n",
+        )
+        .unwrap();
+
+        let agent_file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(agent_file.path(), "# Agent\n\n## Tools\nBasic tools.\n").unwrap();
+
+        let db = skwaq_core::graph::GraphDb::in_memory().unwrap();
+
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: make_score(vec![]),
+            false_negatives: vec![],
+            reviewed_proposals: vec![],
+            proposals: vec![
+                Improvement {
+                    kind: ImprovementKind::NewPattern,
+                    description: "Add test pattern".to_string(),
+                    target_cwes: vec![119],
+                    target_file: pattern_file.path().to_path_buf(),
+                    patch: Patch {
+                        find: String::new(),
+                        replace: r"\btest_api\s*\(".to_string(),
+                    },
+                    source_case: "case1".to_string(),
+                    priority: Priority::High,
+                    supporting_evidence: Vec::new(),
+                    review: None,
+                },
+                Improvement {
+                    kind: ImprovementKind::AgentPrompt,
+                    description: "Add instruction".to_string(),
+                    target_cwes: vec![78],
+                    target_file: agent_file.path().to_path_buf(),
+                    patch: Patch {
+                        find: String::new(),
+                        replace: "## New Section\nDo graph analysis.\n".to_string(),
+                    },
+                    source_case: "case2".to_string(),
+                    priority: Priority::Medium,
+                    supporting_evidence: Vec::new(),
+                    review: None,
+                },
+                Improvement {
+                    kind: ImprovementKind::TaintRule,
+                    description: "Add taint source".to_string(),
+                    target_cwes: vec![78],
+                    target_file: PathBuf::from("data_sources"),
+                    patch: Patch {
+                        find: String::new(),
+                        replace: "recv_buf|network|socket.c|source".to_string(),
+                    },
+                    source_case: "case3".to_string(),
+                    priority: Priority::High,
+                    supporting_evidence: Vec::new(),
+                    review: None,
+                },
+            ],
+            holdout_case_count: 0,
+            training_case_count: 0,
+            cross_validation_pending: vec![],
+        };
+
+        let applied = apply_accepted_proposals(&cycle, Some(&db)).unwrap();
+        assert_eq!(applied, 3, "All 3 proposal kinds should be applied");
+    }
+
+    // ===== Task 5: REORIENT-FAILURE-ANALYST TDD tests =====
+    // These tests define the contract for graph-gap-aware heuristic failure analysis.
+    // They will FAIL until heuristic_failure_analysis is updated.
+
+    #[test]
+    fn test_heuristic_prefers_graph_proposals_over_regex() {
+        // When source code has a dangerous API AND graph context is sparse,
+        // heuristic should propose AgentPrompt/TaintRule, not just NewPattern
+        let cases = vec![FalseNegativeCase {
+            case_id: "buffer-overflow-1".to_string(),
+            expected_cwes: vec![119],
+            detected_cwes: vec![],
+            source_path: PathBuf::from("test.c"),
+            source_content: "void foo() { memcpy(dst, src, n); }".to_string(),
+        }];
+
+        let proposals = heuristic_failure_analysis(&cases);
+
+        // Should still find the memcpy pattern
+        assert!(
+            !proposals.is_empty(),
+            "Should generate at least one proposal"
+        );
+
+        // After reorientation, should include non-NewPattern proposals
+        let has_graph_proposal = proposals.iter().any(|p| {
+            matches!(
+                p.kind,
+                ImprovementKind::AgentPrompt | ImprovementKind::TaintRule
+            )
+        });
+        assert!(
+            has_graph_proposal,
+            "Heuristic should generate graph-based proposals (AgentPrompt or TaintRule), \
+             not only NewPattern regex proposals"
+        );
+    }
+
+    #[test]
+    fn test_heuristic_detects_missing_taint_sources() {
+        // When a false negative involves user input but no data_sources exist,
+        // heuristic should suggest a TaintRule
+        let cases = vec![FalseNegativeCase {
+            case_id: "injection-1".to_string(),
+            expected_cwes: vec![78],
+            detected_cwes: vec![],
+            source_path: PathBuf::from("cmd.c"),
+            source_content: "void run() { char *input = getenv(\"CMD\"); system(input); }"
+                .to_string(),
+        }];
+
+        let proposals = heuristic_failure_analysis(&cases);
+
+        let has_taint_rule = proposals
+            .iter()
+            .any(|p| matches!(p.kind, ImprovementKind::TaintRule));
+        assert!(
+            has_taint_rule,
+            "Missing taint source for getenv should trigger TaintRule proposal"
+        );
+    }
+
+    #[test]
+    fn test_heuristic_suggests_agent_prompt_for_complex_flows() {
+        // Complex multi-step vulnerability that regex alone can't catch
+        let cases = vec![FalseNegativeCase {
+            case_id: "complex-flow-1".to_string(),
+            expected_cwes: vec![78],
+            detected_cwes: vec![],
+            source_path: PathBuf::from("complex.c"),
+            source_content: r#"
+                void process() {
+                    char *data = read_network();
+                    char *transformed = transform(data);
+                    execute_command(transformed);
+                }
+            "#
+            .to_string(),
+        }];
+
+        let proposals = heuristic_failure_analysis(&cases);
+
+        let has_agent_prompt = proposals
+            .iter()
+            .any(|p| matches!(p.kind, ImprovementKind::AgentPrompt));
+        assert!(
+            has_agent_prompt,
+            "Complex multi-step flows should trigger AgentPrompt proposal \
+             to improve agent's graph traversal behavior"
+        );
     }
 }

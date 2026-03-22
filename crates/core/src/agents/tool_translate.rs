@@ -150,6 +150,70 @@ pub fn translate_to_sql(
         ));
     }
 
+    // --- SQL passthrough: validate and execute safe SELECT queries directly ---
+    if upper.starts_with("SELECT") {
+        // Security: reject dangerous constructs
+        if q.contains(';') {
+            return Err("SQL passthrough rejected: semicolons not allowed".into());
+        }
+        if q.contains("--") || q.contains("/*") {
+            return Err("SQL passthrough rejected: SQL comments not allowed".into());
+        }
+        if upper.contains("LOAD_EXTENSION") {
+            return Err("SQL passthrough rejected: LOAD_EXTENSION not allowed".into());
+        }
+
+        // Whitelist of allowed tables
+        let whitelisted: &[&str] = &[
+            "functions",
+            "basic_blocks",
+            "data_sources",
+            "data_sinks",
+            "vulnerabilities",
+            "findings",
+            "cwes",
+            "investigations",
+            "annotations",
+            "hypotheses",
+            "agent_actions",
+            "symbols",
+            "string_literals",
+            "calls",
+            "contains_block",
+            "flows_to",
+            "taint_flows",
+            "func_references_string",
+        ];
+
+        // Extract table references after FROM/JOIN keywords and validate them
+        let words: Vec<&str> = q.split_whitespace().collect();
+        let mut all_tables_ok = true;
+        for (i, word) in words.iter().enumerate() {
+            let upper_word = word.to_uppercase();
+            if upper_word == "FROM" || upper_word == "JOIN" {
+                if let Some(table_word) = words.get(i + 1) {
+                    let table = table_word
+                        .trim_matches(|c: char| !c.is_alphanumeric() && c != '_')
+                        .to_lowercase();
+                    if !whitelisted.contains(&table.as_str()) {
+                        all_tables_ok = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if all_tables_ok {
+            return Ok((q.to_string(), vec![investigation_id.to_string()]));
+        } else {
+            return Err(format!(
+                "SQL passthrough rejected: query references non-whitelisted table. \
+                 Allowed tables: {:?}",
+                whitelisted
+            ));
+        }
+    }
+
     let q_preview: String = q.chars().take(80).collect();
     Err(format!(
         "Unsupported query pattern. Try: MATCH (f:Function) RETURN f, or use keywords: \
@@ -461,9 +525,9 @@ mod tests {
         let result = translate_to_sql("UPDATE functions SET name = 'hacked'", "inv1");
         assert!(result.is_err());
 
-        // Raw SELECT should also be rejected (no pass-through)
+        // Raw SELECT on whitelisted tables now passes through SQL passthrough
         let result = translate_to_sql("SELECT * FROM functions", "inv1");
-        assert!(result.is_err());
+        assert!(result.is_ok());
 
         // Recognised Cypher-like patterns should work and use parameterized queries
         let result = translate_to_sql("MATCH (f:Function) RETURN f", "inv1");
@@ -477,5 +541,182 @@ mod tests {
         let (sql, params) = result.unwrap();
         assert!(sql.contains("?1"));
         assert_eq!(params, vec!["inv1"]);
+    }
+
+    // ===== Task 3: FIX-QUERY-GRAPH TDD tests =====
+    // These tests define the contract for SQL passthrough in translate_to_sql.
+    // They will FAIL until the SQL passthrough logic is implemented.
+
+    #[test]
+    fn sql_passthrough_accepts_valid_select() {
+        // A plain SQL SELECT on whitelisted tables should pass through
+        let result = translate_to_sql(
+            "SELECT name, source_type FROM data_sources WHERE investigation_id = ?1",
+            "inv1",
+        );
+        assert!(
+            result.is_ok(),
+            "Valid SQL SELECT on whitelisted table should be accepted"
+        );
+        let (sql, params) = result.unwrap();
+        assert!(
+            sql.contains("data_sources"),
+            "SQL should be passed through (not re-translated)"
+        );
+        assert_eq!(params, vec!["inv1"]);
+    }
+
+    #[test]
+    fn sql_passthrough_accepts_join_on_whitelisted_tables() {
+        let result = translate_to_sql(
+            "SELECT f.name, s.value FROM functions f \
+             JOIN func_references_string frs ON frs.function_id = f.id \
+             JOIN string_literals s ON frs.string_id = s.id \
+             WHERE f.investigation_id = ?1",
+            "inv1",
+        );
+        assert!(
+            result.is_ok(),
+            "JOIN on whitelisted tables should be accepted"
+        );
+    }
+
+    #[test]
+    fn sql_passthrough_blocks_insert() {
+        let result = translate_to_sql("INSERT INTO functions (id, name) VALUES ('x', 'y')", "inv1");
+        assert!(result.is_err(), "INSERT must be blocked by SQL passthrough");
+    }
+
+    #[test]
+    fn sql_passthrough_blocks_update() {
+        let result = translate_to_sql(
+            "UPDATE functions SET name = 'hacked' WHERE id = 'f1'",
+            "inv1",
+        );
+        assert!(result.is_err(), "UPDATE must be blocked by SQL passthrough");
+    }
+
+    #[test]
+    fn sql_passthrough_blocks_delete() {
+        let result = translate_to_sql("DELETE FROM functions WHERE id = 'f1'", "inv1");
+        assert!(result.is_err(), "DELETE must be blocked by SQL passthrough");
+    }
+
+    #[test]
+    fn sql_passthrough_blocks_drop() {
+        let result = translate_to_sql("DROP TABLE functions", "inv1");
+        assert!(result.is_err(), "DROP must be blocked by SQL passthrough");
+    }
+
+    #[test]
+    fn sql_passthrough_blocks_non_whitelisted_table() {
+        let result = translate_to_sql("SELECT * FROM sqlite_master", "inv1");
+        assert!(
+            result.is_err(),
+            "SELECT on non-whitelisted table must be blocked"
+        );
+    }
+
+    #[test]
+    fn sql_passthrough_blocks_semicolons() {
+        let result = translate_to_sql(
+            "SELECT name FROM functions WHERE investigation_id = ?1; DROP TABLE functions",
+            "inv1",
+        );
+        assert!(
+            result.is_err(),
+            "Semicolons must be rejected to prevent statement chaining"
+        );
+    }
+
+    #[test]
+    fn sql_passthrough_blocks_sql_comments() {
+        let result = translate_to_sql(
+            "SELECT name FROM functions -- WHERE investigation_id = ?1",
+            "inv1",
+        );
+        assert!(result.is_err(), "SQL comments (--) must be blocked");
+
+        let result = translate_to_sql(
+            "SELECT name FROM functions /* hidden */ WHERE investigation_id = ?1",
+            "inv1",
+        );
+        assert!(result.is_err(), "Block comments (/* */) must be blocked");
+    }
+
+    #[test]
+    fn sql_passthrough_blocks_load_extension() {
+        let result = translate_to_sql("SELECT load_extension('/tmp/evil.so')", "inv1");
+        assert!(result.is_err(), "LOAD_EXTENSION must be blocked");
+    }
+
+    #[test]
+    fn sql_passthrough_cypher_still_works_as_fallback() {
+        // Cypher-like queries should still translate correctly
+        let result = translate_to_sql("MATCH (f:Function) RETURN f", "inv1");
+        assert!(result.is_ok(), "Cypher patterns must still work");
+    }
+
+    #[test]
+    fn sql_passthrough_execute_returns_rows() {
+        // Integration test: valid SQL passthrough should execute and return data
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv";
+
+        db.execute(
+            "INSERT INTO symbols (id, name, symbol_type, investigation_id) VALUES (?1, ?2, ?3, ?4)",
+            &[
+                &"s1" as &dyn rusqlite::types::ToSql,
+                &"printf",
+                &"import",
+                &inv_id,
+            ],
+        )
+        .unwrap();
+
+        let (sql, params) = translate_to_sql(
+            "SELECT name, symbol_type FROM symbols WHERE investigation_id = ?1",
+            inv_id,
+        )
+        .unwrap();
+
+        let rows = execute_read_query(&db, &sql, &params).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["name"], "printf");
+    }
+
+    #[test]
+    fn sql_passthrough_all_18_tables_accepted() {
+        // Verify all 18 whitelisted tables are accepted in SQL passthrough
+        let whitelisted = [
+            "functions",
+            "basic_blocks",
+            "data_sources",
+            "data_sinks",
+            "vulnerabilities",
+            "findings",
+            "cwes",
+            "investigations",
+            "annotations",
+            "hypotheses",
+            "agent_actions",
+            "symbols",
+            "string_literals",
+            "calls",
+            "contains_block",
+            "flows_to",
+            "taint_flows",
+            "func_references_string",
+        ];
+
+        for table in &whitelisted {
+            let query = format!("SELECT * FROM {} WHERE 1=0", table);
+            let result = translate_to_sql(&query, "inv1");
+            assert!(
+                result.is_ok(),
+                "Whitelisted table '{}' should be accepted in SQL passthrough",
+                table
+            );
+        }
     }
 }

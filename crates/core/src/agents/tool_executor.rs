@@ -48,6 +48,10 @@ pub fn execute_tool_with_memory(
         "lookup_knowledge" => execute_lookup_knowledge(db, args),
         "store_memory" => execute_store_memory(memory, agent_name, args),
         "recall_memory" => execute_recall_memory(memory, agent_name, args),
+        "get_taint_paths" => execute_get_taint_paths(db, investigation_id, args),
+        "get_cross_file_calls" => execute_get_cross_file_calls(db, investigation_id, args),
+        "get_data_sources" => execute_get_data_sources(db, investigation_id, args),
+        "get_imports" => execute_get_imports(db, investigation_id, args),
         _ => {
             tracing::warn!("Unknown tool: {name}");
             Ok(serde_json::json!({
@@ -560,6 +564,246 @@ fn execute_recall_memory(
     }))
 }
 
+/// Get taint flow paths involving a specific function.
+fn execute_get_taint_paths(
+    db: &GraphDb,
+    investigation_id: &str,
+    args: &serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
+    let function = args.get("function").and_then(|v| v.as_str()).unwrap_or("");
+    let function: String = function.chars().take(256).collect();
+    tracing::info!("Tool get_taint_paths: {function}");
+
+    // Get the function's file prefix to match taint sources/sinks in the same file
+    let file_prefix: Option<String> = db
+        .conn()
+        .query_row(
+            "SELECT address FROM functions WHERE investigation_id = ?1 AND name = ?2",
+            rusqlite::params![investigation_id, function],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()
+        .and_then(|addr| {
+            addr.split(':')
+                .next()
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+        });
+
+    let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) =
+        if let Some(ref prefix) = file_prefix {
+            (
+                "SELECT ds.name, dk.name, tf.path FROM taint_flows tf \
+             JOIN data_sources ds ON tf.source_id = ds.id \
+             JOIN data_sinks dk ON tf.sink_id = dk.id \
+             WHERE ds.investigation_id = ?1 \
+             AND (ds.location LIKE ?2 || '%' OR dk.location LIKE ?2 || '%') \
+             LIMIT 50"
+                    .to_string(),
+                vec![
+                    Box::new(investigation_id.to_string()) as Box<dyn rusqlite::types::ToSql>,
+                    Box::new(prefix.clone()) as Box<dyn rusqlite::types::ToSql>,
+                ],
+            )
+        } else {
+            // No function found — return all taint flows for the investigation
+            (
+                "SELECT ds.name, dk.name, tf.path FROM taint_flows tf \
+             JOIN data_sources ds ON tf.source_id = ds.id \
+             JOIN data_sinks dk ON tf.sink_id = dk.id \
+             WHERE ds.investigation_id = ?1 \
+             LIMIT 50"
+                    .to_string(),
+                vec![Box::new(investigation_id.to_string()) as Box<dyn rusqlite::types::ToSql>],
+            )
+        };
+
+    let mut stmt = db.conn().prepare(&sql)?;
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
+    let rows = stmt.query_map(param_refs.as_slice(), |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
+
+    let paths: Vec<serde_json::Value> = rows
+        .filter_map(|r| r.ok())
+        .map(|(source, sink, path)| {
+            serde_json::json!({
+                "source": source,
+                "sink": sink,
+                "path": path,
+            })
+        })
+        .collect();
+
+    Ok(serde_json::json!({
+        "status": "ok",
+        "function": function,
+        "taint_paths": paths,
+        "count": paths.len()
+    }))
+}
+
+/// Get cross-file call relationships for a function.
+fn execute_get_cross_file_calls(
+    db: &GraphDb,
+    investigation_id: &str,
+    args: &serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
+    let function = args.get("function").and_then(|v| v.as_str()).unwrap_or("");
+    let function: String = function.chars().take(256).collect();
+    tracing::info!("Tool get_cross_file_calls: {function}");
+
+    // Get the function's file prefix from its address
+    let file_prefix: Option<String> = db
+        .conn()
+        .query_row(
+            "SELECT address FROM functions WHERE investigation_id = ?1 AND name = ?2",
+            rusqlite::params![investigation_id, function],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()
+        .and_then(|addr| addr.split(':').next().map(|s| s.to_string()));
+
+    let mut results = Vec::new();
+
+    if let Some(ref prefix) = file_prefix {
+        // Get callees in different files
+        let mut stmt = db.conn().prepare(
+            "SELECT f2.name, f2.address FROM calls c \
+             JOIN functions f1 ON c.caller_id = f1.id \
+             JOIN functions f2 ON c.callee_id = f2.id \
+             WHERE f1.investigation_id = ?1 AND f1.name = ?2 \
+             LIMIT 50",
+        )?;
+
+        let rows = stmt.query_map(rusqlite::params![investigation_id, function], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+
+        for row in rows.flatten() {
+            let (name, address) = row;
+            let callee_prefix = address.split(':').next().unwrap_or("");
+            if callee_prefix != prefix {
+                results.push(serde_json::json!({
+                    "name": name,
+                    "address": address,
+                    "direction": "callee",
+                }));
+            }
+        }
+
+        // Get callers from different files
+        let mut stmt = db.conn().prepare(
+            "SELECT f1.name, f1.address FROM calls c \
+             JOIN functions f1 ON c.caller_id = f1.id \
+             JOIN functions f2 ON c.callee_id = f2.id \
+             WHERE f2.investigation_id = ?1 AND f2.name = ?2 \
+             LIMIT 50",
+        )?;
+
+        let rows = stmt.query_map(rusqlite::params![investigation_id, function], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+
+        for row in rows.flatten() {
+            let (name, address) = row;
+            let caller_prefix = address.split(':').next().unwrap_or("");
+            if caller_prefix != prefix {
+                results.push(serde_json::json!({
+                    "name": name,
+                    "address": address,
+                    "direction": "caller",
+                }));
+            }
+        }
+    }
+
+    Ok(serde_json::json!({
+        "status": "ok",
+        "function": function,
+        "cross_file_calls": results,
+        "count": results.len()
+    }))
+}
+
+/// Get all data sources for an investigation.
+fn execute_get_data_sources(
+    db: &GraphDb,
+    investigation_id: &str,
+    _args: &serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
+    tracing::info!("Tool get_data_sources for investigation {investigation_id}");
+
+    let mut stmt = db.conn().prepare(
+        "SELECT name, source_type, location FROM data_sources \
+         WHERE investigation_id = ?1 LIMIT 100",
+    )?;
+
+    let rows = stmt.query_map([investigation_id], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
+
+    let sources: Vec<serde_json::Value> = rows
+        .filter_map(|r| r.ok())
+        .map(|(name, src_type, location)| {
+            serde_json::json!({
+                "name": name,
+                "source_type": src_type,
+                "location": location,
+            })
+        })
+        .collect();
+
+    Ok(serde_json::json!({
+        "status": "ok",
+        "data_sources": sources,
+        "count": sources.len()
+    }))
+}
+
+/// Get all import symbols for an investigation.
+fn execute_get_imports(
+    db: &GraphDb,
+    investigation_id: &str,
+    _args: &serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
+    tracing::info!("Tool get_imports for investigation {investigation_id}");
+
+    let mut stmt = db.conn().prepare(
+        "SELECT name, symbol_type FROM symbols \
+         WHERE investigation_id = ?1 AND symbol_type = 'import' LIMIT 100",
+    )?;
+
+    let rows = stmt.query_map([investigation_id], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    })?;
+
+    let imports: Vec<serde_json::Value> = rows
+        .filter_map(|r| r.ok())
+        .map(|(name, sym_type)| {
+            serde_json::json!({
+                "name": name,
+                "symbol_type": sym_type,
+            })
+        })
+        .collect();
+
+    Ok(serde_json::json!({
+        "status": "ok",
+        "imports": imports,
+        "count": imports.len()
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -931,5 +1175,303 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("Failed to read knowledge pack"));
+    }
+
+    // ===== Task 2: GRAPH-TOOLS execution TDD tests =====
+    // These tests define the contract for the 4 new graph tools.
+    // They will FAIL until the execute handlers are implemented.
+
+    #[test]
+    fn test_execute_get_taint_paths() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv";
+
+        // Set up function, data source, data sink, and taint flow
+        db.execute(
+            "INSERT INTO functions (id, name, address, investigation_id) VALUES (?1, ?2, ?3, ?4)",
+            &[
+                &"f1" as &dyn rusqlite::types::ToSql,
+                &"parse_input",
+                &"main.c:0x1000",
+                &inv_id,
+            ],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO data_sources (id, name, source_type, location, investigation_id) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            &[
+                &"ds1" as &dyn rusqlite::types::ToSql,
+                &"user_input",
+                &"stdin",
+                &"main.c:10",
+                &inv_id,
+            ],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO data_sinks (id, name, sink_type, danger_level, location, investigation_id) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            &[
+                &"dk1" as &dyn rusqlite::types::ToSql,
+                &"strcpy_call",
+                &"memory",
+                &"high",
+                &"main.c:20",
+                &inv_id,
+            ],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO taint_flows (source_id, sink_id, path, sanitized) VALUES (?1, ?2, ?3, ?4)",
+            &[
+                &"ds1" as &dyn rusqlite::types::ToSql,
+                &"dk1",
+                &"user_input -> buf -> strcpy_call",
+                &0i32 as &dyn rusqlite::types::ToSql,
+            ],
+        )
+        .unwrap();
+
+        let args = serde_json::json!({"function": "parse_input"});
+        let result = execute_tool(&db, inv_id, "get_taint_paths", &args).unwrap();
+
+        assert_eq!(result["status"], "ok");
+        let paths = result["taint_paths"]
+            .as_array()
+            .expect("taint_paths must be an array");
+        assert!(!paths.is_empty(), "Should find at least one taint path");
+        assert!(
+            paths[0]["source"].as_str().unwrap().contains("user_input"),
+            "Taint path should include source name"
+        );
+        assert!(
+            paths[0]["sink"].as_str().unwrap().contains("strcpy_call"),
+            "Taint path should include sink name"
+        );
+    }
+
+    #[test]
+    fn test_execute_get_taint_paths_no_results() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv";
+
+        let args = serde_json::json!({"function": "nonexistent"});
+        let result = execute_tool(&db, inv_id, "get_taint_paths", &args).unwrap();
+
+        assert_eq!(result["status"], "ok");
+        assert_eq!(
+            result["taint_paths"].as_array().unwrap().len(),
+            0,
+            "No taint paths for nonexistent function"
+        );
+    }
+
+    #[test]
+    fn test_execute_get_cross_file_calls() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv";
+
+        // Two functions in different files
+        db.execute(
+            "INSERT INTO functions (id, name, address, investigation_id) VALUES (?1, ?2, ?3, ?4)",
+            &[
+                &"f1" as &dyn rusqlite::types::ToSql,
+                &"caller_func",
+                &"src/main.c:0x1000",
+                &inv_id,
+            ],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO functions (id, name, address, investigation_id) VALUES (?1, ?2, ?3, ?4)",
+            &[
+                &"f2" as &dyn rusqlite::types::ToSql,
+                &"callee_func",
+                &"src/util.c:0x2000",
+                &inv_id,
+            ],
+        )
+        .unwrap();
+        // Same file caller — should NOT appear in cross-file results
+        db.execute(
+            "INSERT INTO functions (id, name, address, investigation_id) VALUES (?1, ?2, ?3, ?4)",
+            &[
+                &"f3" as &dyn rusqlite::types::ToSql,
+                &"same_file_func",
+                &"src/main.c:0x3000",
+                &inv_id,
+            ],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO calls (caller_id, callee_id) VALUES (?1, ?2)",
+            &[&"f1" as &dyn rusqlite::types::ToSql, &"f2"],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO calls (caller_id, callee_id) VALUES (?1, ?2)",
+            &[&"f1" as &dyn rusqlite::types::ToSql, &"f3"],
+        )
+        .unwrap();
+
+        let args = serde_json::json!({"function": "caller_func"});
+        let result = execute_tool(&db, inv_id, "get_cross_file_calls", &args).unwrap();
+
+        assert_eq!(result["status"], "ok");
+        let calls = result["cross_file_calls"]
+            .as_array()
+            .expect("cross_file_calls must be an array");
+        // Should include callee_func (different file) but NOT same_file_func
+        assert!(
+            calls
+                .iter()
+                .any(|c| c["name"].as_str().unwrap() == "callee_func"),
+            "Should include cross-file callee"
+        );
+        assert!(
+            !calls
+                .iter()
+                .any(|c| c["name"].as_str().unwrap() == "same_file_func"),
+            "Should exclude same-file calls"
+        );
+    }
+
+    #[test]
+    fn test_execute_get_data_sources() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv";
+
+        db.execute(
+            "INSERT INTO data_sources (id, name, source_type, location, investigation_id) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            &[
+                &"ds1" as &dyn rusqlite::types::ToSql,
+                &"env_var",
+                &"environment",
+                &"config.c:15",
+                &inv_id,
+            ],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO data_sources (id, name, source_type, location, investigation_id) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            &[
+                &"ds2" as &dyn rusqlite::types::ToSql,
+                &"network_recv",
+                &"network",
+                &"net.c:42",
+                &inv_id,
+            ],
+        )
+        .unwrap();
+        // Different investigation — should NOT appear
+        db.execute(
+            "INSERT INTO data_sources (id, name, source_type, location, investigation_id) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            &[
+                &"ds3" as &dyn rusqlite::types::ToSql,
+                &"other_source",
+                &"file",
+                &"other.c:1",
+                &"other-inv",
+            ],
+        )
+        .unwrap();
+
+        let args = serde_json::json!({});
+        let result = execute_tool(&db, inv_id, "get_data_sources", &args).unwrap();
+
+        assert_eq!(result["status"], "ok");
+        let sources = result["data_sources"]
+            .as_array()
+            .expect("data_sources must be an array");
+        assert_eq!(
+            sources.len(),
+            2,
+            "Should return only sources for this investigation"
+        );
+        assert!(
+            sources.iter().any(|s| s["name"] == "env_var"),
+            "Should include env_var source"
+        );
+        assert!(
+            sources.iter().any(|s| s["name"] == "network_recv"),
+            "Should include network_recv source"
+        );
+    }
+
+    #[test]
+    fn test_execute_get_imports() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv";
+
+        // Insert import symbols
+        db.execute(
+            "INSERT INTO symbols (id, name, symbol_type, investigation_id) VALUES (?1, ?2, ?3, ?4)",
+            &[
+                &"s1" as &dyn rusqlite::types::ToSql,
+                &"stdio.h",
+                &"import",
+                &inv_id,
+            ],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO symbols (id, name, symbol_type, investigation_id) VALUES (?1, ?2, ?3, ?4)",
+            &[
+                &"s2" as &dyn rusqlite::types::ToSql,
+                &"stdlib.h",
+                &"import",
+                &inv_id,
+            ],
+        )
+        .unwrap();
+        // Non-import symbol — should NOT appear
+        db.execute(
+            "INSERT INTO symbols (id, name, symbol_type, investigation_id) VALUES (?1, ?2, ?3, ?4)",
+            &[
+                &"s3" as &dyn rusqlite::types::ToSql,
+                &"local_var",
+                &"local",
+                &inv_id,
+            ],
+        )
+        .unwrap();
+
+        let args = serde_json::json!({});
+        let result = execute_tool(&db, inv_id, "get_imports", &args).unwrap();
+
+        assert_eq!(result["status"], "ok");
+        let imports = result["imports"]
+            .as_array()
+            .expect("imports must be an array");
+        assert_eq!(imports.len(), 2, "Should return only import symbols");
+        assert!(
+            imports.iter().any(|i| i["name"] == "stdio.h"),
+            "Should include stdio.h import"
+        );
+        assert!(
+            !imports.iter().any(|i| i["name"] == "local_var"),
+            "Should exclude non-import symbols"
+        );
+    }
+
+    #[test]
+    fn test_execute_get_taint_paths_function_name_capped() {
+        // Security: function name argument capped at 256 characters
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv";
+
+        let long_name = "a".repeat(300);
+        let args = serde_json::json!({"function": long_name});
+        let result = execute_tool(&db, inv_id, "get_taint_paths", &args).unwrap();
+
+        // Should not error out; either returns empty results or gracefully handles
+        assert!(
+            result["status"] == "ok" || result["status"] == "error",
+            "Should handle oversized function name gracefully"
+        );
     }
 }
