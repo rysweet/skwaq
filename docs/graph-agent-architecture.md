@@ -491,3 +491,6 @@ The per-case token budget (50K target, 100K max) remains unchanged.
 | Per-section truncation | Each context section enforces its own character and row limits |
 
 For the complete security model, see [Gym Safety Hardening](gym-safety-hardening.md).
+
+For a step-by-step guide to running improvement cycles that exercise the
+graph-aware proposal pipeline, see [Graph-Agent Gym Cycle](graph-agent-gym-cycle.md).

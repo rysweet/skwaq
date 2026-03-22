@@ -323,3 +323,10 @@ language = "c"
 ```
 
 Path values must be relative with no `..` segments.
+
+## Next Steps
+
+- [Graph-Agent Gym Cycle](graph-agent-gym-cycle.md) — Running cycles that
+  generate AgentPrompt and TaintRule proposals (not just regex patterns)
+- [Gym Configuration](gym-configuration.md) — Full configuration reference
+- [Gym Safety Hardening](gym-safety-hardening.md) — Security controls

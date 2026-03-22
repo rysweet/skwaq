@@ -30,6 +30,9 @@ futures = "0.3"
 indicatif = "0.17"
 regex = "1"
 
+[features]
+test-heuristic-api = []
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
 tempfile = { workspace = true }

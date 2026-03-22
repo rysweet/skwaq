@@ -447,6 +447,9 @@ git add -A && git commit -m "gym: improve fixtures F1 85.2%→86.3% (+1.1%)"
 
 For the full security model, see [Gym Safety Hardening](gym-safety-hardening.md).
 
+For running improvement cycles that target agent behavior and taint coverage
+(rather than regex patterns), see [Graph-Agent Gym Cycle](graph-agent-gym-cycle.md).
+
 ## Troubleshooting
 
 ### "No false negatives found"
