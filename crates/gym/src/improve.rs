@@ -23,6 +23,10 @@ use std::path::{Path, PathBuf};
 const PROPOSAL_REGEX_SIZE_LIMIT: usize = 200_000;
 
 const IMPROVE_KB_MAX_CWE_QUERIES: usize = 6;
+
+/// Maximum number of SourcePattern entries allowed in a single pattern file.
+/// Prevents unbounded growth across successive improvement cycles.
+const PATTERN_COUNT_CEILING: usize = 500;
 const IMPROVE_KB_HITS_PER_QUERY: usize = 2;
 const IMPROVE_KB_SNIPPET_CHAR_LIMIT: usize = 700;
 const IMPROVE_KB_FIXED_QUERIES: [&str; 2] = ["methodology", "cwe-families"];
@@ -1458,7 +1462,17 @@ fn parse_review_rating(
 /// Heuristic analysis of false negatives (no LLM needed).
 /// Checks for graph context gaps first (missing taint rules, agent prompt gaps),
 /// then falls back to missing regex patterns.
+#[cfg(not(feature = "test-heuristic-api"))]
 fn heuristic_failure_analysis(false_negatives: &[FalseNegativeCase]) -> Vec<Improvement> {
+    heuristic_failure_analysis_impl(false_negatives)
+}
+
+#[cfg(feature = "test-heuristic-api")]
+pub fn heuristic_failure_analysis(false_negatives: &[FalseNegativeCase]) -> Vec<Improvement> {
+    heuristic_failure_analysis_impl(false_negatives)
+}
+
+fn heuristic_failure_analysis_impl(false_negatives: &[FalseNegativeCase]) -> Vec<Improvement> {
     let mut proposals = Vec::new();
 
     // Phase 1: Check for graph context gaps — prefer agent prompt and taint rule proposals
@@ -2262,6 +2276,19 @@ pub fn apply_accepted_proposals(
         let new_content = match proposal.kind {
             ImprovementKind::NewPattern => {
                 if proposal.patch.find.is_empty() {
+                    // Pattern ceiling guard: count existing SourcePattern entries
+                    // and skip if we'd exceed the ~500 limit.
+                    let existing_count = content.matches("SourcePattern {").count();
+                    if existing_count >= PATTERN_COUNT_CEILING {
+                        tracing::warn!(
+                            "Pattern ceiling reached ({} >= {}), skipping NewPattern proposal: {}",
+                            existing_count,
+                            PATTERN_COUNT_CEILING,
+                            proposal.description.chars().take(60).collect::<String>(),
+                        );
+                        continue;
+                    }
+
                     // Append mode: generate a proper SourcePattern struct and insert
                     // before the closing `]` of the c_cpp_patterns() array.
                     let regex_str = &proposal.patch.replace;

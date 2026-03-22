@@ -241,3 +241,10 @@ skwaq agents list
 Keep agent prompts focused on a single responsibility. The synthesis layer
 handles cross-agent coordination — individual agents should not try to
 do everything.
+
+## Related Documentation
+
+- [Graph-Agent Gym Cycle](graph-agent-gym-cycle.md) — Running improvement
+  cycles that generate AgentPrompt proposals to tune agent behavior
+- [Graph-Agent Architecture](graph-agent-architecture.md) — How agents use
+  graph tools for vulnerability detection
