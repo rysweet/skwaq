@@ -31,6 +31,9 @@ Thumbs.db
 *.secret
 credentials.json
 
+# Git worktrees
+worktrees/
+
 # Skwaq runtime
 .skwaq/
 
