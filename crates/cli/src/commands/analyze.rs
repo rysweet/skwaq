@@ -409,7 +409,7 @@ mod tests {
             "strcpy".into(),
         );
 
-        assert_eq!(semantic, "buffer_overflow");
+        assert_eq!(semantic, "buffer_overflow,unsafe_api_usage");
     }
 
     #[test]

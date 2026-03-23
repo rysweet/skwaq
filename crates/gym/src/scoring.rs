@@ -194,7 +194,7 @@ pub fn cwe_family(cwe: u32) -> u32 {
         // Use-after-free family -> CWE-416
         415 => 416,
         // Injection family -> CWE-74
-        15 | 77 | 78 | 79 | 80 | 89 | 90 | 94 | 95 | 96 | 114 | 116 | 501 | 643 => 74,
+        15 | 77 | 78 | 79 | 80 | 89 | 90 | 94 | 95 | 96 | 114 | 116 | 501 | 643 | 918 => 74,
         // Input validation family -> CWE-20
         17 | 187 => 20,
         // Race condition family -> CWE-362
@@ -255,13 +255,13 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
     match category {
         "memory" => vec![
             118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 129, 131, 135, 170, 176, 188, 467,
-            562, 785, 787, 788, 805, 806, 824, 839, 416, 415, 189, 190, 191, 192, 193, 194, 195,
-            196, 197, 680, 681, 682, 128, 590, 761, 763, 822, 823, 825, 843,
+            562, 676, 785, 787, 788, 805, 806, 824, 839, 416, 415, 189, 190, 191, 192, 193, 194,
+            195, 196, 197, 680, 681, 682, 128, 590, 761, 763, 822, 823, 825, 843,
         ],
-        "injection" => vec![15, 77, 78, 89, 90, 94, 114, 116, 501, 643, 917],
-        "format_string" => vec![134],
+        "injection" => vec![15, 77, 78, 89, 90, 94, 114, 116, 501, 643, 917, 918],
+        "format_string" => vec![134, 676],
         "race" => vec![362, 364, 366, 367, 832],
-        "temp_file" => vec![377],
+        "temp_file" => vec![377, 676],
         "path_traversal" => vec![22, 23, 36, 426],
         "deserialization" => vec![502],
         "crypto" => vec![
@@ -293,9 +293,9 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
     match class {
         SemanticPatternClass::BufferOverflow => &[
             118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 129, 131, 135, 170, 176, 188, 467,
-            785, 787, 788, 805, 806, 824, 839, 843,
+            676, 785, 787, 788, 805, 806, 824, 839, 843,
         ],
-        SemanticPatternClass::CommandInjection => &[77, 78, 643],
+        SemanticPatternClass::CommandInjection => &[77, 78, 643, 918],
         SemanticPatternClass::CrossSiteScripting => &[79, 80],
         SemanticPatternClass::CryptoWeakness => &[
             256, 259, 295, 310, 312, 319, 321, 323, 325, 326, 327, 328, 330, 338, 347, 780, 798,
@@ -304,12 +304,12 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         SemanticPatternClass::Deserialization => &[502],
         SemanticPatternClass::DeadStore => &[],
         SemanticPatternClass::EmbeddedMaliciousCode => &[506, 511, 510],
-        SemanticPatternClass::FormatString => &[134],
+        SemanticPatternClass::FormatString => &[134, 676],
         SemanticPatternClass::ImproperAccessControl => &[272, 273, 284],
         SemanticPatternClass::ImproperErrorHandling => &[666, 390, 391, 667],
         SemanticPatternClass::InfiniteLoop => &[835, 674],
         SemanticPatternClass::InformationExposure => &[226, 534, 535, 526],
-        SemanticPatternClass::InsecureTempFile => &[377],
+        SemanticPatternClass::InsecureTempFile => &[377, 676],
         SemanticPatternClass::InvalidFree => &[590],
         SemanticPatternClass::LdapInjection => &[90],
         SemanticPatternClass::OperatorMisuse => &[15, 478, 479, 480, 481, 482, 483, 484, 685, 688],
@@ -377,7 +377,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         | 188 | 467 | 785 | 787 | 788 | 805 | 806 | 824 | 839 => {
             Some(SemanticPatternClass::BufferOverflow)
         }
-        77 | 78 | 643 => Some(SemanticPatternClass::CommandInjection),
+        77 | 78 | 643 | 918 => Some(SemanticPatternClass::CommandInjection),
         79 | 80 => Some(SemanticPatternClass::CrossSiteScripting),
         256 | 259 | 295 | 310 | 312 | 319 | 321 | 323 | 325 | 326 | 327 | 328 | 330 | 338 | 347
         | 780 | 798 | 1240 => Some(SemanticPatternClass::CryptoWeakness),
@@ -830,7 +830,7 @@ mod tests {
     fn test_category_to_cwes() {
         assert!(!category_to_cwes("memory").is_empty());
         assert!(!category_to_cwes("injection").is_empty());
-        assert_eq!(category_to_cwes("format_string"), vec![134]);
+        assert_eq!(category_to_cwes("format_string"), vec![134, 676]);
         assert!(category_to_cwes("unknown_category").is_empty());
     }
 
@@ -2076,6 +2076,37 @@ mod tests {
         assert!(
             (CWE_REGRESSION_NOISE_MARGIN - 0.02).abs() < f64::EPSILON,
             "CWE_REGRESSION_NOISE_MARGIN must be exactly 0.02"
+        );
+    }
+
+    // ---- TDD: CWE-918 (SSRF) → injection family (CWE-74) ----
+
+    #[test]
+    fn test_cwe_918_maps_to_injection_family() {
+        assert_eq!(
+            cwe_family(918),
+            74,
+            "CWE-918 (SSRF) must map to injection family (CWE-74)"
+        );
+    }
+
+    #[test]
+    fn test_ssrf_finding_scores_as_true_positive() {
+        let case = TestCase {
+            id: "cse_ssrf_py".to_string(),
+            path: "test.py".to_string(),
+            binary_path: None,
+            expected_cwes: vec![918],
+            is_negative: false,
+            language: "python".to_string(),
+        };
+        // A finding with CWE-74 (injection) should match expected CWE-918 via family mapping
+        let findings = vec![make_finding("injection", vec![74])];
+
+        let outcome = score_case(&case, &findings, &|f| f.cwes.clone());
+        assert!(
+            outcome.cwe_hits[&918],
+            "CWE-918 expected case with CWE-74 finding must score as TP"
         );
     }
 }

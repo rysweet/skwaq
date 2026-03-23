@@ -302,6 +302,8 @@ fn is_buffer_overflow(category: &str, title: &str, function_name: &str) -> bool 
         "strcpy", "strcat", "gets", "memcpy", "memmove", "strncpy", "strncat",
         // Wide-string equivalents (wchar_t)
         "wcscpy", "wcscat", "wmemcpy", "wmemmove", "wcsncpy", "wcsncat", "swprintf",
+        // Stack allocation without bounds
+        "alloca",
     ];
     const BUFFER_TERMS: &[&str] = &[
         "buffer overflow",
@@ -311,6 +313,9 @@ fn is_buffer_overflow(category: &str, title: &str, function_name: &str) -> bool 
         "out of bounds",
         "out-of-bounds write",
         "out-of-bounds read",
+        "variable-length array",
+        "non-constant size",
+        "stack overflow",
     ];
 
     is_function(function_name, BUFFER_APIS)
@@ -320,13 +325,27 @@ fn is_buffer_overflow(category: &str, title: &str, function_name: &str) -> bool 
 
 fn is_command_injection(_category: &str, title: &str, function_name: &str) -> bool {
     const COMMAND_APIS: &[&str] = &[
-        "system", "popen", "exec", "execl", "execle", "execlp", "execv", "execvp", "execvpe",
+        "system",
+        "popen",
+        "exec",
+        "execl",
+        "execle",
+        "execlp",
+        "execv",
+        "execvp",
+        "execvpe",
+        // SSRF sinks (CWE-918)
+        "urlopen",
+        "urllib.request.urlopen",
     ];
     const COMMAND_TERMS: &[&str] = &[
         "command injection",
         "shell injection",
         "os command injection",
         "command execution",
+        "ssrf",
+        "server-side request forgery",
+        "server side request forgery",
     ];
 
     is_function(function_name, COMMAND_APIS) || contains_any(title, COMMAND_TERMS)
@@ -381,8 +400,16 @@ fn is_improper_access_control(category: &str, title: &str, function_name: &str) 
 }
 
 fn is_path_traversal(category: &str, title: &str, function_name: &str) -> bool {
+    const PATH_APIS: &[&str] = &[
+        "os.path.join",
+        "path.join",
+        "path.resolve",
+        "path.normalize",
+    ];
+
     !is_untrusted_search_path(category, title, function_name)
         && (category == "path_traversal"
+            || is_function(function_name, PATH_APIS)
             || contains_any(
                 title,
                 &["path traversal", "directory traversal", "zip slip"],
@@ -553,6 +580,11 @@ fn is_crypto_weakness(category: &str, title: &str) -> bool {
                 "rc4",
                 "weak key",
                 "insufficient key",
+                "hashlib",
+                "random.choice",
+                "random.randint",
+                "random.random",
+                "not cryptographically secure",
             ],
         )
 }
@@ -599,7 +631,25 @@ fn is_prototype_pollution(category: &str, title: &str) -> bool {
 
 fn is_unsafe_api_usage(category: &str, title: &str, function_name: &str) -> bool {
     category == "unsafe_code"
-        || is_function(function_name, &["transmute", "setuid", "setgid"])
+        || category == "temp_file"
+        || is_function(
+            function_name,
+            &[
+                "transmute",
+                "setuid",
+                "setgid",
+                "gets",
+                "strcpy",
+                "strcat",
+                "sprintf",
+                "vsprintf",
+                "scanf",
+                "mktemp",
+                "tmpnam",
+                "tempnam",
+                "alloca",
+            ],
+        )
         || contains_any(
             title,
             &[
@@ -608,6 +658,7 @@ fn is_unsafe_api_usage(category: &str, title: &str, function_name: &str) -> bool
                 "unsafe api",
                 "deprecated api",
                 "banned function",
+                "no bounds check",
             ],
         )
 }
@@ -650,6 +701,11 @@ fn is_integer_overflow(category: &str, title: &str, function_name: &str) -> bool
                 "integer coercion",
                 "atoi",
                 "atol",
+                "multiplication may overflow",
+                "addition may overflow",
+                "may wrap around",
+                "narrowing cast",
+                "overflow before allocation",
             ],
         )
 }
@@ -1658,5 +1714,148 @@ mod tests {
         let classifier = SemanticPatternClassifier::new();
         let classes = classifier.classify("memory", "Dangerous API: atol", "atol");
         assert!(classes.contains(&SemanticPatternClass::IntegerOverflow));
+    }
+
+    // ---- TDD: CWE-676 banned C API functions → UnsafeApiUsage ----
+
+    #[test]
+    fn classifies_gets_as_unsafe_api_usage() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "unsafe_code",
+            "Pattern: dangerous function gets",
+            "gets",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "gets must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn classifies_strcpy_as_unsafe_api_usage() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "memory",
+            "Pattern: dangerous function strcpy",
+            "strcpy",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "strcpy must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn classifies_strcat_as_unsafe_api_usage() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "memory",
+            "Pattern: dangerous function strcat",
+            "strcat",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "strcat must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn classifies_sprintf_as_unsafe_api_usage() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "memory",
+            "Pattern: dangerous function sprintf",
+            "sprintf",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "sprintf must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn classifies_vsprintf_as_unsafe_api_usage() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "memory",
+            "Pattern: dangerous function vsprintf",
+            "vsprintf",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "vsprintf must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn classifies_tmpnam_as_unsafe_api_usage() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "temp_file",
+            "Pattern: dangerous function tmpnam",
+            "tmpnam",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "tmpnam must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn classifies_tempnam_as_unsafe_api_usage() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "temp_file",
+            "Pattern: dangerous function tempnam",
+            "tempnam",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "tempnam must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn classifies_mktemp_as_unsafe_api_usage() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "temp_file",
+            "Pattern: insecure temporary file via mktemp",
+            "mktemp",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "mktemp must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn banned_api_gets_detected_by_function_name_alone() {
+        // Even without "dangerous function" in the title, the function name should trigger
+        let classes = SemanticPatternClassifier::new().classify(
+            "memory",
+            "LLM: buffer read in parse_input",
+            "gets",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "gets by function_name alone must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn banned_api_strcpy_detected_by_function_name_alone() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "memory",
+            "LLM: copy operation in handle_request",
+            "strcpy",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "strcpy by function_name alone must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
     }
 }

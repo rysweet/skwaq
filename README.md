@@ -141,6 +141,8 @@ The `gym improve` command analyzes detection failures, proposes targeted fixes
 (new patterns, CWE mappings, taint rules), reviews them for overfitting via an
 LLM reviewer agent, and applies accepted patches. See
 [docs/gym-self-improvement.md](docs/gym-self-improvement.md) for the full guide.
+See [docs/detection-coverage.md](docs/detection-coverage.md) for how semantic
+classification, CWE family mapping, and scoring interact.
 
 ## Architecture
 

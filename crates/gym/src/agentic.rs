@@ -1164,6 +1164,13 @@ fn dominant_expert_domain(
         clusters.extend(finding_clusters);
     }
 
+    // "unsafe_api" is a meta-cluster that overlaps with specific domains
+    // (e.g., strcpy is both buffer_overflow/memory_bounds and unsafe_api).
+    // Remove it when a more specific cluster is present.
+    if clusters.len() > 1 {
+        clusters.remove("unsafe_api");
+    }
+
     if clusters.len() == 1 {
         clusters
             .into_iter()
@@ -2238,7 +2245,10 @@ mod tests {
             title: "LLM: stack buffer overflow in strcpy".into(),
         };
 
-        assert_eq!(semantic_prompt_hint(&finding), "buffer_overflow");
+        assert_eq!(
+            semantic_prompt_hint(&finding),
+            "buffer_overflow, unsafe_api_usage"
+        );
     }
 
     #[test]
