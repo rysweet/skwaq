@@ -255,13 +255,13 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
     match category {
         "memory" => vec![
             118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 129, 131, 135, 170, 176, 188, 467,
-            562, 785, 787, 788, 805, 806, 824, 839, 416, 415, 189, 190, 191, 192, 193, 194, 195,
-            196, 197, 680, 681, 682, 128, 590, 761, 763, 822, 823, 825, 843,
+            562, 676, 785, 787, 788, 805, 806, 824, 839, 416, 415, 189, 190, 191, 192, 193, 194,
+            195, 196, 197, 680, 681, 682, 128, 590, 761, 763, 822, 823, 825, 843,
         ],
         "injection" => vec![15, 77, 78, 89, 90, 94, 114, 116, 501, 643, 917, 918],
-        "format_string" => vec![134],
+        "format_string" => vec![134, 676],
         "race" => vec![362, 364, 366, 367, 832],
-        "temp_file" => vec![377],
+        "temp_file" => vec![377, 676],
         "path_traversal" => vec![22, 23, 36, 426],
         "deserialization" => vec![502],
         "crypto" => vec![
@@ -295,7 +295,7 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
             118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 129, 131, 135, 170, 176, 188, 467,
             676, 785, 787, 788, 805, 806, 824, 839, 843,
         ],
-        SemanticPatternClass::CommandInjection => &[77, 78, 643],
+        SemanticPatternClass::CommandInjection => &[77, 78, 643, 918],
         SemanticPatternClass::CrossSiteScripting => &[79, 80],
         SemanticPatternClass::CryptoWeakness => &[
             256, 259, 295, 310, 312, 319, 321, 323, 325, 326, 327, 328, 330, 338, 347, 780, 798,
@@ -377,7 +377,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         | 188 | 467 | 785 | 787 | 788 | 805 | 806 | 824 | 839 => {
             Some(SemanticPatternClass::BufferOverflow)
         }
-        77 | 78 | 643 => Some(SemanticPatternClass::CommandInjection),
+        77 | 78 | 643 | 918 => Some(SemanticPatternClass::CommandInjection),
         79 | 80 => Some(SemanticPatternClass::CrossSiteScripting),
         256 | 259 | 295 | 310 | 312 | 319 | 321 | 323 | 325 | 326 | 327 | 328 | 330 | 338 | 347
         | 780 | 798 | 1240 => Some(SemanticPatternClass::CryptoWeakness),
@@ -830,7 +830,7 @@ mod tests {
     fn test_category_to_cwes() {
         assert!(!category_to_cwes("memory").is_empty());
         assert!(!category_to_cwes("injection").is_empty());
-        assert_eq!(category_to_cwes("format_string"), vec![134]);
+        assert_eq!(category_to_cwes("format_string"), vec![134, 676]);
         assert!(category_to_cwes("unknown_category").is_empty());
     }
 

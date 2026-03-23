@@ -811,6 +811,34 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "realloc with multiplication may overflow; check for integer overflow before reallocation",
         },
+        // Integer overflow: malloc with multiplication (CWE-190, CWE-680)
+        SourcePattern {
+            regex: r"\bmalloc\s*\([^)]*\*[^)]*\)",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::High,
+            reason: "malloc with multiplication may overflow; check for integer overflow before allocation",
+        },
+        // Integer overflow: calloc-like manual pattern (CWE-190, CWE-680)
+        SourcePattern {
+            regex: r"\bmalloc\s*\([^)]*\+[^)]*\)",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::Medium,
+            reason: "malloc with addition may overflow for large inputs; validate size before allocation",
+        },
+        // Integer cast truncation (CWE-190): cast to unsigned short/char before use
+        SourcePattern {
+            regex: r"\(unsigned\s+short\)\s*\w+",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::Medium,
+            reason: "Cast to unsigned short may truncate value; check for overflow before narrowing cast",
+        },
+        // Integer overflow: uint32_t multiplication (CWE-190, CWE-680)
+        SourcePattern {
+            regex: r"\buint32_t\b[^;]*=[^;]*\*[^;]*;",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::High,
+            reason: "32-bit integer multiplication may wrap around; validate operands before multiplication",
+        },
         // Use-after-free / double-free (CWE-416) — from self-improvement iteration 5
         SourcePattern {
             regex: r"\bfree\s*\(",
@@ -824,6 +852,20 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::Memory,
             severity: Severity::High,
             reason: "alloca allocates on the stack; large or unchecked sizes cause stack overflow",
+        },
+        // Variable-length array with non-constant size (CWE-119, CWE-787)
+        SourcePattern {
+            regex: r"\bchar\s+\w+\s*\[\s*[a-zA-Z_]\w*\s*\]",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Variable-length array with non-constant size; attacker-controlled size causes stack overflow",
+        },
+        // VLA with other types (CWE-119, CWE-787)
+        SourcePattern {
+            regex: r"\b(?:int|unsigned|short|long|uint\d+_t)\s+\w+\s*\[\s*[a-zA-Z_]\w*\s*\]",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Variable-length array with non-constant size; attacker-controlled size causes stack overflow",
         },
         // LDAP injection (CWE-90) — from self-improvement iteration 5
         SourcePattern {
