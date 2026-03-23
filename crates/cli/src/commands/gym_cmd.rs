@@ -83,6 +83,10 @@ pub enum GymSub {
         #[arg(long, default_value = "fixtures,juliet,owasp,cyberseceval,cgc")]
         suites: String,
 
+        /// Maximum cases per suite (0 = all cases)
+        #[arg(long, default_value = "0")]
+        max_cases: usize,
+
         /// Processes per suite for multi-process parallelism (1-50)
         #[arg(long, default_value = "5")]
         procs: usize,
@@ -342,6 +346,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
         }
         GymSub::Eval {
             suites,
+            max_cases,
             procs,
             concurrency,
             quick,
@@ -386,7 +391,12 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             )?;
 
             let exe = std::env::current_exe()?;
-            let suite_cases = load_suite_case_counts(&gym)?;
+            let mut suite_cases = load_suite_case_counts(&gym)?;
+            if *max_cases > 0 {
+                for count in suite_cases.values_mut() {
+                    *count = (*count).min(*max_cases);
+                }
+            }
             println!("=== Skwaq Gym Evaluation ({mode}) ===");
             println!("  Suites:      {suites}");
             println!("  Procs/suite: {procs}");
