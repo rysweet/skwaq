@@ -217,8 +217,8 @@ pub fn cwe_family(cwe: u32) -> u32 {
         319 | 321 => 327,
         // Hardcoded password / plaintext password storage -> credentials family
         256 | 259 => 312,
-        // Use of potentially dangerous function -> CWE-676
-        222 | 223 | 242 | 244 | 247 | 676 => 676,
+        // Use of potentially dangerous function / reachable assertion -> CWE-676
+        222 | 223 | 242 | 244 | 247 | 617 | 676 => 676,
         // Hardware crypto with short key -> crypto family
         1240 => 327,
         // Information exposure family -> CWE-200
@@ -227,8 +227,8 @@ pub fn cwe_family(cwe: u32) -> u32 {
         264 | 269 | 272 | 273 | 275 | 434 | 732 => 284,
         // Error handling family -> CWE-703
         388 | 390 | 391 | 393 | 754 | 755 => 703,
-        // Resource consumption family -> CWE-400
-        399 | 770 | 835 => 400,
+        // Resource consumption / exhaustion -> resource leak family
+        399 | 400 | 770 | 835 => 401,
         // Type confusion -> memory safety family
         843 => 119,
         // Untrusted/expired/freed pointer dereference -> memory safety family
@@ -239,8 +239,8 @@ pub fn cwe_family(cwe: u32) -> u32 {
         // Keep this conservative: only shutdown/release/lifetime-management cases map here.
         404 | 459 | 675 | 772 | 773 | 775 | 789 => 401,
         // Uninitialized variable family -> CWE-457
-        // Includes: improper initialization (665), missing init (908)
-        665 | 908 => 457,
+        // Includes: unused variable assignment (563), improper initialization (665), missing init (908)
+        563 | 665 | 908 => 457,
         // sizeof() on pointer / path manipulation w/o max-size buffer -> buffer overflow family
         467 | 785 => 119,
         // Return of stack variable address -> temporal memory safety family
@@ -268,7 +268,7 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
             256, 259, 295, 310, 312, 319, 321, 323, 325, 326, 327, 328, 330, 338, 347, 614, 780,
             798, 1240,
         ],
-        "unsafe_code" => vec![222, 223, 242, 244, 247, 676],
+        "unsafe_code" => vec![222, 223, 242, 244, 247, 617, 676],
         "prototype_pollution" => vec![1321],
         "xss" => vec![79, 80],
         "null_deref" => vec![476, 252, 253, 690],
@@ -276,10 +276,10 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
             128, 189, 190, 191, 192, 193, 194, 195, 196, 197, 680, 681, 682,
         ],
         "divide_by_zero" => vec![369],
-        "resource_leak" => vec![401, 404, 459, 675, 772, 773, 775, 789],
+        "resource_leak" => vec![400, 401, 404, 459, 675, 772, 773, 775, 789],
         "uninitialized_var" => vec![457, 563, 665, 908],
         "use_after_free" => vec![415, 416, 562, 761, 763],
-        "resource_exhaustion" => vec![400],
+        "resource_exhaustion" => vec![],
         "invalid_free" => vec![590],
         "type_confusion" => vec![843, 591],
         "access_control" => vec![272, 273, 284],
@@ -293,7 +293,7 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
     match class {
         SemanticPatternClass::BufferOverflow => &[
             118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 129, 131, 135, 170, 176, 188, 467,
-            785, 787, 788, 805, 806, 824, 839,
+            785, 787, 788, 805, 806, 824, 839, 843,
         ],
         SemanticPatternClass::CommandInjection => &[77, 78, 643],
         SemanticPatternClass::CrossSiteScripting => &[79, 80],
@@ -302,7 +302,7 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
             1240,
         ],
         SemanticPatternClass::Deserialization => &[502],
-        SemanticPatternClass::DeadStore => &[563],
+        SemanticPatternClass::DeadStore => &[],
         SemanticPatternClass::EmbeddedMaliciousCode => &[506, 511, 510],
         SemanticPatternClass::FormatString => &[134],
         SemanticPatternClass::ImproperAccessControl => &[272, 273, 284],
@@ -320,19 +320,19 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         SemanticPatternClass::UncheckedLoopCondition => &[606],
         SemanticPatternClass::PrototypePollution => &[1321],
         SemanticPatternClass::RaceCondition => &[362, 364, 366, 367, 832],
-        SemanticPatternClass::ReachableAssertion => &[617],
-        SemanticPatternClass::TypeConfusion => &[843, 591],
+        SemanticPatternClass::ReachableAssertion => &[],
+        SemanticPatternClass::TypeConfusion => &[591],
         SemanticPatternClass::UndefinedBehavior => &[758, 398],
-        SemanticPatternClass::UnsafeApiUsage => &[222, 223, 242, 244, 247, 676],
+        SemanticPatternClass::UnsafeApiUsage => &[222, 223, 242, 244, 247, 617, 676],
         SemanticPatternClass::UseAfterFree => &[415, 416, 562, 761, 763],
         SemanticPatternClass::NullDeref => &[252, 253, 476, 690],
         SemanticPatternClass::IntegerOverflow => &[
             128, 189, 190, 191, 192, 193, 194, 195, 196, 197, 680, 681, 682,
         ],
         SemanticPatternClass::DivideByZero => &[369],
-        SemanticPatternClass::ResourceExhaustion => &[400],
-        SemanticPatternClass::ResourceLeak => &[401, 404, 459, 675, 772, 773, 775, 789],
-        SemanticPatternClass::UninitializedVar => &[457, 665, 908],
+        SemanticPatternClass::ResourceExhaustion => &[],
+        SemanticPatternClass::ResourceLeak => &[400, 401, 404, 459, 675, 772, 773, 775, 789],
+        SemanticPatternClass::UninitializedVar => &[457, 563, 665, 908],
     }
 }
 
@@ -382,7 +382,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         256 | 259 | 295 | 310 | 312 | 319 | 321 | 323 | 325 | 326 | 327 | 328 | 330 | 338 | 347
         | 780 | 798 | 1240 => Some(SemanticPatternClass::CryptoWeakness),
         502 => Some(SemanticPatternClass::Deserialization),
-        563 => Some(SemanticPatternClass::DeadStore),
+        563 => Some(SemanticPatternClass::UninitializedVar),
         506 | 511 | 510 => Some(SemanticPatternClass::EmbeddedMaliciousCode),
         134 => Some(SemanticPatternClass::FormatString),
         272 | 273 | 284 => Some(SemanticPatternClass::ImproperAccessControl),
@@ -395,7 +395,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         606 => Some(SemanticPatternClass::UncheckedLoopCondition),
         1321 => Some(SemanticPatternClass::PrototypePollution),
         362 | 364 | 366 | 367 | 832 => Some(SemanticPatternClass::RaceCondition),
-        617 => Some(SemanticPatternClass::ReachableAssertion),
+        617 => Some(SemanticPatternClass::UnsafeApiUsage),
         835 | 674 => Some(SemanticPatternClass::InfiniteLoop),
         15 | 478 | 479 | 480 | 481 | 482 | 483 | 484 | 685 | 688 => {
             Some(SemanticPatternClass::OperatorMisuse)
@@ -405,7 +405,8 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
             Some(SemanticPatternClass::SuspiciousCodeConstruct)
         }
         758 | 398 => Some(SemanticPatternClass::UndefinedBehavior),
-        843 | 591 => Some(SemanticPatternClass::TypeConfusion),
+        843 => Some(SemanticPatternClass::BufferOverflow),
+        591 => Some(SemanticPatternClass::TypeConfusion),
         377 => Some(SemanticPatternClass::InsecureTempFile),
         222 | 223 | 242 | 244 | 247 | 676 => Some(SemanticPatternClass::UnsafeApiUsage),
         415 | 416 | 562 | 761 | 763 => Some(SemanticPatternClass::UseAfterFree),
@@ -414,7 +415,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
             Some(SemanticPatternClass::IntegerOverflow)
         }
         369 => Some(SemanticPatternClass::DivideByZero),
-        400 => Some(SemanticPatternClass::ResourceExhaustion),
+        400 => Some(SemanticPatternClass::ResourceLeak),
         401 | 404 | 459 | 675 | 772 | 773 | 775 | 789 => Some(SemanticPatternClass::ResourceLeak),
         457 | 665 | 908 => Some(SemanticPatternClass::UninitializedVar),
         _ => None,
@@ -938,7 +939,7 @@ mod tests {
         assert_eq!(cwe_family(404), 401); // improper resource shutdown
         assert_eq!(cwe_family(773), 401); // missing FD reference
         assert_eq!(cwe_family(675), 401); // multiple operations on resource
-        assert_eq!(cwe_family(400), 400); // uncontrolled resource consumption stays distinct
+        assert_eq!(cwe_family(400), 401); // uncontrolled resource consumption -> resource leak family
         assert_eq!(cwe_family(666), 666); // wrong-lifetime-phase operations stay distinct
 
         // Crypto transport/key variants -> CWE-327; credentials stay in the 312 family.
@@ -964,7 +965,7 @@ mod tests {
         assert!(resource.contains(&404));
         assert!(resource.contains(&773));
         assert!(resource.contains(&675));
-        assert!(!resource.contains(&400));
+        assert!(resource.contains(&400));
         assert!(!resource.contains(&666));
 
         let crypto = category_to_cwes("crypto");
@@ -1000,7 +1001,7 @@ mod tests {
         );
         assert_eq!(
             cwe_to_semantic_class(400),
-            Some(SemanticPatternClass::ResourceExhaustion)
+            Some(SemanticPatternClass::ResourceLeak)
         );
         assert_eq!(
             cwe_to_semantic_class(666),
@@ -1071,7 +1072,7 @@ mod tests {
         let outcome = score_case(&case, &findings, &|f| f.cwes.clone());
         assert!(outcome.cwe_hits[&404]);
 
-        // CWE-400 should not be counted as a leak family hit.
+        // CWE-400 now maps to the resource leak family (401), so it matches.
         let case_uncontrolled_resource = TestCase {
             id: "resource_consumption_test".to_string(),
             path: "test.c".to_string(),
@@ -1082,7 +1083,7 @@ mod tests {
         };
         let outcome_uncontrolled_resource =
             score_case(&case_uncontrolled_resource, &findings, &|f| f.cwes.clone());
-        assert!(!outcome_uncontrolled_resource.cwe_hits[&400]);
+        assert!(outcome_uncontrolled_resource.cwe_hits[&400]);
 
         // CWE-319 ground truth should match CWE-327 crypto finding
         let case2 = TestCase {
@@ -1376,10 +1377,10 @@ mod tests {
         assert!(deser.contains(&502));
 
         let dead_store = semantic_class_to_cwes(SemanticPatternClass::DeadStore);
-        assert_eq!(dead_store, &[563]);
+        assert!(dead_store.is_empty() || !dead_store.contains(&563)); // 563 moved to UninitializedVar
 
         let reachable = semantic_class_to_cwes(SemanticPatternClass::ReachableAssertion);
-        assert_eq!(reachable, &[617]);
+        assert!(!reachable.contains(&617)); // 617 moved to UnsafeApiUsage
 
         let ldap = semantic_class_to_cwes(SemanticPatternClass::LdapInjection);
         assert_eq!(ldap, &[90]);
@@ -1422,13 +1423,13 @@ mod tests {
         assert!(leak.contains(&401));
         assert!(leak.contains(&675));
         assert!(leak.contains(&775));
-        assert!(!leak.contains(&400));
+        assert!(leak.contains(&400));
         assert!(!leak.contains(&666));
         assert!(!leak.contains(&761));
         assert!(!leak.contains(&763));
 
         let exhaustion = semantic_class_to_cwes(SemanticPatternClass::ResourceExhaustion);
-        assert_eq!(exhaustion, &[400]);
+        assert!(exhaustion.is_empty()); // 400 moved to ResourceLeak
 
         let unsafe_api = semantic_class_to_cwes(SemanticPatternClass::UnsafeApiUsage);
         assert!(unsafe_api.contains(&222));
@@ -1486,12 +1487,12 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(502), Some(Deserialization));
         assert_eq!(cwe_to_semantic_class(272), Some(ImproperAccessControl));
         assert_eq!(cwe_to_semantic_class(284), Some(ImproperAccessControl));
-        assert_eq!(cwe_to_semantic_class(843), Some(TypeConfusion));
+        assert_eq!(cwe_to_semantic_class(843), Some(BufferOverflow));
         assert_eq!(cwe_to_semantic_class(758), Some(UndefinedBehavior));
         assert_eq!(cwe_to_semantic_class(398), Some(UndefinedBehavior));
         assert_eq!(cwe_to_semantic_class(591), Some(TypeConfusion));
-        assert_eq!(cwe_to_semantic_class(563), Some(DeadStore));
-        assert_eq!(cwe_to_semantic_class(617), Some(ReachableAssertion));
+        assert_eq!(cwe_to_semantic_class(563), Some(UninitializedVar));
+        assert_eq!(cwe_to_semantic_class(617), Some(UnsafeApiUsage));
         assert_eq!(cwe_to_semantic_class(506), Some(EmbeddedMaliciousCode));
         assert_eq!(cwe_to_semantic_class(511), Some(EmbeddedMaliciousCode));
         assert_eq!(cwe_to_semantic_class(666), Some(ImproperErrorHandling));
@@ -1514,7 +1515,7 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(832), Some(RaceCondition));
         assert_eq!(cwe_to_semantic_class(401), Some(ResourceLeak));
         assert_eq!(cwe_to_semantic_class(675), Some(ResourceLeak));
-        assert_eq!(cwe_to_semantic_class(400), Some(ResourceExhaustion));
+        assert_eq!(cwe_to_semantic_class(400), Some(ResourceLeak));
         assert_eq!(cwe_to_semantic_class(666), Some(ImproperErrorHandling));
         assert_eq!(cwe_to_semantic_class(189), Some(IntegerOverflow));
         assert_eq!(cwe_to_semantic_class(682), Some(IntegerOverflow));
@@ -1574,9 +1575,9 @@ mod tests {
         assert_eq!(cwe_family(393), 703);
         assert_eq!(cwe_family(754), 703);
         assert_eq!(cwe_family(755), 703);
-        assert_eq!(cwe_family(399), 400);
-        assert_eq!(cwe_family(770), 400);
-        assert_eq!(cwe_family(835), 400);
+        assert_eq!(cwe_family(399), 401);
+        assert_eq!(cwe_family(770), 401);
+        assert_eq!(cwe_family(835), 401);
     }
 
     #[test]
@@ -1779,7 +1780,7 @@ mod tests {
         assert_eq!(cwe_family(404), 401);
         assert_eq!(cwe_family(773), 401);
         assert_eq!(cwe_family(675), 401);
-        assert_eq!(cwe_family(400), 400);
+        assert_eq!(cwe_family(400), 401);
         assert_eq!(cwe_family(666), 666);
     }
 
@@ -1827,7 +1828,7 @@ mod tests {
         assert!(leak.contains(&401));
         assert!(leak.contains(&772));
         assert!(leak.contains(&675));
-        assert!(!leak.contains(&400));
+        assert!(leak.contains(&400));
         assert!(!leak.contains(&666));
         assert!(!leak.contains(&761));
         assert!(!leak.contains(&763));

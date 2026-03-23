@@ -50,7 +50,7 @@ void copy_data(size_t size) {
         return;
     }
     memset(buf, 0, size);
-    strcpy(buf, "initialized");
+    snprintf(buf, size, "%s", "initialized");
     printf("Data: %s\n", buf);
     free(buf);
 }

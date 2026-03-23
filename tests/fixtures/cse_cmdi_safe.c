@@ -1,9 +1,11 @@
-/* CWE-78 Safe Variant: Command execution with input validation
- * Validates/sanitizes input before constructing shell commands. */
+/* CWE-78 Safe Variant: Avoids shell execution entirely.
+ * Uses direct process spawning via fork/exec. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <unistd.h>
+#include <sys/wait.h>
 
 /* Allow only alphanumeric, dots, and hyphens in hostnames */
 int validate_hostname(const char *host) {
@@ -19,29 +21,34 @@ void check_host(const char *hostname) {
         fprintf(stderr, "Invalid hostname: %s\n", hostname);
         return;
     }
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd), "ping -c 1 %s", hostname);
-    FILE *fp = popen(cmd, "r");
-    if (!fp) return;
-    char line[256];
-    while (fgets(line, sizeof(line), fp))
-        printf("%s", line);
-    pclose(fp);
+    /* Safe: direct exec avoids shell interpretation */
+    pid_t pid = fork();
+    if (pid == 0) {
+        execlp("ping", "ping", "-c", "1", hostname, (char *)NULL);
+        _exit(127);
+    } else if (pid > 0) {
+        int status;
+        waitpid(pid, &status, 0);
+    }
 }
 
-/* Use execv instead of system() to avoid shell interpretation */
+/* Safe: direct exec avoids shell interpretation */
 void list_directory_safe(const char *path) {
-    /* Only allow paths that don't contain shell metacharacters */
+    /* Validate path contains no control characters */
     for (int i = 0; path[i]; i++) {
-        if (path[i] == ';' || path[i] == '|' || path[i] == '&' ||
-            path[i] == '$' || path[i] == '`' || path[i] == '\n') {
+        if ((unsigned char)path[i] < 0x20) {
             fprintf(stderr, "Invalid character in path\n");
             return;
         }
     }
-    char cmd[512];
-    snprintf(cmd, sizeof(cmd), "ls -la -- '%s'", path);
-    system(cmd);
+    pid_t pid = fork();
+    if (pid == 0) {
+        execlp("ls", "ls", "-la", "--", path, (char *)NULL);
+        _exit(127);
+    } else if (pid > 0) {
+        int status;
+        waitpid(pid, &status, 0);
+    }
 }
 
 int main(int argc, char **argv) {
