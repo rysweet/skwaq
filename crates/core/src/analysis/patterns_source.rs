@@ -250,6 +250,14 @@ fn python_patterns() -> &'static [SourcePattern] {
             severity: Severity::Critical,
             reason: "compile() with exec mode enables code execution; avoid with untrusted input",
         },
+        // SSRF detection (CWE-918) — urlopen with user-controlled URL
+        SourcePattern {
+            regex: r"\b(?:urlopen|urllib\.request\.urlopen)\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason:
+                "urlopen with user-controlled URL enables SSRF; validate and allowlist target hosts",
+        },
     ]
 }
 
@@ -1323,6 +1331,20 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::Race,
             severity: Severity::High,
             reason: "Detect access() TOCTOU race condition (CWE-367) — access() checks are inherently vulnerable to time-of-check-time-of-use attacks",
+        },
+        // VLA detection (CWE-119, CWE-787) — variable-length arrays on the stack
+        SourcePattern {
+            regex: r"\b(?:char|int|unsigned|uint8_t|uint16_t|uint32_t|uint64_t|size_t|short|long|float|double)\s+\w+\s*\[\s*[a-zA-Z_]\w*\s*\]",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Variable-length array on stack; size from variable can cause stack overflow or out-of-bounds write",
+        },
+        // alloca with variable size (CWE-119, CWE-787)
+        SourcePattern {
+            regex: r"\balloca\s*\(\s*[a-zA-Z_]\w*",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "alloca with variable size can cause stack overflow; use heap allocation with bounds checking",
         },
     ]
 }
