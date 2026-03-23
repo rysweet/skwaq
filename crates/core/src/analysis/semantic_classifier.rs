@@ -599,7 +599,22 @@ fn is_prototype_pollution(category: &str, title: &str) -> bool {
 
 fn is_unsafe_api_usage(category: &str, title: &str, function_name: &str) -> bool {
     category == "unsafe_code"
-        || is_function(function_name, &["transmute", "setuid", "setgid"])
+        || is_function(
+            function_name,
+            &[
+                "transmute",
+                "setuid",
+                "setgid",
+                "gets",
+                "strcpy",
+                "strcat",
+                "sprintf",
+                "vsprintf",
+                "mktemp",
+                "tmpnam",
+                "tempnam",
+            ],
+        )
         || contains_any(
             title,
             &[
@@ -1658,5 +1673,148 @@ mod tests {
         let classifier = SemanticPatternClassifier::new();
         let classes = classifier.classify("memory", "Dangerous API: atol", "atol");
         assert!(classes.contains(&SemanticPatternClass::IntegerOverflow));
+    }
+
+    // ---- TDD: CWE-676 banned C API functions → UnsafeApiUsage ----
+
+    #[test]
+    fn classifies_gets_as_unsafe_api_usage() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "unsafe_code",
+            "Pattern: dangerous function gets",
+            "gets",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "gets must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn classifies_strcpy_as_unsafe_api_usage() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "memory",
+            "Pattern: dangerous function strcpy",
+            "strcpy",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "strcpy must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn classifies_strcat_as_unsafe_api_usage() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "memory",
+            "Pattern: dangerous function strcat",
+            "strcat",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "strcat must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn classifies_sprintf_as_unsafe_api_usage() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "memory",
+            "Pattern: dangerous function sprintf",
+            "sprintf",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "sprintf must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn classifies_vsprintf_as_unsafe_api_usage() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "memory",
+            "Pattern: dangerous function vsprintf",
+            "vsprintf",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "vsprintf must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn classifies_tmpnam_as_unsafe_api_usage() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "temp_file",
+            "Pattern: dangerous function tmpnam",
+            "tmpnam",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "tmpnam must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn classifies_tempnam_as_unsafe_api_usage() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "temp_file",
+            "Pattern: dangerous function tempnam",
+            "tempnam",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "tempnam must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn classifies_mktemp_as_unsafe_api_usage() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "temp_file",
+            "Pattern: insecure temporary file via mktemp",
+            "mktemp",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "mktemp must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn banned_api_gets_detected_by_function_name_alone() {
+        // Even without "dangerous function" in the title, the function name should trigger
+        let classes = SemanticPatternClassifier::new().classify(
+            "memory",
+            "LLM: buffer read in parse_input",
+            "gets",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "gets by function_name alone must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
+    }
+
+    #[test]
+    fn banned_api_strcpy_detected_by_function_name_alone() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "memory",
+            "LLM: copy operation in handle_request",
+            "strcpy",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UnsafeApiUsage),
+            "strcpy by function_name alone must classify as UnsafeApiUsage, got {:?}",
+            classes
+        );
     }
 }

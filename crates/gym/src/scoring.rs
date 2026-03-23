@@ -194,7 +194,7 @@ pub fn cwe_family(cwe: u32) -> u32 {
         // Use-after-free family -> CWE-416
         415 => 416,
         // Injection family -> CWE-74
-        15 | 77 | 78 | 79 | 80 | 89 | 90 | 94 | 95 | 96 | 114 | 116 | 501 | 643 => 74,
+        15 | 77 | 78 | 79 | 80 | 89 | 90 | 94 | 95 | 96 | 114 | 116 | 501 | 643 | 918 => 74,
         // Input validation family -> CWE-20
         17 | 187 => 20,
         // Race condition family -> CWE-362
@@ -2076,6 +2076,37 @@ mod tests {
         assert!(
             (CWE_REGRESSION_NOISE_MARGIN - 0.02).abs() < f64::EPSILON,
             "CWE_REGRESSION_NOISE_MARGIN must be exactly 0.02"
+        );
+    }
+
+    // ---- TDD: CWE-918 (SSRF) → injection family (CWE-74) ----
+
+    #[test]
+    fn test_cwe_918_maps_to_injection_family() {
+        assert_eq!(
+            cwe_family(918),
+            74,
+            "CWE-918 (SSRF) must map to injection family (CWE-74)"
+        );
+    }
+
+    #[test]
+    fn test_ssrf_finding_scores_as_true_positive() {
+        let case = TestCase {
+            id: "cse_ssrf_py".to_string(),
+            path: "test.py".to_string(),
+            binary_path: None,
+            expected_cwes: vec![918],
+            is_negative: false,
+            language: "python".to_string(),
+        };
+        // A finding with CWE-74 (injection) should match expected CWE-918 via family mapping
+        let findings = vec![make_finding("injection", vec![74])];
+
+        let outcome = score_case(&case, &findings, &|f| f.cwes.clone());
+        assert!(
+            outcome.cwe_hits[&918],
+            "CWE-918 expected case with CWE-74 finding must score as TP"
         );
     }
 }
