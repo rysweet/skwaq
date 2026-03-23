@@ -393,6 +393,35 @@ impl HistoryDb {
         Ok(())
     }
 
+    fn run_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<BenchmarkRun> {
+        let metadata_json = row
+            .get::<_, Option<String>>(5)?
+            .unwrap_or_else(|| "{}".to_string());
+        Ok(BenchmarkRun {
+            id: row.get(0)?,
+            started_at: row.get::<_, String>(1)?.parse().unwrap_or_default(),
+            finished_at: row
+                .get::<_, Option<String>>(2)?
+                .and_then(|s| s.parse().ok()),
+            suite: row.get(3)?,
+            skwaq_commit: row.get(4)?,
+            metadata: serde_json::from_str(&metadata_json).map_err(|err| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    5,
+                    rusqlite::types::Type::Text,
+                    Box::new(err),
+                )
+            })?,
+            precision: row.get(6)?,
+            recall: row.get(7)?,
+            f1: row.get(8)?,
+            true_positives: row.get(9)?,
+            false_positives: row.get(10)?,
+            false_negatives: row.get(11)?,
+            true_negatives: row.get(12)?,
+        })
+    }
+
     /// Load the N most recent runs.
     pub fn recent_runs(&self, limit: u32) -> anyhow::Result<Vec<BenchmarkRun>> {
         let mut stmt = self.conn.prepare(
@@ -401,34 +430,7 @@ impl HistoryDb {
                     false_negatives, true_negatives
               FROM runs ORDER BY started_at DESC LIMIT ?1",
         )?;
-        let rows = stmt.query_map(rusqlite::params![limit], |row| {
-            let metadata_json = row
-                .get::<_, Option<String>>(5)?
-                .unwrap_or_else(|| "{}".to_string());
-            Ok(BenchmarkRun {
-                id: row.get(0)?,
-                started_at: row.get::<_, String>(1)?.parse().unwrap_or_default(),
-                finished_at: row
-                    .get::<_, Option<String>>(2)?
-                    .and_then(|s| s.parse().ok()),
-                suite: row.get(3)?,
-                skwaq_commit: row.get(4)?,
-                metadata: serde_json::from_str(&metadata_json).map_err(|err| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        5,
-                        rusqlite::types::Type::Text,
-                        Box::new(err),
-                    )
-                })?,
-                precision: row.get(6)?,
-                recall: row.get(7)?,
-                f1: row.get(8)?,
-                true_positives: row.get(9)?,
-                false_positives: row.get(10)?,
-                false_negatives: row.get(11)?,
-                true_negatives: row.get(12)?,
-            })
-        })?;
+        let rows = stmt.query_map(rusqlite::params![limit], Self::run_from_row)?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 
@@ -442,34 +444,7 @@ impl HistoryDb {
               WHERE finished_at IS NOT NULL
               ORDER BY started_at DESC LIMIT ?1",
         )?;
-        let rows = stmt.query_map(rusqlite::params![limit], |row| {
-            let metadata_json = row
-                .get::<_, Option<String>>(5)?
-                .unwrap_or_else(|| "{}".to_string());
-            Ok(BenchmarkRun {
-                id: row.get(0)?,
-                started_at: row.get::<_, String>(1)?.parse().unwrap_or_default(),
-                finished_at: row
-                    .get::<_, Option<String>>(2)?
-                    .and_then(|s| s.parse().ok()),
-                suite: row.get(3)?,
-                skwaq_commit: row.get(4)?,
-                metadata: serde_json::from_str(&metadata_json).map_err(|err| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        5,
-                        rusqlite::types::Type::Text,
-                        Box::new(err),
-                    )
-                })?,
-                precision: row.get(6)?,
-                recall: row.get(7)?,
-                f1: row.get(8)?,
-                true_positives: row.get(9)?,
-                false_positives: row.get(10)?,
-                false_negatives: row.get(11)?,
-                true_negatives: row.get(12)?,
-            })
-        })?;
+        let rows = stmt.query_map(rusqlite::params![limit], Self::run_from_row)?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 
@@ -487,34 +462,7 @@ impl HistoryDb {
               WHERE finished_at IS NOT NULL AND suite = ?1
               ORDER BY started_at DESC LIMIT ?2",
         )?;
-        let rows = stmt.query_map(rusqlite::params![suite, limit], |row| {
-            let metadata_json = row
-                .get::<_, Option<String>>(5)?
-                .unwrap_or_else(|| "{}".to_string());
-            Ok(BenchmarkRun {
-                id: row.get(0)?,
-                started_at: row.get::<_, String>(1)?.parse().unwrap_or_default(),
-                finished_at: row
-                    .get::<_, Option<String>>(2)?
-                    .and_then(|s| s.parse().ok()),
-                suite: row.get(3)?,
-                skwaq_commit: row.get(4)?,
-                metadata: serde_json::from_str(&metadata_json).map_err(|err| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        5,
-                        rusqlite::types::Type::Text,
-                        Box::new(err),
-                    )
-                })?,
-                precision: row.get(6)?,
-                recall: row.get(7)?,
-                f1: row.get(8)?,
-                true_positives: row.get(9)?,
-                false_positives: row.get(10)?,
-                false_negatives: row.get(11)?,
-                true_negatives: row.get(12)?,
-            })
-        })?;
+        let rows = stmt.query_map(rusqlite::params![suite, limit], Self::run_from_row)?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 
@@ -626,39 +574,39 @@ impl HistoryDb {
             .collect();
 
         let mut deltas = Vec::new();
-        let mut all_keys: std::collections::HashSet<(String, u32)> =
-            baseline_map.keys().cloned().collect();
-        all_keys.extend(new_map.keys().cloned());
 
-        for key in all_keys {
-            let old = baseline_map.get(&key);
-            let new_outcome = new_map.get(&key);
-            match (old, new_outcome) {
-                (Some(CaseOutcomeKind::FalseNegative), Some(CaseOutcomeKind::TruePositive)) => {
+        // Iterate baseline keys first, then new-only keys, avoiding a full clone of all keys.
+        for (key, old_outcome) in &baseline_map {
+            let new_outcome = new_map.get(key);
+            match (old_outcome, new_outcome) {
+                (CaseOutcomeKind::FalseNegative, Some(CaseOutcomeKind::TruePositive)) => {
                     deltas.push(CaseDelta::Improved {
-                        case_id: key.0,
+                        case_id: key.0.clone(),
                         cwe: key.1,
                     });
                 }
-                (Some(CaseOutcomeKind::TruePositive), Some(CaseOutcomeKind::FalseNegative)) => {
+                (CaseOutcomeKind::TruePositive, Some(CaseOutcomeKind::FalseNegative)) => {
                     deltas.push(CaseDelta::Regressed {
-                        case_id: key.0,
+                        case_id: key.0.clone(),
                         cwe: key.1,
                     });
                 }
-                (None, Some(CaseOutcomeKind::FalsePositive)) => {
-                    deltas.push(CaseDelta::NewFalsePositive {
-                        case_id: key.0,
-                        cwe: key.1,
-                    });
-                }
-                (Some(CaseOutcomeKind::FalsePositive), None) => {
+                (CaseOutcomeKind::FalsePositive, _) if !new_map.contains_key(key) => {
                     deltas.push(CaseDelta::FixedFalsePositive {
-                        case_id: key.0,
+                        case_id: key.0.clone(),
                         cwe: key.1,
                     });
                 }
                 _ => {}
+            }
+        }
+        // Keys only in new_map (not in baseline).
+        for (key, new_outcome) in &new_map {
+            if !baseline_map.contains_key(key) && *new_outcome == CaseOutcomeKind::FalsePositive {
+                deltas.push(CaseDelta::NewFalsePositive {
+                    case_id: key.0.clone(),
+                    cwe: key.1,
+                });
             }
         }
 
@@ -667,13 +615,13 @@ impl HistoryDb {
                 CaseDelta::Improved { case_id, cwe }
                 | CaseDelta::Regressed { case_id, cwe }
                 | CaseDelta::NewFalsePositive { case_id, cwe }
-                | CaseDelta::FixedFalsePositive { case_id, cwe } => (case_id.clone(), *cwe),
+                | CaseDelta::FixedFalsePositive { case_id, cwe } => (case_id.as_str(), *cwe),
             };
             let b_key = match b {
                 CaseDelta::Improved { case_id, cwe }
                 | CaseDelta::Regressed { case_id, cwe }
                 | CaseDelta::NewFalsePositive { case_id, cwe }
-                | CaseDelta::FixedFalsePositive { case_id, cwe } => (case_id.clone(), *cwe),
+                | CaseDelta::FixedFalsePositive { case_id, cwe } => (case_id.as_str(), *cwe),
             };
             a_key.cmp(&b_key)
         });

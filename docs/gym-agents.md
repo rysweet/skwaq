@@ -85,8 +85,13 @@ custom queries and `read_function` for source-level confirmation. See
 **Model:** claude-opus-4.6 | **Max turns:** 25
 
 **Input:** False negative cases with source code, expected CWEs, graph
-context (imports, data sources, call graph, string references), and
-knowledge base context.
+context (imports, data sources, call graph, interprocedural taint flows,
+string references), and knowledge base context.
+
+Since PR #292, the failure analyst receives **interprocedural taint flows**
+in the graph context — taint edges that cross function boundaries. This
+enables diagnosis of false negatives caused by incomplete cross-function
+data flow tracking, and more precise TaintRule/AgentPrompt proposals.
 
 **Output:** Structured JSON proposals, prioritized by type:
 
@@ -120,10 +125,18 @@ knowledge base context.
 
 **Graph gap detection** (heuristic fallback):
 - Missing taint flows for functions handling external data → `TaintRule`
+- Missing interprocedural taint edges for cross-function flows → `TaintRule`
 - Sparse cross-file call graph → `AgentPrompt`
 - No data sources in investigation → `TaintRule`
 - Unmapped CWE family → `CweMapping`
 - No graph gap found → `NewPattern` (fallback)
+
+**Interprocedural taint awareness** (post-PR #292):
+- Checks whether functions on call edges have matching taint source/sink pairs
+- If a caller passes tainted data to a callee but no `taint_flows` entry
+  exists, proposes a `TaintRule` to add the missing interprocedural edge
+- If interprocedural taint exists but the agent doesn't follow it, proposes
+  an `AgentPrompt` to add taint path traversal instructions
 
 **Anti-overfitting rules** (built into the prompt):
 - Reject patterns that match benchmark-specific naming (e.g., `test_case_*`)

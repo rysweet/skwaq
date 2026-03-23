@@ -366,12 +366,7 @@ fn dedup_cwes(cwes: impl IntoIterator<Item = u32>) -> Vec<u32> {
         .collect()
 }
 
-/// Public accessor for CWE-to-semantic-class mapping.
-pub fn cwe_to_semantic_class_public(cwe: u32) -> Option<SemanticPatternClass> {
-    cwe_to_semantic_class(cwe)
-}
-
-fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
+pub fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
     match cwe {
         118 | 119 | 120 | 121 | 122 | 123 | 124 | 125 | 126 | 127 | 129 | 131 | 135 | 170 | 176
         | 188 | 467 | 785 | 787 | 788 | 805 | 806 | 824 | 839 => {
@@ -439,12 +434,12 @@ pub fn deduplicate_outcomes(outcomes: Vec<CaseOutcome>) -> Vec<CaseOutcome> {
                     existing.case_id
                 );
 
-                let existing_expected: HashSet<u32> =
-                    existing.expected_cwes.iter().copied().collect();
-                let incoming_expected: HashSet<u32> =
-                    outcome.expected_cwes.iter().copied().collect();
+                let mut existing_sorted: Vec<u32> = existing.expected_cwes.clone();
+                let mut incoming_sorted: Vec<u32> = outcome.expected_cwes.clone();
+                existing_sorted.sort_unstable();
+                incoming_sorted.sort_unstable();
                 assert_eq!(
-                    existing_expected, incoming_expected,
+                    existing_sorted, incoming_sorted,
                     "duplicate case {} had inconsistent expected CWEs during deduplication",
                     existing.case_id
                 );
@@ -509,27 +504,39 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
                     .filter_map(|&cwe| cwe_to_semantic_class(cwe))
                     .collect();
                 for class in &detected_semantic_classes {
-                    let class_name = class.as_str().to_string();
-                    *score
+                    let class_str = class.as_str();
+                    if let Some(count) = score
                         .negative_calibration
                         .per_semantic_fps
-                        .entry(class_name.clone())
-                        .or_insert(0) += 1;
-                    let entry =
-                        per_semantic
-                            .entry(class_name.clone())
-                            .or_insert_with(|| SemanticScore {
-                                class_name,
+                        .get_mut(class_str)
+                    {
+                        *count += 1;
+                    } else {
+                        score
+                            .negative_calibration
+                            .per_semantic_fps
+                            .insert(class_str.to_string(), 1);
+                    }
+                    if let Some(entry) = per_semantic.get_mut(class_str) {
+                        entry.false_positives += 1;
+                    } else {
+                        per_semantic.insert(
+                            class_str.to_string(),
+                            SemanticScore {
+                                class_name: class_str.to_string(),
+                                false_positives: 1,
                                 ..Default::default()
-                            });
-                    entry.false_positives += 1;
+                            },
+                        );
+                    }
                 }
             }
         } else {
             // Positive test case.
             for (&cwe, &hit) in &outcome.cwe_hits {
-                let entry = per_cwe.entry(cwe_family(cwe)).or_insert_with(|| CweScore {
-                    cwe_id: cwe_family(cwe),
+                let family = cwe_family(cwe);
+                let entry = per_cwe.entry(family).or_insert_with(|| CweScore {
+                    cwe_id: family,
                     ..Default::default()
                 });
                 entry.total_cases += 1;
@@ -554,31 +561,41 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
                 .collect();
 
             for class in &expected_semantic_classes {
-                let class_name = class.as_str().to_string();
-                let entry =
-                    per_semantic
-                        .entry(class_name.clone())
-                        .or_insert_with(|| SemanticScore {
-                            class_name,
-                            ..Default::default()
-                        });
-                entry.total_cases += 1;
-                if detected_semantic_classes.contains(class) {
-                    entry.true_positives += 1;
+                let class_str = class.as_str();
+                let is_detected = detected_semantic_classes.contains(class);
+                if let Some(entry) = per_semantic.get_mut(class_str) {
+                    entry.total_cases += 1;
+                    if is_detected {
+                        entry.true_positives += 1;
+                    } else {
+                        entry.false_negatives += 1;
+                    }
                 } else {
-                    entry.false_negatives += 1;
+                    per_semantic.insert(
+                        class_str.to_string(),
+                        SemanticScore {
+                            class_name: class_str.to_string(),
+                            total_cases: 1,
+                            true_positives: if is_detected { 1 } else { 0 },
+                            false_negatives: if is_detected { 0 } else { 1 },
+                            ..Default::default()
+                        },
+                    );
                 }
             }
 
             // False positives: findings that don't match any expected CWE.
             score.false_positives += outcome.unmatched_finding_ids.len() as u32;
+            // Pre-compute expected CWE families to avoid repeated cwe_family() calls
+            // in the inner loop.
+            let expected_families: Vec<u32> = outcome
+                .expected_cwes
+                .iter()
+                .map(|&e| cwe_family(e))
+                .collect();
             for &cwe in &outcome.detected_cwes {
                 let family = cwe_family(cwe);
-                if !outcome
-                    .expected_cwes
-                    .iter()
-                    .any(|&e| cwe_family(e) == family)
-                {
+                if !expected_families.contains(&family) {
                     let entry = per_cwe.entry(family).or_insert_with(|| CweScore {
                         cwe_id: family,
                         ..Default::default()
@@ -588,15 +605,19 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
             }
 
             for class in detected_semantic_classes.difference(&expected_semantic_classes) {
-                let class_name = class.as_str().to_string();
-                let entry =
-                    per_semantic
-                        .entry(class_name.clone())
-                        .or_insert_with(|| SemanticScore {
-                            class_name,
+                let class_str = class.as_str();
+                if let Some(entry) = per_semantic.get_mut(class_str) {
+                    entry.false_positives += 1;
+                } else {
+                    per_semantic.insert(
+                        class_str.to_string(),
+                        SemanticScore {
+                            class_name: class_str.to_string(),
+                            false_positives: 1,
                             ..Default::default()
-                        });
-                entry.false_positives += 1;
+                        },
+                    );
+                }
             }
         }
     }

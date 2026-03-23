@@ -7,14 +7,14 @@ overfitting, and applies accepted patches — then verifies the result.
 ## Quick Start
 
 ```bash
-# 1. Establish baseline
-skwaq gym run fixtures --quick
+# 1. Establish baseline (all 5 suites)
+skwaq gym eval --suites fixtures,juliet,owasp,cyberseceval,cgc --procs 5 -j 2
 
-# 2. Run improvement cycle
-skwaq gym improve fixtures --max-cases 20
+# 2. Run improvement cycle (with holdout validation)
+skwaq gym improve fixtures --max-improvements 5 --holdout-fraction 0.2 --timeout 30
 
 # 3. Verify improvement
-skwaq gym run fixtures --quick
+skwaq gym eval --suites fixtures --procs 5 -j 2
 skwaq gym compare
 ```
 
@@ -40,22 +40,30 @@ generalize and are not overfit to specific test inputs.
 ### Phase 2: Failure Analysis
 
 The **failure-analyst** LLM agent examines each false negative using
-enriched graph context (imports, data sources, cross-file call graph, and
-string references):
+enriched graph context (imports, data sources, cross-file call graph,
+interprocedural taint flows, and string references):
 
 - Reads the vulnerable source code and graph context
 - Queries the knowledge base for relevant CWE patterns
 - Checks for graph context gaps (missing taint flows, sparse call graph,
-  absent data sources)
+  absent data sources, missing interprocedural taint edges)
 - Identifies why the vulnerability was missed and produces structured
   improvement proposals
 - Prioritizes graph-aware proposals (`AgentPrompt`, `TaintRule`) over regex
   patterns (`NewPattern`)
 
+Since PR #292, the failure analyst has access to **interprocedural taint
+flows** — taint edges that cross function boundaries. When a tainted value
+passes from a caller to a callee (or vice versa via return values), the
+graph builder creates `taint_flows` entries linking caller sources to callee
+sinks. The failure analyst uses these edges to diagnose false negatives
+caused by incomplete cross-function data flow tracking.
+
 A heuristic analyzer runs in parallel, checking for graph context gaps
 before falling back to regex-based analysis. It detects: missing taint flows
-for functions handling external data, sparse cross-file call graphs, missing
-data source entries, and unmapped CWE families.
+for functions handling external data (including interprocedural flows),
+sparse cross-file call graphs, missing data source entries, and unmapped
+CWE families.
 
 ### Phase 3: Overfitting Review
 
@@ -374,6 +382,49 @@ language = "c"
 
 Path values are validated: `..` segments and absolute paths are rejected.
 
+## Interprocedural Taint in Improvement Cycles
+
+Since PR #292, the graph builder creates interprocedural `taint_flows`
+entries that link tainted data across function boundaries. This
+significantly improves the failure analyst's ability to diagnose false
+negatives in multi-function vulnerability patterns.
+
+### How interprocedural taint affects proposals
+
+When the failure analyst examines a false negative, it now sees taint paths
+that cross function boundaries:
+
+```
+Source: getenv() in main()
+  → Interprocedural edge: main() calls process_input()
+  → Sink: system() in process_input()
+```
+
+This enables three types of proposals that were previously not possible:
+
+| Scenario | Pre-292 Proposal | Post-292 Proposal |
+|----------|-----------------|-------------------|
+| Cross-function injection | `NewPattern` (regex for `system()`) | `TaintRule` (link caller source to callee sink) |
+| Wrapper function chains | `AgentPrompt` (tell agent to read more code) | `AgentPrompt` (tell agent to follow interprocedural taint paths) |
+| Multi-file data flow | Often no proposal (gap too large) | `TaintRule` + `AgentPrompt` (taint edge + traversal instruction) |
+
+### Verifying interprocedural coverage
+
+To check whether interprocedural taint flows are being created for a
+specific case:
+
+```bash
+# Query the CPG for cross-function taint edges
+skwaq query "SELECT ds.name as source, dk.name as sink, tf.path
+             FROM taint_flows tf
+             JOIN data_sources ds ON tf.source_id = ds.id
+             JOIN data_sinks dk ON tf.sink_id = dk.id
+             WHERE tf.path LIKE '%→%'"
+```
+
+If no interprocedural edges appear for a case that should have them, the
+graph builder may be missing call edges. File an issue with the case ID.
+
 ## Supported Benchmark Suites
 
 | Suite | Description | Cases |
@@ -389,36 +440,77 @@ Path values are validated: `..` segments and absolute paths are rejected.
 
 ## Workflow: Running a Full Improvement Cycle
 
+This example shows a complete cycle starting from the post-PR #292 baseline
+(interprocedural taint, 0 FP, expanded CWE mappings).
+
 ```bash
 # Step 1: Verify environment
 skwaq gym preflight
 
-# Step 2: Baseline benchmark
-skwaq gym run fixtures --quick
-# → Records: F1=85.2%, Precision=95.7%, Recall=76.7%
+# Step 2: Create feature branch
+git checkout -b improve/gym-cycle-post-292
 
-# Step 3: Run improvement
-skwaq gym improve fixtures --max-cases 20
-# → Analyzes 27 false negatives
-# → Generates 5 proposals
-# → Overfitting reviewer accepts 2, rejects 3
-# → Applies 2 patches (NewPattern + CweMapping)
+# Step 3: Baseline all suites (sequential to avoid LLM rate limits)
+skwaq gym eval --suites fixtures --procs 5 -j 2
+# → fixtures: F1=87.9%  P=100%  R=78.4%  TP=91 FP=0 FN=25 TN=12
+skwaq gym eval --suites juliet --procs 5 -j 2
+skwaq gym eval --suites owasp --procs 5 -j 2
+skwaq gym eval --suites cyberseceval --procs 5 -j 2
+skwaq gym eval --suites cgc --procs 5 -j 2
 
-# Step 4: Verify
-skwaq gym run fixtures --quick
-# → Records: F1=86.3%, Precision=95.8%, Recall=78.4%
+# Step 4: Run improvement with holdout validation
+skwaq gym improve fixtures --max-improvements 5 --holdout-fraction 0.2 --timeout 30
+# → Analyzes 25 false negatives (20 training, 5 holdout)
+# → Generates proposals (AgentPrompt, TaintRule, NewPattern)
+# → Overfitting reviewer gates each proposal
+# → Applies accepted patches
 
-# Step 5: Compare
+# Step 5: Verify — F1 must exceed 87.9%, precision must stay at 100%
+skwaq gym eval --suites fixtures --procs 5 -j 2
 skwaq gym compare
-# → F1: +1.1%, Recall: +1.7%, Precision: +0.1%
+# → F1: 87.9% → 90.1% (+2.2%)
+# → Precision: 100% → 100% (no regression)
+# → Recall: 78.4% → 81.7% (+3.3%, 3 fewer FN)
 
-# Step 6: Review per-CWE changes
+# Step 6: If targets not met, run a second cycle (cap: 2 total)
+skwaq gym improve fixtures --max-improvements 5 --holdout-fraction 0.2 --timeout 30
+
+# Step 7: Review per-CWE changes
 skwaq gym case-diff
-# → CWE-362 detection: 40% → 80% (+2 TP, -2 FN)
+# → CWE-78 detection: 80% → 100% (interprocedural taint caught multi_file)
+# → CWE-362 detection: 60% → 80% (AgentPrompt added TOCTOU tracing)
 
-# Step 7: Commit
-git add -A && git commit -m "gym: improve fixtures F1 85.2%→86.3% (+1.1%)"
+# Step 8: Commit with before/after table
+git add agents/ crates/core/src/analysis/patterns_source.rs \
+       crates/gym/src/scoring.rs data/knowledge/
+git commit -m "gym: improve fixtures F1 87.9%→90.1% (+2.2%)
+
+Improvement cycle results (post-PR #292 baseline):
+- Before: F1=87.9%, P=100%, R=78.4% (91 TP, 0 FP, 25 FN, 12 TN)
+- After:  F1=90.1%, P=100%, R=81.7% (95 TP, 0 FP, 22 FN, 12 TN)
+- Accepted: 2 AgentPrompt, 1 TaintRule
+- Key: interprocedural taint enables cross-function FN resolution
+"
+
+# Step 9: Create PR
+gh pr create --title "gym: improve fixtures F1 87.9%→90.1%" --base main
 ```
+
+### Multi-Suite Baseline Recording
+
+When recording baselines across all 5 suites, run them sequentially to
+avoid LLM rate-limit contention. Each suite records independently to the
+history database at `~/.skwaq/gym/results.db`:
+
+```bash
+for suite in fixtures juliet owasp cyberseceval cgc; do
+  skwaq gym eval --suites "$suite" --procs 5 -j 2
+done
+```
+
+The CGC suite may timeout on some cases due to binary analysis complexity.
+CGC eval failures are non-blocking — record whatever results complete.
+Partial CGC results are still valuable as a baseline for future cycles.
 
 ## Security Considerations
 

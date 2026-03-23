@@ -14,13 +14,9 @@ use crate::adapters::{BenchmarkAdapter, BenchmarkConfig};
 use crate::scoring::{self, AggregateScore};
 use regex::RegexBuilder;
 use serde::Deserialize;
+use skwaq_core::analysis::patterns_source::PATTERN_REGEX_SIZE_LIMIT;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-
-/// Maximum compiled regex size (bytes) for LLM-proposed patterns.
-/// Mirrors the limit in patterns_source.rs to prevent ReDoS.
-/// Uses the same 200KB limit as the core pattern engine.
-const PROPOSAL_REGEX_SIZE_LIMIT: usize = 200_000;
 
 const IMPROVE_KB_MAX_CWE_QUERIES: usize = 6;
 
@@ -67,11 +63,33 @@ pub enum ImprovementKind {
     GroundTruthFix,
 }
 
+impl std::fmt::Display for ImprovementKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ImprovementKind::NewPattern => write!(f, "NEW_PATTERN"),
+            ImprovementKind::AgentPrompt => write!(f, "AGENT_PROMPT"),
+            ImprovementKind::CweMapping => write!(f, "CWE_MAPPING"),
+            ImprovementKind::TaintRule => write!(f, "TAINT_RULE"),
+            ImprovementKind::GroundTruthFix => write!(f, "GROUND_TRUTH"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Priority {
     High,
     Medium,
     Low,
+}
+
+impl std::fmt::Display for Priority {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Priority::High => write!(f, "HIGH"),
+            Priority::Medium => write!(f, "MEDIUM"),
+            Priority::Low => write!(f, "LOW"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -305,11 +323,18 @@ pub async fn run_improvement_cycle(
         }
 
         let source_path = data_dir.join(&case.path);
-        let source_content = std::fs::read_to_string(&source_path).unwrap_or_default();
-
-        if source_content.is_empty() {
-            continue;
-        }
+        let source_content = match std::fs::read_to_string(&source_path) {
+            Ok(s) if !s.is_empty() => s,
+            Ok(_) => continue,
+            Err(e) => {
+                tracing::warn!(
+                    "Could not read source file {}: {}",
+                    source_path.display(),
+                    e
+                );
+                continue;
+            }
+        };
 
         false_negatives.push(FalseNegativeCase {
             case_id: case.id.clone(),
@@ -472,7 +497,7 @@ async fn run_failure_analyst_agent(
             .detected_cwes
             .iter()
             .filter_map(|&cwe| {
-                crate::scoring::cwe_to_semantic_class_public(cwe).map(|c| c.as_str().to_string())
+                crate::scoring::cwe_to_semantic_class(cwe).map(|c| c.as_str().to_string())
             })
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
@@ -481,7 +506,7 @@ async fn run_failure_analyst_agent(
             .expected_cwes
             .iter()
             .filter_map(|&cwe| {
-                crate::scoring::cwe_to_semantic_class_public(cwe).map(|c| c.as_str().to_string())
+                crate::scoring::cwe_to_semantic_class(cwe).map(|c| c.as_str().to_string())
             })
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
@@ -1106,18 +1131,11 @@ async fn run_overfitting_review_batch(
         suite
     );
     for (i, p) in proposals.iter().enumerate() {
-        let kind = match &p.kind {
-            ImprovementKind::NewPattern => "NEW_PATTERN",
-            ImprovementKind::AgentPrompt => "AGENT_PROMPT",
-            ImprovementKind::CweMapping => "CWE_MAPPING",
-            ImprovementKind::TaintRule => "TAINT_RULE",
-            ImprovementKind::GroundTruthFix => "GROUND_TRUTH",
-        };
         proposal_text.push_str(&format!(
             "{}. Proposal ID: {}\n   Kind: [{}] {}\n   Target CWEs: {:?}\n   Patch: {}\n   From case: {}\n\n",
             i + 1,
             review_proposal_id(i),
-            kind,
+            p.kind,
             p.description,
             p.target_cwes,
             p.patch.replace,
@@ -1588,10 +1606,6 @@ fn heuristic_failure_analysis_impl(false_negatives: &[FalseNegativeCase]) -> Vec
         }
     }
 
-    // Track which cases got proposals from Phase 1
-    let _phase1_cases: std::collections::HashSet<String> =
-        proposals.iter().map(|p| p.source_case.clone()).collect();
-
     // Phase 2: Fall back to regex pattern proposals for remaining gaps
     let missing_patterns: Vec<(&str, &str, &[u32])> = vec![
         (r"\bexecl\s*\(", "injection", &[78]),
@@ -1883,13 +1897,6 @@ fn store_fn_insights(
             rejected_count
         ));
         for proposal in reviewed_proposals.iter().take(10) {
-            let kind = match &proposal.kind {
-                ImprovementKind::NewPattern => "Pattern Gap",
-                ImprovementKind::AgentPrompt => "Agent Capability Gap",
-                ImprovementKind::CweMapping => "CWE Mapping Gap",
-                ImprovementKind::TaintRule => "Taint Rule Gap",
-                ImprovementKind::GroundTruthFix => "Ground Truth Issue",
-            };
             let review_status = proposal
                 .review
                 .as_ref()
@@ -1897,7 +1904,7 @@ fn store_fn_insights(
                 .unwrap_or("UNREVIEWED");
             content.push_str(&format!(
                 "- **[{}] [{}]** {}\n  CWEs: {:?} | From case: {}\n",
-                kind,
+                proposal.kind,
                 review_status,
                 proposal.description,
                 proposal.target_cwes,
@@ -2034,7 +2041,17 @@ pub fn append_learned_patterns(cycle: &ImprovementCycle) {
 
     // Read existing content (or start fresh).
     let mut content = if patterns_path.exists() {
-        std::fs::read_to_string(&patterns_path).unwrap_or_default()
+        match std::fs::read_to_string(&patterns_path) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::warn!(
+                    "Could not read {}: {}, starting fresh",
+                    patterns_path.display(),
+                    e
+                );
+                String::new()
+            }
+        }
     } else {
         String::from(
             "# Learned Patterns\n\n\
@@ -2053,6 +2070,15 @@ pub fn append_learned_patterns(cycle: &ImprovementCycle) {
     ));
 
     for proposal in &pattern_proposals {
+        // Dedup: skip patterns already recorded in the file.
+        let pattern_marker = format!("**Pattern**: `{}`", proposal.patch.replace);
+        if content.contains(&pattern_marker) {
+            tracing::debug!(
+                "Skipping duplicate learned pattern: {}",
+                proposal.patch.replace
+            );
+            continue;
+        }
         content.push_str(&format!(
             "- **Pattern**: `{}`\n  - CWEs: {:?}\n  - From case: `{}`\n  - Priority: {:?}\n\n",
             proposal.patch.replace, proposal.target_cwes, proposal.source_case, proposal.priority,
@@ -2301,7 +2327,7 @@ pub fn apply_accepted_proposals(
                     }
 
                     match RegexBuilder::new(regex_str)
-                        .size_limit(PROPOSAL_REGEX_SIZE_LIMIT)
+                        .size_limit(PATTERN_REGEX_SIZE_LIMIT)
                         .build()
                     {
                         Ok(_) => {}
@@ -2569,101 +2595,49 @@ pub fn print_proposals(cycle: &ImprovementCycle) {
     println!();
 
     for (i, proposal) in cycle.proposals.iter().enumerate() {
-        let kind = match &proposal.kind {
-            ImprovementKind::NewPattern => "NEW_PATTERN",
-            ImprovementKind::AgentPrompt => "AGENT_PROMPT",
-            ImprovementKind::CweMapping => "CWE_MAPPING",
-            ImprovementKind::TaintRule => "TAINT_RULE",
-            ImprovementKind::GroundTruthFix => "GROUND_TRUTH",
-        };
-        let priority = match &proposal.priority {
-            Priority::High => "HIGH",
-            Priority::Medium => "MEDIUM",
-            Priority::Low => "LOW",
-        };
-        println!(
-            "  {}. [{}] [{}] {}",
-            i + 1,
-            kind,
-            priority,
-            proposal.description
-        );
-        if !proposal.patch.replace.is_empty() {
-            println!("     Patch: {}", proposal.patch.replace);
-        }
-        println!("     From case: {}", proposal.source_case);
-        for evidence in &proposal.supporting_evidence {
-            println!("     Evidence: {}", render_evidence_ref_inline(evidence));
-        }
-        if let Some(review) = &proposal.review {
-            println!(
-                "     Review: {} | Risk={} | Applicability={}",
-                render_review_verdict(review.verdict),
-                render_review_rating(review.overfitting_risk),
-                render_review_rating(review.real_world_applicability)
-            );
-            println!("     Review reason: {}", review.reason);
-            if let Some(modification) = &review.suggested_modification {
-                println!("     Suggested modification: {}", modification);
-            }
-            for evidence in &review.evidence_refs {
-                println!(
-                    "     Review evidence: {}",
-                    render_evidence_ref_inline(evidence)
-                );
-            }
-        }
-        println!();
+        print_proposal(i + 1, "", proposal);
     }
 
     if !rejected_proposals.is_empty() {
         println!("  Rejected proposals:");
         println!();
         for (i, proposal) in rejected_proposals.iter().enumerate() {
-            let kind = match &proposal.kind {
-                ImprovementKind::NewPattern => "NEW_PATTERN",
-                ImprovementKind::AgentPrompt => "AGENT_PROMPT",
-                ImprovementKind::CweMapping => "CWE_MAPPING",
-                ImprovementKind::TaintRule => "TAINT_RULE",
-                ImprovementKind::GroundTruthFix => "GROUND_TRUTH",
-            };
-            let priority = match &proposal.priority {
-                Priority::High => "HIGH",
-                Priority::Medium => "MEDIUM",
-                Priority::Low => "LOW",
-            };
-            println!(
-                "  R{}. [{}] [{}] {}",
-                i + 1,
-                kind,
-                priority,
-                proposal.description
-            );
-            println!("     From case: {}", proposal.source_case);
-            for evidence in &proposal.supporting_evidence {
-                println!("     Evidence: {}", render_evidence_ref_inline(evidence));
-            }
-            if let Some(review) = &proposal.review {
-                println!(
-                    "     Review: {} | Risk={} | Applicability={}",
-                    render_review_verdict(review.verdict),
-                    render_review_rating(review.overfitting_risk),
-                    render_review_rating(review.real_world_applicability)
-                );
-                println!("     Review reason: {}", review.reason);
-                if let Some(modification) = &review.suggested_modification {
-                    println!("     Suggested modification: {}", modification);
-                }
-                for evidence in &review.evidence_refs {
-                    println!(
-                        "     Review evidence: {}",
-                        render_evidence_ref_inline(evidence)
-                    );
-                }
-            }
-            println!();
+            print_proposal(i + 1, "R", proposal);
         }
     }
+}
+
+fn print_proposal(number: usize, prefix: &str, proposal: &Improvement) {
+    println!(
+        "  {}{}. [{}] [{}] {}",
+        prefix, number, proposal.kind, proposal.priority, proposal.description
+    );
+    if !proposal.patch.replace.is_empty() {
+        println!("     Patch: {}", proposal.patch.replace);
+    }
+    println!("     From case: {}", proposal.source_case);
+    for evidence in &proposal.supporting_evidence {
+        println!("     Evidence: {}", render_evidence_ref_inline(evidence));
+    }
+    if let Some(review) = &proposal.review {
+        println!(
+            "     Review: {} | Risk={} | Applicability={}",
+            render_review_verdict(review.verdict),
+            render_review_rating(review.overfitting_risk),
+            render_review_rating(review.real_world_applicability)
+        );
+        println!("     Review reason: {}", review.reason);
+        if let Some(modification) = &review.suggested_modification {
+            println!("     Suggested modification: {}", modification);
+        }
+        for evidence in &review.evidence_refs {
+            println!(
+                "     Review evidence: {}",
+                render_evidence_ref_inline(evidence)
+            );
+        }
+    }
+    println!();
 }
 
 fn render_review_verdict(verdict: ReviewVerdict) -> &'static str {

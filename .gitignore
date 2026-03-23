@@ -45,6 +45,9 @@ ghidra_projects/
 *.bak
 *.backup/
 
+# Git worktrees
+worktrees/
+
 # Claude Code / Amplihack runtime
 .claude/runtime/
 .claude/logs/

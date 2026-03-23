@@ -18,7 +18,7 @@ let re = RegexBuilder::new(&proposed_pattern)
     .build()?;
 ```
 
-The 10,000-byte NFA size limit is enforced in two locations:
+The 200,000-byte NFA size limit is enforced in two locations:
 
 | Location | File | Purpose |
 |----------|------|---------|
@@ -28,10 +28,10 @@ The 10,000-byte NFA size limit is enforced in two locations:
 Patterns exceeding the limit are rejected with a clear error and the proposal
 is marked as failed — the cycle continues with remaining proposals.
 
-### Why 10,000 bytes?
+### Why 200,000 bytes?
 
 The largest legitimate pattern in the codebase compiles to ~2,500 bytes of NFA.
-A 4x headroom accommodates complex but valid patterns while blocking
+A generous headroom accommodates complex but valid patterns while blocking
 pathological constructs (deeply nested alternations, excessive character
 classes) that LLMs occasionally generate.
 

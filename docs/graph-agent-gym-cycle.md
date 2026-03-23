@@ -7,15 +7,18 @@ graph-agent instruction tuning.
 
 ## Overview
 
-After the graph-agent architecture refactoring (PR #288), the improvement loop
-generates proposals that modify agent behavior and taint coverage, not just
-regex patterns. A graph-agent gym cycle validates that:
+After the graph-agent architecture refactoring (PR #288) and the
+interprocedural taint additions (PR #292), the improvement loop generates
+proposals that modify agent behavior and taint coverage, not just regex
+patterns. A graph-agent gym cycle validates that:
 
 1. The failure-analyst produces AgentPrompt and TaintRule proposals
-2. The overfitting-reviewer accepts graph-aware proposals
-3. `apply_accepted_proposals()` correctly patches agent Markdown files and
+2. Interprocedural taint flows inform cross-function FN diagnosis
+3. The overfitting-reviewer accepts graph-aware proposals
+4. `apply_accepted_proposals()` correctly patches agent Markdown files and
    inserts taint rules into the CPG database
-4. No regression occurs in pattern-only evaluation
+5. Precision remains at 100% (0 FP — the post-292 baseline)
+6. No regression occurs in pattern-only evaluation
 
 ## Quick Start
 
@@ -87,14 +90,17 @@ proposals based on graph context analysis.
 ### 2. Establish baseline
 
 ```bash
-cargo run -p skwaq -- gym eval --suites fixtures --quick
+cargo run -p skwaq -- gym eval --suites fixtures --procs 5 -j 2
 ```
 
-Record the baseline metrics. Example:
+Record the baseline metrics. Post-PR #292 example:
 
 ```
-fixtures: F1=86.3%  Precision=95.8%  Recall=78.4%  TP=91 FP=4 FN=25 TN=12
+fixtures: F1=87.9%  Precision=100%  Recall=78.4%  TP=91 FP=0 FN=25 TN=12
 ```
+
+The 100% precision (0 FP) is a critical invariant. Any improvement cycle
+that introduces even one false positive must be rejected.
 
 ### 3. Run improvement cycle
 
@@ -192,11 +198,37 @@ Improvement cycle results:
 "
 ```
 
+## Interprocedural Taint in Graph-Agent Cycles
+
+Since PR #292, the graph builder creates **interprocedural taint flows** —
+`taint_flows` entries that link tainted data across function boundaries.
+During graph construction:
+
+1. Source/sink IDs are tracked per enclosing function
+2. Call edges and function name→ID mappings are tracked across files
+3. After per-file processing, `taint_flows` entries are created linking
+   caller sources to callee sinks when tainted data crosses function
+   boundaries
+
+This means the failure analyst now sees complete taint paths through
+function call chains, not just within individual functions. The improvement
+loop can generate more precise TaintRule and AgentPrompt proposals because
+it understands exactly where taint is lost in cross-function flows.
+
+### Impact on proposal generation
+
+| Before PR #292 | After PR #292 |
+|----------------|---------------|
+| Taint paths stop at function boundaries | Taint paths cross function calls |
+| FN diagnosis limited to single-function analysis | FN diagnosis follows full caller→callee chains |
+| TaintRule proposals add new sources/sinks | TaintRule proposals also fix missing interprocedural edges |
+| AgentPrompt proposals suggest "read more code" | AgentPrompt proposals suggest specific taint path traversal |
+
 ## Multi-File Vulnerability Detection
 
 The primary use case for graph-agent proposals is detecting vulnerabilities
-that span multiple source files. These are invisible to single-file pattern
-matching.
+that span multiple source files. With interprocedural taint flows, these
+cases are now partially visible in the graph even before agent analysis.
 
 ### Example: `multi_file` case (CWE-78)
 
@@ -206,13 +238,16 @@ The `multi_file` fixture contains a command injection where:
 2. `main.c` passes the input to `process_data()` in `processor.c`
 3. `processor.c` calls `system()` with the unsanitized input
 
-Pattern-only analysis detects `system()` in `processor.c` but cannot trace the
-data flow from `getenv()` in `main.c`. The AgentPrompt proposal adds
-instructions to the vuln-hunter agent to:
+**Pre-292:** Pattern-only analysis detects `system()` in `processor.c` but
+cannot trace the data flow from `getenv()` in `main.c`.
 
+**Post-292:** The interprocedural taint builder creates a `taint_flows`
+entry: `getenv (main.c) → system (processor.c)` via the
+`main()→process_data()` call edge. The failure analyst sees this flow and
+generates an AgentPrompt proposal that instructs the vuln-hunter agent to:
+
+- Use `get_taint_paths` to find interprocedural flows through the function
 - Use `get_cross_file_calls` to identify cross-file callers of `system()`
-- Use `get_taint_paths` to trace data flow from external sources through
-  wrapper functions
 - Follow the call chain across compilation units before confirming or
   dismissing a finding
 
@@ -251,9 +286,11 @@ A well-functioning graph-agent cycle shows:
 
 - At least one AgentPrompt or TaintRule in accepted proposals
 - Proposals reference specific graph context gaps (missing taint paths,
-  sparse cross-file call graph)
+  sparse cross-file call graph, missing interprocedural edges)
 - Rejected proposals have clear overfitting reasoning
 - Quick-mode delta is 0% or positive (never negative)
+- Precision remains at 100% (0 FP — hard constraint post-292)
+- F1 > 87.9% (strict improvement over post-292 baseline)
 - Knowledge files updated with FN analysis insights
 
 ### Warning signs

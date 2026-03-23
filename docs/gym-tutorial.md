@@ -27,20 +27,34 @@ Expected output:
 
 ## Step 1: Establish Baseline
 
-Run the benchmark in pattern-only mode to get a fast baseline:
+Run the benchmark to get a baseline. Since PR #292 (interprocedural taint,
+FP fixes, Juliet CWE expansion), the fixtures baseline is:
 
 ```bash
-cargo run -p skwaq -- gym eval --suites fixtures --quick
+cargo run -p skwaq -- gym eval --suites fixtures --procs 5 -j 2
 ```
 
-This evaluates all ~99 fixture cases using regex pattern detection only (no
-LLM agents). Typical output:
+This evaluates all ~128 fixture cases. Typical output on the current
+codebase:
 
 ```
-fixtures: F1=86.3%  Precision=95.8%  Recall=78.4%  TP=91 FP=4 FN=25 TN=12
+fixtures: F1=87.9%  Precision=100%  Recall=78.4%  TP=91 FP=0 FN=25 TN=12
 ```
+
+Key baseline properties:
+- **100% precision** (0 FP) — restored by PR #292's fixture fixes
+- **25 false negatives** — the improvement target
+- **Interprocedural taint active** — cross-function flows are in the graph
 
 Record these numbers — they are your before-improvement baseline.
+
+For a comprehensive baseline across all suites:
+
+```bash
+for suite in fixtures juliet owasp cyberseceval cgc; do
+  cargo run -p skwaq -- gym eval --suites "$suite" --procs 5 -j 2
+done
+```
 
 ## Step 2: Review False Negatives
 
@@ -50,29 +64,31 @@ Before running the improvement loop, inspect which cases are being missed:
 cargo run -p skwaq -- gym case-diff --suite fixtures
 ```
 
-Common false negative categories:
+Common false negative categories (post-PR #292):
 
-| Category | Example Cases | Typical Cause |
-|----------|--------------|---------------|
-| Multi-file vulnerabilities | `multi_file` | Cross-file taint paths not fully traced |
-| Subtle race conditions | `race_condition` | Agent lacks TOCTOU graph traversal instructions |
-| Complex integer flows | `int_wrap`, `signedness` | Missing taint sources for integer conversion APIs |
-| Language-specific idioms | `cpp_vulns` | Missing data source/sink entries for C++ APIs |
+| Category | Example Cases | Typical Cause | Interprocedural Taint Helps? |
+|----------|--------------|---------------|------------------------------|
+| Multi-file vulnerabilities | `multi_file` | Cross-file taint paths not fully traced | Yes — interprocedural edges now cross function boundaries |
+| Subtle race conditions | `race_condition` | Agent lacks TOCTOU graph traversal instructions | Partially — taint shows access/open sequences across functions |
+| Complex integer flows | `int_wrap`, `signedness` | Missing taint sources for integer conversion APIs | Yes — integer casts across function calls now tracked |
+| Language-specific idioms | `cpp_vulns` | Missing data source/sink entries for C++ APIs | No — requires TaintRule proposals for new APIs |
+| Wrapper function chains | `cse_*` wrappers | Taint lost through helper functions | Yes — caller-to-callee taint propagation |
 
 ## Step 3: Run the Improvement Cycle
 
 ```bash
-cargo run -p skwaq -- gym improve fixtures --max-cases 20
+cargo run -p skwaq -- gym improve fixtures \
+  --max-improvements 5 --holdout-fraction 0.2 --timeout 30
 ```
 
 The cycle executes five phases:
 
 ```
-Phase 1: Benchmark .................. done (99 cases, 25 FN)
-Phase 2: Failure analysis ........... done (15 cases analyzed)
-Phase 3: Overfitting review ......... done (3 proposals → 1 accepted, 2 rejected)
-Phase 4: Patch application .......... done (1 patch applied)
-Phase 5: Verification ............... done (no regression)
+Phase 1: Benchmark .................. done (128 cases, 25 FN)
+Phase 2: Failure analysis ........... done (20 training cases analyzed)
+Phase 3: Overfitting review ......... done (5 proposals → 3 accepted, 2 rejected)
+Phase 4: Patch application .......... done (3 patches applied)
+Phase 5: Verification ............... done (F1 improved, 0 FP)
 ```
 
 ### What happens during each phase
@@ -128,23 +144,29 @@ cargo run -p skwaq -- gym compare
 Example output:
 
 ```
-Run 42 vs Run 41 (fixtures, quick mode)
+Run 44 vs Run 43 (fixtures)
 
   Metric     Before   After    Delta
   ─────────  ───────  ───────  ──────
-  F1         86.3%    86.3%    +0.0%
-  Precision  95.8%    95.8%    +0.0%
-  Recall     78.4%    78.4%    +0.0%
+  F1         87.9%    90.1%    +2.2%
+  Precision  100.0%   100.0%   +0.0%
+  Recall     78.4%    81.7%    +3.3%
 
-  Per-CWE changes: none
+  Per-CWE changes:
+    CWE-78:  80% → 100%  (+20%)  [interprocedural taint caught multi_file]
+    CWE-362: 60% →  80%  (+20%)  [AgentPrompt added TOCTOU tracing]
 
-  Verdict: NO REGRESSION
+  Verdict: IMPROVED (F1 +2.2%, P maintained at 100%)
 ```
 
-A "no regression" result is a valid outcome — it means the accepted proposals
-did not make things worse, even if they did not measurably improve the score.
-This is common when the remaining false negatives require architectural
-changes (like multi-file analysis) rather than pattern additions.
+A "no regression" result is also a valid outcome — it means the accepted
+proposals did not make things worse. This is common when remaining false
+negatives require fundamental changes beyond what the improvement loop can
+propose.
+
+**Important:** With the post-292 baseline at 100% precision, any FP
+introduction is an immediate rejection signal. The improvement loop must
+maintain P=100% — this is a hard constraint, not a target.
 
 ## Step 5: Cross-Validate
 
@@ -177,23 +199,35 @@ tail -20 data/knowledge/learned-patterns.md
 
 ## Step 7: Commit and PR
 
+Include a before/after comparison table in the commit message. The PR
+should show per-suite baselines and improvement results.
+
 ```bash
-git add crates/core/src/analysis/patterns_source.rs \
+git add agents/ \
+       crates/core/src/analysis/patterns_source.rs \
        crates/gym/src/scoring.rs \
-       agents/ \
        data/knowledge/fn-insights.md \
        data/knowledge/learned-patterns.md
 
-git commit -m "gym: improve fixtures F1 86.3% (no regression from baseline)
+git commit -m "gym: improve fixtures F1 87.9%→90.1% (+2.2%)
 
-Improvement cycle results:
-- Baseline: F1=86.3%, Prec=95.8%, Rec=78.4%
-- Post:     F1=86.3%, Prec=95.8%, Rec=78.4%
-- Delta:    none (remaining FNs require architectural changes)
-- Accepted: 1 proposal (MODIFY verdict)
+Improvement cycle results (post-PR #292 baseline):
+- Before: F1=87.9%, P=100%, R=78.4% (91 TP, 0 FP, 25 FN, 12 TN)
+- After:  F1=90.1%, P=100%, R=81.7% (95 TP, 0 FP, 22 FN, 12 TN)
+- Accepted: 2 AgentPrompt, 1 TaintRule
 - Rejected: 2 proposals (overfitting risk)
+- Key improvement: interprocedural taint enables cross-function FN resolution
+
+Proposal details:
+- AgentPrompt: vuln-hunter cross-file taint path traversal (CWE-78)
+- AgentPrompt: vuln-hunter TOCTOU detection via access/open sequences (CWE-362)
+- TaintRule: add missing source/sink for wrapper function chains
 "
 ```
+
+The commit must include at least one AgentPrompt or TaintRule change — not
+just regex patterns. This ensures the improvement loop exercises the full
+graph-agent pipeline, not just the pattern detector.
 
 ## Common Scenarios
 
@@ -236,25 +270,38 @@ If a proposal improves training-set scores but the holdout cases show no
 improvement or regression, the overfitting reviewer will flag it. The proposal
 receives a `Reject` verdict with `overfitting_risk: High`.
 
-## Advanced: Multi-Suite Improvement
+## Advanced: Multi-Suite Baseline and Improvement
 
-Run improvement cycles against multiple suites to build broad detection
-capability:
+Record baselines across all 5 suites before running improvement cycles.
+This establishes comprehensive metrics in the history database for
+before/after comparison in PRs.
 
 ```bash
-# Cycle 1: Fixtures (fast iteration)
-cargo run -p skwaq -- gym improve fixtures --max-cases 20
+# Baseline all suites (sequential to avoid LLM rate limits)
+for suite in fixtures juliet owasp cyberseceval cgc; do
+  cargo run -p skwaq -- gym eval --suites "$suite" --procs 5 -j 2
+done
 
-# Cycle 2: Juliet (NIST reference)
-cargo run -p skwaq -- gym improve juliet --max-cases 15
+# Improve on fixtures (max 2 cycles, 5 improvements each)
+cargo run -p skwaq -- gym improve fixtures \
+  --max-improvements 5 --holdout-fraction 0.2 --timeout 30
 
-# Cycle 3: Cross-validate everything
-cargo run -p skwaq -- gym eval --suites fixtures,juliet,owasp,cyberseceval --quick
+# If F1 ≤ 87.9% or R ≤ 78.4%, run a second cycle
+cargo run -p skwaq -- gym improve fixtures \
+  --max-improvements 5 --holdout-fraction 0.2 --timeout 30
+
+# Cross-validate against other suites
+cargo run -p skwaq -- gym eval --suites juliet,owasp --procs 5 -j 2
 cargo run -p skwaq -- gym compare
 ```
 
 Each cycle is independent — proposals from the fixtures cycle are tested
 against juliet during cross-validation, and vice versa.
+
+**CGC suite note:** The CGC suite involves binary analysis and may timeout
+on some cases. CGC eval failures are non-blocking for the improvement
+workflow. Record whatever results complete — partial CGC baselines are
+still valuable for tracking trends.
 
 ## Advanced: Configuring the Holdout Split
 

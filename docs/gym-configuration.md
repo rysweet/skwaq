@@ -111,13 +111,31 @@ LLM-proposed regex patterns are compiled with safety limits:
 
 Patterns exceeding the size limit are rejected and the proposal is skipped.
 
+## CWE Family Mappings (Post-PR #292)
+
+The scoring engine maps specific CWEs to their parent family for
+aggregation. PR #292 added 6 new mappings for Juliet CWE expansion:
+
+| CWE | Family | Family Name | Added In |
+|-----|--------|-------------|----------|
+| CWE-400 | CWE-404 | ResourceLeak | PR #292 (was ResourceExhaustion) |
+| CWE-401 | CWE-404 | ResourceLeak | PR #292 (verified) |
+| CWE-563 | CWE-457 | UninitializedVar | PR #292 (was DeadStore) |
+| CWE-617 | CWE-676 | UnsafeApiUsage | PR #292 (was ReachableAssertion) |
+| CWE-843 | CWE-119 | BufferOverflow | PR #292 (was TypeConfusion) |
+| CWE-197 | CWE-190 | IntegerOverflow | PR #292 (verified) |
+
+Over 40 CWE mappings are defined in total. Unmapped CWEs return themselves
+as their own family. The `cwe_family()` function in `scoring.rs` is the
+source of truth.
+
 ## Benchmark Suites
 
 Suites are defined by TOML manifests in `data/gym/ground_truth/`:
 
 | Suite | Manifest | Cases | Languages | Description |
 |-------|----------|-------|-----------|-------------|
-| `fixtures` | `fixtures.toml` | ~99 | C, C++, Python, JS | Pre-bundled test cases (65 CSE + 12 CGC + original) |
+| `fixtures` | `fixtures.toml` | ~128 | C, C++, Python, JS | Pre-bundled test cases (65 CSE + 12 CGC + original) |
 | `juliet` | `juliet.toml` | ~200+ | C, Java | NIST Juliet Test Suite |
 | `owasp` | `owasp.toml` | ~2700 | Java | OWASP Benchmark (web) |
 | `cgc` | `cgc.toml` | ~130 | C | DARPA Cyber Grand Challenge |
@@ -195,14 +213,40 @@ max_turns: 25
 ---
 ```
 
+## Interprocedural Taint Configuration
+
+Since PR #292, the graph builder creates interprocedural `taint_flows`
+entries. This is enabled by default and requires no additional configuration.
+
+The interprocedural taint builder:
+
+1. Tracks source/sink IDs per enclosing function during graph construction
+2. Records call edges and function name→ID mappings across files
+3. After per-file processing, creates `taint_flows` entries linking caller
+   sources to callee sinks
+
+This enriches the graph context available to agents and the failure analyst.
+The improvement loop benefits because:
+
+- The failure analyst sees complete taint paths through function call chains
+- TaintRule proposals can target missing interprocedural edges specifically
+- AgentPrompt proposals can reference specific interprocedural flow gaps
+
+No environment variables or CLI flags control interprocedural taint — it is
+always active when the graph builder runs.
+
 ## History Database
 
 Benchmark run history is stored in a SQLite database at
-`data/gym/history.db`. This database is `.gitignore`d and contains:
+`~/.skwaq/gym/results.db`. This database is `.gitignore`d and contains:
 
 - Run timestamps and suite identifiers
 - Aggregate scores (F1, precision, recall)
 - Per-CWE detection rates
 - Per-case outcomes (for `case-diff` and `compare`)
+
+All 5 suites (fixtures, juliet, owasp, cyberseceval, cgc) should have
+baseline results recorded before running improvement cycles. This enables
+comprehensive before/after comparison in PRs.
 
 The database uses parameterized queries exclusively — no string interpolation.

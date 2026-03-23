@@ -213,8 +213,12 @@ Maps a specific CWE ID to its family root. Examples:
 | CWE-78 | CWE-74 | Injection |
 | CWE-367 | CWE-362 | Race Condition |
 | CWE-416 | CWE-119 | Use After Free |
+| CWE-400 | CWE-404 | Resource Leak (PR #292) |
+| CWE-563 | CWE-457 | Uninitialized Variable (PR #292) |
+| CWE-617 | CWE-676 | Unsafe API Usage (PR #292) |
+| CWE-843 | CWE-119 | Type Confusion → Buffer Overflow (PR #292) |
 
-Over 40 CWE mappings are defined. Unmapped CWEs return themselves.
+Over 46 CWE mappings are defined. Unmapped CWEs return themselves.
 
 ### Types
 
@@ -513,6 +517,65 @@ The synthesis layer routes findings through one of six paths, tracked by
 
 ---
 
+## Interprocedural Taint Builder (`builder_source.rs`)
+
+### `build_interprocedural_taint_flows`
+
+```rust
+pub fn build_interprocedural_taint_flows(
+    db: &GraphDb,
+    file_contexts: &[FileContext],
+) -> Result<usize>
+```
+
+Creates `taint_flows` entries that link tainted data across function
+boundaries. Called automatically after per-file graph construction
+completes.
+
+**Process:**
+
+1. Collects source/sink IDs per enclosing function from all file contexts
+2. Collects call edges and function name→ID mappings across files
+3. For each call edge where the caller has a taint source and the callee
+   has a taint sink, creates a `taint_flows` entry linking them
+
+**Returns** the number of interprocedural taint flows created.
+
+### Types
+
+#### `FileContext`
+
+```rust
+pub struct FileContext {
+    pub file_path: PathBuf,
+    pub function_sources: HashMap<String, Vec<String>>,  // fn_name → source IDs
+    pub function_sinks: HashMap<String, Vec<String>>,    // fn_name → sink IDs
+    pub call_edges: Vec<(String, String)>,               // (caller_name, callee_name)
+    pub function_ids: HashMap<String, String>,            // fn_name → fn_id
+}
+```
+
+Tracks per-function taint context during graph construction. The
+`function_sources` and `function_sinks` maps are populated as the
+tree-sitter parser encounters taint-relevant API calls. The `call_edges`
+list records all function calls observed across the file.
+
+### Interprocedural Flow Creation Logic
+
+```
+For each call edge (caller → callee):
+  If caller has taint sources AND callee has taint sinks:
+    For each (source, sink) pair:
+      INSERT INTO taint_flows (source_id, sink_id, path)
+      VALUES (?source, ?sink, ?caller_name || ' → ' || ?callee_name)
+```
+
+The path field records the function call chain as a human-readable string
+(e.g., `"main → process_input"`). This path is visible in the failure
+analyst's graph context and in `get_taint_paths` tool output.
+
+---
+
 ## Report Formats
 
 ### JSON Report
@@ -520,13 +583,13 @@ The synthesis layer routes findings through one of six paths, tracked by
 ```json
 {
   "suite": "fixtures",
-  "timestamp": "2026-03-21T10:30:00Z",
-  "skwaq_commit": "b1ed70b7",
-  "precision": 0.958,
+  "timestamp": "2026-03-23T10:30:00Z",
+  "skwaq_commit": "02605466",
+  "precision": 1.0,
   "recall": 0.784,
-  "f1": 0.863,
+  "f1": 0.879,
   "true_positives": 91,
-  "false_positives": 4,
+  "false_positives": 0,
   "false_negatives": 25,
   "true_negatives": 12,
   "per_cwe": [
@@ -559,11 +622,11 @@ The synthesis layer routes findings through one of six paths, tracked by
 
 | Metric    | Value  |
 |-----------|--------|
-| Precision | 95.8%  |
+| Precision | 100.0% |
 | Recall    | 78.4%  |
-| F1        | 86.3%  |
+| F1        | 87.9%  |
 | TP        | 91     |
-| FP        | 4      |
+| FP        | 0      |
 | FN        | 25     |
 | TN        | 12     |
 
