@@ -1481,6 +1481,69 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "recvfrom reads network data; validate before use as array index or buffer size",
         },
+        // Race condition: signal handler with non-atomic operations (CWE-364)
+        SourcePattern {
+            regex: r"\bsignal\s*\(\s*SIG\w+\s*,",
+            category: DangerCategory::Race,
+            severity: Severity::High,
+            reason: "Signal handler installed; ensure handler performs only async-signal-safe operations and uses sig_atomic_t",
+        },
+        // Race condition: shared global modified without synchronization (CWE-366)
+        SourcePattern {
+            regex: r"\b(?:pthread_create|CreateThread|_beginthread|stdThreadCreate)\s*\(",
+            category: DangerCategory::Race,
+            severity: Severity::Medium,
+            reason: "Thread created; ensure shared data is protected with mutexes or atomic operations",
+        },
+        // Uncontrolled search path: putenv with data (CWE-427)
+        SourcePattern {
+            regex: r"\b(?:putenv|_putenv|_wputenv)\s*\(",
+            category: DangerCategory::PathTraversal,
+            severity: Severity::High,
+            reason: "putenv modifies search path; validate input to prevent PATH hijacking (CWE-427)",
+        },
+        // Pointer subtraction on potentially different objects (CWE-469)
+        SourcePattern {
+            regex: r"\(\s*(?:size_t|ptrdiff_t|ssize_t|int|long)\s*\)\s*\(\s*\w+\s*-\s*\w+\s*\)",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "Pointer subtraction cast to integer; ensure both pointers reference the same allocation",
+        },
+        // Embedded malicious code: SMTP protocol in socket code (CWE-506)
+        SourcePattern {
+            regex: r#"\bsend\s*\([^)]*"(?:MAIL FROM|RCPT TO|HELO|EHLO)"#,
+            category: DangerCategory::UnsafeCode,
+            severity: Severity::High,
+            reason: "Suspicious SMTP protocol implementation; verify intent and authorization of email operations",
+        },
+        // Information exposure: error message with sensitive path or stack info (CWE-200)
+        SourcePattern {
+            regex: r"\b(?:perror|strerror|FormatMessage)\s*\(",
+            category: DangerCategory::InformationExposure,
+            severity: Severity::Low,
+            reason: "Error message may expose system internals; ensure error output is sanitized in production",
+        },
+        // Resource leak: file descriptor not closed (CWE-775)
+        SourcePattern {
+            regex: r"\b(?:open|_open|_wopen)\s*\([^)]*O_\w+",
+            category: DangerCategory::ResourceLeak,
+            severity: Severity::Medium,
+            reason: "File opened with low-level open(); ensure close() is called on all paths including error paths",
+        },
+        // Improper access control: missing permission check (CWE-284)
+        SourcePattern {
+            regex: r"\b(?:chmod|_chmod|SetFileSecurity|SetSecurityInfo)\s*\(",
+            category: DangerCategory::AccessControl,
+            severity: Severity::Medium,
+            reason: "File permissions modified; verify correct access control bits are set",
+        },
+        // Error handling: empty catch/ignored return value (CWE-390/391)
+        SourcePattern {
+            regex: r"\bif\s*\(\s*\w+\s*(?:==|!=)\s*(?:NULL|0|FALSE|-1)\s*\)\s*\{\s*\}",
+            category: DangerCategory::ErrorHandling,
+            severity: Severity::Medium,
+            reason: "Empty error check body; handle error condition to prevent silent failures",
+        },
     ]
 }
 
