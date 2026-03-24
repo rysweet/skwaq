@@ -3916,3 +3916,39 @@ Additionally, ensure CWE-79 is mapped to `SemanticPatternClass::CrossSiteScripti
 
 ---
 
+## Cycle: juliet (2026-03-24 20:17 UTC)
+
+### Missed Cases (1 false negatives)
+
+- **CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_22a**: Expected CWE-[134], detected CWE-[], missed CWE-[134]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_22a.c
+  Label Definition File: CWE134_Uncontrolled_Format_String.label.xml
+  Template File: sources-sinks-22a.tmpl.c
+  */
+  ```
+
+### Reviewed Improvement Proposals (2 total; 2 accepted, 0 rejected)
+
+- **[Agent Capability Gap] [MODIFY]** Add explicit CWE-134 (Uncontrolled Format String) detection instructions to the vulnerability analysis semantic analyzer agent prompt. The agent should be instructed to detect the following pattern in C/C++ source code: When data from an untrusted source (recv, recvfrom, fgets, scanf, fscanf, getenv, argv, read) flows into the format string parameter of a printf-family function (printf, fprintf, sprintf, snprintf, vprintf, vfprintf, vsprintf, vsnprintf, syslog, err, warn), flag as CWE-134. The critical distinction is: `fprintf(stdout, data)` is VULNERABLE (data is the format string), while `fprintf(stdout, "%s", data)` is SAFE (data is a format argument). The agent should also flag cases where untrusted data is passed to a function whose name suggests it will be used as a format string (e.g., `*Sink(data)` where the function is declared externally), especially when the source function reads from network sockets or other external inputs. Additionally, ensure CWE-134 maps to the `format_string` SemanticPatternClass in scoring.rs.
+  CWEs: [134] | From case: CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_22a
+  - [KB] cwe/CWE-134/CWE-134 Use of Externally-Controlled Format String — Confirms this is a well-defined CWE covering format string vulnerabilities from user-controlled format specifiers, validating the need for explicit detection support
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology explicitly lists "Format string (CWE-134): printf with user-controlled format string" as a Memory Safety vulnerability pattern for C/C++, confirming this is a standard detection target that the semantic analyzer should cover
+  - [MEMORY] pattern :: CWE-89 SQL Injection detection failure in source-only C files with empty CPG, requiring AGENT_PROMPT improvement for the semantic analyzer [cwe-89, sql-injection, empty-graph, source-code-not-ingested, agent-prompt] — Demonstrates the recurring pattern where source-only C files produce empty CPGs, and the fix is always to improve the LLM semantic analyzer agent prompt to explicitly detect the missing CWE class — the same approach applies to CWE-134 format string detection
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: The core detection pattern (untrusted data flowing into format string position of printf-family functions) is well-defined, general, and directly maps to CWE-134. The distinction between `fprintf(stdout, data)` vs `fprintf(stdout, "%s", data)` is the canonical real-world pattern and is excellent guidance. However, the heuristic about flagging calls to functions whose name matches `*Sink(data)` is Juliet-specific naming convention and would not generalize to real-world codebases. This introduces overfitting to the Juliet test suite's naming patterns. The scoring.rs mapping to `format_string` SemanticPatternClass is fine as infrastructure. The rest of the proposal is solid and represents genuine CWE-134 detection logic.
+  Suggested modification: Remove the heuristic about flagging functions whose name suggests format string usage (e.g., `*Sink(data)`). Instead, replace with: 'When untrusted data flows through intermediate wrapper functions to eventually reach a printf-family format string parameter, trace the taint through the call chain. If the intermediate function passes the tainted data as a format string argument to a printf-family function, flag as CWE-134.' Keep all other detection patterns as-is.
+  - [KB] cwe/CWE-134/CWE-134 Use of Externally-Controlled Format String — CWE-134 is specifically about user-controlled format specifiers. The proposal's core pattern (untrusted source -> format string parameter) directly matches this CWE definition. The `*Sink` naming heuristic does not appear in the CWE definition and is Juliet-specific.
+  - [MEMORY] insight :: Juliet benchmark uses naming conventions like 'badSink', 'goodSink' that do not exist in real-world code. Pattern matching on function names from the benchmark is a classic overfitting signal. [cwe-134] — The *Sink naming pattern is a Juliet-specific convention that would not help detect CWE-134 in production codebases.
+- **[Agent Capability Gap] [ACCEPT]** Enhance agent graph traversal for CWE-[134] detection — case CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_22a has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [134] | From case: CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_22a
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[134].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal addresses a genuine capability gap: when dangerous API calls are not directly visible in the analyzed function but occur in callees across files. The recommendation to use cross-file call graph traversal and taint path tracing is a general-purpose improvement that would benefit detection of many CWE families, not just CWE-134. It does not introduce any Juliet-specific heuristics. Cross-file taint analysis is a standard requirement for real-world vulnerability detection where code is modular.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The fn-insights document describes an Agent Capability Gap pattern where functions are not found in the analysis graph, leading to missed detections. P2 directly addresses this class of gap by enhancing graph traversal, which is a general fix applicable beyond any single test case.
+  - [KB] cwe/CWE-134/CWE-134 Use of Externally-Controlled Format String — CWE-134 detection inherently requires taint flow analysis from external sources to format string sinks. In real-world code, this flow frequently crosses function and file boundaries, making cross-file call graph and taint tracing a necessary general capability.
+
+---
+
