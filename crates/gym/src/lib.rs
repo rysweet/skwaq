@@ -219,7 +219,7 @@ impl Gym {
             let gt = adapter.ground_truth()?;
             let data_dir = adapter.setup(&config).await?;
 
-            let cases: Vec<&ground_truth::TestCase> = gt
+            let filtered_cases: Vec<&ground_truth::TestCase> = gt
                 .cases
                 .iter()
                 .filter(|c| {
@@ -229,8 +229,11 @@ impl Gym {
                     })
                 })
                 .skip(config.skip)
-                .take(config.max_cases.unwrap_or(usize::MAX))
                 .collect();
+            let cases = match config.max_cases {
+                Some(max) => ground_truth::stratified_sample(&filtered_cases, max),
+                None => filtered_cases,
+            };
 
             let total = cases.len();
             let concurrency = config.concurrency;

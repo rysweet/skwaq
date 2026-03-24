@@ -5,7 +5,7 @@
 //! Directory structure: testcases/CWE{NNN}_{name}/s{NN}/{file}.c
 
 use super::*;
-use crate::ground_truth::GroundTruth;
+use crate::ground_truth::{self, GroundTruth};
 use std::path::{Path, PathBuf};
 
 pub struct JulietAdapter {
@@ -59,7 +59,7 @@ impl BenchmarkAdapter for JulietAdapter {
         let bin_dir = data_dir.join("compiled");
         std::fs::create_dir_all(&bin_dir)?;
 
-        let cases: Vec<_> = gt
+        let filtered: Vec<_> = gt
             .cases
             .iter()
             .filter(|c| !c.is_negative)
@@ -69,8 +69,11 @@ impl BenchmarkAdapter for JulietAdapter {
                     .as_ref()
                     .is_none_or(|f| c.expected_cwes.iter().any(|cwe| f.contains(cwe)))
             })
-            .take(config.max_cases.unwrap_or(usize::MAX))
             .collect();
+        let cases = match config.max_cases {
+            Some(max) => ground_truth::stratified_sample(&filtered, max),
+            None => filtered,
+        };
 
         // Compile in parallel using rayon.
         use rayon::prelude::*;
