@@ -1134,9 +1134,15 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
         },
         SourcePattern {
             regex: r"\bcalloc\s*\(",
-            category: DangerCategory::Memory,
-            severity: Severity::Low,
-            reason: "calloc is safer than malloc for arrays but verify count*size doesn't overflow",
+            category: DangerCategory::ResourceLeak,
+            severity: Severity::Medium,
+            reason: "Heap allocation via calloc; ensure free() is called on all exit paths to prevent memory leaks (CWE-401)",
+        },
+        SourcePattern {
+            regex: r"\bstrdup\s*\(",
+            category: DangerCategory::ResourceLeak,
+            severity: Severity::Medium,
+            reason: "strdup allocates heap memory; ensure free() is called on all exit paths (CWE-401)",
         },
         // Generalized dangerous API suffix detection.
         // Catches prefixed wrappers like project_strcpy, my_memcpy, safe_strcat, etc.
