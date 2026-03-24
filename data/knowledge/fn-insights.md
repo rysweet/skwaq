@@ -3822,3 +3822,97 @@ If all three conditions are met, flag as CWE-190 (if the operation could exceed 
 
 ---
 
+## Cycle: fixtures (2026-03-24 20:10 UTC)
+
+### Missed Cases (3 false negatives)
+
+- **cse_path_traversal**: Expected CWE-[22], detected CWE-[], missed CWE-[22]
+  ```
+  /* CWE-22: Improper Limitation of a Pathname to a Restricted Directory
+   * Constructs file path from user input without sanitizing ".." sequences. */
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <string.h>
+  ```
+- **cse_xss_js**: Expected CWE-[79], detected CWE-[], missed CWE-[79]
+  ```
+  /**
+   * CWE-79: Cross-Site Scripting (XSS) in JavaScript
+   * User input inserted into DOM without sanitization.
+   */
+  
+  ```
+- **cse_sqli**: Expected CWE-[89], detected CWE-[], missed CWE-[89]
+  ```
+  /* CWE-89: SQL Injection in C
+   * Constructs SQL query via string concatenation with user input. */
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <string.h>
+  ```
+
+### Reviewed Improvement Proposals (6 total; 6 accepted, 0 rejected)
+
+- **[Agent Capability Gap] [ACCEPT]** Modify the vulnerability analysis agent prompt (e.g., `vuln_analysis_agent.md` or the semantic analyzer prompt) to add explicit CWE-22 path traversal detection instructions for C/C++ source code. Add the following instruction block: "**CWE-22 Path Traversal Detection (C/C++):** When analyzing C/C++ code, look for patterns where user-controlled data (from `argv`, `getenv()`, `fgets()`, `scanf()`, `recv()`, `read()`) is incorporated into file system paths via string construction functions (`snprintf`, `sprintf`, `strcat`, `strcpy`, string concatenation) and the resulting path is passed to file system operations (`fopen`, `open`, `access`, `stat`, `unlink`, `rename`, `remove`, `opendir`, `chdir`, `mkdir`, `rmdir`) WITHOUT intervening path validation. Valid sanitizers include: `realpath()` canonicalization, explicit checks for `..` in the path string (e.g., `strstr(path, \"..\")`), or chroot/directory confinement. The absence of such sanitization between user input and file operations constitutes CWE-22. Pay special attention to the pattern `snprintf(buf, size, \"%s/%s\", base_dir, user_input)` followed by `fopen(buf, ...)` — this is a classic path traversal when user_input is not validated." This instruction enables the LLM semantic analyzer to detect this vulnerability class even when the CPG is empty (source-only C files), as the agent can reason about the source code directly.
+  CWEs: [22] | From case: cse_path_traversal
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE families knowledge pack explicitly documents CWE-22 detection signals as "File operations with user-controlled path components" and "Missing canonicalization before path use" — exactly the pattern present in this code. The agent prompt needs to encode these detection signals explicitly.
+  - [KB] cwe/CWE-22/CWE-22 Improper Limitation of a Pathname to a Restricted Directory — CWE-22 is a well-defined vulnerability class covering `../` traversal. The vulnerability in this code is a textbook instance: user input is concatenated into a path without sanitization, allowing directory traversal.
+  - [MEMORY] pattern :: CWE-190/191 integer overflow/underflow detection failures in source-only C files where CPG is completely empty because source C files are not compiled into binaries [cwe-190, empty-graph, source-code-not-ingested, agent-prompt] — The same root cause (empty CPG for source-only C files) has been documented across 8+ instances of other CWE families. The proven fix approach is AGENT_PROMPT to teach the LLM semantic analyzer to detect vulnerability patterns directly from source code when graph-based analysis is unavailable.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal provides well-structured, generalizable guidance for CWE-22 detection in C/C++. The sources, sinks, and sanitizers listed are comprehensive and representative of real-world path traversal patterns, not overfit to a single test case. The instruction is language-specific but broadly applicable across C/C++ codebases. The sanitizer list (realpath, strstr for .., chroot) reflects real-world mitigations. The mention of snprintf+fopen is a canonical pattern, not a narrow fixture-specific detail.
+  - [KB] cwe/CWE-22/CWE-22 Improper Limitation of a Pathname to a Restricted Directory — The proposal directly aligns with the CWE-22 definition of path traversal and provides accurate source-sink-sanitizer guidance consistent with the CWE specification.
+- **[Agent Capability Gap] [ACCEPT]** Modify the vulnerability analysis agent prompt (e.g., vuln-analysis-agent.md or semantic-analyzer.md) to add explicit CWE-79 XSS detection instructions for JavaScript/Node.js source code analysis. Add the following instruction block:
+
+**XSS Detection (CWE-79) for JavaScript/Node.js:**
+When analyzing JavaScript or Node.js source code, detect Cross-Site Scripting (XSS) where user-controlled input reaches HTML output without encoding:
+- **Sources** (user input): `req.url`, `req.query`, `req.params`, `req.body`, `req.headers`, `url.parse(...)`, `new URL(...)`, `document.location`, `window.location`, `document.cookie`, URL query parameters, form data.
+- **Sinks** (HTML output): Template literals containing HTML tags with interpolated variables `${...}`, `innerHTML`, `outerHTML`, `document.write()`, `document.writeln()`, `res.write()`, `res.end()` with `Content-Type: text/html`, `res.send()` without explicit encoding, JSX `dangerouslySetInnerHTML`.
+- **Pattern**: If a user-controlled value flows from an HTTP request source into an HTML template literal or DOM manipulation sink without passing through an HTML encoding/escaping function (e.g., `encodeURIComponent`, `escape-html`, `DOMPurify.sanitize`, framework auto-escaping), flag as CWE-79.
+- **Confidence**: HIGH when `Content-Type` is explicitly set to `text/html` and user input is directly interpolated. MEDIUM when template literals contain HTML-like content with user variables.
+
+Additionally, ensure CWE-79 is mapped to `SemanticPatternClass::CrossSiteScripting` (or equivalent `cross_site_scripting` class) in scoring.rs via a CWE_MAPPING update if not already present.
+  CWEs: [79] | From case: cse_xss_js
+  - [KB] knowledge-pack/cwe-families/cwe-families — KB explicitly documents "CWE-79: Cross-Site Scripting (XSS) — User input reflected in HTML output without encoding" with detection signals including "innerHTML, document.write() with user input in JavaScript" and "Template rendering without auto-escaping", confirming the XSS detection methodology that the agent prompt currently lacks
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — KB lists "XSS (CWE-79): reflecting user input in HTML without encoding" under Injection (All Languages) and "Output encoding: context-appropriate (HTML, URL, SQL, etc.)" under Security Controls Review, confirming that XSS via unsanitized HTML output is a recognized vulnerability pattern that should be in the agent's detection repertoire
+  - [MEMORY] pattern :: CWE-79 XSS detection failure in JavaScript source files with empty CPG, user input interpolated into HTML template literals without sanitization [cwe-79, xss, javascript, template-literal, empty-graph, agent-prompt] — Confirmed first instance of CWE-79 XSS detection gap; the empty CPG for JavaScript files means only the LLM semantic analyzer can detect this, requiring explicit prompt instructions for XSS source-sink patterns in JavaScript/Node.js code
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal provides comprehensive, well-structured XSS detection guidance for JavaScript/Node.js that covers both server-side (Express-style) and client-side (DOM) patterns. The sources and sinks are broadly representative of real-world XSS vulnerabilities, not narrowly tailored to one test case. The confidence calibration is reasonable. The mention of scoring.rs mapping is a practical implementation concern. The sanitizer list covers common real-world libraries.
+  - [KB] cwe/CWE-798/CWE-798 Use of Hard-coded Credentials — While the KB query returned CWE-798 for 'cwe-79', the proposal correctly targets CWE-79 XSS patterns. The proposal's source-sink-sanitizer model is a well-established vulnerability detection methodology applicable broadly.
+- **[Agent Capability Gap] [ACCEPT]** Modify the vulnerability analysis agent prompt to include explicit CWE-89 SQL injection detection instructions for C/C++ code. Add the following guidance: "When analyzing C/C++ code, detect SQL injection (CWE-89) by looking for string formatting functions (sprintf, snprintf, strcat, strncat) where the format string or concatenation result contains SQL keywords (SELECT, INSERT, UPDATE, DELETE, DROP, ALTER, FROM, WHERE, SET, VALUES, INTO) and user-controlled data (from argv, getenv, fgets, scanf, recv, read, getline) is interpolated into the query string via %s format specifiers or string concatenation without proper SQL parameterization or escaping. Also check for functions named with patterns suggesting database operations (execute_query, db_query, sql_exec, mysql_query, sqlite3_exec, PQexec) receiving string arguments constructed with user input. Flag as CWE-89 when user-controlled data reaches SQL query construction without evidence of prepared statements, parameterized queries, or input sanitization/escaping." Additionally, ensure CWE-89 maps to a `sql_injection` semantic class in scoring.rs.
+  CWEs: [89] | From case: cse_sqli
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — KB explicitly lists "SQL injection (CWE-89): string concatenation in queries" under Injection (All Languages) detection guidance, confirming this is a recognized vulnerability pattern that the framework should detect but currently misses
+  - [KB] cwe/CWE-89/CWE-89 Improper Neutralization of Special Elements used in an SQL Command — CWE-89 is a well-established vulnerability class. The test case perfectly matches the definition: user input incorporated into SQL queries without parameterization via sprintf/snprintf string formatting
+  - [KB] knowledge-pack/cwe-families/cwe-families — KB documents CWE-89 under the Injection family with detection signal "string concatenation in queries" — exactly the pattern present in this test case (snprintf/sprintf with SQL string literal and %s format specifier receiving argv input)
+  - [MEMORY] pattern :: CWE-120 sprintf buffer overflow detection failure in source-only C files with completely empty CPG; pattern accepted 5+ times but never deployed [cwe-120, sprintf, buffer-overflow, source-code-not-ingested, empty-graph] — Confirms the systemic infrastructure issue: source-only C files produce empty graphs, and the LLM semantic analyzer is the only detection path available. The same sprintf function involved in CWE-120 detection is also central to CWE-89 SQL injection detection in C code, making this a shared detection surface
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a well-generalized proposal for SQL injection detection in C/C++. The sources, sinks (including database API functions like mysql_query, sqlite3_exec, PQexec), and the focus on string formatting with SQL keywords are all standard, broadly applicable patterns. The mention of parameterized queries and prepared statements as sanitizers reflects real-world best practices. Not overfit to a single case.
+  - [KB] cwe/CWE-89/CWE-89 Improper Neutralization of Special Elements used in an SQL Command — The proposal directly aligns with CWE-89's definition of SQL injection and provides accurate detection patterns consistent with the CWE specification for C/C++ contexts.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[22] detection — case cse_path_traversal has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [22] | From case: cse_path_traversal
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[22].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The proposal's intent is sound — improving graph traversal for cases where standard API patterns aren't directly visible is a general need. However, the description is too vague and generic ('use get_cross_file_calls and get_taint_paths') without specifying what constitutes a dangerous sink for CWE-22 in this context or how to distinguish path traversal from other taint flows. It also overlaps significantly with P1 which already addresses CWE-22 detection more concretely. The patch text is a template-like instruction that could apply to any CWE.
+  Suggested modification: Merge this with P1 by adding graph traversal guidance specific to CWE-22: 'When CPG/call graph is available, trace taint from user input sources through wrapper functions to file system operation sinks. Use cross-file call graph to follow paths like user_input -> helper_build_path() -> fopen(). When the graph is incomplete or empty, fall back to source-level semantic analysis as described in the CWE-22 detection instructions.'
+  - [KB] cwe/CWE-22/CWE-22 Improper Limitation of a Pathname to a Restricted Directory — CWE-22 detection requires specific source-to-sink reasoning about file path construction; generic graph traversal instructions without CWE-specific sink definitions are insufficient.
+  - [MEMORY] insight :: Generic graph traversal instructions without CWE-specific context tend to be ineffective and can overlap with more targeted prompt instructions [cwe-22] — The proposal duplicates P1's scope but with less precision, suggesting it should be merged rather than standalone.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[79] detection — case cse_xss_js has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [79] | From case: cse_xss_js
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[79].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: Same issue as P4 — the proposal is too generic and template-like. The patch text ('use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions') is identical to P4 except for the CWE number substitution. This lacks XSS-specific guidance about what constitutes a dangerous sink in JS/Node.js context and overlaps heavily with P2 which already provides detailed XSS detection instructions. For JavaScript specifically, cross-file call graphs may work differently than C/C++, and the proposal doesn't address this.
+  Suggested modification: Merge this with P2 by adding graph traversal guidance specific to CWE-79 in JavaScript: 'When call graph or taint analysis is available for JS/Node.js, trace user input from Express route handlers (req.query, req.params, req.body) through middleware and helper functions to response rendering sinks (res.send, res.write, template engines). When the graph is incomplete, fall back to source-level semantic analysis as described in the CWE-79 XSS detection instructions.'
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The vulnerability analysis methodology should include CWE-specific taint flow guidance rather than generic graph traversal instructions that don't differentiate between vulnerability classes.
+  - [MEMORY] insight :: Template-like proposals that only substitute CWE numbers without CWE-specific sink/source definitions provide minimal detection improvement [cwe-79] — The proposal is a copy of P4 with CWE-79 substituted, indicating it's a generic template rather than a targeted improvement.
+- **[Agent Capability Gap] [ACCEPT]** Enhance agent graph traversal for CWE-[89] detection — case cse_sqli has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [89] | From case: cse_sqli
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[89].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal addresses a genuine gap in SQL injection detection where dangerous sinks are reached through wrapper functions or abstraction layers rather than direct API calls. Real-world codebases commonly wrap database operations behind custom functions, making regex-based pattern matching insufficient. The approach of using cross-file call graph traversal and taint flow tracing is a sound, generalizable methodology for detecting CWE-89 in such scenarios. It does not overfit to a single code pattern but rather enhances the agent's capability to handle indirect data flows, which is a well-known challenge in static analysis.
+  - [KB] cwe/CWE-89/CWE-89 Improper Neutralization of Special Elements used in an SQL Command — CWE-89 SQL injection is a well-established vulnerability class. Real-world SQL injection often occurs through wrapper functions and indirect paths to database queries, making deeper call graph and taint analysis a necessary and general-purpose detection strategy.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The fn-insights document demonstrates that agent capability gaps (such as functions not found in the analysis graph) are a known failure mode. This proposal directly addresses a similar gap where standard API pattern matching fails, requiring deeper graph traversal — a pattern consistent with documented agent limitations.
+
+---
+
