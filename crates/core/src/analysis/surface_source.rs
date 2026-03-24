@@ -494,6 +494,16 @@ fn java_source_sinks() -> &'static [SourceSinkPattern] {
             category: "http_input",
         },
         SourceSinkPattern {
+            regex: r#"request\.getParameterMap\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"request\.getParameterNames\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
             regex: r#"\bBufferedReader\b[^;]*\.readLine\s*\("#,
             kind: SourceSinkKind::Source,
             category: "file_read",

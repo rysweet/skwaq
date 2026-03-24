@@ -613,13 +613,13 @@ fn java_patterns() -> &'static [SourcePattern] {
             reason: "File path from user input; validate and canonicalize path to prevent traversal",
         },
         SourcePattern {
-            regex: r"\bnew\s+FileInputStream\s*\(",
+            regex: r"\bnew\s+(?:java\.io\.)?FileInputStream\s*\(",
             category: DangerCategory::PathTraversal,
             severity: Severity::Medium,
             reason: "FileInputStream may read user-controlled path; validate path to prevent traversal",
         },
         SourcePattern {
-            regex: r"\bnew\s+FileOutputStream\s*\(",
+            regex: r"\bnew\s+(?:java\.io\.)?FileOutputStream\s*\(",
             category: DangerCategory::PathTraversal,
             severity: Severity::Medium,
             reason: "FileOutputStream may write to user-controlled path; validate path to prevent traversal",
