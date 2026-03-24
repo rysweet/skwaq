@@ -301,8 +301,8 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         SemanticPatternClass::CommandInjection => &[77, 78, 643, 918],
         SemanticPatternClass::CrossSiteScripting => &[79, 80],
         SemanticPatternClass::CryptoWeakness => &[
-            256, 259, 295, 310, 312, 319, 321, 323, 325, 326, 327, 328, 330, 338, 347, 780, 798,
-            1240,
+            256, 259, 295, 310, 312, 319, 321, 323, 325, 326, 327, 328, 330, 338, 347, 614, 780,
+            798, 1240,
         ],
         SemanticPatternClass::Deserialization => &[502],
         SemanticPatternClass::DeadStore => &[],
@@ -383,7 +383,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         77 | 78 | 643 | 918 => Some(SemanticPatternClass::CommandInjection),
         79 | 80 => Some(SemanticPatternClass::CrossSiteScripting),
         256 | 259 | 295 | 310 | 312 | 319 | 321 | 323 | 325 | 326 | 327 | 328 | 330 | 338 | 347
-        | 780 | 798 | 1240 => Some(SemanticPatternClass::CryptoWeakness),
+        | 614 | 780 | 798 | 1240 => Some(SemanticPatternClass::CryptoWeakness),
         502 => Some(SemanticPatternClass::Deserialization),
         563 => Some(SemanticPatternClass::UninitializedVar),
         506 | 511 | 510 => Some(SemanticPatternClass::EmbeddedMaliciousCode),
