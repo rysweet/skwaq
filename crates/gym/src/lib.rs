@@ -171,6 +171,7 @@ impl Gym {
         skip: usize,
         concurrency: usize,
         adaptive: bool,
+        shard_total: Option<usize>,
     ) -> anyhow::Result<()> {
         let adapters: Vec<&Box<dyn BenchmarkAdapter>> = match suite {
             Some(name) => self.adapters.iter().filter(|a| a.name() == name).collect(),
@@ -219,7 +220,7 @@ impl Gym {
             let gt = adapter.ground_truth()?;
             let data_dir = adapter.setup(&config).await?;
 
-            let cases: Vec<&ground_truth::TestCase> = gt
+            let filtered_cases: Vec<&ground_truth::TestCase> = gt
                 .cases
                 .iter()
                 .filter(|c| {
@@ -228,6 +229,17 @@ impl Gym {
                             || c.expected_cwes.is_empty()
                     })
                 })
+                .collect();
+            // When sharding (eval command), stratify to shard_total so all
+            // processes use the same stratified order, then take the slice.
+            // For single-process runs, stratify to max_cases directly.
+            let stratify_to = shard_total.or(config.max_cases);
+            let stratified = match stratify_to {
+                Some(total) => ground_truth::stratified_sample(&filtered_cases, total),
+                None => filtered_cases,
+            };
+            let cases: Vec<&ground_truth::TestCase> = stratified
+                .into_iter()
                 .skip(config.skip)
                 .take(config.max_cases.unwrap_or(usize::MAX))
                 .collect();
@@ -784,6 +796,7 @@ fn reconstruct_score(
         recall: run.recall,
         f1: run.f1,
         per_cwe,
+        per_original_cwe: Default::default(),
         per_semantic,
         negative_calibration: Default::default(),
     }
@@ -852,6 +865,7 @@ language = "c"
                 0,
                 1,
                 false,
+                None,
             )
             .await
             .unwrap_err();

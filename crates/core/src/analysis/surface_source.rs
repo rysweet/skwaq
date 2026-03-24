@@ -494,6 +494,16 @@ fn java_source_sinks() -> &'static [SourceSinkPattern] {
             category: "http_input",
         },
         SourceSinkPattern {
+            regex: r#"request\.getParameterMap\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"request\.getParameterNames\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
             regex: r#"\bBufferedReader\b[^;]*\.readLine\s*\("#,
             kind: SourceSinkKind::Source,
             category: "file_read",
@@ -608,6 +618,45 @@ fn java_source_sinks() -> &'static [SourceSinkPattern] {
             regex: r#"\bDirContext\b.*\.search\s*\("#,
             kind: SourceSinkKind::Sink,
             category: "ldap_injection",
+        },
+        // XSS via response format/append (CWE-79)
+        SourceSinkPattern {
+            regex: r#"\.getWriter\(\)\.format\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "http_response",
+        },
+        SourceSinkPattern {
+            regex: r#"\.getWriter\(\)\.append\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "http_response",
+        },
+        SourceSinkPattern {
+            regex: r#"\.getWriter\(\)\.print\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "http_response",
+        },
+        // Cookie security sinks (CWE-614)
+        SourceSinkPattern {
+            regex: r#"\.setSecure\s*\(\s*false\s*\)"#,
+            kind: SourceSinkKind::Sink,
+            category: "insecure_cookie",
+        },
+        // Session setAttribute sink (CWE-501 trust boundary)
+        SourceSinkPattern {
+            regex: r#"\bsetAttribute\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "trust_boundary",
+        },
+        // Additional Java sources for trust boundary tracing
+        SourceSinkPattern {
+            regex: r#"\.getRequestURL\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
+        },
+        SourceSinkPattern {
+            regex: r#"\.getPathInfo\s*\("#,
+            kind: SourceSinkKind::Source,
+            category: "http_input",
         },
     ]
 }
@@ -1075,6 +1124,56 @@ fn c_cpp_source_sinks() -> &'static [SourceSinkPattern] {
             regex: r#"\bGetEnvironmentVariable[AW]?\s*\("#,
             kind: SourceSinkKind::Source,
             category: "environment",
+        },
+        // Spawn family sinks (CWE-78) — Windows process creation with arguments
+        SourceSinkPattern {
+            regex: r#"\b_?spawnl[pe]?\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\b_?spawnv[pe]?\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\bposix_spawn\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        // Wide-char command exec sinks (CWE-78)
+        SourceSinkPattern {
+            regex: r#"\b_?wsystem\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        SourceSinkPattern {
+            regex: r#"\b_?w?popen\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "command_exec",
+        },
+        // Environment modification sinks (CWE-427)
+        SourceSinkPattern {
+            regex: r#"\b_?w?putenv\s*\("#,
+            kind: SourceSinkKind::Sink,
+            category: "environment_modification",
+        },
+        // Wide-char format string sinks (CWE-134)
+        SourceSinkPattern {
+            regex: r#"\bwprintf\s*\(\s*[a-zA-Z_]"#,
+            kind: SourceSinkKind::Sink,
+            category: "format_string",
+        },
+        SourceSinkPattern {
+            regex: r#"\bfwprintf\s*\([^,]+,\s*[a-zA-Z_]"#,
+            kind: SourceSinkKind::Sink,
+            category: "format_string",
+        },
+        // Signal handler sinks (CWE-364)
+        SourceSinkPattern {
+            regex: r#"\bsignal\s*\(\s*SIG"#,
+            kind: SourceSinkKind::Sink,
+            category: "signal_handler",
         },
     ]
 }

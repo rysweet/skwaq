@@ -11,6 +11,7 @@
 //! 5. (Human or automated) apply proposals and re-run
 
 use crate::adapters::{BenchmarkAdapter, BenchmarkConfig};
+use crate::ground_truth;
 use crate::scoring::{self, AggregateScore};
 use regex::RegexBuilder;
 use serde::Deserialize;
@@ -234,7 +235,7 @@ pub async fn run_improvement_cycle(
 
     // Step 1: Run benchmark and collect outcomes
     let gt = adapter.ground_truth()?;
-    let all_cases: Vec<_> = gt
+    let filtered_cases: Vec<_> = gt
         .cases
         .iter()
         .filter(|c| {
@@ -242,8 +243,11 @@ pub async fn run_improvement_cycle(
                 c.expected_cwes.iter().any(|cwe| f.contains(cwe)) || c.expected_cwes.is_empty()
             })
         })
-        .take(config.max_cases.unwrap_or(usize::MAX))
         .collect();
+    let all_cases = match config.max_cases {
+        Some(max) => ground_truth::stratified_sample(&filtered_cases, max),
+        None => filtered_cases,
+    };
 
     // Split into training and holdout sets for overfitting prevention.
     // Training cases are used for failure analysis; holdout cases are

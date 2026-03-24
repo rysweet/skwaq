@@ -31,6 +31,9 @@ pub struct AggregateScore {
     pub recall: f64,
     pub f1: f64,
     pub per_cwe: HashMap<u32, CweScore>,
+    /// Per-original-CWE breakdown (not collapsed to family roots).
+    /// Gives visibility into individual CWE performance (e.g. CWE-121 vs CWE-122).
+    pub per_original_cwe: HashMap<u32, CweScore>,
     pub per_semantic: HashMap<String, SemanticScore>,
     /// Calibration metrics from negative/patched cases only.
     pub negative_calibration: NegativeCaseCalibration,
@@ -298,8 +301,8 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         SemanticPatternClass::CommandInjection => &[77, 78, 643, 918],
         SemanticPatternClass::CrossSiteScripting => &[79, 80],
         SemanticPatternClass::CryptoWeakness => &[
-            256, 259, 295, 310, 312, 319, 321, 323, 325, 326, 327, 328, 330, 338, 347, 780, 798,
-            1240,
+            256, 259, 295, 310, 312, 319, 321, 323, 325, 326, 327, 328, 330, 338, 347, 614, 780,
+            798, 1240,
         ],
         SemanticPatternClass::Deserialization => &[502],
         SemanticPatternClass::DeadStore => &[],
@@ -380,7 +383,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         77 | 78 | 643 | 918 => Some(SemanticPatternClass::CommandInjection),
         79 | 80 => Some(SemanticPatternClass::CrossSiteScripting),
         256 | 259 | 295 | 310 | 312 | 319 | 321 | 323 | 325 | 326 | 327 | 328 | 330 | 338 | 347
-        | 780 | 798 | 1240 => Some(SemanticPatternClass::CryptoWeakness),
+        | 614 | 780 | 798 | 1240 => Some(SemanticPatternClass::CryptoWeakness),
         502 => Some(SemanticPatternClass::Deserialization),
         563 => Some(SemanticPatternClass::UninitializedVar),
         506 | 511 | 510 => Some(SemanticPatternClass::EmbeddedMaliciousCode),
@@ -491,6 +494,7 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
 
     let mut score = AggregateScore::default();
     let mut per_cwe: HashMap<u32, CweScore> = HashMap::new();
+    let mut per_original_cwe: HashMap<u32, CweScore> = HashMap::new();
     let mut per_semantic: HashMap<String, SemanticScore> = HashMap::new();
 
     for outcome in &deduped {
@@ -533,11 +537,21 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
                     ..Default::default()
                 });
                 entry.total_cases += 1;
+
+                // Also track by original (non-family) CWE ID.
+                let orig_entry = per_original_cwe.entry(cwe).or_insert_with(|| CweScore {
+                    cwe_id: cwe,
+                    ..Default::default()
+                });
+                orig_entry.total_cases += 1;
+
                 if hit {
                     entry.true_positives += 1;
+                    orig_entry.true_positives += 1;
                     score.true_positives += 1;
                 } else {
                     entry.false_negatives += 1;
+                    orig_entry.false_negatives += 1;
                     score.false_negatives += 1;
                 }
             }
@@ -584,6 +598,12 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
                         ..Default::default()
                     });
                     entry.false_positives += 1;
+
+                    let orig_entry = per_original_cwe.entry(cwe).or_insert_with(|| CweScore {
+                        cwe_id: cwe,
+                        ..Default::default()
+                    });
+                    orig_entry.false_positives += 1;
                 }
             }
 
@@ -631,6 +651,14 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
         entry.precision = if tp + fp > 0.0 { tp / (tp + fp) } else { 0.0 };
     }
 
+    for entry in per_original_cwe.values_mut() {
+        let tp = entry.true_positives as f64;
+        let fp = entry.false_positives as f64;
+        let fn_ = entry.false_negatives as f64;
+        entry.detection_rate = if tp + fn_ > 0.0 { tp / (tp + fn_) } else { 0.0 };
+        entry.precision = if tp + fp > 0.0 { tp / (tp + fp) } else { 0.0 };
+    }
+
     for entry in per_semantic.values_mut() {
         let tp = entry.true_positives as f64;
         let fp = entry.false_positives as f64;
@@ -640,6 +668,7 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
     }
 
     score.per_cwe = per_cwe;
+    score.per_original_cwe = per_original_cwe;
     score.per_semantic = per_semantic;
     score
 }

@@ -53,6 +53,43 @@ pub fn print_summary(score: &AggregateScore, suite: &str) {
     }
     println!();
 
+    // Show per-original-CWE breakdown when it differs from family-level.
+    if score.per_original_cwe.len() > score.per_cwe.len() {
+        println!(
+            "  {:>8} {:>8} {:>8} {:>8} {:>10} {:>10}  (original CWE IDs)",
+            "CWE", "Cases", "TP", "FN", "Detect%", "Prec%"
+        );
+        println!("  {}", "-".repeat(62));
+
+        let mut orig_cwes: Vec<_> = score.per_original_cwe.values().collect();
+        orig_cwes.sort_by(|a, b| {
+            a.detection_rate
+                .partial_cmp(&b.detection_rate)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        for cwe in &orig_cwes {
+            let detect_color = if cwe.detection_rate >= 0.8 {
+                "\x1b[32m"
+            } else if cwe.detection_rate >= 0.5 {
+                "\x1b[33m"
+            } else {
+                "\x1b[31m"
+            };
+            println!(
+                "  {:>8} {:>8} {:>8} {:>8} {}{:>9.1}%\x1b[0m {:>9.1}%",
+                cwe.cwe_id,
+                cwe.total_cases,
+                cwe.true_positives,
+                cwe.false_negatives,
+                detect_color,
+                cwe.detection_rate * 100.0,
+                cwe.precision * 100.0
+            );
+        }
+        println!();
+    }
+
     if !score.per_semantic.is_empty() {
         let mut semantics: Vec<_> = score.per_semantic.values().collect();
         semantics.sort_by(|a, b| {

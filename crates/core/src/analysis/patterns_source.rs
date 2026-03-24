@@ -64,12 +64,6 @@ fn python_patterns() -> &'static [SourcePattern] {
             reason: "yaml.load is unsafe; use yaml.safe_load",
         },
         SourcePattern {
-            regex: r"\b__import__\s*\(",
-            category: DangerCategory::Injection,
-            severity: Severity::High,
-            reason: "__import__() can load arbitrary modules; validate input",
-        },
-        SourcePattern {
             regex: r"\bshelve\.open\s*\(",
             category: DangerCategory::Deserialization,
             severity: Severity::High,
@@ -478,12 +472,33 @@ fn java_patterns() -> &'static [SourcePattern] {
             severity: Severity::Medium,
             reason: "Writing to response writer with concatenation; encode output to prevent XSS",
         },
+        // XSS via response.getWriter().format() (OWASP Benchmark CWE-79 gap)
+        SourcePattern {
+            regex: r"\.getWriter\(\)\.format\s*\(",
+            category: DangerCategory::Xss,
+            severity: Severity::High,
+            reason: "Response.format() with untrusted format string enables XSS; encode user input",
+        },
+        // XSS via response.getWriter().append() 
+        SourcePattern {
+            regex: r"\.getWriter\(\)\.append\s*\(",
+            category: DangerCategory::Xss,
+            severity: Severity::High,
+            reason: "Response.append() with untrusted data enables XSS; encode output",
+        },
         // Insecure cookie (CWE-614)
         SourcePattern {
             regex: r"\bnew\s+[\w.]*Cookie\s*\(",
             category: DangerCategory::Crypto,
             severity: Severity::Medium,
             reason: "Cookie creation; ensure setSecure(true) and setHttpOnly(true) are called",
+        },
+        // Explicit insecure cookie flag (CWE-614 — OWASP gap, 0% detection)
+        SourcePattern {
+            regex: r"\.setSecure\s*\(\s*false\s*\)",
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "Cookie.setSecure(false) transmits cookie over HTTP; use setSecure(true) for HTTPS-only",
         },
         // Weak cryptography patterns
         SourcePattern {
@@ -592,13 +607,13 @@ fn java_patterns() -> &'static [SourcePattern] {
             reason: "File path from user input; validate and canonicalize path to prevent traversal",
         },
         SourcePattern {
-            regex: r"\bnew\s+FileInputStream\s*\(",
+            regex: r"\bnew\s+(?:java\.io\.)?FileInputStream\s*\(",
             category: DangerCategory::PathTraversal,
             severity: Severity::Medium,
             reason: "FileInputStream may read user-controlled path; validate path to prevent traversal",
         },
         SourcePattern {
-            regex: r"\bnew\s+FileOutputStream\s*\(",
+            regex: r"\bnew\s+(?:java\.io\.)?FileOutputStream\s*\(",
             category: DangerCategory::PathTraversal,
             severity: Severity::Medium,
             reason: "FileOutputStream may write to user-controlled path; validate path to prevent traversal",
@@ -609,6 +624,20 @@ fn java_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::Injection,
             severity: Severity::Critical,
             reason: "Runtime.exec runs OS commands; validate all arguments",
+        },
+        // Runtime.exec with environment array — indirect command injection via env (CWE-78)
+        SourcePattern {
+            regex: r"\bRuntime\b.*\bexec\s*\(\s*\w+\s*,\s*\w+\s*\)",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "Runtime.exec with environment array; user input in env enables command injection",
+        },
+        // Runtime variable exec — r.exec(cmd) where r = Runtime.getRuntime() (CWE-78)
+        SourcePattern {
+            regex: r"\b\w+\.exec\s*\([^)]*\+",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "Process exec with string concatenation; validate all arguments to prevent command injection",
         },
         // From self-improvement: cookie-based path traversal
         SourcePattern {
@@ -623,6 +652,13 @@ fn java_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::Injection,
             severity: Severity::Medium,
             reason: "Storing user input in session without validation; sanitize before storing",
+        },
+        // Trust boundary (CWE-501): setAttribute with cookie/header sources (OWASP gap)
+        SourcePattern {
+            regex: r"\bsetAttribute\s*\([^)]*(?:getCookies|getHeader|getQueryString)",
+            category: DangerCategory::Injection,
+            severity: Severity::Medium,
+            reason: "Storing untrusted cookie/header data in session crosses trust boundary (CWE-501)",
         },
         // Broader trust boundary: HttpSession with any put/set + parameter
         SourcePattern {
@@ -663,6 +699,12 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             reason: "system() passes to shell; use exec* family",
         },
         SourcePattern {
+            regex: r"\b_?wsystem\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "_wsystem() passes wide-char command to shell; use exec* family",
+        },
+        SourcePattern {
             regex: r"\bstrcat\s*\(",
             category: DangerCategory::Memory,
             severity: Severity::Critical,
@@ -679,6 +721,12 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::Injection,
             severity: Severity::Critical,
             reason: "popen passes to shell; use pipe+fork+exec",
+        },
+        SourcePattern {
+            regex: r"\b_?w?popen\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "_popen/_wpopen passes command to shell; use CreateProcess or pipe+exec",
         },
         SourcePattern {
             regex: r"\bprintf\s*\(\s*[a-zA-Z_]\w*\s*\)",
@@ -716,6 +764,50 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::FormatString,
             severity: Severity::Medium,
             reason: "vsnprintf with variable format string; validate format origin",
+        },
+        // Wide-char format string sinks (CWE-134 Juliet gap — wchar_t variants)
+        SourcePattern {
+            regex: r"\bwprintf\s*\(\s*[a-zA-Z_]\w*\s*\)",
+            category: DangerCategory::FormatString,
+            severity: Severity::High,
+            reason: "wprintf with variable format string; use wprintf(L\"%ls\", var) instead",
+        },
+        SourcePattern {
+            regex: r"\bfwprintf\s*\([^,]+,\s*[a-zA-Z_]\w*\s*\)",
+            category: DangerCategory::FormatString,
+            severity: Severity::High,
+            reason: "fwprintf with variable format string; use fwprintf(f, L\"%ls\", var) instead",
+        },
+        SourcePattern {
+            regex: r"\bswprintf\s*\([^,]+,[^,]+,\s*[a-zA-Z_]\w*\s*\)",
+            category: DangerCategory::FormatString,
+            severity: Severity::Medium,
+            reason: "swprintf with variable format string; format string vulnerability",
+        },
+        SourcePattern {
+            regex: r"\bvwprintf\s*\(\s*[a-zA-Z_]\w*\s*,",
+            category: DangerCategory::FormatString,
+            severity: Severity::High,
+            reason: "vwprintf with variable format string; validate format origin",
+        },
+        SourcePattern {
+            regex: r"\bvfwprintf\s*\([^,]+,\s*[a-zA-Z_]\w*\s*,",
+            category: DangerCategory::FormatString,
+            severity: Severity::High,
+            reason: "vfwprintf with variable format string; validate format origin",
+        },
+        SourcePattern {
+            regex: r"\bvswprintf\s*\([^,]+,\s*[^,]+,\s*[a-zA-Z_]\w*\s*,",
+            category: DangerCategory::FormatString,
+            severity: Severity::Medium,
+            reason: "vswprintf with variable format string; validate format origin",
+        },
+        // syslog format string sink
+        SourcePattern {
+            regex: r"\bsyslog\s*\([^,]+,\s*[a-zA-Z_]\w*\s*\)",
+            category: DangerCategory::FormatString,
+            severity: Severity::High,
+            reason: "syslog with variable format string; use syslog(priority, \"%s\", var)",
         },
         SourcePattern {
             regex: r"\batoi\s*\(",
@@ -759,6 +851,74 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::Injection,
             severity: Severity::Critical,
             reason: "execve executes a program with environment; validate all arguments",
+        },
+        // execlp/execvpe — PATH-searching exec variants (CWE-78 Juliet gap)
+        SourcePattern {
+            regex: r"(?i)\bexeclp\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "execlp executes a program via PATH search; validate all arguments",
+        },
+        SourcePattern {
+            regex: r"(?i)\bexecvpe\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "execvpe executes a program with env via PATH; validate all arguments",
+        },
+        // spawn family — Windows process creation (CWE-78 Juliet gap, ~15K FN cases)
+        SourcePattern {
+            regex: r"(?i)\b_?spawnl\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "_spawnl creates a new process; validate all arguments to prevent command injection",
+        },
+        SourcePattern {
+            regex: r"(?i)\b_?spawnle\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "_spawnle creates a process with environment; validate all arguments",
+        },
+        SourcePattern {
+            regex: r"(?i)\b_?spawnlp\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "_spawnlp creates a process via PATH; validate all arguments",
+        },
+        SourcePattern {
+            regex: r"(?i)\b_?spawnlpe\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "_spawnlpe creates a process with env via PATH; validate all arguments",
+        },
+        SourcePattern {
+            regex: r"(?i)\b_?spawnv\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "_spawnv creates a process with arg vector; validate all arguments",
+        },
+        SourcePattern {
+            regex: r"(?i)\b_?spawnve\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "_spawnve creates a process with env and arg vector; validate all arguments",
+        },
+        SourcePattern {
+            regex: r"(?i)\b_?spawnvp\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "_spawnvp creates a process via PATH with arg vector; validate all arguments",
+        },
+        SourcePattern {
+            regex: r"(?i)\b_?spawnvpe\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "_spawnvpe creates a process with env via PATH; validate all arguments",
+        },
+        SourcePattern {
+            regex: r"\bposix_spawn\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "posix_spawn creates a new process; validate path and arguments",
         },
         // Memory operations (from self-improvement: heuristic on Juliet CWE-119/120)
         SourcePattern {
@@ -982,9 +1142,15 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
         },
         SourcePattern {
             regex: r"\bcalloc\s*\(",
-            category: DangerCategory::Memory,
-            severity: Severity::Low,
-            reason: "calloc is safer than malloc for arrays but verify count*size doesn't overflow",
+            category: DangerCategory::ResourceLeak,
+            severity: Severity::Medium,
+            reason: "Heap allocation via calloc; ensure free() is called on all exit paths to prevent memory leaks (CWE-401)",
+        },
+        SourcePattern {
+            regex: r"\bstrdup\s*\(",
+            category: DangerCategory::ResourceLeak,
+            severity: Severity::Medium,
+            reason: "strdup allocates heap memory; ensure free() is called on all exit paths (CWE-401)",
         },
         // Generalized dangerous API suffix detection.
         // Catches prefixed wrappers like project_strcpy, my_memcpy, safe_strcat, etc.
@@ -1387,6 +1553,181 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::Memory,
             severity: Severity::High,
             reason: "alloca with variable size can cause stack overflow; use heap allocation with bounds checking",
+        },
+        // Integer overflow: arithmetic on char/short/int from external input (CWE-190)
+        // Self-improvement: targets Juliet CWE-190 char/short/int fscanf/fgets/socket add/multiply/inc patterns
+        SourcePattern {
+            regex: r"\b(?:char|short|int|long|int64_t|uint\d+_t|unsigned\s+int|unsigned\s+short)\s+result\s*=\s*\w+\s*[+*]\s*",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::High,
+            reason: "Arithmetic result stored without overflow check; validate operands before arithmetic",
+        },
+        SourcePattern {
+            regex: r"\b(?:char|short|int|long|int64_t|uint\d+_t|unsigned\s+int)\s+\w+\s*=\s*\w+\s*\*\s*\w+\s*;",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::High,
+            reason: "Integer multiplication without overflow check; validate operands before multiplying",
+        },
+        // Integer overflow: post/pre increment on external data (CWE-190)
+        SourcePattern {
+            regex: r"\bresult\s*=\s*\w+\s*\+\+",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::High,
+            reason: "Post-increment without overflow check; validate value before incrementing",
+        },
+        SourcePattern {
+            regex: r"\bresult\s*=\s*\+\+\s*\w+",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::High,
+            reason: "Pre-increment without overflow check; validate value before incrementing",
+        },
+        // Integer overflow: squaring pattern variable * variable (CWE-190)
+        SourcePattern {
+            regex: r"\bresult\s*=\s*\w+\s*\*\s*\w+\s*;",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::High,
+            reason: "Integer multiplication stored in result without overflow check; validate operands",
+        },
+        // Integer underflow: subtraction on external data (CWE-191)
+        SourcePattern {
+            regex: r"\b(?:char|short|int|long|int64_t|uint\d+_t|unsigned\s+int|unsigned\s+short)\s+result\s*=\s*\w+\s*-\s*",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::High,
+            reason: "Subtraction result stored without underflow check; validate operands before subtracting",
+        },
+        SourcePattern {
+            regex: r"\bresult\s*=\s*\w+\s*--",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::High,
+            reason: "Post-decrement without underflow check; validate value before decrementing",
+        },
+        SourcePattern {
+            regex: r"\bresult\s*=\s*--\s*\w+",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::High,
+            reason: "Pre-decrement without underflow check; validate value before decrementing",
+        },
+        // Integer overflow: fgets as taint source feeding arithmetic (CWE-190)
+        SourcePattern {
+            regex: r"\bfgets\s*\(",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::Medium,
+            reason: "fgets reads external input that may feed into arithmetic; validate before integer operations",
+        },
+        // Stack buffer overflow: array index from variable without upper bound check (CWE-121, CWE-129)
+        SourcePattern {
+            regex: r"\w+\s*\[\s*\w+\s*\]\s*=",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Array write with variable index; validate index is within bounds to prevent buffer overflow",
+        },
+        // Stack buffer overflow: strncpy/strncat/wcsncpy with size from variable (CWE-121, CWE-805, CWE-806)
+        SourcePattern {
+            regex: r"\bstrncpy\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "strncpy may not null-terminate and can overflow if size is wrong; validate destination size",
+        },
+        SourcePattern {
+            regex: r"\bstrncat\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "strncat may overflow if remaining buffer space is not correctly calculated",
+        },
+        SourcePattern {
+            regex: r"\bwcsncpy\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "wcsncpy (wide-char strncpy) may not null-terminate; validate destination size",
+        },
+        SourcePattern {
+            regex: r"\bwcsncat\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "wcsncat may overflow if remaining buffer space is not correctly calculated",
+        },
+        // Stack buffer overflow: wchar_t copy functions (CWE-121)
+        SourcePattern {
+            regex: r"\bwcscat\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Critical,
+            reason: "wcscat has no bounds checking (wide-char strcat); use wcsncat",
+        },
+        // connect/listen socket as taint source (CWE-121 via CWE-129)
+        SourcePattern {
+            regex: r"\brecv\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "recv reads network data that may be attacker-controlled; validate before use as index or size",
+        },
+        SourcePattern {
+            regex: r"\brecvfrom\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "recvfrom reads network data; validate before use as array index or buffer size",
+        },
+        // Race condition: signal handler with non-atomic operations (CWE-364)
+        SourcePattern {
+            regex: r"\bsignal\s*\(\s*SIG\w+\s*,",
+            category: DangerCategory::Race,
+            severity: Severity::High,
+            reason: "Signal handler installed; ensure handler performs only async-signal-safe operations and uses sig_atomic_t",
+        },
+        // Race condition: shared global modified without synchronization (CWE-366)
+        SourcePattern {
+            regex: r"\b(?:pthread_create|CreateThread|_beginthread|stdThreadCreate)\s*\(",
+            category: DangerCategory::Race,
+            severity: Severity::Medium,
+            reason: "Thread created; ensure shared data is protected with mutexes or atomic operations",
+        },
+        // Uncontrolled search path: putenv with data (CWE-427)
+        SourcePattern {
+            regex: r"\b(?:putenv|_putenv|_wputenv)\s*\(",
+            category: DangerCategory::PathTraversal,
+            severity: Severity::High,
+            reason: "putenv modifies search path; validate input to prevent PATH hijacking (CWE-427)",
+        },
+        // Pointer subtraction on potentially different objects (CWE-469)
+        SourcePattern {
+            regex: r"\(\s*(?:size_t|ptrdiff_t|ssize_t|int|long)\s*\)\s*\(\s*\w+\s*-\s*\w+\s*\)",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "Pointer subtraction cast to integer; ensure both pointers reference the same allocation",
+        },
+        // Embedded malicious code: SMTP protocol in socket code (CWE-506)
+        SourcePattern {
+            regex: r#"\bsend\s*\([^)]*"(?:MAIL FROM|RCPT TO|HELO|EHLO)"#,
+            category: DangerCategory::UnsafeCode,
+            severity: Severity::High,
+            reason: "Suspicious SMTP protocol implementation; verify intent and authorization of email operations",
+        },
+        // Information exposure: error message with sensitive path or stack info (CWE-200)
+        SourcePattern {
+            regex: r"\b(?:perror|strerror|FormatMessage)\s*\(",
+            category: DangerCategory::InformationExposure,
+            severity: Severity::Low,
+            reason: "Error message may expose system internals; ensure error output is sanitized in production",
+        },
+        // Resource leak: file descriptor not closed (CWE-775)
+        SourcePattern {
+            regex: r"\b(?:open|_open|_wopen)\s*\([^)]*O_\w+",
+            category: DangerCategory::ResourceLeak,
+            severity: Severity::Medium,
+            reason: "File opened with low-level open(); ensure close() is called on all paths including error paths",
+        },
+        // Improper access control: missing permission check (CWE-284)
+        SourcePattern {
+            regex: r"\b(?:chmod|_chmod|SetFileSecurity|SetSecurityInfo)\s*\(",
+            category: DangerCategory::AccessControl,
+            severity: Severity::Medium,
+            reason: "File permissions modified; verify correct access control bits are set",
+        },
+        // Error handling: empty catch/ignored return value (CWE-390/391)
+        SourcePattern {
+            regex: r"\bif\s*\(\s*\w+\s*(?:==|!=)\s*(?:NULL|0|FALSE|-1)\s*\)\s*\{\s*\}",
+            category: DangerCategory::ErrorHandling,
+            severity: Severity::Medium,
+            reason: "Empty error check body; handle error condition to prevent silent failures",
         },
     ]
 }

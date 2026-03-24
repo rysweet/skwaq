@@ -68,6 +68,40 @@ pub fn generate(score: &AggregateScore, suite: &str, commit: &str) -> String {
 
     md.push_str("\n\n_Legend: + >80% detection, ~ 50-80%, - <50%_\n");
 
+    // Per-original-CWE breakdown when it adds granularity beyond family-level.
+    if score.per_original_cwe.len() > score.per_cwe.len() {
+        md.push_str("\n## Per-CWE Detection Rates (Original IDs)\n\n");
+        md.push_str("| CWE | Cases | TP | FN | Detection % | Precision % |\n");
+        md.push_str("|-----|-------|----|----|-------------|-------------|\n");
+
+        let mut orig_cwes: Vec<_> = score.per_original_cwe.values().collect();
+        orig_cwes.sort_by(|a, b| {
+            a.detection_rate
+                .partial_cmp(&b.detection_rate)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        for cwe in &orig_cwes {
+            let emoji = if cwe.detection_rate >= 0.8 {
+                "+"
+            } else if cwe.detection_rate >= 0.5 {
+                "~"
+            } else {
+                "-"
+            };
+            md.push_str(&format!(
+                "| CWE-{} {} | {} | {} | {} | {:.1}% | {:.1}% |\n",
+                cwe.cwe_id,
+                emoji,
+                cwe.total_cases,
+                cwe.true_positives,
+                cwe.false_negatives,
+                cwe.detection_rate * 100.0,
+                cwe.precision * 100.0
+            ));
+        }
+    }
+
     md.push_str("\n## Per-Semantic Detection Rates\n\n");
     if score.per_semantic.is_empty() {
         md.push_str("_No semantic-class metrics available._\n");
