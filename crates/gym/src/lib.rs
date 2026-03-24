@@ -784,6 +784,7 @@ fn reconstruct_score(
         recall: run.recall,
         f1: run.f1,
         per_cwe,
+        per_original_cwe: Default::default(),
         per_semantic,
         negative_calibration: Default::default(),
     }

@@ -1160,6 +1160,7 @@ mod tests {
                 detection_rate: 0.0,
                 precision: 0.0,
             }],
+            per_original_cwe: vec![],
             per_semantic: vec![],
         };
         let shard1 = JsonReport {
@@ -1183,6 +1184,7 @@ mod tests {
                 detection_rate: 0.0,
                 precision: 0.0,
             }],
+            per_original_cwe: vec![],
             per_semantic: vec![],
         };
 

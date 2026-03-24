@@ -19,6 +19,8 @@ pub struct JsonReport {
     pub true_negatives: u32,
     pub per_cwe: Vec<JsonCweResult>,
     #[serde(default)]
+    pub per_original_cwe: Vec<JsonCweResult>,
+    #[serde(default)]
     pub per_semantic: Vec<JsonSemanticResult>,
 }
 
@@ -53,6 +55,9 @@ pub fn generate(
     let mut per_cwe: Vec<_> = score.per_cwe.values().collect();
     per_cwe.sort_by_key(|c| c.cwe_id);
 
+    let mut per_original_cwe: Vec<_> = score.per_original_cwe.values().collect();
+    per_original_cwe.sort_by_key(|c| c.cwe_id);
+
     let mut per_semantic: Vec<_> = score.per_semantic.values().collect();
     per_semantic.sort_by(|a, b| a.class_name.cmp(&b.class_name));
 
@@ -69,6 +74,18 @@ pub fn generate(
         false_negatives: score.false_negatives,
         true_negatives: score.true_negatives,
         per_cwe: per_cwe
+            .into_iter()
+            .map(|c| JsonCweResult {
+                cwe_id: c.cwe_id,
+                total_cases: c.total_cases,
+                true_positives: c.true_positives,
+                false_positives: c.false_positives,
+                false_negatives: c.false_negatives,
+                detection_rate: c.detection_rate,
+                precision: c.precision,
+            })
+            .collect(),
+        per_original_cwe: per_original_cwe
             .into_iter()
             .map(|c| JsonCweResult {
                 cwe_id: c.cwe_id,
