@@ -1388,6 +1388,99 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "alloca with variable size can cause stack overflow; use heap allocation with bounds checking",
         },
+        // Integer overflow: arithmetic on char/short/int from external input (CWE-190)
+        // Self-improvement: targets Juliet CWE-190 char/short/int fscanf/fgets/socket add/multiply/inc patterns
+        SourcePattern {
+            regex: r"\b(?:char|short|int|long|int64_t|uint\d+_t|unsigned\s+int|unsigned\s+short)\s+result\s*=\s*\w+\s*[+*]\s*",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::High,
+            reason: "Arithmetic result stored without overflow check; validate operands before arithmetic",
+        },
+        SourcePattern {
+            regex: r"\b(?:char|short|int|long|int64_t|uint\d+_t|unsigned\s+int)\s+\w+\s*=\s*\w+\s*\*\s*\w+\s*;",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::High,
+            reason: "Integer multiplication without overflow check; validate operands before multiplying",
+        },
+        // Integer overflow: post/pre increment on external data (CWE-190)
+        SourcePattern {
+            regex: r"\bresult\s*=\s*\w+\s*\+\+",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::High,
+            reason: "Post-increment without overflow check; validate value before incrementing",
+        },
+        SourcePattern {
+            regex: r"\bresult\s*=\s*\+\+\s*\w+",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::High,
+            reason: "Pre-increment without overflow check; validate value before incrementing",
+        },
+        // Integer overflow: squaring pattern variable * variable (CWE-190)
+        SourcePattern {
+            regex: r"\bresult\s*=\s*\w+\s*\*\s*\w+\s*;",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::High,
+            reason: "Integer multiplication stored in result without overflow check; validate operands",
+        },
+        // Integer overflow: fgets as taint source feeding arithmetic (CWE-190)
+        SourcePattern {
+            regex: r"\bfgets\s*\(",
+            category: DangerCategory::IntegerOverflow,
+            severity: Severity::Medium,
+            reason: "fgets reads external input that may feed into arithmetic; validate before integer operations",
+        },
+        // Stack buffer overflow: array index from variable without upper bound check (CWE-121, CWE-129)
+        SourcePattern {
+            regex: r"\w+\s*\[\s*\w+\s*\]\s*=",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Array write with variable index; validate index is within bounds to prevent buffer overflow",
+        },
+        // Stack buffer overflow: strncpy/strncat/wcsncpy with size from variable (CWE-121, CWE-805, CWE-806)
+        SourcePattern {
+            regex: r"\bstrncpy\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "strncpy may not null-terminate and can overflow if size is wrong; validate destination size",
+        },
+        SourcePattern {
+            regex: r"\bstrncat\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "strncat may overflow if remaining buffer space is not correctly calculated",
+        },
+        SourcePattern {
+            regex: r"\bwcsncpy\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "wcsncpy (wide-char strncpy) may not null-terminate; validate destination size",
+        },
+        SourcePattern {
+            regex: r"\bwcsncat\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "wcsncat may overflow if remaining buffer space is not correctly calculated",
+        },
+        // Stack buffer overflow: wchar_t copy functions (CWE-121)
+        SourcePattern {
+            regex: r"\bwcscat\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Critical,
+            reason: "wcscat has no bounds checking (wide-char strcat); use wcsncat",
+        },
+        // connect/listen socket as taint source (CWE-121 via CWE-129)
+        SourcePattern {
+            regex: r"\brecv\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "recv reads network data that may be attacker-controlled; validate before use as index or size",
+        },
+        SourcePattern {
+            regex: r"\brecvfrom\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "recvfrom reads network data; validate before use as array index or buffer size",
+        },
     ]
 }
 
