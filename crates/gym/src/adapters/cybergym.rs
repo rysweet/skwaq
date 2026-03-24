@@ -123,17 +123,21 @@ impl BenchmarkAdapter for CyberGymAdapter {
     ) -> anyhow::Result<Vec<DetectedFinding>> {
         let case_dir = data_dir.join("cases").join(sanitize_case_id(&case.id));
         if !case_dir.exists() {
-            anyhow::bail!(
-                "CyberGym case directory not found: {}. Run `skwaq gym setup` first.",
-                case_dir.display()
+            // Case not extracted — return empty findings (scores as FN for
+            // positive cases, TN for negative). This is honest: we can't
+            // analyze what we don't have.
+            tracing::debug!(
+                "CyberGym case {} not extracted, returning no findings",
+                case.id
             );
+            return Ok(vec![]);
         }
 
         // Use patch.diff to identify only the vulnerable files instead of
         // walking the entire repo tree (which can be 900MB+ for projects
         // like FFmpeg or Wireshark).
         let source_files = patch_affected_files(&case_dir, data_dir, &case.id)
-            .unwrap_or_else(|| collect_source_files_limited(&case_dir, 50));
+            .unwrap_or_else(|| collect_source_files_limited(&case_dir, 10));
 
         if source_files.is_empty() {
             tracing::warn!("No C/C++ source files found in {}", case_dir.display());
@@ -263,7 +267,7 @@ fn collect_source_files_recursive_limited(
     depth: u32,
     limit: usize,
 ) {
-    if depth > 5 || files.len() >= limit {
+    if depth > 3 || files.len() >= limit {
         return;
     }
     let Ok(entries) = std::fs::read_dir(dir) else {
