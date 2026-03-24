@@ -3952,3 +3952,137 @@ Additionally, ensure CWE-79 is mapped to `SemanticPatternClass::CrossSiteScripti
 
 ---
 
+## Cycle: owasp (2026-03-24 20:27 UTC)
+
+### Missed Cases (4 false negatives)
+
+- **BenchmarkTest00007**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+- **BenchmarkTest00030**: Expected CWE-[79], detected CWE-[], missed CWE-[79]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+- **BenchmarkTest00048**: Expected CWE-[79], detected CWE-[], missed CWE-[79]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+- **BenchmarkTest00019**: Expected CWE-[327], detected CWE-[], missed CWE-[327]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+
+### Reviewed Improvement Proposals (9 total; 8 accepted, 1 rejected)
+
+- **[Agent Capability Gap] [ACCEPT]** Modify the vulnerability analysis agent prompt to include explicit Java CWE-78 OS command injection detection instructions. Add the following guidance to the agent's prompt:
+
+**For Java source code, detect CWE-78 (OS Command Injection) when:**
+1. User input enters via HTTP servlet methods: `request.getParameter()`, `request.getHeader()`, `request.getCookies()`, `request.getQueryString()`, `request.getPathInfo()`, `request.getInputStream()`
+2. The input flows (directly or through transformations like `URLDecoder.decode()`, string concatenation, `StringBuilder`) into process execution sinks:
+   - `Runtime.getRuntime().exec()` — any of the command string, command array, or **environment array** arguments
+   - `ProcessBuilder` constructor or `.command()` with user-controlled data
+   - `ProcessBuilder.environment().put()` with user-controlled keys or values
+3. Flag even when user input is passed as environment variables (the `envp` / `argsEnv` parameter) to `Runtime.exec()`, not just the command itself — environment variable injection is a recognized CWE-78 vector.
+
+This addresses both the missing Java pattern coverage and the subtle variant where user input flows into process environment rather than the command string directly.
+  CWEs: [78] | From case: BenchmarkTest00007
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE families knowledge pack explicitly lists "Runtime.getRuntime().exec() in Java with user-controlled args" as a detection signal for CWE-78 OS Command Injection, confirming the knowledge base already has this guidance but the agent prompt does not incorporate it for Java detection.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 is confirmed as OS command injection. The vulnerability in this case matches exactly — user input from an HTTP header is incorporated into an OS command execution call without sanitization.
+  - [MEMORY] pattern :: CWE-79 XSS detection failure where CPG was empty for JavaScript source files and the LLM semantic analyzer also failed to flag it, requiring AGENT_PROMPT improvement [cwe-79, xss, empty-graph, source-code-not-ingested, agent-prompt] — This is the exact same class of failure — source-only files (Java in this case) produce an empty CPG, and the LLM semantic analyzer lacks explicit instructions for the specific vulnerability pattern. The prior lesson confirms AGENT_PROMPT is the correct fix when graph-based detection is unavailable and the semantic analyzer needs explicit pattern guidance.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal provides well-structured, general-purpose OS command injection detection guidance for Java. The taint sources (servlet request methods) and sinks (Runtime.exec, ProcessBuilder) are standard and broadly applicable. The environment variable injection vector is a legitimate and recognized CWE-78 variant. The guidance is not over-fitted to a single test case pattern but covers the general class of command injection vulnerabilities in Java web applications.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — The proposal directly aligns with CWE-78 definition of OS command injection. The sources and sinks enumerated are standard taint-flow patterns for this CWE in Java.
+- **[Agent Capability Gap] [MODIFY]** Modify the vulnerability analysis agent prompt to include comprehensive Java servlet CWE-79 (Reflected XSS) detection guidance. Add instruction block covering all taint sources (request.getParameter(), getParameterValues(), getParameterMap(), getHeader(), getHeaders(), getHeaderNames(), getCookies(), getQueryString(), getPathInfo(), getInputStream(), getReader()) and all taint sinks (response.getWriter().write(), .print(), .println(), .printf(), .format(), .append(), response.getOutputStream().write(), .print(), .println(), response.setHeader(), response.addHeader(), JSP <%= %> expressions, out.print(), out.println()). Key indicators include Content-Type set to text/html, X-XSS-Protection: 0 header, and absence of output encoding calls (ESAPI.encoder().encodeForHTML(), StringEscapeUtils.escapeHtml(), HtmlUtils.htmlEscape()). Flag as CWE-79 when user input from any taint source reaches any taint sink without passing through an HTML encoding/escaping function. The specific failure case is BenchmarkTest00030 where request.getParameterMap().get("BenchmarkTest00030")[0] flows into response.getWriter().printf(param, obj) without encoding — the printf() sink is less obvious than write() but equally dangerous.
+  CWEs: [79] | From case: BenchmarkTest00030
+  - [KB] knowledge-pack/cwe-families/cwe-families — KB explicitly lists "response.getWriter().write() with unencoded user input in Java" as a CWE-79 detection signal, confirming the vulnerability class is recognized but the detection signal set is incomplete — it covers write() but not printf(), print(), println(), format(), or append() on the response writer.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — KB methodology identifies "XSS (CWE-79): reflecting user input in HTML without encoding" as a core injection pattern for static review, confirming this is a recognized high-priority vulnerability class that should be detected.
+  - [MEMORY] pattern :: CWE-79 XSS detection failure in JavaScript source files where CPG is empty and LLM semantic analyzer also fails. Two issues: CWE-79 may not be mapped to cross_site_scripting semantic class, and agent prompt lacks explicit XSS detection instructions. [cwe-79, xss, cross-site-scripting, javascript, agent-prompt, cwe-mapping] — Prior experience confirms the same dual failure mode (empty CPG + missing agent prompt guidance) has been observed for CWE-79 in JavaScript. The fix proposed here extends the same AGENT_PROMPT improvement to Java servlets, addressing a broader set of XSS sinks beyond just write().
+  - [MEMORY] pattern :: CWE-78 OS Command Injection detection failure in Java servlet source files where CPG is empty and LLM fails to flag it. [cwe-78, command-injection, java, servlet, empty-graph, source-code-not-ingested, agent-prompt, owasp-benchmark] — Prior experience with Java servlet CWE-78 detection confirms the recurring pattern: Java source files not ingested into CPG, and agent prompt lacking Java-specific detection guidance. The same pattern applies to CWE-79 Java XSS detection.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: The proposal is largely general and well-structured, but includes overly specific details referencing the exact test case (BenchmarkTest00030, the specific parameter name, the exact printf pattern). These case-specific references should be removed to keep the guidance general. The comprehensive source/sink enumeration and sanitizer list are excellent and broadly applicable.
+  Suggested modification: Remove the specific mention of BenchmarkTest00030 and the exact failure case details. Keep the general guidance about printf() being a valid XSS sink alongside write/print/println, but phrase it generically: 'Note that printf() and format() on response writers are XSS sinks equivalent to write() and print().'
+  - [KB] cwe/CWE-798/CWE-798 Use of Hard-coded Credentials — While not directly related, the CWE knowledge base confirms the importance of general CWE mapping rather than test-case-specific detection. The proposal's inclusion of specific test case names risks overfitting to benchmark artifacts rather than real-world patterns.
+- **[Agent Capability Gap] [MODIFY]** Modify the vulnerability analysis agent prompt to include comprehensive Java servlet XSS detection guidance. Add an instruction block covering taint sources (request.getQueryString(), request.getParameter(), request.getHeader(), request.getCookies(), etc.), non-sanitizing transformations (.toCharArray(), URLDecoder.decode(), .substring(), .trim(), etc.), XSS sinks (response.getWriter().write/print/println/printf/format/append, response.getOutputStream() methods), and additional XSS signals (Content-Type text/html, X-XSS-Protection disabled). If user-controlled input reaches any response output method without HTML encoding (ESAPI, StringEscapeUtils, HtmlUtils), flag as CWE-79.
+  CWEs: [79] | From case: BenchmarkTest00048
+  - [KB] knowledge-pack/cwe-families/cwe-families — KB confirms CWE-79 (Cross-Site Scripting) is in the Injection Family (Root: CWE-74) and describes it as 'User input reflected in HTML output without encoding,' directly matching this vulnerability pattern.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — KB methodology lists 'XSS (CWE-79): reflecting user input in HTML without encoding' as a detection signal under the Injection category, confirming the pattern is in scope but not currently detected by the agent.
+  - [MEMORY] pattern :: CWE-79 Reflected XSS detection failure in Java servlet source files (OWASP Benchmark). The vulnerability involves user-controlled HTTP request parameter input flowing into HTTP response output via response.getWriter().printf(). The CPG is empty because Java source files are not ingested. [cwe-79, xss, cross-site-scripting, java, servlet, response-getWriter, printf, agent-prompt, owasp-benchmark] — Prior documented failure with identical root cause (empty CPG + missing agent guidance for Java XSS sinks) confirms this is a recurring systematic gap, not an isolated miss. The prior case already identified that ALL output methods on response.getWriter() must be enumerated as XSS sinks.
+  Overfitting review: MODIFY | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal substantially overlaps with P2. Both address CWE-79 XSS detection in Java servlets with very similar source/sink/sanitizer lists. Having both would create redundancy. P3 adds value with the explicit 'non-sanitizing transformations' list (toCharArray, substring, trim, URLDecoder.decode), which is genuinely useful to prevent false negatives when the agent sees transformations and assumes they are sanitizers. However, these two proposals should be merged.
+  Suggested modification: Merge P3 into P2 (or vice versa) as a single comprehensive XSS detection instruction block. Specifically, incorporate the 'non-sanitizing transformations' concept from P3 into the unified guidance, as this is a valuable addition that P2 lacks. Remove any test-case-specific references.
+  - [KB] cwe/CWE-798/CWE-798 Use of Hard-coded Credentials — CWE knowledge base context confirms that detection guidance should be generalized across vulnerability classes rather than duplicated per test case, supporting the merge recommendation.
+- **[Agent Capability Gap] [ACCEPT]** Add explicit Java cryptographic weakness detection instructions to the vulnerability analysis agent prompt. The agent should be instructed to detect the following Java CWE-327 patterns when analyzing source code:
+
+**Weak cipher algorithms:** Flag `javax.crypto.Cipher.getInstance()` when the algorithm string contains any of: `DES`, `DESede`, `RC4`, `RC2`, `Blowfish`, or uses `ECB` mode (e.g., `"DES/ECB/PKCS5Padding"`, `"DESede/ECB/PKCS5Padding"`). Note that the algorithm may be a literal string, a variable loaded from a properties file (`getProperty("...", "DESede/ECB/PKCS5Padding")`), or any indirect source — trace the value.
+
+**Weak key generation:** Flag `javax.crypto.KeyGenerator.getInstance("DES")` or other weak key algorithms.
+
+**Weak hashing:** Flag `java.security.MessageDigest.getInstance("MD5")` or `getInstance("SHA-1")` when used for security purposes (password hashing, integrity checks).
+
+**Weak PRNG:** Flag `java.util.Random` (non-crypto) used where `java.security.SecureRandom` is needed.
+
+The agent prompt addition should read: "For Java code, check for CWE-327 (Weak Cryptography): Flag calls to Cipher.getInstance(), KeyGenerator.getInstance(), or MessageDigest.getInstance() with weak algorithms (DES, DESede, RC4, RC2, Blowfish, MD5, SHA-1) or weak modes (ECB). The algorithm name may be a string literal or loaded from configuration (e.g., Properties.getProperty with a weak default). Also flag DES key generation via KeyGenerator.getInstance('DES')."
+  CWEs: [327] | From case: BenchmarkTest00019
+  Suggested pattern: `Cipher\.getInstance\s*\(|KeyGenerator\.getInstance\s*\(|MessageDigest\.getInstance\s*\(`
+  - [KB] knowledge-pack/cwe-families/cwe-families — KB explicitly documents "CWE-327: Use of broken/risky algorithm (DES, RC4, MD5 for hashing)" under the Cryptographic Weakness Family, confirming DES and ECB mode usage in this test case are well-known weak algorithms that should be detected.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — KB methodology step 4 lists "Weak algorithms (CWE-327): DES, RC4, MD5, SHA-1" as a detection signal under Cryptography section, confirming the detection methodology already recognizes this pattern but the agent prompt does not implement it.
+  - [MEMORY] pattern :: CWE-78 OS Command Injection detection failure in Java servlet source files with empty CPG and missing agent prompt guidance [cwe-78, command-injection, java, servlet, empty-graph, source-code-not-ingested, agent-prompt, owasp-benchmark] — Identical root cause pattern — Java source not in CPG plus LLM semantic analyzer lacking explicit Java-specific detection guidance. The same dual-fix approach (AGENT_PROMPT + CWE_MAPPING) that was identified for CWE-78 applies to CWE-327.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a well-structured, general-purpose cryptographic weakness detection guide. The weak algorithm list (DES, DESede, RC4, RC2, Blowfish, ECB mode) and weak hash list (MD5, SHA-1) are industry-standard and broadly applicable beyond any single benchmark test. The inclusion of indirect algorithm specification via properties files adds real-world applicability. The weak PRNG guidance (java.util.Random vs SecureRandom) is also a standard detection pattern.
+  - [KB] cwe/CWE-787/CWE-787 Out-of-bounds Write — While CWE-787 is not directly related, the CWE knowledge base structure confirms the importance of accurately mapping specific vulnerability patterns to their correct CWE. The proposal's CWE-327 mapping to specific Java crypto API patterns follows this same rigorous mapping principle.
+- **[CWE Mapping Gap] [ACCEPT]** Ensure CWE-327 maps to `crypto_weakness` SemanticPatternClass in scoring.rs. This is needed so that even if the LLM semantic analyzer correctly flags weak cryptography usage, the finding maps to the correct semantic class for scoring and reporting. Without this mapping, CWE-327 detections may be silently dropped or misclassified.
+  CWEs: [327] | From case: BenchmarkTest00019
+  - [KB] knowledge-pack/cwe-families/cwe-families — KB documents CWE-327 under the Cryptographic Weakness Family, confirming it should map to the crypto_weakness semantic pattern class.
+  - [MEMORY] pattern :: CWE-78 OS Command Injection detection failure in Java servlet source files with empty CPG and missing agent prompt guidance [cwe-78, command-injection, java, servlet, empty-graph, source-code-not-ingested, agent-prompt, owasp-benchmark] — Same dual-fix approach identified for CWE-78 applies here — both AGENT_PROMPT and CWE_MAPPING fixes are needed together to achieve end-to-end detection.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is an infrastructure-level fix ensuring correct CWE-to-semantic-class mapping. Without this mapping, CWE-327 detections would be lost regardless of how well the agent detects them. This is a necessary plumbing fix that applies universally to all CWE-327 findings, not just benchmark cases. It has zero overfitting risk since it's a categorical mapping, not a detection pattern.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference demonstrates the importance of proper CWE categorization and hierarchy. CWE-327 needs to map to its correct semantic class just as memory safety CWEs map to their family root (CWE-119). Without proper mapping, detections are silently lost.
+- **[Agent Capability Gap] [ACCEPT]** Update vuln-hunter to trace 'exec' (sink type: command_execution) for CWE-[78] (found in BenchmarkTest00007)
+  CWEs: [78] | From case: BenchmarkTest00007
+  Suggested pattern: `When analyzing `exec()` calls (sink type: command_execution), use get_taint_paths to check if any taint source flows into this sink. Also use get_cross_file_calls to trace the data across file boundaries.`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal adds generic taint-tracing for exec() command execution sinks, which is a well-established pattern for detecting CWE-78 OS command injection. The guidance is not overfitted to a single test case — exec() is a universal command execution sink, and tracing taint sources into it is standard practice.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 explicitly covers OS command injection via unsanitized input flowing into command execution sinks like exec(). The proposal correctly targets this pattern.
+- **[Agent Capability Gap] [ACCEPT]** Enhance agent graph traversal for CWE-[79] detection — case BenchmarkTest00030 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [79] | From case: BenchmarkTest00030
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[79].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a general-purpose enhancement for XSS (CWE-79) detection when direct API pattern matching fails. Cross-file taint tracing through wrapper functions is a legitimate and broadly applicable technique, not specific to one benchmark case. Real-world applications commonly wrap output functions.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The knowledge base documents cases where functions are not found in the analysis graph, confirming that deeper graph traversal and cross-file tracing is a recognized gap in the agent's capabilities. This proposal addresses that general gap for CWE-79.
+- **[Agent Capability Gap] [REJECT]** Enhance agent graph traversal for CWE-[79] detection — case BenchmarkTest00048 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [79] | From case: BenchmarkTest00048
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[79].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: MEDIUM | Applicability: HIGH
+  Review reason: This proposal is an exact duplicate of P2 — identical patch text, identical target CWE, identical mechanism. It was derived from a different benchmark case (BenchmarkTest00048 vs BenchmarkTest00030) but proposes the exact same change. Accepting both would be redundant and suggests the proposals are being generated per-case rather than generalized. P2 already covers this.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Sound methodology dictates that identical improvements should be consolidated rather than duplicated per test case, to avoid prompt bloat and maintain clarity in agent instructions.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[327] detection — case BenchmarkTest00019 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [327] | From case: BenchmarkTest00019
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[327].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: LOW
+  Review reason: The patch text is a generic copy-paste from P2/P3 with only the CWE number changed. CWE-327 (Use of a Broken or Risky Cryptographic Algorithm) is fundamentally different from injection/XSS — it's about identifying usage of weak crypto algorithms (e.g., MD5, DES, SHA1), not about taint flow to dangerous sinks. The phrase 'dangerous sinks' and taint-source-to-sink reasoning doesn't apply well to crypto weakness detection. The proposal needs CWE-327-specific guidance.
+  Suggested modification: Replace the generic taint-to-sink language with CWE-327-specific guidance: When analyzing for CWE-327, use get_cross_file_calls to trace cryptographic API usage across file boundaries. Look for instantiation or invocation of weak/broken cryptographic algorithms (e.g., MD5, SHA1, DES, RC4, static IVs) even when wrapped in helper/utility classes. Focus on identifying the algorithm identifiers passed to crypto APIs rather than taint flow patterns.
+  - [KB] cwe/CWE-798/CWE-798 Use of Hard-coded Credentials — The KB shows that credential/crypto-related CWEs (like CWE-798 and by extension CWE-327) involve detection of hardcoded or weak values, not traditional taint-source-to-sink flows. This confirms the proposal's taint-flow framing is inappropriate for CWE-327.
+
+---
+
