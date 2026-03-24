@@ -595,6 +595,42 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 summaries.push(summary);
             }
             println!();
+
+            // Results Skeptic: validate coverage and flag suspicious results
+            for summary in &summaries {
+                let evaluated = summary.true_positives
+                    + summary.false_positives
+                    + summary.false_negatives
+                    + summary.true_negatives;
+                let target = summary.target_cases;
+                let coverage_pct = if target > 0 {
+                    evaluated as f64 / target as f64 * 100.0
+                } else {
+                    0.0
+                };
+
+                if coverage_pct < 80.0 {
+                    eprintln!(
+                        "WARNING [results-skeptic]: {} — only {}/{} cases evaluated ({:.0}% coverage). Results are UNRELIABLE.",
+                        summary.suite, evaluated, target, coverage_pct
+                    );
+                }
+                if summary.f1 > 0.95 && evaluated > 50 {
+                    eprintln!(
+                        "WARNING [results-skeptic]: {} — F1={:.1}% with {} cases evaluated. Verify no silent case skipping.",
+                        summary.suite,
+                        summary.f1 * 100.0,
+                        evaluated
+                    );
+                }
+                if summary.precision >= 1.0 && summary.true_negatives == 0 && target > 100 {
+                    eprintln!(
+                        "WARNING [results-skeptic]: {} — 100% precision but 0 TN. Are negative cases being evaluated?",
+                        summary.suite
+                    );
+                }
+            }
+
             write_eval_artifacts(&eval_dir, &eval_metadata, &summaries, &gym.history_db)?;
             println!("Results saved to: {}", eval_dir.display());
             println!("Metadata: {}", eval_dir.join("metadata.json").display());
