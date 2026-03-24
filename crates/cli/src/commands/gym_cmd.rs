@@ -36,6 +36,10 @@ pub enum GymSub {
         #[arg(long, default_value = "0")]
         skip: usize,
 
+        /// Total cases for stratified sampling across shards (internal, set by eval command)
+        #[arg(long, hide = true)]
+        shard_total: Option<usize>,
+
         /// Number of cases to analyze concurrently (in-process async parallelism).
         /// Default 4 for hybrid mode, 1 for quick mode.
         #[arg(long, short = 'j')]
@@ -215,6 +219,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             quick,
             llm_only,
             skip,
+            shard_total,
             concurrency,
             source_only,
             adaptive,
@@ -241,6 +246,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 *skip,
                 conc,
                 *adaptive,
+                *shard_total,
             )
             .await?;
 
@@ -452,6 +458,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                     cmd.args(["gym", "run", suite])
                         .args(["--skip", &skip.to_string()])
                         .args(["--max-cases", &cases_per.to_string()])
+                        .args(["--shard-total", &total.to_string()])
                         .args(["-j", &concurrency.to_string()])
                         .args([
                             "--json",
