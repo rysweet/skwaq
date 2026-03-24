@@ -88,3 +88,42 @@
 - Dependency vulnerability monitoring
 - Security regression testing in CI/CD
 - Threat intelligence integration
+
+## Semantic Investigation Strategies (Beyond Pattern Matching)
+
+These vulnerability classes CANNOT be found by matching API names. They require reasoning about program behavior.
+
+### Resource Leaks (CWE-401, CWE-775, CWE-772)
+**Investigation approach:** For every allocation call (malloc, calloc, open, socket, fopen), trace ALL exit paths from the containing function. If ANY path returns without freeing/closing the resource, it is a leak. Error-handling branches (early returns after failed checks) are the most common leak sites.
+- Graph query: `get_callees("<function>")` to check if free/close is called
+- Look for: `if (error) return;` between allocation and cleanup
+- Common missed pattern: goto-based cleanup where a label is skipped
+
+### Race Conditions (CWE-362, CWE-364, CWE-366, CWE-367)
+**Investigation approach:** This is a STRUCTURAL vulnerability, not a single bad call.
+1. Signal races (CWE-364): Find `signal()` handler installation, then check if code between signal-capable regions uses non-atomic operations (free+NULL, check+use).
+2. Thread races (CWE-366): Find `pthread_create`/`CreateThread`, identify shared globals, check if ANY access is without a lock.
+3. TOCTOU (CWE-367): Find `access()`/`stat()` followed by `open()`/`fopen()` on the same path — the file could change between check and use.
+- These require reading MULTIPLE functions and understanding their execution relationship.
+
+### Integer Issues Without Obvious Arithmetic (CWE-190, CWE-191, CWE-680)
+**Investigation approach:** The overflow may not be `a + b` — it could be:
+- Implicit truncation: `int x = (int)long_value;` — silent data loss
+- Multiplication for allocation: `malloc(count * sizeof(T))` — overflow in size calc
+- Subtraction underflow: `unsigned size = input - header_len;` — wraps to huge value
+- Array index from narrowed type: `char index = large_value; array[index]` — wraps around
+- Look for: external input → type conversion or arithmetic → use as size, index, or loop bound
+
+### Command Injection Through Indirection (CWE-78)
+**Investigation approach:** Not all command injection is `system(user_input)`.
+- Spawn family: `_spawnv`, `execlp` etc. — user input may be in argv[2], not the command
+- Environment modification: `putenv("PATH=...")` followed by `system("cmd")` — attacker controls search path
+- File-based: User writes to a script file, then `system("./script.sh")` executes it
+- Use `get_data_sources()` to find all external inputs, then `get_taint_paths()` to check if ANY reach an execution function in ANY argument position
+
+### Trust Boundary Violations (CWE-501)
+**Investigation approach:** This is about WHERE untrusted data gets stored, not what API is called.
+- Session storage: `request.getParameter()` → `session.setAttribute(name, value)` — either name or value from untrusted source
+- Cookie-sourced: `request.getCookies()` → decode → `session.setAttribute()`
+- Header-sourced: `request.getHeader()` → `session.setAttribute()`
+- The violation is storing untrusted data in a trusted context without validation

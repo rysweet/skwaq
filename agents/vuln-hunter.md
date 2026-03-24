@@ -83,6 +83,26 @@ You MUST call create_finding for each vulnerability. If you don't call it, your 
 - A buffer write operation where the size is not bounded
 - Command/SQL/LDAP injection where user input reaches an execution sink
 - Use-after-free, double-free, or null dereference from attacker-controlled paths
+- Integer overflow/underflow where arithmetic on external input precedes a size or index use
+- Race conditions where shared state is modified by multiple threads or signal handlers without synchronization
+- Resource leaks where malloc/open/socket has no corresponding free/close on all exit paths
+- Uninitialized variables used in security-relevant decisions or operations
+
+**Vulnerability classes that require SEMANTIC investigation (not just API matching):**
+
+These classes cannot be found by matching a single API call. You MUST use graph tools to trace data flow and structural patterns:
+
+1. **Integer underflow (CWE-191)**: Look for subtraction/decrement on external input. The danger is `unsigned_var - attacker_value` wrapping to a huge number used as a buffer size. Trace: `get_data_sources()` → arithmetic → `malloc(result)`.
+
+2. **Race conditions (CWE-362/364/366)**: Look for `signal()` + non-atomic operations, or `pthread_create` + shared globals without mutex. Use `get_callers("<shared_var>")` to find concurrent access patterns. The vulnerability is STRUCTURAL, not a single bad API call.
+
+3. **Resource leaks (CWE-401/775)**: Look for `malloc`/`open`/`socket` without matching `free`/`close` on ALL control flow paths (including error returns). Use `get_callees("<function>")` to check if cleanup happens. Check error-handling branches.
+
+4. **Uninitialized variables (CWE-457)**: Look for local variable declarations without initializers that are used before any assignment. Use `read_function()` and trace variable definitions to first use.
+
+5. **Format string via wrapper (CWE-134)**: The dangerous call may not be `printf` directly — trace through wrapper functions. Use `get_taint_paths("<format_arg>")` to find if external data reaches ANY format parameter position.
+
+6. **Command injection via spawn (CWE-78)**: Not just `system()`/`popen()` — check `_spawnl`, `_spawnv`, `execlp`, `posix_spawn`, `CreateProcess`. The injected argument may be in an argv array element, not the command string itself. Use `get_data_sources()` then trace each source into argument positions.
 
 **Severity levels** (use these to express confidence):
 - critical: clear exploit path with attacker-controlled input reaching dangerous sink
