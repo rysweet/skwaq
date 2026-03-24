@@ -64,12 +64,6 @@ fn python_patterns() -> &'static [SourcePattern] {
             reason: "yaml.load is unsafe; use yaml.safe_load",
         },
         SourcePattern {
-            regex: r"\b__import__\s*\(",
-            category: DangerCategory::Injection,
-            severity: Severity::High,
-            reason: "__import__() can load arbitrary modules; validate input",
-        },
-        SourcePattern {
             regex: r"\bshelve\.open\s*\(",
             category: DangerCategory::Deserialization,
             severity: Severity::High,
