@@ -631,6 +631,20 @@ fn java_patterns() -> &'static [SourcePattern] {
             severity: Severity::Critical,
             reason: "Runtime.exec runs OS commands; validate all arguments",
         },
+        // Runtime.exec with environment array — indirect command injection via env (CWE-78)
+        SourcePattern {
+            regex: r"\bRuntime\b.*\bexec\s*\(\s*\w+\s*,\s*\w+\s*\)",
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "Runtime.exec with environment array; user input in env enables command injection",
+        },
+        // Runtime variable exec — r.exec(cmd) where r = Runtime.getRuntime() (CWE-78)
+        SourcePattern {
+            regex: r"\b\w+\.exec\s*\([^)]*\+",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "Process exec with string concatenation; validate all arguments to prevent command injection",
+        },
         // From self-improvement: cookie-based path traversal
         SourcePattern {
             regex: r"\bgetCookies\s*\(\s*\)",
