@@ -89,7 +89,16 @@ impl BenchmarkAdapter for CyberGymAdapter {
             }
 
             std::fs::create_dir_all(&case_dir)?;
-            extract_tar_gz(&archive, &case_dir)?;
+            if let Err(e) = extract_tar_gz(&archive, &case_dir) {
+                tracing::warn!(
+                    "CyberGym: skipping case {} — extraction failed: {}",
+                    case.id,
+                    e
+                );
+                // Remove partial extraction
+                let _ = std::fs::remove_dir_all(&case_dir);
+                continue;
+            }
         }
 
         std::fs::write(dest.join(".ready"), "")?;
@@ -120,9 +129,12 @@ impl BenchmarkAdapter for CyberGymAdapter {
             );
         }
 
-        // CyberGym cases are entire repositories. Analyze all C/C++ source
-        // files in the extracted directory tree, similar to CGC approach.
-        let source_files = collect_source_files(&case_dir);
+        // Use patch.diff to identify only the vulnerable files instead of
+        // walking the entire repo tree (which can be 900MB+ for projects
+        // like FFmpeg or Wireshark).
+        let source_files = patch_affected_files(&case_dir, data_dir, &case.id)
+            .unwrap_or_else(|| collect_source_files_limited(&case_dir, 50));
+
         if source_files.is_empty() {
             tracing::warn!("No C/C++ source files found in {}", case_dir.display());
             return Ok(vec![]);
@@ -237,42 +249,106 @@ fn archive_path_for_case(dataset_dir: &Path, case_id: &str, is_negative: bool) -
     }
 }
 
-/// Collect all C/C++ source files in a directory tree.
-fn collect_source_files(dir: &Path) -> Vec<PathBuf> {
+/// Collect source files with a cap to avoid walking massive repo trees.
+fn collect_source_files_limited(dir: &Path, limit: usize) -> Vec<PathBuf> {
     let mut files = Vec::new();
-    collect_source_files_recursive(dir, &mut files, 0);
+    collect_source_files_recursive_limited(dir, &mut files, 0, limit);
     files.sort();
     files
 }
 
-fn collect_source_files_recursive(dir: &Path, files: &mut Vec<PathBuf>, depth: u32) {
-    // Bound recursion to prevent symlink loops or extremely deep trees
-    if depth > 10 {
+fn collect_source_files_recursive_limited(
+    dir: &Path,
+    files: &mut Vec<PathBuf>,
+    depth: u32,
+    limit: usize,
+) {
+    if depth > 5 || files.len() >= limit {
         return;
     }
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
     for entry in entries.flatten() {
+        if files.len() >= limit {
+            return;
+        }
         let path = entry.path();
-        // Skip symlinks to prevent traversal attacks
         if path.is_symlink() {
             continue;
         }
         if path.is_dir() {
-            // Skip common non-source directories
             let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
             if matches!(
                 name,
-                ".git" | "build" | "target" | "node_modules" | ".svn" | "__pycache__"
+                ".git" | "build" | "test" | "tests" | "doc" | "docs" | "third_party" | "vendor"
             ) {
                 continue;
             }
-            collect_source_files_recursive(&path, files, depth + 1);
+            collect_source_files_recursive_limited(&path, files, depth + 1, limit);
         } else if is_c_source(&path) {
             files.push(path);
         }
     }
+}
+
+/// Extract affected file paths from patch.diff and resolve them in the case directory.
+fn patch_affected_files(case_dir: &Path, data_dir: &Path, case_id: &str) -> Option<Vec<PathBuf>> {
+    let base_id = case_id.strip_suffix("-fix").unwrap_or(case_id);
+    let (source, id) = base_id.split_once(':')?;
+    let patch_path = data_dir
+        .join("dataset")
+        .join("data")
+        .join(source)
+        .join(id)
+        .join("patch.diff");
+
+    let patch_content = std::fs::read_to_string(&patch_path).ok()?;
+
+    let mut affected = Vec::new();
+    for line in patch_content.lines() {
+        // Parse "diff --git a/path/to/file.c b/path/to/file.c" or
+        // "--- a/path/to/file.c"
+        let rel_path = if line.starts_with("diff --git a/") {
+            line.strip_prefix("diff --git a/")
+                .and_then(|s| s.split_once(" b/"))
+                .map(|(a, _)| a)
+        } else if line.starts_with("--- a/") {
+            line.strip_prefix("--- a/")
+        } else {
+            None
+        };
+
+        if let Some(rel) = rel_path {
+            if is_source_extension(rel) {
+                // Look in the extracted case dir (under src-vul/ or directly)
+                let candidates = [case_dir.join("src-vul").join(rel), case_dir.join(rel)];
+                for candidate in &candidates {
+                    if candidate.exists() {
+                        affected.push(candidate.clone());
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    affected.dedup();
+    if affected.is_empty() {
+        None
+    } else {
+        Some(affected)
+    }
+}
+
+fn is_source_extension(path: &str) -> bool {
+    let lower = path.to_lowercase();
+    lower.ends_with(".c")
+        || lower.ends_with(".cc")
+        || lower.ends_with(".cpp")
+        || lower.ends_with(".cxx")
+        || lower.ends_with(".h")
+        || lower.ends_with(".hpp")
 }
 
 fn is_c_source(path: &Path) -> bool {
@@ -360,7 +436,7 @@ mod tests {
     fn test_collect_source_files_empty_dir() {
         let dir = std::env::temp_dir().join("cybergym_test_empty");
         let _ = std::fs::create_dir_all(&dir);
-        let files = collect_source_files(&dir);
+        let files = collect_source_files_limited(&dir, 50);
         assert!(files.is_empty());
         let _ = std::fs::remove_dir(&dir);
     }
