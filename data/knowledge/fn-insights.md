@@ -5265,3 +5265,108 @@ This instruction is generalizable to all real-world C/C++ code where external in
 
 ---
 
+## Cycle: owasp (2026-03-25 04:16 UTC)
+
+### Missed Cases (3 false negatives)
+
+- **BenchmarkTest00007**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+- **BenchmarkTest00030**: Expected CWE-[79], detected CWE-[], missed CWE-[79]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+- **BenchmarkTest00019**: Expected CWE-[327], detected CWE-[], missed CWE-[327]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+
+### Reviewed Improvement Proposals (7 total; 6 accepted, 1 rejected)
+
+- **[Agent Capability Gap] [ACCEPT]** Modify the vulnerability analysis agent prompt to add explicit Java CWE-78 (OS Command Injection) detection instructions. The agent should be instructed to perform the following when analyzing Java source code:
+
+1. **Identify taint sources in Java servlets**: Recognize HTTP request input methods as taint sources: `request.getHeader()`, `request.getParameter()`, `request.getCookies()` / `cookie.getValue()`, `request.getQueryString()`, `request.getInputStream()`, `request.getReader()`.
+
+2. **Identify command injection sinks**: Flag `Runtime.getRuntime().exec()` and `ProcessBuilder.command()` / `ProcessBuilder.start()` as CWE-78 sinks. Critically, ALL argument positions of `exec()` are sinks — including the command array (1st arg), the environment variables array (2nd arg), and the working directory (3rd arg). User-controlled environment variables passed to `exec(String[], String[])` enable command injection via PATH manipulation, LD_PRELOAD, etc.
+
+3. **Recognize non-sanitizing transformations**: `URLDecoder.decode()`, `URLEncoder.encode()`, `String.trim()`, `String.toLowerCase()`, `String.toUpperCase()`, and collection operations (HashMap put/get, ArrayList add/get, array assignment/access) are taint-preserving and should NOT break taint chains.
+
+4. **Detection rule**: If a taint source (HTTP request method) flows to a command execution sink (`Runtime.exec()`, `ProcessBuilder`) through any number of taint-preserving transformations without passing through a proper sanitizer (e.g., allowlist validation, input character restriction), flag as CWE-78 OS Command Injection.
+
+This guidance should be added to the agent's prompt as a general-purpose Java command injection detection checklist, not specific to any benchmark.
+  CWEs: [78] | From case: BenchmarkTest00007
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference explicitly lists "Runtime.getRuntime().exec() in Java with user-controlled args" as a CWE-78 detection signal, confirming this is a recognized pattern that the agent should detect but currently misses due to lack of operationalized prompt instructions.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 covers OS command injection which directly applies to this case where user-controlled HTTP header data flows into Runtime.exec() environment variables.
+  - [MEMORY] pattern :: CWE-78 OS Command Injection in Java servlet where user-controlled HTTP header input flows through URLDecoder.decode() into Runtime.getRuntime().exec() as the environment variables array. The CPG is completely empty because Java source files are not ingested. [cwe-78, command-injection, java, servlet, runtime-exec, getHeader, environment-variables, argsEnv, empty-graph, agent-prompt, owasp-benchmark, recurring-failure] — Prior memory from multiple identical cases confirms this is a recurring systematic failure with the same two root causes (empty Java CPG + missing agent guidance), validating the AGENT_PROMPT fix as the appropriate remediation.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal provides well-structured, general-purpose taint analysis guidance for Java OS command injection. The sources, sinks, taint-preserving transforms, and sanitizer concepts are all industry-standard and not benchmark-specific. The inclusion of environment variable arguments as sinks is a real-world concern (PATH manipulation, LD_PRELOAD). The detection rule is sound and aligns with standard CWE-78 definitions.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — The proposal directly addresses CWE-78 OS command injection with well-known Java-specific sources and sinks, consistent with the CWE definition.
+- **[Taint Rule Gap] [ACCEPT]** Add Java servlet XSS taint source and sink definitions to the taint analysis framework. Sources (type: http_request_input, CWE: 79): request.getParameter(), request.getParameterMap(), request.getParameterValues(), request.getHeader(), request.getHeaders(), request.getCookies(), request.getQueryString(), request.getInputStream(), request.getReader(), request.getPathInfo(), request.getRequestURI(). Sinks (type: http_response_output, CWE: 79): response.getWriter().write(), response.getWriter().print(), response.getWriter().println(), response.getWriter().printf(), response.getWriter().format(), response.getWriter().append(), response.getOutputStream().write(), response.getOutputStream().print(), response.getOutputStream().println(). The taint rule should flag any flow from an HTTP request input source to an HTTP response output sink without an intervening HTML encoding/escaping sanitizer (e.g., ESAPI.encoder().encodeForHTML(), StringEscapeUtils.escapeHtml(), OWASP Java Encoder). This TAINT_RULE approach is preferred over AGENT_PROMPT because prior AGENT_PROMPT proposals (3+ cycles) have not been effectively deployed. Defining sources and sinks at the framework level ensures the taint engine can detect the flow even when the CPG is empty, by guiding the LLM semantic analyzer with explicit source/sink definitions.
+  CWEs: [79] | From case: BenchmarkTest00030
+  Suggested pattern: `response\.getWriter\(\)\.(printf|print|println|write|format|append)\(`
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE-79 entry in cwe-families says 'User input reflected in HTML output without encoding' but lists NO Java-specific detection signals (no PrintWriter methods, no HttpServletRequest methods). This confirms the knowledge gap causing the false negative.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology lists 'XSS (CWE-79): reflecting user input in HTML without encoding' as a detection target but provides no Java-specific sink enumeration, confirming the agent lacks actionable guidance for Java servlet XSS detection.
+  - [MEMORY] pattern :: CWE-79 Reflected XSS in Java servlet: recurring false negative where the knowledge base CWE-79 detection signals only list response.getWriter().write() but miss response.getWriter().printf(), .print(), .println(), .format(), .append(). [cwe-79, xss, cross-site-scripting, java, servlet, response-getWriter, printf, print, println, format, append, getParameterMap, agent-prompt, knowledge-pack-update, recurring-failure, owasp-benchmark] — Durable memory from 3+ prior cycles confirms this exact false negative pattern and recommends TAINT_RULE over AGENT_PROMPT since prompt-based proposals have repeatedly failed to deploy.
+  - [MEMORY] pattern :: CWE-79 Reflected XSS in Java servlet: BenchmarkTest00030 is a recurring false negative. The AGENT_PROMPT fix has been proposed 3+ times but continues to not take effect. The TAINT_RULE approach may be more effective. [cwe-79, xss, cross-site-scripting, java, servlet, response-getWriter, printf, getParameterMap, agent-prompt, recurring-failure, deployment-pipeline-broken, taint-rule] — Prior memory explicitly recommends switching to TAINT_RULE since AGENT_PROMPT proposals are not being deployed, confirming this is the correct fix category.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a standard reflected XSS taint rule definition using well-known Java servlet API sources and response writer sinks. The sources and sinks are comprehensive and industry-standard. The sanitizer list (ESAPI, StringEscapeUtils, OWASP Java Encoder) is well-chosen. The rationale for choosing TAINT_RULE over AGENT_PROMPT (prior failures) is pragmatic. No benchmark-specific logic is present.
+  - [KB] cwe/CWE-798/CWE-798 Use of Hard-coded Credentials — While this KB entry is for CWE-798, the adjacent CWE-79 context confirms XSS is about improper neutralization of user input reflected in output, which this taint rule correctly models.
+  - [MEMORY] failure :: Prior AGENT_PROMPT proposals (3+ cycles) have not been effectively deployed for Java analysis, suggesting a framework-level TAINT_RULE is a more reliable approach. [cwe-79] — The proposal explicitly references repeated failures of AGENT_PROMPT approaches, justifying the shift to TAINT_RULE.
+- **[Pattern Gap] [MODIFY]** Add a regex pattern to detect Java cryptographic weakness (CWE-327) when Cipher.getInstance() or KeyGenerator.getInstance() is called with known weak/broken algorithms. The pattern targets specific dangerous API calls in Java's javax.crypto package that instantiate known-weak ciphers (DES, DESede, RC2, RC4, Blowfish). It will NOT match strong algorithms like AES or ChaCha20. Additionally, add a second pattern for ECB mode detection since ECB mode is insecure regardless of the cipher. These patterns are precise enough to avoid false positives: (a) they only match Java crypto API calls with specific weak algorithm names, (b) DES, RC2, RC4, and Blowfish are universally considered broken by NIST, OWASP, and every major security standard, (c) ECB mode leaks plaintext patterns and is never appropriate for production encryption. This is a pattern-only fix because the graph is empty for Java source files, making AGENT_PROMPT and TAINT_RULE approaches inoperable until the Java ingestion pipeline is fixed.
+  CWEs: [327] | From case: BenchmarkTest00019
+  Suggested pattern: `\b(Cipher|KeyGenerator)\.getInstance\s*\(\s*"?(DES|DESede|RC2|RC4|Blowfish)`
+  - [KB] knowledge-pack/cwe-families/cwe-families — Explicitly documents 'CWE-327: Use of broken/risky algorithm (DES, RC4, MD5 for hashing)' under the Cryptographic Weakness Family (Root: CWE-327), confirming DES and RC4 as canonical weak algorithms that the proposed pattern targets
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Lists 'Weak algorithms (CWE-327): DES, RC4, MD5, SHA-1' as a key detection signal under the Cryptography section, confirming the algorithm names used in the proposed regex pattern are the correct detection targets
+  - [MEMORY] pattern :: CWE-79 XSS Java servlet empty graph recurring failure with AGENT_PROMPT proposals not taking effect [cwe-79, xss, java, servlet, empty-graph, taint-rule, recurring-failure] — Prior experience with Java OWASP Benchmark cases shows the CPG is consistently empty (0 nodes) for Java source files, confirming that graph-based approaches (AGENT_PROMPT, TAINT_RULE) are non-functional for this target and pattern-based detection is the only viable fallback until Java ingestion is fixed
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: The regex pattern and targeted algorithms are generally sound, but DESede (Triple DES) is not universally 'broken' — it's deprecated by NIST (as of 2023) but was considered acceptable until recently and is still used in legacy systems. More importantly, the regex `DES|DESede` will match 'DES' as a substring of 'DESede', creating potential double-matching issues. The pattern should also be careful not to match algorithm names in comments or string literals unrelated to crypto calls — though the Cipher.getInstance/KeyGenerator.getInstance prefix mitigates this. The 'Blowfish' classification as universally broken is debatable (it has a small block size but isn't 'broken' in the same way as DES). Consider adjusting severity levels or separating 'weak' from 'broken'.
+  Suggested modification: Consider splitting the pattern into two severity tiers: (1) HIGH severity for DES, RC2, RC4 which are definitively broken, and (2) MEDIUM severity for DESede and Blowfish which are deprecated/weak but not fully broken. Also ensure the regex uses word boundaries or full algorithm name matching to avoid substring conflicts between DES and DESede (e.g., match DESede first, then DES separately, or use negative lookahead: `DES(?!ede)`).
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — While this KB entry is for CWE-78, the general methodology of precise pattern matching for specific dangerous API calls is consistent. The concern is about precision of the regex pattern to avoid false positives in real-world code.
+- **[Pattern Gap] [ACCEPT]** Add a second regex pattern to detect ECB mode usage in Cipher.getInstance() calls, which is insecure regardless of the underlying cipher algorithm. ECB mode leaks plaintext patterns and is never appropriate for production encryption. This complements the weak algorithm pattern by catching cases like DESede/ECB/PKCS5Padding where the algorithm itself might not be the weakest but the mode of operation is fundamentally broken.
+  CWEs: [327] | From case: BenchmarkTest00019
+  Suggested pattern: `Cipher\.getInstance\s*\(\s*"[^"]*\/ECB\/`
+  - [KB] knowledge-pack/cwe-families/cwe-families — Documents CWE-327 as the root CWE for cryptographic weakness family; ECB mode is a risky cryptographic choice that falls under this category
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The vulnerability analysis methodology identifies weak cryptographic patterns as key detection signals; ECB mode is a well-known insecure mode of operation documented by NIST and OWASP
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: ECB mode detection via `Cipher.getInstance("*/ECB/*")` is a well-established security finding. ECB mode is universally considered insecure for any non-trivial data because it leaks plaintext patterns. The regex is precise — it only matches within Cipher.getInstance() string arguments containing '/ECB/' as a mode specification, which is the standard Java JCE transformation string format. This has very low false positive risk and high real-world applicability.
+  - [KB] cwe/CWE-787/CWE-787 Out-of-bounds Write — While this KB entry covers a different CWE, the general principle of detecting known-insecure configurations via precise pattern matching is well-established. ECB mode detection in Cipher.getInstance is a standard SAST rule present in tools like FindBugs, SpotBugs, and SonarQube.
+- **[Agent Capability Gap] [REJECT]** Update vuln-hunter to trace 'exec' (sink type: command_execution) for CWE-[78] (found in BenchmarkTest00007)
+  CWEs: [78] | From case: BenchmarkTest00007
+  Suggested pattern: `When analyzing `exec()` calls (sink type: command_execution), use get_taint_paths to check if any taint source flows into this sink. Also use get_cross_file_calls to trace the data across file boundaries.`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: This proposal is vague, duplicative, and inferior to P1 which already provides comprehensive CWE-78 detection guidance. P5 merely says to 'use get_taint_paths' and 'get_cross_file_calls' without specifying sources, taint-preserving transforms, sanitizers, or any actionable detection logic. It also explicitly references a specific benchmark test case (BenchmarkTest00007) in its description, suggesting benchmark-specific tuning rather than general-purpose improvement. P1 already covers the same use case with far more detail and rigor.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — While targeting CWE-78 is valid, this proposal lacks the specificity needed for effective detection. It names no sources, no taint-preserving transforms, and no sanitizer exceptions — making it too vague to improve detection while risking benchmark-specific tuning.
+  - [MEMORY] insight :: Proposals that merely reference tool APIs (get_taint_paths, get_cross_file_calls) without defining the semantic analysis criteria tend to be ineffective and benchmark-fitted. [cwe-78] — The proposal's vagueness and explicit benchmark reference indicate it was derived from a specific test case rather than general security principles.
+- **[Agent Capability Gap] [ACCEPT]** Enhance agent graph traversal for CWE-[79] detection — case BenchmarkTest00030 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [79] | From case: BenchmarkTest00030
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[79].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal addresses a genuine detection gap where XSS (CWE-79) vulnerabilities are hidden behind wrapper functions and indirect call paths. The approach of using cross-file call graph traversal and taint flow tracing is a well-established, general-purpose technique for detecting data flow from sources to sinks. It does not hardcode any test-case-specific patterns and applies broadly to real-world applications where output encoding or rendering sinks are wrapped in utility methods.
+  - [MEMORY] failure :: Agent capability gap where functions are not found in the analysis graph due to incomplete graph construction, requiring deeper traversal to find indirect paths [cwe-79] — The known failure pattern of functions being absent from the analysis graph directly supports the need for deeper cross-file call graph traversal. The same root cause (incomplete graph construction) applies here — wrapper functions obscure the path to XSS sinks.
+  - [KB] kb source/vuln-analysis-methodology/vuln-analysis-methodology — The methodology guidance supports using deeper analysis techniques when standard pattern matching fails, which is exactly what this proposal recommends.
+- **[Agent Capability Gap] [ACCEPT]** Enhance agent graph traversal for CWE-[327] detection — case BenchmarkTest00019 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [327] | From case: BenchmarkTest00019
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[327].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal targets CWE-327 (Use of a Broken or Risky Cryptographic Algorithm) detection when cryptographic API calls are wrapped in helper functions or abstraction layers. The approach is general-purpose — using cross-file call graphs and taint paths to find indirect usage of weak crypto algorithms. This is a common real-world pattern where applications wrap crypto operations in utility classes. The proposal does not encode any single-test-case-specific logic.
+  - [MEMORY] failure :: Agent capability gap where functions are not found in the analysis graph due to incomplete graph construction, requiring deeper traversal to find indirect paths [cwe-327] — The same class of failure — functions absent from the analysis graph — applies to CWE-327 detection. Cryptographic API calls wrapped in utility methods require the same deeper graph traversal approach that was identified as a gap in prior analyses.
+  - [KB] kb source/fn-insights/fn-insights — The fn-insights document identifies a recurring pattern where functions are not found in the analysis graph, leading to missed vulnerabilities. This proposal directly addresses that gap for CWE-327 by extending traversal depth to capture wrapper functions.
+
+---
+

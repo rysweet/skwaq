@@ -154,3 +154,5 @@ When standard API patterns are not found, use get_cross_file_calls and get_taint
 **CWE-457 Use of Uninitialized Variable (C/C++):** Detect local variables declared without an initializer that are used before any assignment on at least one control-flow path. The pattern is `type var;` (no `= ...`) followed by a read of `var` before a write. Check conditional initialization: `if (cond) { var = val; }` followed by unconditional use — the else path leaves it uninitialized. Also flag pointer variables (`char *ptr;`) used without allocation. This is purely semantic — no dangerous API is involved.
 
 When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions for CWE-[22, 78, 89, 119, 122, 134, 190, 457].
+
+When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[79].
