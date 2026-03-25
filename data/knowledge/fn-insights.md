@@ -4422,3 +4422,182 @@ This prompt addition enables the LLM semantic analyzer to detect this vulnerabil
 
 ---
 
+## Cycle: owasp (2026-03-25 00:37 UTC)
+
+### Missed Cases (10 false negatives)
+
+- **BenchmarkTest00007**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+- **BenchmarkTest00091**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /**
+   * OWASP Benchmark Project v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+- **BenchmarkTest00092**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /**
+   * OWASP Benchmark Project v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+- **BenchmarkTest00172**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /**
+   * OWASP Benchmark Project v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+- **BenchmarkTest00030**: Expected CWE-[79], detected CWE-[], missed CWE-[79]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+- **BenchmarkTest00048**: Expected CWE-[79], detected CWE-[], missed CWE-[79]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+- **BenchmarkTest00149**: Expected CWE-[79], detected CWE-[], missed CWE-[79]
+  ```
+  /**
+   * OWASP Benchmark Project v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+- **BenchmarkTest00150**: Expected CWE-[79], detected CWE-[], missed CWE-[79]
+  ```
+  /**
+   * OWASP Benchmark Project v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+- **BenchmarkTest00019**: Expected CWE-[327], detected CWE-[], missed CWE-[327]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+- **BenchmarkTest00035**: Expected CWE-[327], detected CWE-[], missed CWE-[327]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+
+### Reviewed Improvement Proposals (15 total; 9 accepted, 6 rejected)
+
+- **[Agent Capability Gap] [ACCEPT]** Modify the vulnerability analysis agent prompt to include explicit Java CWE-78 command injection detection guidance. Add the following instruction block:
+
+**Java OS Command Injection (CWE-78) Detection:**
+When analyzing Java servlet/web application source code, check for the following taint flow pattern:
+- **Sources** (user-controlled input): `request.getHeader()`, `request.getParameter()`, `request.getParameterValues()`, `request.getParameterMap()`, `request.getCookies()`, `request.getQueryString()`, `request.getInputStream()`, `request.getReader()`, `request.getPathInfo()`
+- **Sinks** (command execution): `Runtime.getRuntime().exec()`, `ProcessBuilder.command()`, `ProcessBuilder.start()`, `new ProcessBuilder()`
+- **Critical**: `Runtime.exec(String[] cmdarray, String[] envp)` — user input in ANY argument position is dangerous, including the `envp` (environment variables) parameter. An attacker controlling environment variables can influence command behavior (e.g., PATH manipulation, LD_PRELOAD injection).
+- **Non-sanitizing transformations**: `URLDecoder.decode()`, `String.trim()`, `String.toLowerCase()`, `new String()`, array assignment — these do NOT neutralize command injection.
+- Flag as CWE-78 when user input from any servlet request method reaches any argument of `Runtime.exec()` or `ProcessBuilder` without proper validation/allowlisting.
+  CWEs: [78] | From case: BenchmarkTest00007
+  - [KB] knowledge-pack/cwe-families/cwe-families — The knowledge pack explicitly lists "Runtime.getRuntime().exec() in Java with user-controlled args" as a detection signal for CWE-78 command injection, confirming this is a known and documented pattern that the agent should be detecting but is not.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology document specifies "OS command injection (CWE-78): system(), exec(), popen() with user input" and "Use get_data_sources() to find all external inputs, then get_taint_paths() to check if ANY reach an execution function in ANY argument position" — the "ANY argument position" guidance is critical here since the vulnerability is in the envp parameter, not the command parameter.
+  - [MEMORY] pattern :: CWE-78 OS Command Injection detection failure in Java servlet source files with empty CPG and failed LLM semantic analysis [cwe-78, command-injection, java, servlet, runtime-exec, processbuilder, http-header, getHeader, empty-graph, source-code-not-ingested, agent-prompt, owasp-benchmark] — Prior memory confirms this is a recurring pattern across multiple OWASP Benchmark cases — the same two-layer failure (empty graph + agent prompt gap) prevents detection of Java command injection via Runtime.exec() with HTTP request input.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal provides well-structured, generalizable taint-flow guidance for Java CWE-78 detection. The sources, sinks, and non-sanitizing transformations listed are all standard and applicable to real-world Java web applications, not just the OWASP Benchmark. The emphasis on envp as a dangerous argument position is a legitimate and often-missed attack vector. The guidance does not overfit to a single test case pattern.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — The proposal correctly targets CWE-78 OS command injection with standard taint source-to-sink patterns consistent with the CWE definition.
+- **[Agent Capability Gap] [MODIFY]** Modify the vulnerability analysis agent prompt to add explicit Java CWE-78 detection guidance for source-code-only analysis. Add the following instructions: "For Java servlet code, detect CWE-78 OS Command Injection by identifying taint flows from HTTP request inputs to process execution APIs. Taint sources include: request.getParameter(), request.getHeader(), request.getCookies() (via Cookie.getValue()), request.getQueryString(), request.getInputStream(), request.getReader(), request.getParameterMap(). Taint sinks include: Runtime.getRuntime().exec() in ALL argument positions (the command string, the command+args array, AND the environment variables array), ProcessBuilder.command(), ProcessBuilder.start() with tainted arguments. CRITICAL: User input passed as environment variables (the second array argument to Runtime.exec(String[], String[])) is CWE-78 command injection because the attacker can control PATH, LD_PRELOAD, or other environment variables that influence command execution. URLDecoder.decode() is a non-sanitizing transformation — it preserves taint. When the graph is empty for Java source files, perform source-code-only semantic analysis using these patterns."
+  CWEs: [78] | From case: BenchmarkTest00091
+  - [KB] knowledge-pack/cwe-families/cwe-families — KB explicitly lists "Runtime.getRuntime().exec() in Java with user-controlled args" as a CWE-78 detection signal, confirming this is a recognized pattern, but it does not emphasize environment variable arguments specifically
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — KB methodology section on "Command Injection Through Indirection" states "user input may be in argv[2], not the command" and "Environment modification: putenv('PATH=...') followed by system('cmd') — attacker controls search path", directly describing this exact vulnerability pattern where user input controls environment variables rather than the command itself
+  - [MEMORY] pattern :: CWE-78 OS Command Injection detection failure in Java servlet source files where user-controlled HTTP header input flows through URLDecoder.decode() into Runtime.getRuntime().exec() as environment variables. CPG is empty because Java source files are not ingested. [cwe-78, command-injection, java, servlet, runtime-exec, environment-variables, agent-prompt, owasp-benchmark, recurring-failure] — Prior memory confirms this is a recurring failure pattern across multiple OWASP Benchmark cases: Java source files produce empty CPGs, and the semantic analyzer lacks specific Java CWE-78 detection guidance especially for environment variable injection via exec()
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: The core CWE-78 guidance is sound and largely overlaps with P1. However, the final instruction 'When the graph is empty for Java source files, perform source-code-only semantic analysis using these patterns' is a workaround for an agent capability gap that could mask graph construction issues. This fallback should be scoped more carefully to avoid hiding systemic problems.
+  Suggested modification: Remove or rephrase the fallback instruction. Instead of 'When the graph is empty for Java source files, perform source-code-only semantic analysis using these patterns,' use: 'If the analysis graph is incomplete or missing for Java source files, log a warning about incomplete graph construction AND attempt source-code-level taint analysis as a secondary method.' This preserves observability of the underlying issue while still enabling detection.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The fn-insights entry documents agent capability gaps where functions are missing from the analysis graph. The fallback instruction in P2 may mask such gaps rather than addressing the root cause.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — The CWE-78 taint flow patterns described are accurate and generalizable.
+- **[Agent Capability Gap] [MODIFY]** Modify the vulnerability analysis agent prompt to add explicit Java CWE-78 detection guidance. The agent should be instructed to: (1) Recognize all Java servlet HTTP request input methods as taint sources for CWE-78: request.getCookies() + cookie.getValue(), request.getParameter(), request.getHeader(), request.getQueryString(), request.getInputStream(), request.getReader(). (2) Recognize Runtime.getRuntime().exec() and ProcessBuilder as command injection sinks in ALL argument positions — not just the command string, but also the arguments array and especially the environment variables array (String[] envp). The exec(String[] cmdarray, String[] envp) and exec(String[] cmdarray, String[] envp, File dir) overloads accept attacker-controlled environment variables, which is OS command injection via environment manipulation. (3) Recognize URLDecoder.decode() as a taint propagator (not a sanitizer). (4) When a switch statement routes tainted data to a variable on at least one reachable case branch, treat the target variable as tainted. Specifically, add this instruction to the agent prompt: "In Java servlets, check if ANY data from HTTP request methods (getParameter, getHeader, getCookies/getValue, getQueryString, getInputStream) flows into ANY argument of Runtime.getRuntime().exec() or ProcessBuilder, including command arrays, argument arrays, environment variable arrays, and working directory. User-controlled environment variables passed to exec() constitute CWE-78 OS command injection because they can manipulate PATH, LD_PRELOAD, or other security-critical environment settings of the spawned process."
+  CWEs: [78] | From case: BenchmarkTest00092
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — KB explicitly documents 'Command Injection Through Indirection' including environment modification (putenv/PATH) and states 'Use get_data_sources() to find all external inputs, then get_taint_paths() to check if ANY reach an execution function in ANY argument position' — the agent prompt needs to apply this principle to Java's Runtime.exec(args, argsEnv)
+  - [KB] knowledge-pack/cwe-families/cwe-families — KB lists 'Runtime.getRuntime().exec() in Java with user-controlled args' as a CWE-78 detection signal, confirming the sink identification but not covering the environment variables argument position specifically
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 covers OS command injection which includes controlling environment variables of spawned processes
+  - [MEMORY] pattern :: CWE-78 OS Command Injection in Java servlet code where user-controlled cookie input flows into Runtime.getRuntime().exec() as environment variables (argsEnv parameter). CPG is completely empty because Java source files are not ingested. [cwe-78, command-injection, java, servlet, runtime-exec, getCookies, environment-variables, argsEnv, empty-graph, agent-prompt, recurring-failure] — Durable memory documents this exact failure pattern (cookie → URLDecoder.decode → exec argsEnv) from a prior case, confirming it is a recurring detection gap requiring the same AGENT_PROMPT fix
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: Most of this proposal is excellent and generalizable. However, point (4) about switch statements routing tainted data is overly specific to the OWASP Benchmark test case pattern (BenchmarkTest00092 likely uses a switch to route tainted data). While the principle is valid (taint propagation through control flow), the specific mention of 'switch statement' is too narrow and risks overfitting. The guidance should be generalized to cover all control flow constructs.
+  Suggested modification: Replace point (4) with: 'When tainted data flows through control flow constructs (switch statements, if-else chains, ternary operators) and is assigned to a variable on any reachable branch, treat the target variable as tainted. Taint is not lost by routing through control flow.' This generalizes the guidance beyond the specific switch pattern.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — The CWE-78 source/sink/propagation guidance is accurate and matches the standard definition of OS command injection.
+- **[Agent Capability Gap] [ACCEPT]** Modify the vulnerability analysis agent prompt to include explicit Java CWE-78 (OS Command Injection) detection guidance. Add the following instructions: "When analyzing Java source code, detect CWE-78 OS Command Injection by: (1) SOURCES: Identify all HTTP servlet input methods as taint sources — request.getHeader(), request.getParameter(), request.getCookies(), request.getQueryString(), request.getInputStream(), request.getReader(), request.getParameterMap(). (2) TAINT PROPAGATION: Recognize that URLDecoder.decode() is a non-sanitizing transformation that preserves taint. Recognize that storing a tainted value in a Java collection (HashMap.put(), ArrayList.add(), array assignment) and later retrieving it (HashMap.get(), ArrayList.get(), array access) preserves taint — this is a common taint-laundering pattern. (3) SINKS: Identify Runtime.getRuntime().exec() and ProcessBuilder as command injection sinks in ALL argument positions — the command string, the argument array, AND the environment variables array. User-controlled environment variables (e.g., PATH, LD_PRELOAD) passed to exec(String[], String[], File) can redirect or influence command execution and constitute CWE-78. (4) Flag any path from an HTTP servlet input source to any argument of exec()/ProcessBuilder without command injection sanitization."
+  CWEs: [78] | From case: BenchmarkTest00172
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE-families knowledge pack explicitly lists "Runtime.getRuntime().exec() in Java with user-controlled args" as a detection signal for CWE-78 OS Command Injection, confirming this is the correct CWE and that the detection gap is in applying this known signal in the agent prompt.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 covers OS command injection, confirming the expected CWE classification is correct for this case where user input flows into Runtime.exec() arguments.
+  - [MEMORY] pattern :: CWE-78 OS Command Injection in Java servlet code where user-controlled HTTP header input flows through URLDecoder.decode() into Runtime.getRuntime().exec() as environment variables. CPG is empty because Java source files are not ingested. [cwe-78, command-injection, java, servlet, runtime-exec, getHeader, environment-variables, agent-prompt, owasp-benchmark, recurring-failure] — Prior memory from multiple analysis cycles confirms this is a recurring detection failure with the same root causes (empty CPG + missing agent prompt guidance). The proposed AGENT_PROMPT fix has been consistently identified as the correct remediation approach.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal is well-generalized. The collection taint-laundering pattern (HashMap.put/get, ArrayList.add/get) described in point (2) is a genuinely important and commonly missed real-world pattern, not just an OWASP Benchmark artifact. The sources, sinks, and propagation rules are all standard. The guidance is structured clearly with SOURCES/PROPAGATION/SINKS/FLAG which is practical for agent prompts.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — The proposal accurately describes CWE-78 detection patterns including standard taint sources, propagation through collections, and execution sinks.
+- **[Agent Capability Gap] [ACCEPT]** Update the vulnerability analysis agent's prompt and the cwe-families knowledge pack entry for CWE-79 to expand Java servlet XSS detection signals. Currently the KB only lists response.getWriter().write() as a Java XSS sink. This must be expanded to include all response output methods: response.getWriter().write(), response.getWriter().print(), response.getWriter().println(), response.getWriter().printf(), response.getWriter().format(), response.getWriter().append(), and response.getOutputStream().write(). ALL of these methods write user-controlled data directly to the HTTP response body without encoding and are XSS sinks when the Content-Type is text/html. Java Servlet XSS Sources should include: request.getParameter(), request.getParameterMap(), request.getParameterValues(), request.getHeader(), request.getHeaders(), request.getCookies(), request.getQueryString(), request.getInputStream(), request.getReader(), request.getPathInfo(), request.getRequestURI(). The agent prompt should instruct: 'When analyzing Java servlet code, flag CWE-79 (Reflected XSS) whenever data from ANY HTTP request input method flows into ANY response output method on response.getWriter() or response.getOutputStream() without HTML encoding (e.g., OWASP ESAPI encoder, StringEscapeUtils.escapeHtml). Non-sanitizing transformations like toString(), toCharArray(), trim(), URLDecoder.decode() do NOT break the taint chain.'
+  CWEs: [79] | From case: BenchmarkTest00030
+  Suggested pattern: `Java Servlet XSS Sinks (CWE-79): response.getWriter().write(), response.getWriter().print(), response.getWriter().println(), response.getWriter().printf(), response.getWriter().format(), response.getWriter().append(), and response.getOutputStream().write(). ALL of these methods write user-controlled data directly to the HTTP response body without encoding and are XSS sinks when the Content-Type is text/html. Java Servlet XSS Sources: request.getParameter(), request.getParameterMap(), request.getParameterValues(), request.getHeader(), request.getHeaders(), request.getCookies(), request.getQueryString(), request.getInputStream(), request.getReader(), request.getPathInfo(), request.getRequestURI(). Flag CWE-79 whenever data from ANY HTTP request input method flows into ANY response output method without HTML encoding. Non-sanitizing transformations like toString(), toCharArray(), trim(), URLDecoder.decode() do NOT break the taint chain.`
+  - [KB] knowledge-pack/cwe-families/cwe-families — The cwe-families KB entry for CWE-79 explicitly only lists 'response.getWriter().write() with unencoded user input in Java' as a detection signal, omitting printf(), print(), println(), format(), and append() — this is the root cause of the false negative
+  - [MEMORY] pattern :: CWE-79 Reflected XSS detection failure in Java servlet source files where printf() on response.getWriter() is not recognized as an XSS sink [cwe-79, xss, cross-site-scripting, java, servlet, response-getWriter, printf, getParameterMap, empty-graph, source-code-not-ingested, agent-prompt, owasp-benchmark] — Durable memory with confidence 0.97 confirms this exact pattern was identified in a prior cycle but the KB/agent prompt was never updated — this is a deployment gap for a known fix
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal correctly expands the XSS sink coverage to include all standard Java servlet response output methods, which is a legitimate gap in the current KB. The sources, sinks, and non-sanitizing transformations are all standard and applicable to real-world Java web applications. The mention of ESAPI and StringEscapeUtils as legitimate sanitizers demonstrates awareness of real-world sanitization patterns. The Content-Type caveat (text/html) is appropriate.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The cwe-families knowledge pack is the target for update and currently has limited Java XSS sink coverage, making this expansion well-justified.
+- **[Agent Capability Gap] [ACCEPT]** Update vuln-hunter to trace 'exec' (sink type: command_execution) for CWE-[78] (found in BenchmarkTest00007)
+  CWEs: [78] | From case: BenchmarkTest00007
+  Suggested pattern: `When analyzing `exec()` calls (sink type: command_execution), use get_taint_paths to check if any taint source flows into this sink. Also use get_cross_file_calls to trace the data across file boundaries.`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal adds a general-purpose taint tracing rule for exec() sinks mapped to CWE-78 (OS Command Injection). The approach — tracing taint from sources through to exec() sinks, including cross-file flows — is a standard and well-established pattern for detecting command injection vulnerabilities. It is not overfit to a single test case since exec() is a universally recognized dangerous sink.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 directly covers OS command injection via exec() sinks. The proposal correctly maps the sink type and CWE, and taint-to-sink analysis is the canonical detection approach.
+- **[Agent Capability Gap] [REJECT]** Update vuln-hunter to trace 'exec' (sink type: command_execution) for CWE-[78] (found in BenchmarkTest00091)
+  CWEs: [78] | From case: BenchmarkTest00091
+  Suggested pattern: `When analyzing `exec()` calls (sink type: command_execution), use get_taint_paths to check if any taint source flows into this sink. Also use get_cross_file_calls to trace the data across file boundaries.`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: HIGH
+  Review reason: This proposal is an exact duplicate of P1 — same patch text, same sink, same CWE, same detection logic. It was derived from a different benchmark test case but adds no new capability. Accepting duplicates creates maintenance burden and signals overfitting to individual test cases rather than generalizing the rule once.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — The CWE mapping is correct, but the proposal is redundant with P1. A single generalized rule for exec() command injection sinks is sufficient; duplicating per test case is a sign of overfitting to the benchmark.
+- **[Agent Capability Gap] [REJECT]** Update vuln-hunter to trace 'exec' (sink type: command_execution) for CWE-[78] (found in BenchmarkTest00092)
+  CWEs: [78] | From case: BenchmarkTest00092
+  Suggested pattern: `When analyzing `exec()` calls (sink type: command_execution), use get_taint_paths to check if any taint source flows into this sink. Also use get_cross_file_calls to trace the data across file boundaries.`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: HIGH
+  Review reason: This is another exact duplicate of P1 and P2. Same patch content, same sink type, same CWE. No differentiation in the detection logic. Accepting this would be overfitting to individual benchmark cases rather than consolidating into a single general rule.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 mapping is accurate but the rule is already covered by P1. Duplicate proposals per test case indicate benchmark overfitting.
+- **[Agent Capability Gap] [REJECT]** Update vuln-hunter to trace 'exec' (sink type: command_execution) for CWE-[78] (found in BenchmarkTest00172)
+  CWEs: [78] | From case: BenchmarkTest00172
+  Suggested pattern: `When analyzing `exec()` calls (sink type: command_execution), use get_taint_paths to check if any taint source flows into this sink. Also use get_cross_file_calls to trace the data across file boundaries.`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: HIGH
+  Review reason: Yet another exact duplicate of P1/P2/P3 with identical patch text. This is the fourth copy of the same rule derived from different benchmark test cases. Only one generalized rule (P1) is needed.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — Correct CWE mapping but fully redundant with P1. Multiple identical proposals from different test cases is a classic overfitting pattern.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[79] detection — case BenchmarkTest00030 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [79] | From case: BenchmarkTest00030
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[79].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The general principle — using cross-file call graph traversal and taint path tracing when direct API pattern matching fails — is sound and applicable to real-world scenarios where XSS sinks are wrapped in utility functions. However, the proposal is too vague: it says 'look for indirect paths to dangerous sinks' without specifying what those dangerous sinks are for CWE-79 (e.g., response.getWriter().write(), PrintWriter.println(), setAttribute for JSP expression). Without concrete sink definitions, this risks being either too broad (false positives) or not actionable.
+  Suggested modification: Specify concrete CWE-79 sinks to trace toward (e.g., HttpServletResponse.getWriter(), PrintWriter.print/println, JSP output methods, response.getOutputStream()). The cross-file tracing should be guided by known XSS-relevant sink signatures rather than open-ended exploration.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The fn-insights entry describes agent capability gaps where functions are not found in analysis graphs, paralleling this proposal's concern about missed detections due to insufficient graph traversal. This validates the need for deeper traversal but also highlights that vague instructions lead to missed detections.
+  - [MEMORY] insight :: When detection rules lack specificity in sink definitions, they either produce excessive false positives or remain non-actionable. Concrete sink enumeration is essential for effective taint-to-sink analysis. [cwe-79] — Generalized 'look for indirect paths' guidance without specifying CWE-79 relevant sinks is insufficient for reliable detection.
+
+---
+
