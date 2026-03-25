@@ -309,7 +309,69 @@ pub async fn run_improvement_cycle(
         }
 
         let source_path = data_dir.join(&case.path);
-        let source_content = std::fs::read_to_string(&source_path).unwrap_or_default();
+        // For directory-based suites (e.g., CyberGym), the path may contain
+        // colons that are sanitized to underscores on disk. Try the sanitized
+        // version if the original doesn't exist.
+        let source_path = if !source_path.exists() {
+            let sanitized = case.path.replace(':', "_");
+            let alt = data_dir.join(&sanitized);
+            if alt.exists() {
+                alt
+            } else {
+                source_path
+            }
+        } else {
+            source_path
+        };
+
+        // Read source: if path is a directory, find and concatenate source files
+        let source_content = if source_path.is_dir() {
+            let mut content = String::new();
+            let mut source_files = Vec::new();
+            // Walk recursively to find source files (CyberGym nests under src-vul/)
+            fn collect_sources(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() {
+                            collect_sources(&path, files);
+                        } else {
+                            let name = path
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                                .to_lowercase();
+                            if name.ends_with(".c")
+                                || name.ends_with(".cc")
+                                || name.ends_with(".cpp")
+                                || name.ends_with(".h")
+                                || name.ends_with(".py")
+                                || name.ends_with(".java")
+                                || name.ends_with(".js")
+                            {
+                                files.push(path);
+                            }
+                        }
+                    }
+                }
+            }
+            collect_sources(&source_path, &mut source_files);
+            source_files.sort();
+            for path in source_files.iter().take(5) {
+                if let Ok(text) = std::fs::read_to_string(path) {
+                    content.push_str(&format!(
+                        "// === {} ===\n",
+                        path.file_name().unwrap_or_default().to_string_lossy()
+                    ));
+                    let truncated: String = text.chars().take(10_000).collect();
+                    content.push_str(&truncated);
+                    content.push('\n');
+                }
+            }
+            content
+        } else {
+            std::fs::read_to_string(&source_path).unwrap_or_default()
+        };
 
         if source_content.is_empty() {
             continue;
