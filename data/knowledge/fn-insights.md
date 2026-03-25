@@ -5543,3 +5543,56 @@ This guidance should be added to the agent's prompt as a general-purpose Java co
 
 ---
 
+## Cycle: owasp (2026-03-25 04:57 UTC)
+
+### Missed Cases (1 false negatives)
+
+- **BenchmarkTest00030**: Expected CWE-[79], detected CWE-[], missed CWE-[79]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+
+### Reviewed Improvement Proposals (2 total; 2 accepted, 0 rejected)
+
+- **[Taint Rule Gap] [ACCEPT]** Add two taint rule definitions to the taint analysis framework for Java servlet XSS (CWE-79):
+
+**Taint Source Rule:**
+- Name: `javax.servlet.http.HttpServletRequest`
+- Source type: `http_request_input`
+- Methods: `getParameter()`, `getParameterMap()`, `getParameterValues()`, `getHeader()`, `getHeaders()`, `getCookies()`, `getQueryString()`, `getInputStream()`, `getReader()`, `getPathInfo()`, `getRequestURI()`
+- CWE: 79
+- Rationale: All methods on `HttpServletRequest` that return user-controlled data are taint sources for reflected XSS
+
+**Taint Sink Rule:**
+- Name: `javax.servlet.http.HttpServletResponse` output methods
+- Sink type: `http_response_output`
+- Methods: `response.getWriter().write()`, `.print()`, `.println()`, `.printf()`, `.format()`, `.append()`, `response.getOutputStream().write()`
+- CWE: 79
+- Rationale: All methods on `PrintWriter` obtained from `response.getWriter()` write content directly to the HTTP response body. When content-type is `text/html`, any unsanitized user input reaching these methods constitutes reflected XSS.
+
+These two rules together detect the general pattern: `HttpServletRequest.*input method → [no HTML encoding] → HttpServletResponse.*output method = CWE-79`. This covers all OWASP Benchmark Java servlet XSS variants including `printf()`, `print()`, `println()`, `write()`, `format()`, and `append()` sinks, and all request input method variants (`getParameter`, `getParameterMap`, `getQueryString`, `getHeader`, `getCookies`, etc.).
+  CWEs: [79] | From case: BenchmarkTest00030
+  - [KB] knowledge-pack/cwe-families/cwe-families — The cwe-families knowledge pack confirms CWE-79 is "User input reflected in HTML output without encoding" but only lists generic detection signals without enumerating Java servlet-specific sources and sinks. This gap means the semantic analyzer has no explicit guidance to flag `response.getWriter().printf()` as an XSS sink.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology knowledge pack lists "XSS (CWE-79): reflecting user input in HTML without encoding" under injection detection signals but provides no Java-specific API enumeration, confirming the detection gap is in the knowledge base's lack of Java servlet specificity.
+  - [MEMORY] pattern :: CWE-79 Reflected XSS in Java servlet: 4th+ cycle recurring false negative with AGENT_PROMPT proposals not deployed [cwe-79, xss, cross-site-scripting, java, servlet, response-getWriter, printf, getParameterMap, taint-rule, recurring-failure, fourth-plus-cycle] — Prior memory explicitly recommends switching from AGENT_PROMPT to TAINT_RULE since prompt proposals have been deployed 3+ times without effect. The TAINT_RULE approach operates at the framework level, bypassing the prompt deployment pipeline that has been identified as broken.
+  - [MEMORY] pattern :: CWE-79 Reflected XSS: knowledge base only lists response.getWriter().write() but misses printf/print/println/format/append [cwe-79, xss, java, servlet, response-getWriter, printf, print, println, format, append, getParameterMap, agent-prompt, knowledge-pack-update, recurring-failure] — Memory confirms the specific API coverage gap — all PrintWriter output methods are equivalent XSS sinks but only write() is implicitly covered. The TAINT_RULE must enumerate all seven output methods to close this gap comprehensively.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal defines well-established, broadly recognized taint source and sink definitions for Java servlet XSS detection. The HttpServletRequest input methods and HttpServletResponse output methods are canonical patterns documented across OWASP, CWE-79 references, and real-world SAST tools. The proposal correctly requires the absence of HTML encoding (sanitization) between source and sink, which prevents false positives. The source and sink method lists are comprehensive but not overly specific to any single benchmark case—they represent the standard Java servlet API surface. The critical condition about content-type being text/html and the need for no sanitization between source and sink prevents this from being a blanket flag rule. This generalizes well to real-world Java web applications.
+  - [KB] cwe/CWE-798/CWE-798 Use of Hard-coded Credentials — While this KB entry is about CWE-798, the proposal correctly targets CWE-79 with standard source-sink taint analysis patterns. The CWE framework methodology of identifying specific vulnerability patterns through well-defined sources and sinks is consistent across CWE families.
+  - [MEMORY] pattern :: Standard Java servlet taint analysis follows source→propagation→sink model where HttpServletRequest methods are universally recognized taint sources and response output methods are universally recognized sinks for XSS [cwe-79] — The source and sink definitions in this proposal match established industry-standard taint analysis patterns for reflected XSS in Java servlets, making them broadly applicable beyond any single test case.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[79] detection — case BenchmarkTest00030 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [79] | From case: BenchmarkTest00030
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[79].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The proposal's goal of improving cross-file taint tracing is sound in principle, but the justification is problematic. It claims BenchmarkTest00030 'has no regex-matchable APIs,' yet P1 for the same case defines standard HttpServletRequest/HttpServletResponse APIs that are clearly regex-matchable. This suggests the prompt enhancement may be compensating for missing taint rules rather than genuinely requiring deeper graph traversal. Additionally, the instruction is vague—'look for indirect paths to dangerous sinks' without specifying what constitutes a wrapper function or how deep to traverse risks both false positives and performance issues. The proposal should be scoped to handle specific patterns like intermediate helper methods or utility classes wrapping standard APIs, not serve as a catch-all deepening of analysis.
+  Suggested modification: Refine the prompt enhancement to specifically handle cases where standard servlet APIs are wrapped in utility/helper classes. Instead of a generic 'trace deeper' instruction, specify: (1) when direct source/sink patterns from taint rules are not found in the immediate function, check one level of callee functions for known taint sources/sinks; (2) limit cross-file traversal depth to avoid performance degradation; (3) only trigger this deeper analysis after standard taint rules have been applied and found no matches.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The fn-insights entry documents an Agent Capability Gap where functions are not found in the analysis graph. This P2 proposal attempts to address a similar graph completeness issue but does so too vaguely, risking the same kind of incomplete or misdirected analysis that the fn-insights case documents.
+  - [MEMORY] insight :: When standard API pattern matching fails, the root cause is often missing taint rule definitions rather than insufficient graph traversal depth. Adding generic deepening of traversal without first ensuring proper rule coverage leads to over-broad analysis. [cwe-79] — P1 for the same case defines the standard APIs that should be matched, suggesting P2's premise that there are 'no regex-matchable APIs' is incorrect. The proper fix is P1's taint rules, not a generic graph traversal enhancement.
+
+---
+
