@@ -79,7 +79,7 @@
             </li>
             <li>
                 <img src="https://img.shields.io/badge/-3-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 3"> <strong>Leveraging the Graph Database</strong><br>
-                Built a code property graph backed by <a href="https://github.com/LadybugDB/ladybug">LadybugDB</a> (with SQLite fallback) &mdash; skwaq's own analysis code extracts functions, call edges, taint flows, data sources, data sinks, and symbols into a queryable graph. Agents query this graph with specialized tools, enabling cross-file analysis, recursive call-graph traversal, and taint source-to-sink tracing that static patterns alone can't achieve.
+                Built a code property graph in <a href="https://github.com/LadybugDB/ladybug">LadybugDB</a> &mdash; skwaq's own analysis code extracts functions, call edges, taint flows, data sources, data sinks, and symbols into a queryable graph. Agents query this graph with specialized tools, enabling cross-file analysis, recursive call-graph traversal, and taint source-to-sink tracing that static patterns alone can't achieve.
             </li>
             <li>
                 <img src="https://img.shields.io/badge/-4-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 4"> <strong>Multi-Agent Pipeline</strong><br>
@@ -117,7 +117,7 @@ flowchart TB
         </pre>
 
         <h3>Code Property Graph</h3>
-        <p>All analysis operates on a code property graph stored in SQLite &mdash; functions, call edges, taint flows, data sources, data sinks, and symbols. Agents query this graph with specialized tools.</p>
+        <p>All analysis operates on a code property graph stored in <a href="https://github.com/LadybugDB/ladybug">LadybugDB</a> &mdash; functions, call edges, taint flows, data sources, data sinks, and symbols. Agents query this graph with specialized tools.</p>
         <pre class="mermaid">
 erDiagram
     FUNCTIONS ||--o{ CALLS : "caller-callee"
