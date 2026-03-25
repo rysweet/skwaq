@@ -119,7 +119,7 @@ impl Gym {
             parallelism: 4,
             skip: 0,
             concurrency: 1,
-            timeout_secs: 1800,
+            timeout_secs: 7200,
             holdout_fraction: 0.2,
             max_improvements_per_cycle: 5,
         };
@@ -199,13 +199,13 @@ impl Gym {
         } else if llm_only {
             config.quick_mode = false;
             config.llm_only = true;
-            config.timeout_secs = 1800;
+            config.timeout_secs = 7200;
         } else {
             config.quick_mode = false;
             config.llm_only = false;
-            // Agentic analysis with 5 LLM agents can take 10+ minutes per case.
-            // 30 minutes is generous but prevents infinite hangs.
-            config.timeout_secs = 1800;
+            // Agentic analysis can legitimately take a long time for complex cases.
+            // 2 hours per case prevents infinite hangs without cutting off real work.
+            config.timeout_secs = 7200;
         }
         config.binary_mode = binary_mode;
         config.skip = skip;
