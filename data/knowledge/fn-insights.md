@@ -5543,3 +5543,232 @@ This guidance should be added to the agent's prompt as a general-purpose Java co
 
 ---
 
+## Cycle: owasp (2026-03-25 04:57 UTC)
+
+### Missed Cases (1 false negatives)
+
+- **BenchmarkTest00030**: Expected CWE-[79], detected CWE-[], missed CWE-[79]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+
+### Reviewed Improvement Proposals (2 total; 2 accepted, 0 rejected)
+
+- **[Taint Rule Gap] [ACCEPT]** Add two taint rule definitions to the taint analysis framework for Java servlet XSS (CWE-79):
+
+**Taint Source Rule:**
+- Name: `javax.servlet.http.HttpServletRequest`
+- Source type: `http_request_input`
+- Methods: `getParameter()`, `getParameterMap()`, `getParameterValues()`, `getHeader()`, `getHeaders()`, `getCookies()`, `getQueryString()`, `getInputStream()`, `getReader()`, `getPathInfo()`, `getRequestURI()`
+- CWE: 79
+- Rationale: All methods on `HttpServletRequest` that return user-controlled data are taint sources for reflected XSS
+
+**Taint Sink Rule:**
+- Name: `javax.servlet.http.HttpServletResponse` output methods
+- Sink type: `http_response_output`
+- Methods: `response.getWriter().write()`, `.print()`, `.println()`, `.printf()`, `.format()`, `.append()`, `response.getOutputStream().write()`
+- CWE: 79
+- Rationale: All methods on `PrintWriter` obtained from `response.getWriter()` write content directly to the HTTP response body. When content-type is `text/html`, any unsanitized user input reaching these methods constitutes reflected XSS.
+
+These two rules together detect the general pattern: `HttpServletRequest.*input method → [no HTML encoding] → HttpServletResponse.*output method = CWE-79`. This covers all OWASP Benchmark Java servlet XSS variants including `printf()`, `print()`, `println()`, `write()`, `format()`, and `append()` sinks, and all request input method variants (`getParameter`, `getParameterMap`, `getQueryString`, `getHeader`, `getCookies`, etc.).
+  CWEs: [79] | From case: BenchmarkTest00030
+  - [KB] knowledge-pack/cwe-families/cwe-families — The cwe-families knowledge pack confirms CWE-79 is "User input reflected in HTML output without encoding" but only lists generic detection signals without enumerating Java servlet-specific sources and sinks. This gap means the semantic analyzer has no explicit guidance to flag `response.getWriter().printf()` as an XSS sink.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology knowledge pack lists "XSS (CWE-79): reflecting user input in HTML without encoding" under injection detection signals but provides no Java-specific API enumeration, confirming the detection gap is in the knowledge base's lack of Java servlet specificity.
+  - [MEMORY] pattern :: CWE-79 Reflected XSS in Java servlet: 4th+ cycle recurring false negative with AGENT_PROMPT proposals not deployed [cwe-79, xss, cross-site-scripting, java, servlet, response-getWriter, printf, getParameterMap, taint-rule, recurring-failure, fourth-plus-cycle] — Prior memory explicitly recommends switching from AGENT_PROMPT to TAINT_RULE since prompt proposals have been deployed 3+ times without effect. The TAINT_RULE approach operates at the framework level, bypassing the prompt deployment pipeline that has been identified as broken.
+  - [MEMORY] pattern :: CWE-79 Reflected XSS: knowledge base only lists response.getWriter().write() but misses printf/print/println/format/append [cwe-79, xss, java, servlet, response-getWriter, printf, print, println, format, append, getParameterMap, agent-prompt, knowledge-pack-update, recurring-failure] — Memory confirms the specific API coverage gap — all PrintWriter output methods are equivalent XSS sinks but only write() is implicitly covered. The TAINT_RULE must enumerate all seven output methods to close this gap comprehensively.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal defines well-established, broadly recognized taint source and sink definitions for Java servlet XSS detection. The HttpServletRequest input methods and HttpServletResponse output methods are canonical patterns documented across OWASP, CWE-79 references, and real-world SAST tools. The proposal correctly requires the absence of HTML encoding (sanitization) between source and sink, which prevents false positives. The source and sink method lists are comprehensive but not overly specific to any single benchmark case—they represent the standard Java servlet API surface. The critical condition about content-type being text/html and the need for no sanitization between source and sink prevents this from being a blanket flag rule. This generalizes well to real-world Java web applications.
+  - [KB] cwe/CWE-798/CWE-798 Use of Hard-coded Credentials — While this KB entry is about CWE-798, the proposal correctly targets CWE-79 with standard source-sink taint analysis patterns. The CWE framework methodology of identifying specific vulnerability patterns through well-defined sources and sinks is consistent across CWE families.
+  - [MEMORY] pattern :: Standard Java servlet taint analysis follows source→propagation→sink model where HttpServletRequest methods are universally recognized taint sources and response output methods are universally recognized sinks for XSS [cwe-79] — The source and sink definitions in this proposal match established industry-standard taint analysis patterns for reflected XSS in Java servlets, making them broadly applicable beyond any single test case.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[79] detection — case BenchmarkTest00030 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [79] | From case: BenchmarkTest00030
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[79].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The proposal's goal of improving cross-file taint tracing is sound in principle, but the justification is problematic. It claims BenchmarkTest00030 'has no regex-matchable APIs,' yet P1 for the same case defines standard HttpServletRequest/HttpServletResponse APIs that are clearly regex-matchable. This suggests the prompt enhancement may be compensating for missing taint rules rather than genuinely requiring deeper graph traversal. Additionally, the instruction is vague—'look for indirect paths to dangerous sinks' without specifying what constitutes a wrapper function or how deep to traverse risks both false positives and performance issues. The proposal should be scoped to handle specific patterns like intermediate helper methods or utility classes wrapping standard APIs, not serve as a catch-all deepening of analysis.
+  Suggested modification: Refine the prompt enhancement to specifically handle cases where standard servlet APIs are wrapped in utility/helper classes. Instead of a generic 'trace deeper' instruction, specify: (1) when direct source/sink patterns from taint rules are not found in the immediate function, check one level of callee functions for known taint sources/sinks; (2) limit cross-file traversal depth to avoid performance degradation; (3) only trigger this deeper analysis after standard taint rules have been applied and found no matches.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The fn-insights entry documents an Agent Capability Gap where functions are not found in the analysis graph. This P2 proposal attempts to address a similar graph completeness issue but does so too vaguely, risking the same kind of incomplete or misdirected analysis that the fn-insights case documents.
+  - [MEMORY] insight :: When standard API pattern matching fails, the root cause is often missing taint rule definitions rather than insufficient graph traversal depth. Adding generic deepening of traversal without first ensuring proper rule coverage leads to over-broad analysis. [cwe-79] — P1 for the same case defines the standard APIs that should be matched, suggesting P2's premise that there are 'no regex-matchable APIs' is incorrect. The proper fix is P1's taint rules, not a generic graph traversal enhancement.
+
+---
+
+## Cycle: juliet (2026-03-25 05:13 UTC)
+
+### Missed Cases (11 false negatives)
+
+- **CWE606_Unchecked_Loop_Condition__char_connect_socket_01**: Expected CWE-[606], detected CWE-[], missed CWE-[606]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE606_Unchecked_Loop_Condition__char_connect_socket_01.c
+  Label Definition File: CWE606_Unchecked_Loop_Condition.label.xml
+  Template File: sources-sinks-01.tmpl.c
+  */
+  ```
+- **CWE606_Unchecked_Loop_Condition__char_connect_socket_02**: Expected CWE-[606], detected CWE-[], missed CWE-[606]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE606_Unchecked_Loop_Condition__char_connect_socket_02.c
+  Label Definition File: CWE606_Unchecked_Loop_Condition.label.xml
+  Template File: sources-sinks-02.tmpl.c
+  */
+  ```
+- **CWE606_Unchecked_Loop_Condition__char_connect_socket_03**: Expected CWE-[606], detected CWE-[], missed CWE-[606]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE606_Unchecked_Loop_Condition__char_connect_socket_03.c
+  Label Definition File: CWE606_Unchecked_Loop_Condition.label.xml
+  Template File: sources-sinks-03.tmpl.c
+  */
+  ```
+- **CWE606_Unchecked_Loop_Condition__char_connect_socket_04**: Expected CWE-[606], detected CWE-[], missed CWE-[606]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE606_Unchecked_Loop_Condition__char_connect_socket_04.c
+  Label Definition File: CWE606_Unchecked_Loop_Condition.label.xml
+  Template File: sources-sinks-04.tmpl.c
+  */
+  ```
+- **CWE606_Unchecked_Loop_Condition__char_connect_socket_05**: Expected CWE-[606], detected CWE-[], missed CWE-[606]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE606_Unchecked_Loop_Condition__char_connect_socket_05.c
+  Label Definition File: CWE606_Unchecked_Loop_Condition.label.xml
+  Template File: sources-sinks-05.tmpl.c
+  */
+  ```
+- **CWE606_Unchecked_Loop_Condition__char_connect_socket_06**: Expected CWE-[606], detected CWE-[], missed CWE-[606]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE606_Unchecked_Loop_Condition__char_connect_socket_06.c
+  Label Definition File: CWE606_Unchecked_Loop_Condition.label.xml
+  Template File: sources-sinks-06.tmpl.c
+  */
+  ```
+- **CWE606_Unchecked_Loop_Condition__char_connect_socket_07**: Expected CWE-[606], detected CWE-[], missed CWE-[606]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE606_Unchecked_Loop_Condition__char_connect_socket_07.c
+  Label Definition File: CWE606_Unchecked_Loop_Condition.label.xml
+  Template File: sources-sinks-07.tmpl.c
+  */
+  ```
+- **CWE606_Unchecked_Loop_Condition__char_connect_socket_08**: Expected CWE-[606], detected CWE-[], missed CWE-[606]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE606_Unchecked_Loop_Condition__char_connect_socket_08.c
+  Label Definition File: CWE606_Unchecked_Loop_Condition.label.xml
+  Template File: sources-sinks-08.tmpl.c
+  */
+  ```
+- **CWE606_Unchecked_Loop_Condition__char_connect_socket_09**: Expected CWE-[606], detected CWE-[], missed CWE-[606]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE606_Unchecked_Loop_Condition__char_connect_socket_09.c
+  Label Definition File: CWE606_Unchecked_Loop_Condition.label.xml
+  Template File: sources-sinks-09.tmpl.c
+  */
+  ```
+- **CWE606_Unchecked_Loop_Condition__char_connect_socket_10**: Expected CWE-[606], detected CWE-[], missed CWE-[606]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE606_Unchecked_Loop_Condition__char_connect_socket_10.c
+  Label Definition File: CWE606_Unchecked_Loop_Condition.label.xml
+  Template File: sources-sinks-10.tmpl.c
+  */
+  ```
+
+### Reviewed Improvement Proposals (17 total; 9 accepted, 8 rejected)
+
+- **[CWE Mapping Gap] [MODIFY]** Add CWE-606 to scoring.rs mapping it to the `unchecked_loop_condition` semantic class (or create this class if it doesn't exist). CWE-606 is a child of CWE-20 (Improper Input Validation) and represents the specific pattern where externally-controlled input is used as a loop condition without validation. The mapping should be: `606 => SemanticPatternClass::UncheckedLoopCondition`. Additionally, the vulnerability analysis agent prompt should be enhanced to include CWE-606 detection guidance: "When untrusted external input (from network sockets via recv/recvfrom, files via fread/fgets, stdin via scanf/gets, environment via getenv) flows through integer parsing functions (sscanf, atoi, strtol, strtoul) into a for/while loop bound variable, and no maximum-value validation (comparison against a limit constant) precedes the loop, flag as CWE-606 Unchecked Input For Loop Condition. This is a denial-of-service vulnerability where an attacker can cause excessive CPU consumption by supplying a very large loop count."
+  CWEs: [606] | From case: CWE606_Unchecked_Loop_Condition__char_connect_socket_01
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — CWE-606 is a child of CWE-20; the vulnerability is fundamentally about failing to validate user-supplied input before using it as a loop bound. CWE-20's description 'Failure to validate user-supplied input' directly encompasses CWE-606's pattern.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology KB lists 'external input → type conversion or arithmetic → use as size, index, or loop bound' as a detection approach for integer issues, confirming that loop bounds from untrusted input are a recognized vulnerability pattern. The KB also notes tracing untrusted data from sources to sinks as core methodology.
+  - [MEMORY] pattern :: CWE-190 Integer Overflow detection failure in source-only C files with empty CPG [cwe-190, empty-graph, source-code-not-ingested, cwe-mapping, agent-prompt] — Confirms the systematic pattern where source-only C files produce empty CPGs, and the fix requires both CWE_MAPPING and AGENT_PROMPT improvements. The same dual-fix approach (mapping + prompt) that was confirmed across 10+ CWE-190 instances applies here for CWE-606.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: The core CWE-606 mapping is legitimate and generalizable — CWE-606 is a real, well-defined CWE under CWE-20. However, the proposal over-specifies detection guidance in the agent prompt by enumerating very specific function names (recv/recvfrom, fread/fgets, sscanf, atoi, strtol, strtoul) that are Juliet-specific patterns. This risks overfitting the prompt to Juliet's coding style. The mapping itself is sound; the prompt guidance should be more abstract.
+  Suggested modification: Keep the CWE-606 → SemanticPatternClass::UncheckedLoopCondition mapping. Simplify the agent prompt guidance to: 'When untrusted external input flows into a loop bound variable without validation against a reasonable maximum, flag as CWE-606.' Remove the exhaustive lists of specific source/sink functions to avoid overfitting to Juliet patterns.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-606 is a legitimate child of CWE-20. The KB confirms CWE family hierarchies are used for mapping, supporting the addition of CWE-606 as a valid mapping target.
+  - [MEMORY] insight :: Overly specific function-name enumeration in detection rules tends to overfit to benchmark patterns rather than capturing the general vulnerability class [cwe-20, cwe-606] — Listing exact function names from Juliet test cases in the agent prompt creates benchmark-specific detection rather than general vulnerability detection.
+- **[CWE Mapping Gap] [MODIFY]** Add CWE-606 (Unchecked Input For Loop Condition) to scoring.rs mapped to the `unchecked_loop_condition` SemanticPatternClass. CWE-606 is a child of CWE-20 (Improper Input Validation) and represents the pattern where external/untrusted input controls loop iteration count without bounds checking, leading to potential denial of service. Additionally, the vulnerability analysis agent prompt should be enhanced to detect this pattern: when data from external sources (recv, read, fgets, fscanf, getenv, argv) flows through string-to-integer conversion (sscanf with %d, atoi, atol, strtol, strtoul) into a variable used as a loop bound (for/while loop condition), and there is no check against a reasonable maximum before the loop, flag as CWE-606. The good-sink pattern is checking `if (n < MAX_LOOP)` before the loop.
+  CWEs: [606] | From case: CWE606_Unchecked_Loop_Condition__char_connect_socket_02
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — CWE-606 is a child of CWE-20. The CWE knowledge base has CWE-20 but not CWE-606, confirming the CWE-606 mapping gap. The vulnerability is fundamentally about failure to validate user-supplied input before using it as a loop bound.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology document covers denial of service under STRIDE threat modeling ("Can availability be disrupted?") and lists "external input → type conversion or arithmetic → use as size, index, or loop bound" as a detection pattern for integer issues. Loop bounds from untrusted input fit this pattern but the agent currently lacks explicit CWE-606 guidance.
+  - [MEMORY] pattern :: CWE-457/CWE-190 empty graph source-only C files with unmapped CWE and semantic class [cwe-457, cwe-190, empty-graph, source-code-not-ingested, cwe-mapping] — Prior experiences with CWE-457 and CWE-190 confirm the recurring systemic failure pattern: source-only C files produce empty CPGs, and CWEs not in the knowledge base cannot be detected. The same dual fix (CWE_MAPPING + AGENT_PROMPT) successfully proposed for those CWEs applies here for CWE-606.
+  Overfitting review: MODIFY | Risk: HIGH | Applicability: HIGH
+  Review reason: Same valid CWE mapping as P1, but this proposal explicitly references the 'good-sink pattern' (`if (n < MAX_LOOP)`) which is a Juliet-specific construct. Encoding Juliet's good-sink pattern into the detection prompt is a clear overfitting signal — real-world code uses diverse validation patterns, not just comparison against a `MAX_LOOP` constant.
+  Suggested modification: Keep the CWE-606 mapping. Remove the good-sink pattern reference and the exhaustive function lists from the prompt guidance. Use general guidance: 'Flag CWE-606 when untrusted input controls loop iteration count without bounds validation.'
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-606 under CWE-20 is a valid mapping. The KB supports hierarchical CWE family mappings.
+  - [MEMORY] pattern :: Juliet good-sink patterns like MAX_LOOP checks are benchmark-specific idioms not representative of diverse real-world validation approaches [cwe-606, cwe-20] — Encoding Juliet's specific good-sink pattern into detection logic causes overfitting to benchmark code structure.
+- **[CWE Mapping Gap] [MODIFY]** Add CWE-606 (Unchecked Input For Loop Condition) to the semantic class mapping in scoring.rs, mapping it to SemanticPatternClass::UncheckedLoopCondition (or the closest existing semantic class for input validation issues). CWE-606 is a child of CWE-20 (Improper Input Validation). The specific pattern is: untrusted external input (from network sockets via recv/recvfrom, files via fgets/fread, stdin via scanf/gets, environment via getenv) flows through string-to-integer conversion functions (sscanf, atoi, strtol, strtoul, strtoimax) into a loop bound variable used in for/while loop conditions (e.g., `for(i=0; i<n; i++)`) without validation against a reasonable maximum value. Additionally, the AGENT_PROMPT for the vulnerability analysis agent should be updated to include CWE-606 detection guidance: "When analyzing C/C++ code, check if external input (from network I/O, file I/O, or user input functions) is parsed into an integer via sscanf/atoi/strtol and used as a loop iteration bound (for/while condition) without being checked against a maximum limit. This is CWE-606: Unchecked Input For Loop Condition, a denial-of-service vulnerability."
+  CWEs: [606] | From case: CWE606_Unchecked_Loop_Condition__char_connect_socket_03
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — CWE-606 is a child of CWE-20 (Improper Input Validation). The KB confirms CWE-20 exists but CWE-606 itself is absent, confirming the mapping gap. Adding CWE-606 under the input validation family enables proper classification.
+  - [MEMORY] pattern :: CWE-606 Unchecked Input For Loop Condition detection failure in source-only C files. The vulnerability pattern: data read from a network socket (recv) is parsed via sscanf into an integer variable, and that integer is used directly as a for-loop bound without validation against a maximum. [cwe-606, unchecked-loop-condition, input-validation, loop-bound, recv, sscanf, taint-analysis, empty-graph, source-code-not-ingested, cwe-mapping, agent-prompt, cwe-20-family] — Prior memory from previous improvement cycles confirms this is a recurring pattern with the same root cause (missing CWE mapping + missing agent prompt guidance). The fix has been consistently identified as CWE_MAPPING + AGENT_PROMPT across multiple CWE-606 Juliet variants.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: The mapping is valid and the prompt guidance is somewhat more abstract than P1/P2, but still enumerates specific conversion functions. The core proposal is sound but the function enumeration should be reduced to avoid overfitting.
+  Suggested modification: Keep the CWE-606 mapping. Simplify the agent prompt to avoid exhaustive function enumeration. General guidance: 'When external input is converted to an integer and used as a loop bound without maximum validation, flag as CWE-606.'
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-606 as a child of CWE-20 is a valid and well-defined vulnerability class worthy of inclusion in the mapping.
+  - [MEMORY] insight :: Agent prompts that enumerate specific function names from benchmark code risk overfitting; prefer abstract taint-flow descriptions [cwe-606] — Function-specific enumeration in prompts ties detection to benchmark coding patterns rather than the general vulnerability semantics.
+- **[CWE Mapping Gap] [MODIFY]** Add CWE-606 to scoring.rs mapped to `SemanticPatternClass::UncheckedLoopCondition` (or create this semantic class if it doesn't exist). CWE-606 represents the pattern where untrusted external input (from network sockets via `recv`/`read`, files via `fread`/`fgets`, stdin via `scanf`/`gets`, environment via `getenv`, or command-line via `argv`) flows through string-to-integer conversion functions (`sscanf`, `atoi`, `strtol`, `strtoul`) into a loop bound variable used in `for` or `while` loop conditions without validation against a reasonable maximum. This is a denial-of-service vulnerability. The mapping enables the scoring layer to correctly classify findings when any detection mechanism (LLM semantic analyzer, pattern matching, taint analysis) identifies unchecked loop conditions. Additionally, the vulnerability analysis agent's system prompt should be updated to explicitly check for CWE-606 by looking for the pattern: external input → integer parsing → loop bound without max check. The CWE knowledge base should also be seeded with CWE-606 so `lookup_cwe` returns meaningful guidance.
+  CWEs: [606] | From case: CWE606_Unchecked_Loop_Condition__char_connect_socket_04
+  - [MEMORY] pattern :: CWE-606 Unchecked Input For Loop Condition: recurring false negative confirmed across multiple Juliet variants. The vulnerability pattern is: data from external source (recv, fgets, scanf, getenv) → string-to-integer conversion (sscanf, atoi, strtol) → integer used directly as for-loop bound without validation against a maximum. The CPG is empty because source-only C files are not compiled into binaries. CWE-606 is not in the CWE knowledge base. The semantic class 'unchecked_loop_condition' has no mapping in scoring.rs. [cwe-606, unchecked-loop-condition, input-validation, loop-bound, recv, sscanf, atoi, denial-of-service, cwe-mapping, agent-prompt, empty-graph, source-code-not-ingested, cwe-20-family, recurring-failure] — Confirms this is a recurring failure across multiple CWE-606 variants with two root causes: missing CWE_MAPPING in scoring.rs and missing CWE-606 in the knowledge base. The proposed CWE_MAPPING fix directly addresses the classification gap.
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — CWE-606 is a child of CWE-20 (Improper Input Validation). The parent CWE exists in the knowledge base, confirming that the input validation family is recognized but CWE-606 specifically is not covered, supporting the need to add CWE-606 mapping.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology knowledge pack explicitly lists "external input → type conversion or arithmetic → use as size, index, or loop bound" as a vulnerability investigation pattern, confirming that unchecked loop bounds from external input is a recognized real-world vulnerability class worth detecting.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: This is the most comprehensive proposal — it includes the mapping, prompt update, and KB seeding. The KB seeding for CWE-606 is a good addition that reduces overfitting risk by making the system rely on structured knowledge rather than hardcoded patterns. However, the function enumeration in the description is still overly specific to Juliet patterns. The three-part approach (mapping + prompt + KB) is sound in principle.
+  Suggested modification: Keep all three components (mapping, prompt update, KB seeding). Simplify the prompt guidance to abstract taint-flow description: 'external input → integer conversion → loop bound without validation → CWE-606'. Remove specific function name enumerations from the prompt.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-606 is a legitimate CWE under CWE-20, and seeding the KB with it is a sound approach to reducing overfitting while improving coverage.
+  - [MEMORY] failure :: Function not found in the analysis graph, indicating incomplete graph construction or missing function extraction for this test case. [cwe-121] — The KB seeding component of this proposal addresses a known pattern where missing CWE knowledge leads to detection failures — similar to the CWE-121 case where graph incompleteness caused misses.
+- **[CWE Mapping Gap] [ACCEPT]** Add CWE-606 → `unchecked_loop_condition` semantic class mapping in scoring.rs. CWE-606 is a child of CWE-20 (Improper Input Validation) and represents a denial-of-service vulnerability class where external input controls loop iteration count without validation.
+  CWEs: [606] | From case: CWE606_Unchecked_Loop_Condition__char_connect_socket_05
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — CWE-606 is a child of CWE-20 (Improper Input Validation). The parent CWE exists in the knowledge base but CWE-606 itself does not, confirming the CWE mapping gap.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology calls for mapping entry points and tracing untrusted data from sources to sinks, which is exactly the pattern needed here: recv() source → sscanf conversion → loop bound sink without validation.
+  - [MEMORY] pattern :: CWE-606 Unchecked Input For Loop Condition: recurring false negative confirmed across multiple Juliet variants. The vulnerability pattern is: data from external source → string-to-integer conversion → integer used directly as for-loop bound without validation against a maximum. CWE-606 is not in the CWE knowledge base. The semantic class 'unchecked_loop_condition' has no mapping in scoring.rs. [cwe-606, unchecked-loop-condition, input-validation, loop-bound, recv, sscanf, atoi, denial-of-service, cwe-mapping, agent-prompt, empty-graph, source-code-not-ingested, cwe-20-family, recurring-failure] — Prior analysis of identical CWE-606 false negatives confirms the root cause is dual: missing CWE mapping in scoring.rs and missing agent prompt guidance for this vulnerability class.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is the most concise and least overfitting-prone proposal. It focuses purely on the CWE mapping without embedding Juliet-specific function names or patterns into detection prompts. The description is appropriately abstract, describing the vulnerability class rather than specific code patterns. This is the right level of generality for a CWE mapping addition.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-606 is a well-defined child of CWE-20. Adding it as a mapping target follows the same pattern as other CWE family mappings described in the KB, without introducing benchmark-specific detection logic.
+  - [MEMORY] pattern :: Minimal, abstract CWE mappings that avoid encoding benchmark-specific patterns have the lowest overfitting risk while maintaining real-world applicability [cwe-606, cwe-20] — This proposal follows the principle of mapping CWEs to semantic classes without embedding specific code patterns, which generalizes well to real-world code.
+- **[Agent Capability Gap] [ACCEPT]** Update the vulnerability analysis agent prompt to include explicit instructions for detecting CWE-606: "Detect when untrusted external input (from network sockets via recv/read, files via fread/fgets, stdin via scanf/gets, environment via getenv) flows through string-to-integer conversion functions (sscanf, atoi, strtol, strtoul, scanf with %d) into for-loop or while-loop bound variables without validation against a reasonable maximum value. Flag as CWE-606 (Unchecked Input For Loop Condition). This is a denial-of-service vulnerability."
+  CWEs: [606] | From case: CWE606_Unchecked_Loop_Condition__char_connect_socket_05
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — CWE-606 is a child of CWE-20 (Improper Input Validation). The parent CWE exists in the knowledge base but CWE-606 itself does not, confirming the CWE mapping gap.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology calls for mapping entry points and tracing untrusted data from sources to sinks, which is exactly the pattern needed here: recv() source → sscanf conversion → loop bound sink without validation.
+  - [MEMORY] pattern :: CWE-606 Unchecked Input For Loop Condition: recurring false negative confirmed across multiple Juliet variants. The vulnerability pattern is: data from external source → string-to-integer conversion → integer used directly as for-loop bound without validation against a maximum. CWE-606 is not in the CWE knowledge base. The semantic class 'unchecked_loop_condition' has no mapping in scoring.rs. [cwe-606, unchecked-loop-condition, input-validation, loop-bound, recv, sscanf, atoi, denial-of-service, cwe-mapping, agent-prompt, empty-graph, source-code-not-ingested, cwe-20-family, recurring-failure] — Prior analysis of identical CWE-606 false negatives confirms the root cause is dual: missing CWE mapping in scoring.rs and missing agent prompt guidance for this vulnerability class.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal describes a genuinely useful and generalizable detection pattern. CWE-606 is a real-world vulnerability class (DoS via unchecked loop bounds from external input). The description covers a broad range of input sources and conversion functions, not just the specific Juliet test case. The pattern of tainted input flowing into loop bounds without validation is a well-understood vulnerability pattern applicable beyond the benchmark.
+  - [KB] kb source/cwe-families/cwe-families — CWE-606 is a legitimate CWE for unchecked loop conditions. The proposal correctly identifies the taint-to-loop-bound pattern which is a recognized vulnerability class distinct from the memory safety family documented in the KB.
+  - [MEMORY] insight :: External input flowing to control flow structures without validation is a common real-world DoS pattern [cwe-606] — The detection pattern described is general enough to apply to real-world code, not just Juliet synthetic cases.
+- **[Agent Capability Gap] [ACCEPT]** Enhance agent graph traversal for CWE-[606] detection — case CWE606_Unchecked_Loop_Condition__char_connect_socket_01 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [606] | From case: CWE606_Unchecked_Loop_Condition__char_connect_socket_01
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[606].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal addresses a genuine infrastructure gap — the inability to trace data flow through wrapper functions and cross-file calls. This is a general-purpose improvement to taint analysis capability that benefits not just CWE-606 detection but any vulnerability requiring cross-file taint tracking. The approach of falling back to deeper analysis when regex-based patterns fail is sound engineering.
+  - [MEMORY] failure :: Function not found in the analysis graph, indicating incomplete graph construction or missing function extraction [cwe-121] — The KB documents a similar failure mode where functions are absent from the analysis graph. Enhancing cross-file call graph and taint flow tracing addresses the same class of infrastructure gap.
+  - [KB] kb source/fn-insights/fn-insights — The documented failure of missing functions in analysis graphs supports the need for deeper cross-file call graph traversal as a general improvement.
+- **[Agent Capability Gap] [REJECT]** Enhance agent graph traversal for CWE-[606] detection — case CWE606_Unchecked_Loop_Condition__char_connect_socket_02 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [606] | From case: CWE606_Unchecked_Loop_Condition__char_connect_socket_02
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[606].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: MEDIUM
+  Review reason: This is an exact duplicate of P2 with only the Juliet case number changed (_02 vs _01). The patch text is identical. Accepting multiple identical proposals for individual test case variants is a clear sign of overfitting to the benchmark. P2 already covers this improvement generically.
+  - [KB] kb source/vuln-analysis-methodology/vuln-analysis-methodology — Sound vulnerability analysis methodology requires generalizing fixes rather than creating per-test-case duplicates. A single general improvement (P2) subsumes all case-specific duplicates.
+- **[Agent Capability Gap] [REJECT]** Enhance agent graph traversal for CWE-[606] detection — case CWE606_Unchecked_Loop_Condition__char_connect_socket_03 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [606] | From case: CWE606_Unchecked_Loop_Condition__char_connect_socket_03
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[606].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: MEDIUM
+  Review reason: This is an exact duplicate of P2 and P3 with only the Juliet case number changed (_03). The patch text is identical. This is per-test-case duplication with no additional generality. P2 already covers this.
+  - [KB] kb source/vuln-analysis-methodology/vuln-analysis-methodology — Duplicating the same proposal per test case variant is overfitting to the benchmark structure rather than addressing the underlying general capability gap.
+- **[Agent Capability Gap] [REJECT]** Enhance agent graph traversal for CWE-[606] detection — case CWE606_Unchecked_Loop_Condition__char_connect_socket_04 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [606] | From case: CWE606_Unchecked_Loop_Condition__char_connect_socket_04
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[606].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: MEDIUM
+  Review reason: This is an exact duplicate of P2, P3, and P4 with only the Juliet case number changed (_04). The patch text is identical. Accepting this would mean four identical prompt additions, which is pure benchmark overfitting. P2 already provides the general solution.
+  - [KB] kb source/vuln-analysis-methodology/vuln-analysis-methodology — Creating one proposal per Juliet variant with identical content is a textbook example of overfitting to specific test cases rather than building general detection capability.
+
+---
+

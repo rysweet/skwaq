@@ -156,3 +156,5 @@ When standard API patterns are not found, use get_cross_file_calls and get_taint
 When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions for CWE-[22, 78, 89, 119, 122, 134, 190, 457].
 
 When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[79].
+
+When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[79].
