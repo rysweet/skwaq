@@ -345,6 +345,32 @@ fn javascript_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "prototype pollution via constructor; sanitize keys",
         },
+        // JavaScript SQL injection (CWE-89) — template literals and concatenation
+        SourcePattern {
+            regex: r#"\bquery\s*\(\s*`[^`]*\$\{"#,
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "SQL query via template literal with interpolation; use parameterized queries",
+        },
+        SourcePattern {
+            regex: r#"(?:SELECT|INSERT|UPDATE|DELETE|FROM|WHERE)\s.*\+\s*\w"#,
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "SQL query built with string concatenation; use parameterized queries",
+        },
+        SourcePattern {
+            regex: r#"\b(?:query|execute)\s*\([^)]*\+"#,
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "Database query with string concatenation; use parameterized queries",
+        },
+        // JavaScript XSS via template literal with res.send/write (CWE-79)
+        SourcePattern {
+            regex: r#"\bres\.(?:send|write|end)\s*\(\s*`[^`]*\$\{"#,
+            category: DangerCategory::Xss,
+            severity: Severity::High,
+            reason: "HTTP response with template literal interpolation; encode output to prevent XSS",
+        },
     ]
 }
 
@@ -1749,6 +1775,19 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::ErrorHandling,
             severity: Severity::Medium,
             reason: "Empty error check body; handle error condition to prevent silent failures",
+        },
+        // C SQL injection: sprintf/snprintf building SQL queries (CWE-89)
+        SourcePattern {
+            regex: r#"\bsprintf\s*\([^;]*(?:SELECT|INSERT|UPDATE|DELETE|WHERE)"#,
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "SQL query built with sprintf; use parameterized queries to prevent SQL injection",
+        },
+        SourcePattern {
+            regex: r#"\bsnprintf\s*\([^;]*(?:SELECT|INSERT|UPDATE|DELETE|WHERE)"#,
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "SQL query built with snprintf; use parameterized queries to prevent SQL injection",
         },
     ]
 }
