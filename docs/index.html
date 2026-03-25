@@ -35,7 +35,7 @@
         .nav a { background: #161b22; padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid #21262d; font-size: 0.9rem; }
         .nav a:hover { border-color: #58a6ff; }
         .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #21262d; font-size: 0.8rem; color: #484f58; }
-        .step-num { display: inline-block; background: #58a6ff; color: #0d1117; width: 1.6rem; height: 1.6rem; border-radius: 50%; text-align: center; line-height: 1.6rem; font-weight: 700; font-size: 0.85rem; margin-right: 0.5rem; vertical-align: middle; }
+        ol li img { vertical-align: middle; margin-right: 0.4rem; }
     </style>
 </head>
 <body>
@@ -57,8 +57,6 @@
         <h2 id="what">What Is Skwaq?</h2>
         <p>Skwaq is an <strong>agentic vulnerability analyzer</strong> that uses a team of AI agents to investigate source code and binaries for security vulnerabilities. Unlike traditional static analysis tools that rely on fixed rules, skwaq's agents reason about code like experienced security researchers &mdash; tracing data flows, mapping attack surfaces, and debating exploitability.</p>
         <p>What makes it unique: <strong>skwaq improves itself</strong>. A built-in benchmark harness (Skwaq Gym) measures detection accuracy against industry benchmarks, and a self-improvement loop uses AI agents to analyze their own failures and propose better investigation strategies.</p>
-        <p>Built from the <a href="https://github.com/rysweet/skwaq/blob/main/Specifications/SKWAQ_V2_SPEC.md">Skwaq V2 Specification</a>.</p>
-
         <div class="stats">
             <div class="stat"><div class="value">97.3%</div><div class="label">Juliet F1 (agentic)</div></div>
             <div class="stat"><div class="value">91.0%</div><div class="label">CSE F1</div></div>
@@ -72,35 +70,35 @@
 
         <ol>
             <li>
-                <strong><span class="step-num">1</span> The Spec</strong><br>
+                <img src="https://img.shields.io/badge/-1-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 1"> <strong>The Spec</strong><br>
                 A brief <a href="https://github.com/rysweet/skwaq/blob/main/Specifications/SKWAQ_V2_SPEC.md">specification</a> for a "vulnerability investigation copilot" &mdash; analyze binaries and source code using a code property graph, with AI agents reasoning about the results. No training data, no pre-built rules, no benchmark infrastructure.
             </li>
             <li>
-                <strong><span class="step-num">2</span> Building the Harness</strong><br>
+                <img src="https://img.shields.io/badge/-2-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 2"> <strong>Building the Harness</strong><br>
                 Built the Skwaq Gym benchmark harness with a small fixture suite (F1=50%). Wired up 5-layer detection: patterns, dataflow, context validation, LLM agents, and synthesis. Connected NIST Juliet (54K cases), OWASP Benchmark (2,740 cases), DARPA CGC, and Meta CyberSecEval. Development orchestrated by <a href="https://github.com/rysweet/amplihack">amplihack-recipe-runner</a>, which enforces a 23-step workflow with quality gates at every stage.
             </li>
             <li>
-                <strong><span class="step-num">3</span> Leveraging the Graph Database</strong><br>
-                Built a code property graph using <a href="https://github.com/rysweet/RustyClawd">RustyClawd</a> &mdash; a Rust-based code analysis engine that extracts functions, call edges, taint flows, data sources, data sinks, and symbols into a queryable graph. Agents query this graph with specialized tools, enabling cross-file analysis, recursive call-graph traversal, and taint source-to-sink tracing that static patterns alone can't achieve.
+                <img src="https://img.shields.io/badge/-3-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 3"> <strong>Leveraging the Graph Database</strong><br>
+                Built a code property graph backed by <a href="https://github.com/LadybugDB/ladybug">LadybugDB</a> (with SQLite fallback) &mdash; skwaq's own analysis code extracts functions, call edges, taint flows, data sources, data sinks, and symbols into a queryable graph. Agents query this graph with specialized tools, enabling cross-file analysis, recursive call-graph traversal, and taint source-to-sink tracing that static patterns alone can't achieve.
             </li>
             <li>
-                <strong><span class="step-num">4</span> Multi-Agent Pipeline</strong><br>
-                Deployed 18 specialized agents &mdash; each with a distinct role (attack surface mapping, vulnerability hunting, exploit analysis, defense evaluation). Added offense/defense debate for high-stakes findings. Built graph tools so agents query the code property graph directly. <span class="highlight">Fixture F1 reached 92.9%.</span>
+                <img src="https://img.shields.io/badge/-4-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 4"> <strong>Multi-Agent Pipeline</strong><br>
+                Deployed 18 specialized agents powered by <a href="https://github.com/rysweet/RustyClawd">RustyClawd</a> (a Rust-based agentic LLM framework handling tool loops, streaming, and retries) &mdash; each with a distinct role (attack surface mapping, vulnerability hunting, exploit analysis, defense evaluation). Added offense/defense debate for high-stakes findings. <span class="highlight">Fixture F1 reached 92.9%.</span>
             </li>
             <li>
-                <strong><span class="step-num">5</span> Self-Improvement Loop</strong><br>
+                <img src="https://img.shields.io/badge/-5-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 5"> <strong>Self-Improvement Loop</strong><br>
                 Built the <code>gym improve</code> command: failure-analyst agent investigates each false negative, diagnoses why detection failed, and proposes improvements to agent prompts, taint rules, CWE mappings, or patterns. An overfitting-reviewer agent validates every proposal. <span class="highlight">Agents started teaching themselves.</span>
             </li>
             <li>
-                <strong><span class="step-num">6</span> Agent Knowledge Graph Packs</strong><br>
+                <img src="https://img.shields.io/badge/-6-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 6"> <strong>Agent Knowledge Graph Packs</strong><br>
                 Integrated <a href="https://github.com/rysweet/agent-kgpacks">agent-kgpacks</a> &mdash; portable knowledge graph packages that encode vulnerability patterns, CWE taxonomies, and investigation strategies. Agents load domain-specific knowledge packs to bootstrap expertise without re-learning from scratch.
             </li>
             <li>
-                <strong><span class="step-num">7</span> Agent Memory</strong><br>
+                <img src="https://img.shields.io/badge/-7-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 7"> <strong>Agent Memory</strong><br>
                 Added durable agent memory (adapted from <a href="https://github.com/rysweet/amplihack">amplihack-memory-lib</a>'s cognitive memory model) so investigation insights persist across cycles. Agents remember which detection strategies worked, which proposals were rejected and why, and which CWE-specific instructions improved recall &mdash; building institutional knowledge over 22+ improvement cycles.
             </li>
             <li>
-                <strong><span class="step-num">8</span> Scale and Results</strong><br>
+                <img src="https://img.shields.io/badge/-8-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 8"> <strong>Scale and Results</strong><br>
                 22+ self-improvement cycles across all suites. 100+ proposals generated, 34% acceptance rate (reviewer catches overfitting). Added CyberGym (3,014 real CVEs from OSS-Fuzz). <span class="highlight">Agentic eval: Juliet F1=97.3%.</span>
             </li>
         </ol>
