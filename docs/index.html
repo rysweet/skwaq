@@ -75,7 +75,7 @@
             </li>
             <li>
                 <img src="https://img.shields.io/badge/-2-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 2"> <strong>Building the Harness</strong><br>
-                Built the Skwaq Gym benchmark harness with a small fixture suite (F1=50%). Wired up 5-layer detection: patterns, dataflow, context validation, LLM agents, and synthesis. Connected NIST Juliet (54K cases), OWASP Benchmark (2,740 cases), DARPA CGC, and Meta CyberSecEval. Development orchestrated by <a href="https://github.com/rysweet/amplihack">amplihack-recipe-runner</a>, which enforces a 23-step workflow with quality gates at every stage.
+                Built the Skwaq Gym benchmark harness with a small fixture suite (F1=50%). Wired up 5-layer detection: patterns, dataflow, context validation, LLM agents, and synthesis. Connected NIST Juliet (54K cases), OWASP Benchmark (2,740 cases), DARPA CGC, and Meta CyberSecEval. Both development and multi-agent analysis pipelines orchestrated by <a href="https://github.com/rysweet/amplihack">amplihack-recipe-runner</a>.
             </li>
             <li>
                 <img src="https://img.shields.io/badge/-3-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 3"> <strong>Leveraging the Graph Database</strong><br>
@@ -83,7 +83,7 @@
             </li>
             <li>
                 <img src="https://img.shields.io/badge/-4-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 4"> <strong>Multi-Agent Pipeline</strong><br>
-                Deployed 18 specialized agents powered by <a href="https://github.com/rysweet/RustyClawd">RustyClawd</a> (a Rust-based agentic LLM framework handling tool loops, streaming, and retries) &mdash; each with a distinct role (attack surface mapping, vulnerability hunting, exploit analysis, defense evaluation). Added offense/defense debate for high-stakes findings. <span class="highlight">Fixture F1 reached 92.9%.</span>
+                Started with a small set of agents and evolved the pipeline as we learned what worked. Began with basic attack-surface mapping and vulnerability hunting, then added specialized agents, a critic for false-positive reduction, and eventually an offense/defense debate for high-stakes findings &mdash; all powered by <a href="https://github.com/rysweet/RustyClawd">RustyClawd</a> (a Rust-based agentic LLM framework). Grew to <a href="#agents">18 specialized agents</a> across discovery, validation, debate, and self-improvement stages. <span class="highlight">Fixture F1 reached 92.9%.</span>
             </li>
             <li>
                 <img src="https://img.shields.io/badge/-5-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 5"> <strong>Self-Improvement Loop</strong><br>
