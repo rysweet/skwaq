@@ -130,57 +130,70 @@ erDiagram
         </pre>
 
         <h2 id="agents">Multi-Agent Analysis</h2>
-        <h3>Agent Pipeline (Source Code)</h3>
+        <p>All 18 agents and the pipelines they participate in:</p>
         <pre class="mermaid">
-sequenceDiagram
-    participant G as Graph DB
-    participant AS as attack-surface
-    participant VH as vuln-hunter
-    participant CR as critic
-    AS->>G: get_data_sources()
-    AS->>G: get_imports()
-    AS->>G: get_taint_paths()
-    AS-->>VH: Attack surface mapped
-    VH->>G: read_function()
-    VH->>G: get_callers() / get_callees()
-    VH->>G: create_finding()
-    VH-->>CR: Findings with evidence
-    CR->>G: Validate reachability
-    CR-->>CR: Accept / Reject / Adjust
-        </pre>
+flowchart TB
+    subgraph INPUT["Input"]
+        SRC["Source Code"]
+        BIN["Binary"]
+    end
 
-        <h3>Deep Pipeline (with Debate)</h3>
-        <p>For high-stakes analysis, an offense/defense debate runs independently:</p>
-        <pre class="mermaid">
-flowchart LR
-    VH["vuln-hunter findings"] --> EA["exploit-analyst\nCan attacker trigger this?"]
-    VH --> DA["defense-analyst\nAre mitigations effective?"]
-    EA --> VS["verdict-synthesizer"]
-    DA --> VS
-    VS --> OUT["CONFIRMED / MITIGATED / SAFE"]
-        </pre>
+    subgraph PREPROCESS["Pre-processing (binary only)"]
+        DR["decompile-renamer\nImproves decompiled output"]
+        DA["decompile-analyst\nReviews decompilation quality"]
+    end
 
-        <h3>18 Specialized Agents</h3>
-        <table>
-            <tr><th>Agent</th><th>Role</th><th>Stage</th></tr>
-            <tr><td><code>attack-surface</code></td><td>Maps entry points and external interfaces</td><td>Discovery</td></tr>
-            <tr><td><code>vuln-hunter</code></td><td>Primary graph-first vulnerability discovery</td><td>Discovery</td></tr>
-            <tr><td><code>vuln-hunter-java</code></td><td>Java/servlet-specialized detection</td><td>Discovery</td></tr>
-            <tr><td><code>vuln-hunter-python</code></td><td>Python-specialized detection</td><td>Discovery</td></tr>
-            <tr><td><code>critic</code></td><td>Validates findings, reduces false positives</td><td>Validation</td></tr>
-            <tr><td><code>exploit-analyst</code></td><td>Assesses real exploitability</td><td>Debate</td></tr>
-            <tr><td><code>defense-analyst</code></td><td>Evaluates defensive controls</td><td>Debate</td></tr>
-            <tr><td><code>verdict-synthesizer</code></td><td>Final synthesis of perspectives</td><td>Synthesis</td></tr>
-            <tr><td><code>failure-analyst</code></td><td>Analyzes why detections were missed</td><td>Self-improvement</td></tr>
-            <tr><td><code>overfitting-reviewer</code></td><td>Prevents over-fitting to benchmarks</td><td>Self-improvement</td></tr>
-            <tr><td><code>results-skeptic</code></td><td>Double-checks suspicious results</td><td>Quality</td></tr>
-            <tr><td><code>cwe-classifier</code></td><td>Maps findings to CWE families</td><td>Classification</td></tr>
-            <tr><td><code>taint-tracer</code></td><td>Traces source-to-sink data flows</td><td>Analysis</td></tr>
-            <tr><td><code>crash-analyst</code></td><td>Analyzes crash outputs</td><td>Analysis</td></tr>
-            <tr><td><code>patch-diff-analyst</code></td><td>Analyzes security patches</td><td>Analysis</td></tr>
-            <tr><td><code>decompile-analyst</code></td><td>Reviews decompilation quality</td><td>Binary</td></tr>
-            <tr><td><code>decompile-renamer</code></td><td>Improves decompiler output</td><td>Binary</td></tr>
-        </table>
+    subgraph DISCOVERY["Discovery"]
+        AS["attack-surface\nMaps entry points,\ndata sources, imports"]
+        VH["vuln-hunter\nGraph-first vuln discovery"]
+        VHJ["vuln-hunter-java\nJava/servlet specialist"]
+        VHP["vuln-hunter-python\nPython specialist"]
+        TT["taint-tracer\nSource-to-sink flows"]
+    end
+
+    subgraph VALIDATION["Validation (standard pipeline)"]
+        CR["critic\nAccept / Reject / Adjust severity"]
+        RS["results-skeptic\nDouble-checks suspicious results"]
+        CC["cwe-classifier\nMaps findings to CWE families"]
+    end
+
+    subgraph DEBATE["Debate (deep pipeline)"]
+        EA["exploit-analyst\nCan attacker trigger this?"]
+        DEF["defense-analyst\nAre mitigations effective?"]
+    end
+
+    subgraph SYNTHESIS["Synthesis"]
+        VS["verdict-synthesizer\nWeighs all perspectives,\nbreaks ties"]
+    end
+
+    subgraph ANALYSIS["Specialized Analysis"]
+        CA["crash-analyst\nAnalyzes crash/fuzz output"]
+        PDA["patch-diff-analyst\nAnalyzes security patches"]
+    end
+
+    subgraph IMPROVE["Self-Improvement Loop"]
+        FA["failure-analyst\nDiagnoses missed detections"]
+        OR["overfitting-reviewer\nValidates proposals"]
+    end
+
+    SRC --> AS
+    BIN --> DR --> DA --> AS
+    AS --> VH & VHJ & VHP
+    VH & VHJ & VHP --> TT
+    TT --> CR
+    CR --> RS --> CC --> VS
+    CR --> EA & DEF
+    EA & DEF --> VS
+    VS --> OUT["Confirmed Findings"]
+    CA -.-> CR
+    PDA -.-> CR
+
+    OUT --> FA
+    FA --> OR
+    OR -->|"Accepted ~34%"| APPLY["Apply improvements"]
+    OR -->|"Rejected ~66%"| MEM["Store lesson"]
+    APPLY --> AS
+        </pre>
 
         <h2 id="self-improvement">Self-Improvement Loop</h2>
         <p>The self-improvement loop is what makes skwaq unique. Instead of manually tuning rules, AI agents analyze their own failures and propose improvements &mdash; validated by another AI agent that prevents overfitting.</p>
