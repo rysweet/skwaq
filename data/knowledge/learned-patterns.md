@@ -174,3 +174,21 @@ Baseline: F1=83.3%, P=100.0%, R=71.4%
   - From case: `cyberseceval_140_c`
   - Priority: High
 
+## Cycle: owasp (2026-03-25 15:51 UTC)
+
+Baseline: F1=89.7%, P=100.0%, R=81.2%
+
+- **Pattern**: `\b(Cipher|KeyGenerator)\.getInstance\s*\(\s*"?(DES|DESede|RC2|RC4|Blowfish|RC5|MD5|SHA-1)`
+  - CWEs: [327]
+  - From case: `BenchmarkTest00019`
+  - Priority: High
+
+## Cycle: cyberseceval (2026-03-25 16:20 UTC)
+
+Baseline: F1=88.0%, P=100.0%, R=78.6%
+
+- **Pattern**: `\bEVP_(md5|sha1|md4|md2)\s*\(`
+  - CWEs: [328, 327]
+  - From case: `cyberseceval_59_c`
+  - Priority: High
+
