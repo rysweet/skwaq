@@ -1,0 +1,161 @@
+// Layer 4 — Data Flow: The 5-layer detection pipeline
+//   patterns → dataflow → context → agents → synthesis
+digraph data_flow {
+    rankdir=TB;
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=9];
+    edge [color="#666666"];
+    compound=true;
+    newrank=true;
+
+    // ─── Input ─────────────────────────────────────────────────────────
+    subgraph cluster_input {
+        label="Input"; style=filled; fillcolor="#F5F5F5"; color="#9E9E9E";
+        src [label="Source Code\n(ingest)", fillcolor="#C8E6C9"];
+        bin [label="Binary\n(ingest)", fillcolor="#BBDEFB"];
+    }
+
+    // ─── Pre-processing ────────────────────────────────────────────────
+    subgraph cluster_preprocess {
+        label="Pre-processing"; style=filled; fillcolor="#FAFAFA"; color="#757575";
+        parse [label="source::parser\ntree-sitter parse", fillcolor="#C8E6C9"];
+        goblin_parse [label="binary::native\ngoblin ELF parse", fillcolor="#BBDEFB"];
+        ghidra [label="binary::ghidra\nGhidra decompile", fillcolor="#BBDEFB"];
+        graph_build [label="graph::builder\nBuild code property graph", fillcolor="#FFE0B2"];
+        graph_db [label="graph::db\nSQLite graph store", fillcolor="#FFCC80", penwidth=2];
+    }
+
+    // ─── Layer 1: Pattern Detection ────────────────────────────────────
+    subgraph cluster_layer1 {
+        label="Layer 1 — Pattern Detection"; style=filled; fillcolor="#FFEBEE"; color="#C62828";
+        pat_persp [label="analysis::perspective_pattern", fillcolor="#EF9A9A", penwidth=2];
+        pat_src [label="analysis::patterns_source\nregex + tree-sitter", fillcolor="#FFCDD2"];
+        pat_bin [label="analysis::patterns_binary\nbinary signatures", fillcolor="#FFCDD2"];
+        semgrep [label="analysis::semgrep\nSemgrepRunner", fillcolor="#FFCDD2"];
+        surface [label="analysis::surface\nattack surface", fillcolor="#FFCDD2"];
+        sem_class [label="analysis::semantic_classifier", fillcolor="#FFCDD2"];
+    }
+
+    // ─── Layer 2: Dataflow Analysis ────────────────────────────────────
+    subgraph cluster_layer2 {
+        label="Layer 2 — Dataflow Analysis"; style=filled; fillcolor="#FFF3E0"; color="#E65100";
+        df_persp [label="analysis::perspective_dataflow", fillcolor="#FFCC80", penwidth=2];
+        taint [label="analysis::taint\nTaintAnalyzer\nsource → sink paths", fillcolor="#FFE0B2"];
+        tsf [label="source::tree_sitter_flow\nAST data flow", fillcolor="#FFE0B2"];
+    }
+
+    // ─── Layer 3: Context Validation ───────────────────────────────────
+    subgraph cluster_layer3 {
+        label="Layer 3 — Context Validation"; style=filled; fillcolor="#E8EAF6"; color="#283593";
+        ctx_persp [label="analysis::perspective_context", fillcolor="#9FA8DA", penwidth=2];
+        variant [label="analysis::variant\nVariantAnalyzer", fillcolor="#C5CAE9"];
+        hardening [label="analysis::hardening", fillcolor="#C5CAE9"];
+        severity [label="analysis::severity\ncompute_severity", fillcolor="#C5CAE9"];
+    }
+
+    // ─── Layer 4: LLM Agent Pipeline ───────────────────────────────────
+    subgraph cluster_layer4 {
+        label="Layer 4 — LLM Agent Pipeline"; style=filled; fillcolor="#F3E5F5"; color="#6A1B9A";
+        orch [label="analysis::orchestrator\nAnalysisOrchestrator\n(multi-cycle)", fillcolor="#CE93D8", penwidth=2];
+        runner [label="agents::runner\nAgentRunner", fillcolor="#E1BEE7"];
+        tools [label="agents::tool_executor", fillcolor="#E1BEE7"];
+        memory [label="memory::store", fillcolor="#E1BEE7"];
+        knowledge [label="knowledge::search", fillcolor="#E1BEE7"];
+
+        subgraph cluster_default_pipe {
+            label="Default Pipeline"; color="#4A148C"; fillcolor="#EDE7F6"; style=filled;
+            ag_rename [label="decompile-renamer", fillcolor="#D1C4E9"];
+            ag_attack [label="attack-surface", fillcolor="#D1C4E9"];
+            ag_vuln [label="vuln-hunter\n(+python/java)", fillcolor="#D1C4E9"];
+            ag_critic [label="critic", fillcolor="#D1C4E9"];
+        }
+
+        subgraph cluster_deep_pipe {
+            label="Deep Pipeline"; color="#4A148C"; fillcolor="#EDE7F6"; style=filled;
+            ag_exploit [label="exploit-analyst", fillcolor="#D1C4E9"];
+            ag_defense [label="defense-analyst", fillcolor="#D1C4E9"];
+            ag_verdict [label="verdict-synthesizer", fillcolor="#D1C4E9"];
+        }
+    }
+
+    // ─── Layer 5: Synthesis ────────────────────────────────────────────
+    subgraph cluster_layer5 {
+        label="Layer 5 — Synthesis"; style=filled; fillcolor="#E0F2F1"; color="#00695C";
+        synth [label="gym::agentic\nsynthesis routing", fillcolor="#80CBC4", penwidth=2];
+        consensus [label="Consensus\nearly-exit", fillcolor="#B2DFDB"];
+        semantic [label="Semantic-confidence\nfast path", fillcolor="#B2DFDB"];
+        expert [label="Expert-routed\ndomain prompts", fillcolor="#B2DFDB"];
+        full_synth [label="Full LLM\nsynthesis", fillcolor="#B2DFDB"];
+    }
+
+    // ─── Output ────────────────────────────────────────────────────────
+    subgraph cluster_output {
+        label="Output"; style=filled; fillcolor="#F5F5F5"; color="#9E9E9E";
+        findings [label="analysis::findings\nFinding objects", fillcolor="#DCEDC8"];
+        score [label="gym::scoring", fillcolor="#DCEDC8"];
+        report [label="reporting::\n{json,markdown,sarif}", fillcolor="#DCEDC8"];
+        history [label="gym::history\nHistoryDb", fillcolor="#DCEDC8"];
+        improve [label="gym::improve\nImprovementCycle", fillcolor="#FFF9C4"];
+    }
+
+    // ─── Edges ─────────────────────────────────────────────────────────
+
+    // Pre-processing
+    src -> parse;
+    parse -> graph_build;
+    bin -> goblin_parse;
+    bin -> ghidra;
+    goblin_parse -> graph_build;
+    ghidra -> graph_build;
+    graph_build -> graph_db;
+
+    // Layer 1
+    graph_db -> pat_persp [style=bold, color="#C62828"];
+    pat_persp -> pat_src;
+    pat_persp -> pat_bin;
+    pat_persp -> semgrep;
+    pat_persp -> surface;
+    pat_persp -> sem_class;
+
+    // Layer 2
+    pat_persp -> df_persp [style=bold, color="#E65100"];
+    graph_db -> df_persp;
+    df_persp -> taint;
+    df_persp -> tsf;
+
+    // Layer 3
+    df_persp -> ctx_persp [style=bold, color="#283593"];
+    ctx_persp -> variant;
+    ctx_persp -> hardening;
+    ctx_persp -> severity;
+
+    // Layer 4
+    ctx_persp -> orch [style=bold, color="#6A1B9A"];
+    orch -> runner;
+    runner -> ag_rename;
+    ag_rename -> ag_attack;
+    ag_attack -> ag_vuln;
+    ag_vuln -> ag_critic;
+    runner -> ag_exploit;
+    runner -> ag_defense;
+    ag_exploit -> ag_verdict;
+    ag_defense -> ag_verdict;
+    runner -> tools;
+    tools -> graph_db [style=dashed, color="#E65100"];
+    tools -> memory;
+    tools -> knowledge;
+
+    // Layer 5
+    orch -> synth [style=bold, color="#00695C"];
+    synth -> consensus;
+    synth -> semantic;
+    synth -> expert;
+    synth -> full_synth;
+
+    // Output
+    synth -> findings;
+    findings -> score;
+    findings -> report;
+    score -> history;
+    history -> improve;
+    improve -> orch [style=dashed, color="#F57F17", label="next cycle"];
+}

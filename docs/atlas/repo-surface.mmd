@@ -1,0 +1,76 @@
+%% Layer 1 — Repo Surface: top-level directory structure and crate organisation
+graph TD
+    subgraph "Repository Root"
+        ROOT["skwaq/"]
+        CARGO_TOML["Cargo.toml<br/>(workspace)"]
+        CARGO_LOCK["Cargo.lock"]
+        README["README.md"]
+        AGENTS_MD["AGENTS.md"]
+        LICENSE["LICENSE"]
+    end
+
+    subgraph "Workspace Crates"
+        CORE["crates/core/<br/>skwaq-core"]
+        GYM["crates/gym/<br/>skwaq-gym"]
+        CLI["crates/cli/<br/>skwaq (bin)"]
+    end
+
+    subgraph "Agent Definitions"
+        AGENTS["agents/<br/>17 .md role-cards"]
+    end
+
+    subgraph "Skills"
+        SKILLS["skills/<br/>8 skill packages"]
+        SK_BIN["binary-audit"]
+        SK_CMP["compare-binaries"]
+        SK_CWE["cwe-lookup"]
+        SK_EXP["explain-vuln"]
+        SK_LLM["llm-binary-vuln-guide"]
+        SK_SRC["source-audit"]
+        SK_THR["threat-model"]
+        SK_VSC["vuln-scan"]
+    end
+
+    subgraph "Data"
+        DATA["data/"]
+        KB["data/knowledge/<br/>6 knowledge docs"]
+        GT["data/gym/ground_truth/<br/>8 suite manifests"]
+        RW["data/gym/realworld/<br/>curl CVE samples"]
+    end
+
+    subgraph "Test Fixtures"
+        TESTS["tests/"]
+        FIX["tests/fixtures/<br/>90+ C/JS/Py sources"]
+        BIN["tests/fixtures/binaries/<br/>pre-compiled ELFs"]
+        GAD["tests/gadugi/<br/>integration yamls"]
+        QA["tests/qa/<br/>QA scenario yamls"]
+    end
+
+    subgraph "Build & CI"
+        GH[".github/workflows/"]
+        SCRIPTS["scripts/<br/>8 shell/python helpers"]
+        GHIDRA["ghidra-scripts/<br/>extract_analysis.py"]
+    end
+
+    subgraph "Documentation"
+        DOCS["docs/<br/>11 markdown guides"]
+        SPECS["Specifications/<br/>7 design docs"]
+    end
+
+    ROOT --> CARGO_TOML
+    CARGO_TOML --> CORE
+    CARGO_TOML --> GYM
+    CARGO_TOML --> CLI
+
+    ROOT --> AGENTS
+    ROOT --> SKILLS
+    SKILLS --> SK_BIN & SK_CMP & SK_CWE & SK_EXP & SK_LLM & SK_SRC & SK_THR & SK_VSC
+
+    ROOT --> DATA
+    DATA --> KB & GT & RW
+
+    ROOT --> TESTS
+    TESTS --> FIX & BIN & GAD & QA
+
+    ROOT --> SCRIPTS & GH & GHIDRA
+    ROOT --> DOCS & SPECS

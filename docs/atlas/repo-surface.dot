@@ -1,0 +1,96 @@
+// Layer 1 — Repo Surface: top-level directory structure and crate organisation
+digraph repo_surface {
+    rankdir=TB;
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=10];
+    edge [color="#666666"];
+
+    // Root
+    root [label="skwaq/", fillcolor="#E8F5E9"];
+
+    // Workspace
+    subgraph cluster_workspace {
+        label="Workspace Crates";
+        style=dashed; color="#1565C0";
+        cargo_toml [label="Cargo.toml\n(workspace)", fillcolor="#BBDEFB"];
+        core [label="crates/core/\nskwaq-core", fillcolor="#C8E6C9"];
+        gym  [label="crates/gym/\nskwaq-gym", fillcolor="#C8E6C9"];
+        cli  [label="crates/cli/\nskwaq (bin)", fillcolor="#C8E6C9"];
+    }
+
+    // Agent definitions
+    subgraph cluster_agents {
+        label="Agent Definitions";
+        style=dashed; color="#6A1B9A";
+        agents [label="agents/\n17 .md role-cards", fillcolor="#E1BEE7"];
+    }
+
+    // Skills
+    subgraph cluster_skills {
+        label="Skills";
+        style=dashed; color="#00695C";
+        skills [label="skills/\n8 skill packages", fillcolor="#B2DFDB"];
+    }
+
+    // Data
+    subgraph cluster_data {
+        label="Data";
+        style=dashed; color="#E65100";
+        data [label="data/", fillcolor="#FFE0B2"];
+        kb   [label="data/knowledge/\n6 knowledge docs", fillcolor="#FFF3E0"];
+        gt   [label="data/gym/ground_truth/\n8 suite manifests", fillcolor="#FFF3E0"];
+        rw   [label="data/gym/realworld/\ncurl CVE samples", fillcolor="#FFF3E0"];
+    }
+
+    // Tests
+    subgraph cluster_tests {
+        label="Test Fixtures";
+        style=dashed; color="#4E342E";
+        tests [label="tests/", fillcolor="#D7CCC8"];
+        fix   [label="tests/fixtures/\n90+ C/JS/Py sources", fillcolor="#EFEBE9"];
+        bin   [label="tests/fixtures/binaries/\npre-compiled ELFs", fillcolor="#EFEBE9"];
+        gad   [label="tests/gadugi/\nintegration yamls", fillcolor="#EFEBE9"];
+        qa    [label="tests/qa/\nQA scenario yamls", fillcolor="#EFEBE9"];
+    }
+
+    // Build & CI
+    subgraph cluster_build {
+        label="Build & CI";
+        style=dashed; color="#37474F";
+        gh      [label=".github/workflows/", fillcolor="#CFD8DC"];
+        scripts [label="scripts/\n8 helpers", fillcolor="#CFD8DC"];
+        ghidra  [label="ghidra-scripts/\nextract_analysis.py", fillcolor="#CFD8DC"];
+    }
+
+    // Documentation
+    subgraph cluster_docs {
+        label="Documentation";
+        style=dashed; color="#1B5E20";
+        docs  [label="docs/\n11 markdown guides", fillcolor="#C8E6C9"];
+        specs [label="Specifications/\n7 design docs", fillcolor="#C8E6C9"];
+    }
+
+    // Edges
+    root -> cargo_toml;
+    cargo_toml -> core;
+    cargo_toml -> gym;
+    cargo_toml -> cli;
+
+    root -> agents;
+    root -> skills;
+    root -> data;
+    data -> kb;
+    data -> gt;
+    data -> rw;
+
+    root -> tests;
+    tests -> fix;
+    tests -> bin;
+    tests -> gad;
+    tests -> qa;
+
+    root -> gh;
+    root -> scripts;
+    root -> ghidra;
+    root -> docs;
+    root -> specs;
+}

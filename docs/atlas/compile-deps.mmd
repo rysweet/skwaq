@@ -1,0 +1,97 @@
+%% Layer 2 — Compile Deps: Cargo dependency graph between workspace crates and key external deps
+graph LR
+    subgraph "Workspace Crates"
+        CLI["skwaq<br/>(cli bin)"]
+        GYM["skwaq-gym"]
+        CORE["skwaq-core"]
+    end
+
+    subgraph "Internal Git Dependencies"
+        RC_CORE["rustyclawd-core"]
+        RC_TOOLS["rustyclawd-tools"]
+    end
+
+    subgraph "Async / Runtime"
+        TOKIO["tokio"]
+        FUTURES["futures"]
+        ASYNC_TRAIT["async-trait"]
+    end
+
+    subgraph "CLI / TUI"
+        CLAP["clap"]
+        RATATUI["ratatui"]
+        CROSSTERM["crossterm"]
+        INDICATIF["indicatif"]
+    end
+
+    subgraph "Serialization"
+        SERDE["serde"]
+        SERDE_JSON["serde_json"]
+        SERDE_YAML["serde_yaml_ng"]
+        TOML["toml"]
+    end
+
+    subgraph "Error Handling"
+        ANYHOW["anyhow"]
+        THISERROR["thiserror"]
+    end
+
+    subgraph "Logging"
+        TRACING["tracing"]
+        TRACING_SUB["tracing-subscriber"]
+    end
+
+    subgraph "Binary Analysis"
+        GOBLIN["goblin"]
+        TREE_SITTER["tree-sitter"]
+        TREE_SITTER_C["tree-sitter-c"]
+    end
+
+    subgraph "Storage"
+        RUSQLITE["rusqlite"]
+    end
+
+    subgraph "Network"
+        REQWEST["reqwest"]
+    end
+
+    subgraph "Archive / Parallel"
+        FLATE2["flate2"]
+        TAR["tar"]
+        ZIP["zip"]
+        WALKDIR["walkdir"]
+        RAYON["rayon"]
+    end
+
+    subgraph "Utilities"
+        CHRONO["chrono"]
+        UUID["uuid"]
+        SHA2["sha2"]
+        REGEX["regex"]
+        DIRS["dirs"]
+        TEMPFILE["tempfile"]
+    end
+
+    %% Workspace edges
+    CLI -->|"path dep"| GYM
+    CLI -->|"path dep"| CORE
+    CLI -->|"workspace"| RC_TOOLS
+    GYM -->|"path dep"| CORE
+    CORE -->|"workspace"| RC_CORE
+
+    %% CLI externals
+    CLI --> TOKIO & CLAP & TRACING & TRACING_SUB & ANYHOW
+    CLI --> SERDE & SERDE_JSON & UUID & CHRONO & DIRS & TEMPFILE
+
+    %% GYM externals
+    GYM --> TOKIO & ASYNC_TRAIT & FUTURES & RAYON
+    GYM --> SERDE & SERDE_JSON & TOML & ANYHOW & THISERROR & TRACING
+    GYM --> REQWEST & RUSQLITE & CHRONO & UUID & SHA2 & TEMPFILE & DIRS
+    GYM --> FLATE2 & TAR & ZIP & WALKDIR & INDICATIF & REGEX
+
+    %% Core externals
+    CORE --> TOKIO & ASYNC_TRAIT & REQWEST
+    CORE --> SERDE & SERDE_JSON & SERDE_YAML & TOML
+    CORE --> ANYHOW & THISERROR & TRACING
+    CORE --> RUSQLITE & GOBLIN & TREE_SITTER & TREE_SITTER_C
+    CORE --> CHRONO & UUID & SHA2 & REGEX & DIRS & TEMPFILE
