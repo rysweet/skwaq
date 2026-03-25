@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Skwaq — Self-Improving Vulnerability Analyzer</title>
+    <meta property="og:title" content="Skwaq — Self-Improving Vulnerability Analyzer">
+    <meta property="og:description" content="A multi-agent vulnerability analyzer that bootstrapped from a short spec into a competitive detection system — 18 AI agents that analyze, benchmark, and improve their own investigation methodology.">
+    <meta property="og:image" content="https://github.com/user-attachments/assets/8213c8c0-6138-4690-929a-9675a0584c6a">
+    <meta property="og:url" content="https://rysweet.github.io/skwaq/">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐦‍⬛</text></svg>">
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -31,17 +38,23 @@
         pre { background: #161b22; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 1rem 0; border: 1px solid #21262d; font-size: 0.85rem; line-height: 1.6; }
         pre.mermaid { background: #161b22; border-radius: 8px; padding: 1.5rem; margin: 1rem 0; border: 1px solid #21262d; }
         .highlight { color: #3fb950; font-weight: 600; }
-        .nav { display: flex; gap: 1.5rem; margin: 1.5rem 0; flex-wrap: wrap; }
-        .nav a { background: #161b22; padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid #21262d; font-size: 0.9rem; }
+        .nav { display: flex; gap: 1rem; margin: 0; padding: 0.75rem 0; flex-wrap: wrap; position: sticky; top: 0; background: #0d1117; z-index: 100; border-bottom: 1px solid #21262d; }
+        .nav a { background: #161b22; padding: 0.4rem 0.75rem; border-radius: 6px; border: 1px solid #21262d; font-size: 0.85rem; }
         .nav a:hover { border-color: #58a6ff; }
         .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #21262d; font-size: 0.8rem; color: #484f58; }
         ol li img { vertical-align: middle; margin-right: 0.4rem; }
+        .table-wrap { overflow-x: auto; margin: 1rem 0; -webkit-overflow-scrolling: touch; }
+        .table-wrap table { margin: 0; }
+        .back-to-top { position: fixed; bottom: 2rem; right: 2rem; background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 0.5rem 0.75rem; color: #58a6ff; font-size: 0.85rem; text-decoration: none; opacity: 0; transition: opacity 0.3s; z-index: 100; }
+        .back-to-top.visible { opacity: 1; }
+        .back-to-top:hover { border-color: #58a6ff; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Skwaq <a href="https://github.com/rysweet/skwaq" style="vertical-align:middle; margin-left:0.5rem; font-size:0.5em; font-weight:400; color:#8b949e;"><svg height="20" width="20" viewBox="0 0 16 16" fill="#8b949e" style="vertical-align:middle; margin-right:0.3rem;"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>View code on GitHub</a></h1>
         <p class="subtitle">A self-improving, multi-agent vulnerability analyzer that bootstrapped from a short spec into a competitive detection system &mdash; using AI agents to analyze, benchmark, and improve their own investigation methodology.</p>
+        <p style="font-size:0.9rem; color:#484f58; font-style:italic; margin-top:-1rem;">The name comes from the Lushootseed word for Raven &mdash; the trickster who reveals hidden truths.</p>
 
         <div style="text-align:center; margin: 1.5rem 0;">
             <img src="https://github.com/user-attachments/assets/8213c8c0-6138-4690-929a-9675a0584c6a" alt="Skwaq — multi-agent vulnerability analyzer" style="max-width:480px; width:100%; border-radius:12px; border:1px solid #21262d;">
@@ -219,7 +232,7 @@ flowchart TB
         </pre>
 
         <h3>Proposal Types (in Preference Order)</h3>
-        <div class="card">
+        <div class="card"><div class="table-wrap">
             <table>
                 <tr><th>Type</th><th>What It Does</th><th>Example</th></tr>
                 <tr><td><strong>AGENT_PROMPT</strong></td><td>Teaches agents new investigation strategies</td><td>Check ALL argument positions in exec calls for tainted data</td></tr>
@@ -227,7 +240,7 @@ flowchart TB
                 <tr><td><strong>CWE_MAPPING</strong></td><td>Fixes scoring/classification</td><td>Map CWE-614 to CryptoWeakness semantic class</td></tr>
                 <tr><td><strong>NEW_PATTERN</strong></td><td>Regex detection (last resort)</td><td>Only when graph-based approaches cannot detect the pattern</td></tr>
             </table>
-        </div>
+        </div></div>
 
         <h3>Overfitting Prevention</h3>
         <p>The overfitting-reviewer agent has rejected ~66% of proposals across 22+ cycles. Common rejection reasons:</p>
@@ -242,6 +255,7 @@ flowchart TB
         <h2 id="results">Results</h2>
 
         <h3>Benchmark Suites</h3>
+        <div class="table-wrap">
         <table>
             <tr><th>Suite</th><th>Source</th><th>Cases</th><th>Languages</th><th>Focus</th></tr>
             <tr><td><a href="https://samate.nist.gov/SARD/test-suites/112">Juliet</a></td><td>NIST</td><td>54,488</td><td>C/C++</td><td>116 CWEs, synthetic variants</td></tr>
@@ -251,8 +265,10 @@ flowchart TB
             <tr><td><a href="https://cybergym.io/">CyberGym</a></td><td>UC Berkeley</td><td>3,014</td><td>C/C++</td><td>Real OSS-Fuzz CVEs from 188 projects</td></tr>
             <tr><td>Fixtures</td><td>skwaq team</td><td>99</td><td>Mixed</td><td>Regression suite</td></tr>
         </table>
+        </div>
 
         <h3>Current Baselines &mdash; Pattern+Dataflow Mode</h3>
+        <div class="table-wrap">
         <table>
             <tr><th>Suite</th><th>Cases</th><th>F1</th><th>Precision</th><th>Recall</th><th>TP</th><th>FP</th><th>FN</th><th>TN</th></tr>
             <tr><td>Fixtures</td><td>99</td><td class="highlight">93.2%</td><td>98.0%</td><td>88.8%</td><td>103</td><td>2</td><td>13</td><td>11</td></tr>
@@ -262,8 +278,51 @@ flowchart TB
             <tr><td><a href="https://github.com/trailofbits/cb-multios">CGC</a></td><td>20</td><td class="highlight">86.6%</td><td>100%</td><td>76.3%</td><td>29</td><td>0</td><td>9</td><td>4</td></tr>
             <tr><td><a href="https://cybergym.io/">CyberGym</a></td><td>100</td><td>71.9%</td><td>100%</td><td>56.1%</td><td>64</td><td>0</td><td>50</td><td>0</td></tr>
         </table>
+        </div>
 
         <p><strong>Key differentiator:</strong> Skwaq maintains <span class="highlight">100% precision</span> across all benchmarks (0 false positives). Most tools trade precision for recall. We continue to run the self-improvement loop, expanding the number of cases with each cycle.</p>
+
+        <h3>Per-CWE Improvements (from Self-Improvement Loop)</h3>
+        <div class="table-wrap">
+        <table>
+            <tr><th>CWE</th><th>Before</th><th>After</th><th>Method</th></tr>
+            <tr><td>CWE-401 memory leak</td><td>0%</td><td class="highlight">99%</td><td>Agent-recommended calloc&rarr;ResourceLeak mapping</td></tr>
+            <tr><td>CWE-614 secure cookie</td><td>0%</td><td class="highlight">100%</td><td>setSecure(false) + semantic class fix</td></tr>
+            <tr><td>CWE-78 cmd injection</td><td>37%</td><td class="highlight">70%</td><td>spawn family (agent-identified taint rules)</td></tr>
+            <tr><td>CWE-22 path traversal</td><td>41%</td><td class="highlight">65%</td><td>java.io.File* qualified name fix</td></tr>
+            <tr><td>CWE-79 XSS</td><td>46%</td><td class="highlight">63%</td><td>getWriter().format/append (agentic cycle)</td></tr>
+            <tr><td>Race conditions</td><td>33%</td><td class="highlight">100%</td><td>signal handler + thread (agentic cycle)</td></tr>
+        </table>
+        </div>
+
+        <h3>Industry Comparison</h3>
+        <div class="table-wrap">
+        <table>
+            <tr><th>Tool</th><th>Approach</th><th>Benchmark</th><th>P</th><th>R</th><th>F1</th></tr>
+            <tr><td><strong>Skwaq (agentic)</strong></td><td>Multi-agent + graph</td><td>Juliet 20</td><td><span class="highlight">100%</span></td><td>95%</td><td><span class="highlight">97.3%</span></td></tr>
+            <tr><td>VulBinLLM</td><td>LLM decompile+reason</td><td>Juliet stripped</td><td>~85%</td><td>~100%</td><td>~92%</td></tr>
+            <tr><td>PS&sup3;</td><td>Binary pattern</td><td>Curated dataset</td><td>82%</td><td>97%</td><td>89%</td></tr>
+            <tr><td>LATTE</td><td>Taint + LLM</td><td>Juliet</td><td>~70%</td><td>~85%</td><td>~77%</td></tr>
+        </table>
+        </div>
+        <p style="font-size:0.85rem; color:#484f58;"><a href="https://arxiv.org/abs/2405.17894">IRIS</a> (LLM+CodeQL hybrid) detected 2x more vulns than CodeQL alone &mdash; validating skwaq's hybrid approach. <a href="https://github.blog/security/vulnerability-research/the-github-security-lab-the-road-to-taskflow/">GitHub SecLab Taskflow Agent</a> is the closest competitor architecture, with 80+ real CVEs found using multi-agent investigation.</p>
+
+        <h3>Improvement History (Key Milestones)</h3>
+        <div class="table-wrap">
+        <table>
+            <tr><th>PR</th><th>Change</th><th>Impact</th></tr>
+            <tr><td>#29</td><td>Gym benchmark harness</td><td>Baseline F1=50%</td></tr>
+            <tr><td>#35-39</td><td>Agentic pipeline, multi-agent validation</td><td>First agent-driven detection</td></tr>
+            <tr><td>#49</td><td>Dual-judge breakthrough</td><td>Precision: 15%&rarr;100%</td></tr>
+            <tr><td>#57</td><td>All 4 industry benchmark adapters</td><td>Juliet, OWASP, CGC, CSE</td></tr>
+            <tr><td>#217-243</td><td>34 semantic classes, 109/109 Juliet CWEs</td><td>Full CWE coverage</td></tr>
+            <tr><td>#298</td><td>Industry expansion</td><td>Juliet 1K, OWASP 1K, CSE 400</td></tr>
+            <tr><td>#302</td><td>CyberGym + results-skeptic agent</td><td>3,014 real CVEs added</td></tr>
+            <tr><td>#303</td><td>3-layer improvement + 4 agentic cycles</td><td>+7.6% Juliet, +8.0% OWASP</td></tr>
+            <tr><td>#312-313</td><td>Agentic eval tuning</td><td>Juliet F1=97.3%</td></tr>
+        </table>
+        </div>
+
         <p><a href="https://github.com/rysweet/skwaq/issues/28">Full benchmark progress and history &rarr;</a></p>
 
         <h2 id="usage">Usage</h2>
@@ -306,6 +365,13 @@ skwaq gym improve juliet --cwe CWE-78 --max-cases 20</code></pre>
         </div>
     </div>
 
+    <a href="#" class="back-to-top" id="btt">&uarr; Top</a>
+    <script>
+        const btt = document.getElementById('btt');
+        window.addEventListener('scroll', () => {
+            btt.classList.toggle('visible', window.scrollY > 600);
+        });
+    </script>
     <script>
         mermaid.initialize({
             startOnLoad: true,
