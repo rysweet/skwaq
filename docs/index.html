@@ -102,7 +102,11 @@
                 Built the <code>gym improve</code> command: failure-analyst agent investigates each false negative, diagnoses why detection failed, and proposes improvements to agent prompts, taint rules, CWE mappings, or patterns. An overfitting-reviewer agent validates every proposal. <span class="highlight">Agents started teaching themselves.</span>
             </li>
             <li>
-                <img src="https://img.shields.io/badge/-8-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 8"> <strong>Scale and Results</strong><br>
+                <img src="https://img.shields.io/badge/-8-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 8"> <strong>The Importance of Not Overfitting</strong><br>
+                It became critical to ensure the improvement loops don't "build to the benchmark" &mdash; overfitting to specific test cases rather than improving general detection. We built a specialized <code>overfitting-reviewer</code> agent and added workflow steps that reject proposals which only help on benchmark cases versus the general case. This agent has rejected ~66% of proposals, catching narrow heuristics, benchmark-specific naming tricks, and detection logic too tightly coupled to test structure.
+            </li>
+            <li>
+                <img src="https://img.shields.io/badge/-9-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 9"> <strong>Scale and Results</strong><br>
                 22+ self-improvement cycles across all suites. 100+ proposals generated, 34% acceptance rate (reviewer catches overfitting). Added CyberGym (3,014 real CVEs from OSS-Fuzz). <span class="highlight">Agentic eval: Juliet F1=97.3%.</span>
             </li>
         </ul>
