@@ -1,10 +1,14 @@
 # Skwaq
 
-AI-powered vulnerability discovery CLI for binaries and source code.
+**A self-improving, multi-agent vulnerability analyzer.**
 
-Skwaq builds a Code Property Graph from binary analysis, detects dangerous API usage patterns, traces taint flows, and uses AI agents to reason about vulnerabilities. It complements tools like Ghidra and IDA Pro - it's the reasoning layer on top.
+**[Website](https://rysweet.github.io/skwaq/)** | **[Benchmark Progress](https://github.com/rysweet/skwaq/issues/28)** | **[Specification](Specifications/SKWAQ_V2_SPEC.md)** | **[Code Atlas](docs/atlas/README.md)**
 
-The name comes from the Lushootseed word for Raven - the trickster who reveals hidden truths.
+Skwaq uses a team of 18 specialized AI agents to investigate source code and binaries for security vulnerabilities. It builds a code property graph in [LadybugDB](https://github.com/LadybugDB/ladybug), traces how untrusted user input propagates through code (taint analysis), and uses multi-agent debate to reason about exploitability. The agents are powered by [RustyClawd](https://github.com/rysweet/RustyClawd), a Rust-based agentic LLM framework.
+
+What makes it unique: **skwaq improves itself**. A built-in benchmark harness (Skwaq Gym) measures detection accuracy against 6 industry benchmarks, and a self-improvement loop uses AI agents to analyze their own failures and propose better investigation strategies — with an overfitting-reviewer agent that rejects ~66% of proposals to prevent building to the benchmark.
+
+The name comes from the Lushootseed word for Raven — the trickster who reveals hidden truths.
 
 ## Quick Start
 
@@ -148,16 +152,18 @@ classification, CWE family mapping, and scoring interact.
 
 Three Rust crates:
 
-- **skwaq-core**: Binary parsing (goblin), graph database (SQLite), analysis engine, LLM client traits, reporting
-- **skwaq-agents**: VulnHunter + Critic AI agents with tool-loop pattern
+- **skwaq-core**: Binary parsing (goblin), graph database (LadybugDB/SQLite), analysis engine, 18 agent definitions, LLM client via RustyClawd, durable agent memory
+- **skwaq-gym**: Benchmark harness, 6 industry adapters, self-improvement loop with failure-analyst and overfitting-reviewer agents
 - **skwaq** (cli): clap-based CLI with 20+ commands
 
 ```
-CLI (clap) -> Analysis Engine -> Graph DB (SQLite)
+CLI (clap) -> Analysis Engine -> Graph DB (LadybugDB)
                 |                    |
-          LLM Agents          Binary Parser
-        (Copilot/Ollama)        (goblin)
+          18 LLM Agents        Binary Parser
+        (via RustyClawd)         (goblin)
 ```
+
+See the [website](https://rysweet.github.io/skwaq/) for the full multi-agent pipeline diagram and benchmark results.
 
 ## Configuration
 
