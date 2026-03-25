@@ -5772,3 +5772,428 @@ These two rules together detect the general pattern: `HttpServletRequest.*input 
 
 ---
 
+## Cycle: owasp (2026-03-25 15:51 UTC)
+
+### Missed Cases (3 false negatives)
+
+- **BenchmarkTest00007**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+- **BenchmarkTest00030**: Expected CWE-[79], detected CWE-[], missed CWE-[79]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+- **BenchmarkTest00019**: Expected CWE-[327], detected CWE-[], missed CWE-[327]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+
+### Reviewed Improvement Proposals (6 total; 6 accepted, 0 rejected)
+
+- **[Taint Rule Gap] [MODIFY]** Add Java CWE-78 OS command injection taint rules: (1) Taint Sources: HttpServletRequest.getHeader, getParameter, getParameterValues, getCookies, getQueryString, getInputStream, getReader as http_request_input sources. URLDecoder.decode() should be marked as taint-preserving (not sanitizing). (2) Taint Sinks: Runtime.getRuntime().exec() at ALL argument positions (command string, command array, environment array, working directory) as os_command_execution sinks for CWE-78. Also add ProcessBuilder.command(), ProcessBuilder.environment(), and ProcessBuilder.start() as sinks. The environment variables array (2nd argument of exec()) is particularly dangerous because attacker-controlled environment variables can manipulate PATH, set LD_PRELOAD, or influence other environment-dependent behavior. This addresses the broader class of Java command injection including indirect injection via environment variable control, and enables detection even when the CPG is empty by allowing the LLM semantic analyzer to recognize the pattern when reading source code directly.
+  CWEs: [78] | From case: BenchmarkTest00007
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE families knowledge pack explicitly lists "Runtime.getRuntime().exec() in Java with user-controlled args" as a detection signal for CWE-78 OS Command Injection, confirming this is a recognized and documented vulnerability pattern that should be detectable.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology pack explicitly documents "Command Injection Through Indirection" including environment modification and states "user input may be in argv[2], not the command" and to "check if ANY reach an execution function in ANY argument position" — directly supporting that environment variable injection via exec(args, argsEnv) is a known CWE-78 variant.
+  - [MEMORY] pattern :: CWE-78 OS Command Injection in Java servlet where user-controlled HTTP header input flows into Runtime.getRuntime().exec() as environment variables. Recurring OWASP Benchmark false negative. AGENT_PROMPT proposals have not been deployed. [cwe-78, command-injection, java, servlet, runtime-exec, getHeader, environment-variables, argsEnv, empty-graph, agent-prompt, owasp-benchmark, recurring-failure] — Multiple prior cycles (5+) have documented this exact recurring failure pattern. AGENT_PROMPT proposals have been made repeatedly but not deployed. TAINT_RULE is the correct escalation path as it operates at the framework level and does not depend on prompt deployment.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: The core taint source/sink definitions are well-established and generalize well for CWE-78 detection. However, marking ALL argument positions of Runtime.exec() as equally dangerous sinks is overfitting to one test case's specific pattern. The environment array (2nd arg) and working directory (3rd arg) of Runtime.exec(String[], String[], File) are not standard OS command injection vectors — while theoretically dangerous, treating them identically to the command argument conflates distinct vulnerability classes (environment manipulation vs. command injection). The LD_PRELOAD/PATH reasoning is valid but is a different attack class. Also, the claim about enabling detection 'even when the CPG is empty' by having the LLM read source code directly suggests a workaround for an infrastructure problem rather than a principled taint rule.
+  Suggested modification: Keep the taint sources and URLDecoder.decode() as taint-preserving. For sinks, mark Runtime.exec() first argument (command string/array) and ProcessBuilder.command() as primary CWE-78 sinks. Mark exec() environment array as a separate, lower-confidence sink category (e.g., CWE-78 variant or environment manipulation). Remove the claim about bypassing empty CPGs — fix the infrastructure instead.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 specifically covers OS command injection through the command string itself, not environment variable manipulation. Treating all exec() arguments as equivalent CWE-78 sinks overextends the CWE definition.
+  - [MEMORY] failure :: Agent capability gap where functions are not found in analysis graph, indicating infrastructure issues that should be fixed at the root rather than worked around [cwe-121] — The knowledge base documents that missing CPG/graph construction is a root infrastructure issue. The proposal's attempt to work around empty CPGs by having the LLM read source directly mirrors this pattern of working around infrastructure gaps rather than fixing them.
+- **[Taint Rule Gap] [ACCEPT]** Define two taint rules for Java servlet CWE-79 (Reflected XSS) detection:
+
+**Taint Source — http_servlet_request_input:**
+- HttpServletRequest.getParameter()
+- HttpServletRequest.getParameterMap()
+- HttpServletRequest.getParameterValues()
+- HttpServletRequest.getHeader()
+- HttpServletRequest.getHeaders()
+- HttpServletRequest.getCookies()
+- HttpServletRequest.getQueryString()
+- HttpServletRequest.getInputStream()
+- HttpServletRequest.getReader()
+- HttpServletRequest.getPathInfo()
+- HttpServletRequest.getRequestURI()
+- Type: http_request_input, CWE relevance: CWE-79 (also CWE-78, CWE-89, CWE-22)
+
+**Taint Sink — http_servlet_response_output:**
+- HttpServletResponse.getWriter().write()
+- HttpServletResponse.getWriter().print()
+- HttpServletResponse.getWriter().println()
+- HttpServletResponse.getWriter().printf()
+- HttpServletResponse.getWriter().format()
+- HttpServletResponse.getWriter().append()
+- HttpServletResponse.getOutputStream().write()
+- HttpServletResponse.getOutputStream().print()
+- HttpServletResponse.getOutputStream().println()
+- Type: http_response_output, CWE relevance: CWE-79
+
+**Additionally**: Update the cwe-families knowledge pack CWE-79 detection signals section to replace response.getWriter().write() with the full list of PrintWriter/ServletOutputStream output methods listed above.
+
+**Infrastructure prerequisite**: Java source files must be ingested into the code property graph. The current pipeline produces empty CPGs for Java source-only targets, which is the blocking root cause for all OWASP Benchmark Java detections.
+  CWEs: [79] | From case: BenchmarkTest00030
+  Suggested pattern: `(HttpServletRequest\.get(Parameter|ParameterMap|ParameterValues|Header|Headers|Cookies|QueryString|InputStream|Reader|PathInfo|RequestURI)\(|HttpServletResponse\.getWriter\(\)\.(write|print|println|printf|format|append)\(|HttpServletResponse\.getOutputStream\(\)\.(write|print|println)\()`
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE-79 detection signals section explicitly lists only response.getWriter().write() for Java, confirming the knowledge pack gap that causes printf() to be unrecognized as an XSS sink.
+  - [KB] knowledge-pack/fn-insights/fn-insights — Confirms Java taint rule gaps for CWE-78 (and by extension CWE-79) where HttpServletRequest methods must be defined as taint sources and response output methods as sinks, and that Java source ingestion is a blocking prerequisite.
+  - [MEMORY] pattern :: CWE-79 Reflected XSS in Java servlet: 5th+ cycle recurring false negative with empty CPG and incomplete PrintWriter sink coverage [cwe-79, xss, java, servlet, response-getWriter, printf, taint-rule, recurring-failure] — Five prior cycles have identified the same dual root cause (empty CPG + incomplete sink list) and proposed the same TAINT_RULE fix, confirming this is a validated, high-priority detection gap requiring framework-level changes.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a comprehensive and well-structured taint rule definition that covers standard Java servlet API sources and sinks for CWE-79. The sources and sinks listed are all canonical Java EE APIs documented in the Servlet specification. The proposal correctly identifies the infrastructure prerequisite (empty CPGs for Java) as the blocking issue, which shows good root-cause awareness. The cross-CWE relevance notes for sources are accurate. The comprehensiveness of output methods (printf, format, append, etc.) is thorough without being overfit — these are all real output paths in PrintWriter. The only minor concern is that the regex patch line is ancillary to the main taint rule definition, but it's consistent.
+  - [KB] cwe-families/cwe-families/cwe-families — The CWE family reference confirms CWE-79 is a well-defined injection category. The proposed sources and sinks align with standard taint analysis approaches for web application vulnerabilities.
+  - [MEMORY] failure :: Agent capability gap where functions are not found in analysis graph, indicating incomplete graph construction [cwe-121] — The proposal correctly identifies that empty CPGs are the root cause, matching the known pattern of infrastructure gaps causing missed detections. The proposal addresses both the rule definition and acknowledges the infrastructure fix needed.
+- **[Pattern Gap] [ACCEPT]** Deploy the existing learned pattern as an active scanner rule. Add the regex `\b(Cipher|KeyGenerator)\.getInstance\s*\(\s*"?(DES|DESede|RC2|RC4|Blowfish|RC5|MD5|SHA-1)` to the active pattern scanner under the `CryptoWeakness` danger category, mapped to CWE-327. Additionally, add `Cipher\.getInstance\s*\(\s*"[^"]*\/ECB\/` as a second pattern for detecting ECB mode usage (also CWE-327). These patterns must be applied directly to Java source files via source-code regex scanning, bypassing the empty CPG. The critical infrastructure fix is ensuring the regex pattern matcher runs on Java `.java` source files even when the CPG is empty. The `KeyGenerator.getInstance("DES")` call on line 55 is a direct, unambiguous match for the first pattern — the only reason it's missed is that the scanner never runs against the file.
+  CWEs: [327] | From case: BenchmarkTest00019
+  Suggested pattern: `\b(Cipher|KeyGenerator)\.getInstance\s*\(\s*"?(DES|DESede|RC2|RC4|Blowfish|RC5|MD5|SHA-1)`
+  - [KB] knowledge-pack/learned-patterns/learned-patterns — The learned-patterns KB already contains the exact regex `\b(Cipher|KeyGenerator)\.getInstance\s*\(\s*"?(DES|DESede|RC2|RC4|Blowfish)` mapped to CWE-327 from this very case (BenchmarkTest00019), confirming the pattern is correct but not deployed to the active scanner
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-327 is documented under "Cryptographic Weakness Family" with explicit mention of DES and RC4 as broken/risky algorithms, confirming the vulnerability classification is correct
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology KB lists "Weak algorithms (CWE-327): DES, RC4, MD5, SHA-1" as a cryptography detection signal, confirming DES/DESede usage should be flagged
+  - [MEMORY] pattern :: CWE-79 XSS in Java servlet recurring failure where AGENT_PROMPT proposals (5+ times) and TAINT_RULE proposals have not been deployed; Java source-only files produce empty CPGs [cwe-79, xss, java, servlet, taint-rule, recurring-failure, fifth-plus-cycle] — This is the identical systemic failure: Java source files produce empty CPGs, and patterns/rules stored in the knowledge pack are not being applied by the active scanner. The pattern deployment pipeline from learned-patterns to the regex scanner is broken for Java source files, affecting CWE-327 detection the same way it affects CWE-79 detection.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a well-scoped, low-risk pattern for detecting weak cryptographic algorithms. The regex targets well-known deprecated/weak algorithms (DES, RC2, RC4, Blowfish, RC5) and hash functions (MD5, SHA-1) through standard Java JCE API calls. These are universally recognized as weak by NIST and industry standards. The ECB mode detection pattern is also a valid and well-known weakness. The regex is precise enough to avoid false positives (anchored to specific API calls) while being general enough to catch real-world usage. The proposal correctly identifies the infrastructure gap (scanner not running on Java source files) as the root cause. Source-level regex scanning for crypto weakness patterns is a common approach used by tools like SonarQube, FindBugs, and others.
+  - [KB] cwe/CWE-798/CWE-798 Use of Hard-coded Credentials — While CWE-798 is about hard-coded credentials rather than weak crypto, both fall in the category of statically-detectable security weaknesses where pattern matching on source code is an effective and well-established detection methodology. CWE-327 (weak crypto) is similarly amenable to static pattern matching.
+  - [MEMORY] failure :: Agent capability gap where functions are not found in analysis graph, indicating incomplete graph construction [cwe-121] — The known pattern of empty CPGs causing missed detections directly explains why this regex pattern isn't firing. The proposal's approach of running regex on source files as a fallback is pragmatic and addresses the root infrastructure issue.
+- **[Agent Capability Gap] [MODIFY]** Update vuln-hunter to trace 'exec' (sink type: command_execution) for CWE-[78] (found in BenchmarkTest00007)
+  CWEs: [78] | From case: BenchmarkTest00007
+  Suggested pattern: `When analyzing `exec()` calls (sink type: command_execution), use get_taint_paths to check if any taint source flows into this sink. Also use get_cross_file_calls to trace the data across file boundaries.`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The prompt update is too narrowly scoped — it specifically mentions 'exec()' as the only sink, which is overfitting to BenchmarkTest00007. A proper agent prompt should cover the full range of command execution sinks in Java (Runtime.exec, ProcessBuilder, ProcessBuilder.command, etc.) and potentially other languages. The instruction to use get_taint_paths and get_cross_file_calls is good generic guidance, but the prompt should be generalized to cover all command execution APIs rather than just 'exec'. Also, this proposal overlaps significantly with P1's taint rules — ideally these should be coordinated.
+  Suggested modification: Generalize the prompt to: 'When analyzing command execution sinks (Runtime.exec(), ProcessBuilder.command(), ProcessBuilder.start(), and equivalent APIs), use get_taint_paths to trace whether any HTTP request input or user-controlled data flows into the command arguments. Use get_cross_file_calls to follow data through wrapper functions and service layers. Flag as CWE-78 when unsanitized user input reaches command execution sinks.'
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 covers OS command injection broadly, not just through exec(). The agent prompt should reflect the full scope of the CWE rather than a single API method from one test case.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[79] detection — case BenchmarkTest00030 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [79] | From case: BenchmarkTest00030
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[79].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The proposal's description says 'BenchmarkTest00030 has no regex-matchable APIs' which is contradicted by P2 which shows the case does use standard HttpServletRequest/Response APIs. The claim of needing 'deeper cross-file call graph' suggests the issue is actually the empty CPG infrastructure problem, not a lack of pattern-matchable APIs. The agent prompt guidance itself (use get_cross_file_calls and get_taint_paths for indirect paths) is generically useful but the framing is misleading. Additionally, this should be generalized beyond CWE-79 — the same graph traversal approach applies to all taint-based CWEs.
+  Suggested modification: Reframe as: 'For all injection-class CWEs (CWE-79, CWE-78, CWE-89, CWE-22, etc.), when direct API pattern matches are insufficient, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions, utility classes, and service layers. Look for indirect paths from HTTP request inputs to dangerous sinks. This is especially important when data flows through intermediate variables, string operations, or framework abstractions.' Remove the incorrect claim about no regex-matchable APIs in BenchmarkTest00030.
+  - [KB] cwe-families/cwe-families/cwe-families — The CWE family reference shows that injection vulnerabilities (CWE-79, CWE-78, etc.) share common taint-flow patterns. Graph traversal guidance should be generalized across the injection family, not narrowly scoped to one CWE from one test case.
+  - [MEMORY] failure :: Agent capability gap where functions are not found in analysis graph, indicating incomplete graph construction [cwe-121] — The root cause is likely the same empty CPG infrastructure issue documented in the knowledge base, not a fundamental limitation of pattern matching. The proposal should acknowledge this infrastructure prerequisite.
+- **[Agent Capability Gap] [ACCEPT]** Enhance agent graph traversal for CWE-[327] detection — case BenchmarkTest00019 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [327] | From case: BenchmarkTest00019
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[327].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal addresses a genuine gap in detection capability: when cryptographic APIs are wrapped in helper/utility functions, simple regex-based pattern matching fails. Cross-file call graph traversal and taint flow tracing are well-established, general-purpose techniques for detecting indirect use of weak cryptographic algorithms (CWE-327). The proposal is not overly specific to a single benchmark case — wrapper functions around crypto APIs are extremely common in real-world Java codebases (e.g., utility classes that centralize cipher creation). The approach of falling back to deeper analysis when surface-level patterns fail is a sound engineering practice that generalizes well.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology guidance supports deeper analysis techniques when surface-level detection is insufficient. Cross-file call graph and taint flow tracing align with standard vulnerability analysis methodology.
+  - [MEMORY] failure :: Agent capability gaps where functions or call paths are not found in the analysis graph indicate incomplete graph construction, requiring deeper traversal strategies. [cwe-327] — The fn-insights knowledge base documents a similar pattern where agent capability gaps led to missed detections due to incomplete graph traversal. The same class of problem (missing function in analysis graph) applies here — wrapper functions for crypto APIs need cross-file resolution to detect CWE-327.
+
+---
+
+## Cycle: owasp (2026-03-25 15:57 UTC)
+
+### Missed Cases (1 false negatives)
+
+- **BenchmarkTest00030**: Expected CWE-[79], detected CWE-[], missed CWE-[79]
+  ```
+  /**
+   * OWASP Benchmark v1.2
+   *
+   * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For
+   * details, please see <a
+  ```
+
+### Reviewed Improvement Proposals (2 total; 1 accepted, 1 rejected)
+
+- **[Taint Rule Gap] [ACCEPT]** Add comprehensive taint source and sink rules for Java servlet CWE-79 (Reflected XSS). Taint Source (HttpServletRequest_input): request.getParameter(), request.getParameterMap(), request.getParameterValues(), request.getHeader(), request.getHeaders(), request.getCookies(), request.getQueryString(), request.getInputStream(), request.getReader(), request.getPathInfo(), request.getRequestURI(). Taint Sink (HttpServletResponse_output): response.getWriter().write(), response.getWriter().print(), response.getWriter().println(), response.getWriter().printf(), response.getWriter().format(), response.getWriter().append(), response.getOutputStream().write(). The current cwe-families knowledge pack only lists response.getWriter().write() as the Java XSS sink, missing printf/print/println/format/append. This causes false negatives for cases like BenchmarkTest00030 where user input from request.getParameterMap().get() flows into response.getWriter().printf() with text/html content type. The cwe-families knowledge pack CWE-79 detection signals section should be updated to replace the single line 'response.getWriter().write() with unencoded user input in Java' with a comprehensive list covering all PrintWriter and ServletOutputStream output methods.
+  CWEs: [79] | From case: BenchmarkTest00030
+  Suggested pattern: `response\.getWriter\(\)\.(write|print|println|printf|format|append)\(|response\.getOutputStream\(\)\.write\(`
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE-79 section explicitly lists only 'response.getWriter().write() with unencoded user input in Java' as the Java detection signal, missing printf/print/println/format/append — this is the exact knowledge gap causing the false negative
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Lists 'XSS (CWE-79): reflecting user input in HTML without encoding' as a target for injection analysis, confirming the vulnerability class but lacking Java-specific sink enumeration
+  - [MEMORY] pattern :: CWE-79 Reflected XSS in Java servlet: recurring false negative where the knowledge base CWE-79 detection signals only list response.getWriter().write() but miss response.getWriter().printf(), .print(), .println(), .format(), .append() [cwe-79, xss, cross-site-scripting, java, servlet, response-getWriter, printf, taint-rule, recurring-failure] — 6+ prior cycles have independently identified this exact gap — the TAINT_RULE approach defining all PrintWriter methods as XSS sinks is the recommended fix path since AGENT_PROMPT proposals have not been deployed
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal addresses a genuine gap in sink coverage for CWE-79 detection. All listed PrintWriter methods (write, print, println, printf, format, append) and ServletOutputStream.write are legitimate standard Java API methods that can serve as XSS sinks when outputting unencoded user input to HTTP responses. The taint sources listed are all well-known HttpServletRequest input methods. This is not overfitting to a single test case — these APIs are universally used in real-world Java servlet applications. The regex pattern is general-purpose and covers the complete PrintWriter/ServletOutputStream API surface without being test-case-specific.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference confirms CWE-79 detection requires tracking user input to output sinks. The current knowledge pack only lists response.getWriter().write() as a Java XSS sink, which is incomplete. Expanding to cover all PrintWriter output methods is a natural and correct generalization of the existing detection signal.
+- **[Agent Capability Gap] [REJECT]** Enhance agent graph traversal for CWE-[79] detection — case BenchmarkTest00030 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [79] | From case: BenchmarkTest00030
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[79].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: This proposal contradicts P1's evidence: BenchmarkTest00030 does have regex-matchable APIs (request.getParameterMap().get() flowing to response.getWriter().printf()), and the real fix is expanding the sink pattern list as P1 proposes. The premise that 'no regex-matchable APIs' exist is incorrect. Furthermore, the prompt instruction is vague ('use get_cross_file_calls and get_taint_paths') and risks being applied too broadly, potentially causing false positives for CWE-79 by chasing indirect paths through unrelated wrapper functions. The specific problem this case exposes is a missing sink pattern, not a graph traversal deficiency.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The fn-insights entry discusses agent capability gaps where functions are missing from the analysis graph. However, in this case the issue is not a missing function in the graph but rather an incomplete pattern list for XSS sinks. The proposal misdiagnoses the root cause, which P1 correctly identifies as missing sink API coverage.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE-79 detection signals in the knowledge pack confirm that the standard approach uses direct API pattern matching for source-to-sink flows. The gap here is in the sink pattern list, not in graph traversal depth.
+
+---
+
+## Cycle: cyberseceval (2026-03-25 16:20 UTC)
+
+### Missed Cases (3 false negatives)
+
+- **cyberseceval_38_c**: Expected CWE-[119], detected CWE-[], missed CWE-[119]
+  ```
+  				return;
+  			} else {
+  				emp.id = id;			
+  			}			
+  		}
+  ```
+- **cyberseceval_3_c**: Expected CWE-[121], detected CWE-[], missed CWE-[121]
+  ```
+      int32_t failNum = fail;
+  
+      /* Make array from input params */
+  
+      UBool is_in[3];
+  ```
+- **cyberseceval_59_c**: Expected CWE-[328], detected CWE-[], missed CWE-[328]
+  ```
+  	EVP_add_cipher(EVP_aes_256_cbc());
+  	EVP_add_cipher(EVP_aes_128_gcm());
+  	EVP_add_cipher(EVP_aes_256_gcm());
+  	EVP_add_cipher(EVP_aes_128_cbc_hmac_sha1());
+  	EVP_add_cipher(EVP_aes_256_cbc_hmac_sha1());
+  ```
+
+### Reviewed Improvement Proposals (6 total; 5 accepted, 1 rejected)
+
+- **[Agent Capability Gap] [ACCEPT]** Add the following instruction to the vulnerability analysis agent's system prompt (the agent that performs LLM-based semantic analysis of source code snippets): "When analyzing C/C++ source code, flag calls to `scanf`, `fscanf`, or `sscanf` that use the `%s` format specifier WITHOUT a width limiter (e.g., `%49s`) when the destination argument is a fixed-size character array or a struct field of type `char[]`. This is CWE-119 (Improper Restriction of Operations within the Bounds of a Memory Buffer) because `%s` reads an unbounded string that can overflow the fixed-size destination buffer. The safe alternative is `%Ns` where N is the buffer size minus 1, or using `fgets()` instead. Example: `scanf("%s", buf)` where `buf` is `char buf[50]` — this is vulnerable. `scanf("%49s", buf)` — this is safe." This instruction belongs in the agent prompt because: (1) the regex pattern pipeline is confirmed broken for source-only files across 4+ cycles, (2) the LLM semantic analyzer is the only analysis component that can inspect raw source code when the CPG is empty, and (3) the `scanf %s` pattern is one of the most common real-world C buffer overflow patterns and generalizes far beyond this benchmark.
+  CWEs: [119] | From case: cyberseceval_38_c
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-119 family reference explicitly lists `scanf` with unbounded format specifiers as a detection signal for the memory safety family: "strcpy, strcat, sprintf, gets (no bounds checking)" — scanf with %s belongs in the same category of unbounded input functions
+  - [KB] cwe/CWE-119/CWE-119 Improper Restriction of Operations within the Bounds of a Memory Buffer — CWE-119 covers software performing operations on a memory buffer without restricting read/write to intended boundaries, which exactly describes scanf("%s") writing unbounded input into a fixed-size buffer
+  - [MEMORY] pattern :: CWE-119 buffer overflow via scanf("%s", &struct_field) in source-only C files, third+ confirmed cycle with empty CPG and broken pattern deployment pipeline [cwe-119, scanf, buffer-overflow, %s-format, source-code-only, empty-graph, pattern-deployment-gap, agent-prompt, recurring-failure, struct-field-overflow] — Durable memory confirms this is a recurring failure across 3+ prior cycles with the same root cause (empty CPG, broken regex pipeline), validating that AGENT_PROMPT is the correct fix approach since it bypasses the broken pattern deployment pipeline
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a well-scoped, highly generalizable prompt instruction. The `scanf("%s", buf)` pattern is one of the most classic and common real-world buffer overflow patterns in C code. The instruction is precise: it specifies the exact condition (no width limiter + fixed-size destination), provides the correct CWE mapping (CWE-119), and includes the safe alternative. It does not overfit to any specific benchmark case — this pattern appears in production code, CTF challenges, and security audits universally. The CWE-119 mapping is correct as the root cause is lack of bounds restriction on the memory buffer operation.
+  - [KB] cwe/CWE-119/CWE-119 Improper Restriction of Operations within the Bounds of a Memory Buffer — CWE-119 is the correct mapping for scanf %s without width limiter — it is an operation on a memory buffer without restricting to intended boundaries, which is exactly what unbounded %s does.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference confirms CWE-119 as the root of buffer-related vulnerabilities, and CWE-120 (Buffer Copy without Size Check) is a direct child — scanf %s is effectively a buffer copy without size check.
+- **[Agent Capability Gap] [REJECT]** Modify the vulnerability analysis agent's system prompt to include explicit CWE-121 detection guidance for C/C++ source code. Add the following instruction: "When analyzing C/C++ source code, flag stack-based buffer overflow risks (CWE-121) when you observe: (1) Fixed-size stack-allocated char arrays, especially small ones (under 32 bytes such as `char buf[5]`, `char tag[10]`, `char name[16]`), that are likely targets for string operations like strcpy, strcat, sprintf, gets, scanf with %s, or manual copy loops without bounds checking. (2) Multiple small stack buffers declared together in a function that processes external or variable-length data (e.g., parsing, protocol handling, resource loading). (3) Any stack buffer where the buffer size appears insufficient for the type of data it is intended to hold (e.g., a 5-byte buffer for string data that could reasonably exceed 4 characters). Even if the vulnerable write operation is not visible in the code snippet, flag the risk if the buffer declarations suggest high overflow potential due to their small size relative to typical usage patterns."
+  CWEs: [121] | From case: cyberseceval_3_c
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-121 (Stack-based Buffer Overflow) is explicitly documented as a child of CWE-119, with detection signals including 'Stack arrays with size from untrusted input' and 'strcpy, strcat, sprintf, gets (no bounds checking)'. This confirms the vulnerability class is well-defined and the agent needs explicit guidance to detect it in source-only contexts.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The fn-insights document explicitly identifies cyberseceval_3_c as having a known agent capability gap for CWE-121 detection, with prior accepted proposals recommending deeper analysis. This confirms the failure is recognized and the AGENT_PROMPT approach has been accepted as appropriate.
+  - [MEMORY] pattern :: CWE-120 buffer overflow via sprintf in source-only C code, pattern deployment pipeline broken across 7+ cycles [cwe-120, sprintf, buffer-overflow, source-code-only, empty-graph, agent-prompt, recurring-failure] — Establishes that source-only C files consistently have empty CPGs, and that the AGENT_PROMPT approach (instructing the LLM semantic analyzer directly) is the correct fix path since the pattern deployment pipeline from learned-patterns to the regex scanner is broken for source-only files. The same infrastructure limitation affects CWE-121 detection.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: This proposal instructs the agent to flag vulnerabilities based purely on buffer declarations without requiring evidence of an actual unsafe write operation. Criterion (3) — flagging buffers where 'the buffer size appears insufficient for the type of data it is intended to hold' — is speculative and would generate massive false positives in real-world code. Small stack buffers are extremely common in well-written C code (e.g., `char hex[3]` for a single hex byte conversion, `char digit[2]` for itoa). Flagging declarations alone without observing a concrete unsafe operation is not sound vulnerability analysis and overfits to a benchmark case where the snippet presumably only shows declarations.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-121 (Stack-based Buffer Overflow) requires an actual overflow to occur — a write beyond the buffer boundary. The CWE family reference describes it as a child of CWE-119 which requires that 'software performs operations on a memory buffer without properly restricting read/write.' Merely declaring a small buffer is not a vulnerability.
+  - [MEMORY] failure :: Function not found in analysis graph, indicating incomplete graph construction [cwe-121] — The fn-insights knowledge base notes that CWE-121 cases require deeper analysis including proper function extraction. The proposal bypasses proper analysis by flagging declarations alone, which is the wrong solution to the underlying problem of incomplete graph construction.
+- **[Pattern Gap] [ACCEPT]** Add regex pattern to detect OpenSSL EVP calls that instantiate cryptographically weak/broken hash algorithms (MD5, SHA-1, MD4, MD2). These are the C-language equivalent of Java's MessageDigest.getInstance("MD5") or Cipher.getInstance("SHA-1"). In real-world OpenSSL code, these functions are used when registering digest algorithms in SSL contexts, computing HMAC values, or signing/verifying data. Using them indicates CWE-327/328 weak cryptography. The pattern is specific enough to avoid false positives — these function names are unique to OpenSSL and always indicate weak hash instantiation. Additionally, CWE-328 should be mapped to the crypto_weakness semantic class in scoring.rs to ensure proper semantic class matching.
+  CWEs: [328, 327] | From case: cyberseceval_59_c
+  Suggested pattern: `\bEVP_(md5|sha1|md4|md2)\s*\(`
+  - [KB] knowledge-pack/cwe-families/cwe-families — KB explicitly documents CWE-328 under 'Cryptographic Weakness Family (Root: CWE-327)' as 'Reversible one-way hash (MD5, SHA-1 for passwords)' and lists MD5/SHA-1 as weak algorithms under CWE-327. This confirms the vulnerability class and that our detection framework should flag these algorithms.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — KB lists 'Weak algorithms (CWE-327): DES, RC4, MD5, SHA-1' under the Cryptography section, confirming MD5 and SHA-1 are canonically recognized as weak algorithms requiring detection.
+  - [KB] knowledge-pack/learned-patterns/learned-patterns — The existing learned pattern '\bEVP_\w+_ecb\b' for CWEs [323, 327] from cyberseceval_140_c demonstrates that EVP-prefixed OpenSSL function patterns are already accepted as valid detection signals. The proposed pattern extends this to cover weak digest algorithms (EVP_md5, EVP_sha1) which are an analogous weakness class.
+  - [KB] knowledge-pack/learned-patterns/learned-patterns — The Java pattern '\b(Cipher|KeyGenerator)\.getInstance\s*\(\s*"?(DES|DESede|RC2|RC4|Blowfish|RC5|MD5|SHA-1)' exists for CWE-327 but has no C/OpenSSL equivalent, confirming the language-specific coverage gap that needs filling.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a well-targeted, low-false-positive regex pattern. The OpenSSL EVP_md5(), EVP_sha1(), EVP_md4(), EVP_md2() functions are indeed the canonical way to instantiate weak hash algorithms in C/OpenSSL code and are extremely common in real-world codebases. The function names are unique to OpenSSL and unambiguously indicate weak hash usage. CWE-327/328 mapping is correct. The additional suggestion to map CWE-328 to the crypto_weakness semantic class is a sound architectural improvement. This generalizes well beyond any single benchmark case.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology supports pattern-based detection for well-known vulnerable API calls. OpenSSL EVP weak hash functions are canonical examples of APIs that always indicate weak cryptography usage.
+- **[Taint Rule Gap] [MODIFY]** Add taint source 'scanf' (type: stdin) for CWE-[119] detection (found in cyberseceval_38_c)
+  CWEs: [119] | From case: cyberseceval_38_c
+  Suggested pattern: `When you see `scanf()` calls, treat the return value as a taint source (type: stdin). Trace it through the call graph using get_taint_paths and get_cross_file_calls to find dangerous sinks.`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: LOW | Applicability: HIGH
+  Review reason: The core idea of treating scanf outputs as taint sources is sound and highly applicable to real-world code. However, the description is imprecise: scanf's return value is an integer count of matched items — it's the *destination arguments* (the pointer parameters after the format string) that should be treated as tainted, not the return value. This distinction matters for accurate taint tracking. Additionally, the taint rule should apply broadly to CWE-119 and its children (CWE-120, CWE-121, CWE-122, CWE-787) rather than only CWE-119.
+  Suggested modification: Correct the taint source definition: treat scanf/fscanf/sscanf *destination arguments* (the pointer parameters passed for %s, %d, etc.) as tainted data from stdin/file/string sources. Do not treat the return value as the taint source. Apply this taint source for detection of CWE-119 and all children (CWE-120, CWE-121, CWE-122, CWE-787).
+  - [KB] cwe/CWE-119/CWE-119 Improper Restriction of Operations within the Bounds of a Memory Buffer — CWE-119 encompasses buffer overflow from external input. scanf reading from stdin into a buffer is a classic taint source-to-sink pattern, but the tainted data is in the destination buffers, not the return value.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[121] detection — case cyberseceval_3_c has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [121] | From case: cyberseceval_3_c
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[121].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The general principle of using cross-file call graph traversal and taint flow tracing when surface-level patterns are absent is sound and generalizable. However, the proposal is too vague as written — it provides no concrete guidance on what to look for during traversal, what constitutes a dangerous sink for CWE-121 specifically, or how to prioritize paths. Without specificity, this instruction may not meaningfully change agent behavior. It also appears to be a fallback for the specific case where the graph was incomplete (per fn-insights), which is an infrastructure problem rather than an analysis logic problem.
+  Suggested modification: Make the instruction concrete: 'When no direct vulnerable API calls are found, use get_cross_file_calls to identify wrapper functions that may internally call strcpy, memcpy, sprintf, gets, or scanf. Use get_taint_paths to trace external input (network, file, stdin) through these wrappers to stack-allocated buffers. For CWE-121, the dangerous sinks are any write operations targeting stack-allocated buffers where the write length is not bounded by the buffer size.' Also, separately file a bug to investigate why the function graph is incomplete for these cases, as that is the root cause.
+  - [MEMORY] failure :: Function not found in the analysis graph, indicating incomplete graph construction or missing function extraction for this test case. [cwe-121] — The fn-insights knowledge base explicitly notes that CWE-121 cases fail because functions are absent from the analysis graph. This suggests the root cause is incomplete graph construction, not insufficient traversal logic. The proposal partially addresses the wrong problem.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-121 is stack-based buffer overflow, a child of CWE-119. Detection requires identifying both the stack buffer and the unbounded write — the proposal needs to specify both elements concretely.
+- **[Agent Capability Gap] [ACCEPT]** Enhance agent graph traversal for CWE-[328] detection — case cyberseceval_59_c has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [328] | From case: cyberseceval_59_c
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[328].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal addresses a genuine gap in detection methodology — when cryptographic operations (CWE-328: Use of Weak Hash) are wrapped in helper/wrapper functions, simple regex-based API matching fails. The approach of falling back to cross-file call graph traversal and taint flow tracing is a sound, general-purpose technique that applies broadly to real-world codebases where direct API calls are abstracted behind layers of indirection. This is not overfitting to a single case pattern but rather implementing a well-known static analysis strategy (inter-procedural analysis) that would benefit detection of many CWE families, not just CWE-328.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The knowledge base documents a similar pattern where functions are not found in the analysis graph (Agent Capability Gap), leading to missed detections. This proposal directly addresses that class of gap by enhancing graph traversal capabilities, which aligns with the documented failure mode of incomplete graph construction.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology guidance supports deeper analysis techniques. Using cross-file calls and taint paths is consistent with established vulnerability analysis methodology for cases where surface-level pattern matching is insufficient.
+  - [MEMORY] failure :: Function not found in analysis graph due to incomplete graph construction or missing function extraction — a recurring pattern when wrapper functions obscure direct API usage [cwe-328, cwe-121] — The documented failure pattern of missing functions in analysis graphs generalizes across CWE families. Enhancing traversal to follow indirect paths through wrappers is a broadly applicable fix, not a case-specific workaround.
+
+---
+
+## Cycle: juliet (2026-03-25 16:34 UTC)
+
+### Missed Cases (11 false negatives)
+
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_01**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_01.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-01.tmpl.c
+  */
+  ```
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_02**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_02.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-02.tmpl.c
+  */
+  ```
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_03**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_03.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-03.tmpl.c
+  */
+  ```
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_04**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_04.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-04.tmpl.c
+  */
+  ```
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_05**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_05.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-05.tmpl.c
+  */
+  ```
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_06**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_06.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-06.tmpl.c
+  */
+  ```
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_07**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_07.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-07.tmpl.c
+  */
+  ```
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_08**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_08.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-08.tmpl.c
+  */
+  ```
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_09**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_09.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-09.tmpl.c
+  */
+  ```
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_10**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_10.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-10.tmpl.c
+  */
+  ```
+
+### Reviewed Improvement Proposals (19 total; 11 accepted, 8 rejected)
+
+- **[CWE Mapping Gap] [ACCEPT]** Add CWE-427 (Uncontrolled Search Path Element) to scoring.rs with mapping to SemanticPatternClass::UntrustedSearchPath (or create this class if it doesn't exist). CWE-427 should be recognized as a distinct vulnerability class where untrusted input modifies environment variables that control executable search paths. This is related to but distinct from CWE-78 (OS Command Injection) — CWE-427 addresses the search path modification itself, while CWE-78 addresses the resulting command execution. The mapping enables the scoring system to recognize CWE-427 findings from the LLM semantic analyzer. Additionally, the vulnerability analysis agent prompt should include guidance for detecting CWE-427: when analyzing C/C++ code, identify calls to putenv(), _putenv(), or setenv() where the string argument contains PATH-related environment variables (PATH, LD_LIBRARY_PATH, LD_PRELOAD, CLASSPATH) and the value portion originates from untrusted input (network sockets via recv/recvfrom, file I/O, command-line arguments, or other external sources). The knowledge base's vuln-analysis-methodology already documents putenv("PATH=...") as an attack pattern under "Command Injection Through Indirection" but maps it only to CWE-78 — it should also reference CWE-427 for the path modification itself.
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_01
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The KB explicitly documents `putenv("PATH=...")` as a command injection indirection pattern and lists it under CWE-78 investigation approaches. This confirms the vulnerability pattern is known but not mapped to CWE-427. The KB states: "Environment modification: `putenv("PATH=...")` followed by `system("cmd")` — attacker controls search path". The CWE-427 mapping would capture the search path modification step specifically.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-427 is not listed in the CWE family reference at all, confirming it is a completely absent vulnerability class. The injection family section covers CWE-78 and CWE-89 but does not include search path manipulation, which is the root cause of this detection gap.
+  - [MEMORY] pattern :: CWE-78 OS Command Injection in Java servlet where user-controlled input flows into environment variables via Runtime.exec() argsEnv parameter [cwe-78, command-injection, environment-variables, argsEnv, taint-rule] — Prior memory documents the closely related pattern of attacker-controlled environment variables influencing command behavior via PATH manipulation. The same principle applies here — putenv() modifying PATH is the C equivalent of controlling Java's exec() environment array. Both are CWE-427 at the path modification level and CWE-78 at the command execution level.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: CWE-427 is a well-defined, distinct CWE that covers a real-world vulnerability class (uncontrolled search path elements). The proposal correctly distinguishes it from CWE-78 and provides a clear, generalizable mapping. The detection guidance covers multiple legitimate sources and sinks without being overly narrow. Adding this as a separate semantic class is architecturally sound since the search path modification vulnerability exists independently of whether command injection actually follows.
+  - [KB] kb source/cwe-families/cwe-families — The CWE family reference demonstrates how the system organizes CWE mappings hierarchically. CWE-427 is a legitimate, well-established CWE that represents a real vulnerability class distinct from CWE-78, warranting its own semantic class mapping.
+  - [KB] kb source/vuln-analysis-methodology/vuln-analysis-methodology — The methodology already documents putenv(PATH=...) patterns but only under CWE-78. Adding CWE-427 mapping is a natural extension that improves classification accuracy without breaking existing detections.
+- **[CWE Mapping Gap] [ACCEPT]** Add CWE-427 (Uncontrolled Search Path Element) to scoring.rs mapped to a new `untrusted_search_path` SemanticPatternClass. CWE-427 describes vulnerabilities where an attacker can modify elements of the search path (e.g., PATH, LD_LIBRARY_PATH) used to locate executables or libraries. The sink functions are `putenv()`, `_putenv()`, `setenv()`, and `_wputenv()` when the argument contains a path-related environment variable derived from untrusted input. Currently CWE-427 is entirely absent from the detection framework — it is not in the CWE knowledge base, the semantic class `untrusted_search_path` is not mapped, and `putenv`/`_putenv`/`setenv` are not recognized as dangerous sinks.
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_02
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The KB explicitly documents `putenv("PATH=...")` as a command injection through indirection pattern, confirming CWE-427 is a recognized vulnerability class that should be detectable. The methodology states "Environment modification: putenv('PATH=...') followed by system('cmd') — attacker controls search path."
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE families reference includes "Detection signals: LoadLibrary(), dlopen() with user-controlled path; Plugin systems loading from untrusted paths" which covers CWE-114 but omits the closely related CWE-427 pattern where environment variables (rather than explicit library paths) are poisoned. This confirms CWE-427 is in a gap between documented families.
+  - [MEMORY] pattern :: CWE-427 Uncontrolled Search Path Element detection failure in source-only C files. The vulnerability pattern: untrusted data from network socket flows into putenv/_putenv. CPG is empty. CWE-427 not in CWE knowledge base. Expected semantic class untrusted_search_path not mapped. [cwe-427, untrusted-search-path, putenv, setenv, environment-variable, taint-rule, cwe-mapping, first-instance] — First confirmed instance of CWE-427 detection failure, establishing that the entire untrusted_search_path semantic class is unmapped and the putenv sink is unrecognized.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is essentially the same proposal as P1 but from a different test case. It is well-scoped, correctly identifies the gap (CWE-427 absent from the framework), and the proposed mapping is generalizable. The inclusion of _wputenv for wide-char variants shows good real-world coverage. No overfitting concern since CWE-427 is a standard, broadly applicable vulnerability class.
+  - [KB] kb source/cwe-families/cwe-families — CWE-427 is a standard CWE that fits within the framework's existing pattern of mapping CWEs to semantic classes. The proposal adds a genuinely missing classification rather than overfitting to a specific test case.
+- **[Taint Rule Gap] [MODIFY]** Define environment-modifying functions as taint sinks for CWE-427 detection. Source = any untrusted input (recv, recvfrom, fgets, fread, getenv, argv, etc.); Sink = putenv/_putenv/setenv/_wputenv when the argument incorporates untrusted data into a path-controlling environment variable (e.g., PATH=, LD_LIBRARY_PATH=, LD_PRELOAD=). This covers the specific pattern in the Juliet test case where data received from a network socket via recv() is prepended with "PATH=" and passed to putenv(), allowing an attacker to control the search path for subsequent system()/exec() calls.
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_02
+  Suggested pattern: `\b(putenv|_putenv|setenv|_wputenv)\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The KB explicitly documents `putenv("PATH=...")` followed by `system("cmd")` as a recognized attack pattern under Command Injection Through Indirection, confirming putenv/setenv should be treated as dangerous sinks when processing untrusted input.
+  - [MEMORY] pattern :: CWE-427 Uncontrolled Search Path Element detection failure in source-only C files. The vulnerability pattern: untrusted data from network socket flows into putenv/_putenv. CPG is empty. CWE-427 not in CWE knowledge base. Expected semantic class untrusted_search_path not mapped. [cwe-427, untrusted-search-path, putenv, setenv, environment-variable, taint-rule, cwe-mapping, first-instance] — First confirmed instance of CWE-427 detection failure. Even if the CPG were populated, the framework has no taint rule recognizing putenv/setenv as sinks, so the data flow from recv() to putenv() would not be flagged.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: The taint rule itself is sound and generalizable — defining putenv/setenv family as sinks for untrusted input is correct. However, the regex pattern `\b(putenv|_putenv|setenv|_wputenv)\s*\(` alone cannot distinguish between path-controlling environment variables and other environment variable modifications. The proposal description mentions constraining to PATH-related variables, but the regex doesn't enforce this. Additionally, requiring that the argument 'incorporates untrusted data into a path-controlling environment variable' is a semantic check that a simple regex cannot perform. The rule should be accepted as a general sink definition but the description should clarify that the regex identifies candidate sinks, and semantic/taint analysis must confirm the PATH-controlling aspect.
+  Suggested modification: Keep the regex as a candidate sink identifier, but clarify that semantic analysis or taint tracking must verify: (1) the environment variable being set is a path-controlling variable (PATH, LD_LIBRARY_PATH, LD_PRELOAD, CLASSPATH, etc.), and (2) the value portion derives from untrusted input. The regex alone should flag all putenv/setenv calls for further analysis, not be the sole detection mechanism.
+  - [KB] kb source/vuln-analysis-methodology/vuln-analysis-methodology — The methodology already identifies putenv(PATH=...) as an attack pattern. A taint rule should leverage this by identifying putenv as a sink candidate, with semantic analysis confirming the PATH-controlling context.
+  - [MEMORY] insight :: Regex-only detection of complex semantic vulnerabilities risks both false positives (non-path env vars) and false negatives (indirect path construction) [cwe-427] — Pure regex matching of function calls without semantic context produces unreliable results for vulnerabilities that depend on argument content.
+- **[CWE Mapping Gap] [ACCEPT]** Add CWE-427 to the `untrusted_search_path` semantic class in scoring.rs. CWE-427 (Uncontrolled Search Path Element) covers vulnerabilities where an attacker can control elements of a search path (e.g., PATH, LD_LIBRARY_PATH) used by the application to locate executables or libraries. The mapping should be: `CWE-427 => SemanticPatternClass::UntrustedSearchPath`. Without this mapping, even if the vulnerability is detected by the LLM semantic analyzer, it cannot be scored correctly against the expected `untrusted_search_path` class.
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_03
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology KB explicitly documents "Environment modification: putenv('PATH=...') followed by system('cmd') — attacker controls search path" as a command injection through indirection pattern, confirming that putenv with untrusted input is a recognized vulnerability pattern that should be detected.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE families KB mentions "LoadLibrary(), dlopen() with user-controlled path" and "Plugin systems loading from untrusted paths" as detection signals, which are closely related to CWE-427's search path manipulation. CWE-427 belongs to this same vulnerability family but is not currently mapped.
+  - [MEMORY] pattern :: CWE-427 detection failure with empty CPG and missing CWE mapping for untrusted_search_path semantic class [cwe-427, untrusted-search-path, putenv, setenv, environment-variable, path-manipulation, empty-graph, source-code-not-ingested, cwe-mapping, taint-rule] — First instance of CWE-427 false negative confirms the entire vulnerability class is absent from detection — no CWE mapping, no sink definitions for putenv/setenv, and no agent guidance for environment variable manipulation vulnerabilities.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a focused, well-justified scoring mapping proposal. It correctly identifies that without the CWE-to-class mapping, detected vulnerabilities cannot be scored. The proposal is minimal, generalizable, and addresses a clear gap. It is essentially the same core request as P1 and P2 but more narrowly scoped to just the scoring mapping, which is appropriate.
+  - [KB] kb source/cwe-families/cwe-families — The CWE family reference demonstrates the system's approach to mapping CWEs to semantic classes. CWE-427 is a standard vulnerability class that warrants its own mapping for accurate scoring.
+- **[Taint Rule Gap] [MODIFY]** Define `putenv`, `_putenv`, and `setenv` as environment-manipulation sinks for CWE-427 when the argument is derived from untrusted input (network recv, file read, user input). The taint source is `recv()` (and similar network/file/user input functions) and the sink is `putenv()`/`_putenv()`/`setenv()`. This rule is needed so that the taint analysis engine can detect flows from untrusted data into environment variable setters that control search paths.
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_03
+  Suggested pattern: `\b(putenv|_putenv|setenv)\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology KB explicitly documents "Environment modification: putenv('PATH=...') followed by system('cmd') — attacker controls search path" as a command injection through indirection pattern, confirming that putenv with untrusted input is a recognized vulnerability pattern that should be detected.
+  - [MEMORY] pattern :: CWE-427 detection failure with empty CPG and missing CWE mapping for untrusted_search_path semantic class [cwe-427, untrusted-search-path, putenv, setenv, environment-variable, path-manipulation, empty-graph, source-code-not-ingested, cwe-mapping, taint-rule] — First instance of CWE-427 false negative confirms the entire vulnerability class is absent from detection — no CWE mapping, no sink definitions for putenv/setenv, and no agent guidance for environment variable manipulation vulnerabilities.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: Similar to P3, this taint rule is fundamentally sound but the regex `\b(putenv|_putenv|setenv)\s*\(` matches all calls to these functions regardless of whether the environment variable being set controls a search path. Real-world code frequently uses putenv/setenv for non-path variables (LANG, TZ, HOME, etc.), which would be false positives for CWE-427. The rule needs an additional constraint or a note that semantic analysis must verify the PATH-controlling nature of the variable. Also missing _wputenv which P3 includes.
+  Suggested modification: Add _wputenv to the regex for completeness. Document that this regex identifies candidate sinks only — taint analysis must additionally verify that the environment variable name corresponds to a search-path-controlling variable (PATH, LD_LIBRARY_PATH, LD_PRELOAD, CLASSPATH, DYLD_LIBRARY_PATH, etc.) and that the value portion is tainted. Updated regex: `\b(putenv|_putenv|_wputenv|setenv)\s*\(`
+  - [KB] kb source/vuln-analysis-methodology/vuln-analysis-methodology — The methodology documents putenv(PATH=...) specifically as an attack pattern, implying that the PATH-controlling context is essential to the vulnerability classification, not just the putenv call itself.
+  - [MEMORY] insight :: Sink identification regex should be paired with semantic constraints to avoid false positives in real-world code where environment variable setters are used for non-security-relevant variables [cwe-427] — Without semantic constraints on the environment variable name, the rule will flag benign setenv calls and produce excessive false positives in production codebases.
+- **[Agent Capability Gap] [ACCEPT]** Teach the vulnerability analysis agent (via AGENT_PROMPT or similar guidance mechanism) to recognize the pattern where untrusted data flows into environment variable setters such as putenv/setenv. The existing methodology knowledge pack already describes this pattern ('Environment modification: putenv("PATH=...") followed by system("cmd") — attacker controls search path') but the agent does not appear to apply it. The agent should be guided to check for recv()/read()/fgets() → putenv()/setenv() flows and flag them as CWE-427.
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_03
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology KB explicitly documents "Environment modification: putenv('PATH=...') followed by system('cmd') — attacker controls search path" as a command injection through indirection pattern, confirming that putenv with untrusted input is a recognized vulnerability pattern that should be detected.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE families KB mentions "LoadLibrary(), dlopen() with user-controlled path" and "Plugin systems loading from untrusted paths" as detection signals, which are closely related to CWE-427's search path manipulation. CWE-427 belongs to this same vulnerability family but is not currently mapped.
+  - [MEMORY] pattern :: CWE-427 detection failure with empty CPG and missing CWE mapping for untrusted_search_path semantic class [cwe-427, untrusted-search-path, putenv, setenv, environment-variable, path-manipulation, empty-graph, source-code-not-ingested, cwe-mapping, taint-rule] — First instance of CWE-427 false negative confirms the entire vulnerability class is absent from detection — no CWE mapping, no sink definitions for putenv/setenv, and no agent guidance for environment variable manipulation vulnerabilities.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal operationalizes existing knowledge-pack guidance that already documents the putenv/setenv pattern but isn't being applied. It targets a well-defined, real-world vulnerability pattern (untrusted input → environment variable modification) and is scoped to CWE-427 without over-generalizing. The guidance is generic enough to apply beyond Juliet test cases.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The knowledge pack already describes the pattern of putenv('PATH=...') followed by system('cmd') as a known vulnerability pattern, confirming this is a recognized real-world concern that the agent should detect.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-427 is a well-established CWE for uncontrolled search path elements, and the proposal correctly maps the taint flow pattern to this CWE.
+- **[Taint Rule Gap] [ACCEPT]** Add putenv, _putenv, and setenv as taint sinks for CWE-427 (Uncontrolled Search Path Element). These functions modify environment variables, and when the argument originates from untrusted input (network socket recv, file read, user input, etc.), it constitutes CWE-427. Specifically:
+- putenv / _putenv: type environment_variable_modification, CWE 427. The first (and only) argument is the taint-sensitive parameter (a string of the form "NAME=value" where an attacker controlling the value can manipulate PATH, LD_LIBRARY_PATH, LD_PRELOAD, etc.).
+- setenv: type environment_variable_modification, CWE 427. The second argument (value) is the taint-sensitive parameter.
+- Additionally required: Add CWE-427 → untrusted_search_path mapping in scoring.rs so the semantic class is properly scored.
+- All standard untrusted input sources (recv, recvfrom, fgets, fread, getenv, argv) already defined as taint sources should connect to these new sinks.
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_04
+  Suggested pattern: `\b(putenv|_putenv|setenv)\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology doc explicitly describes this exact pattern under "Command Injection Through Indirection": "Environment modification: putenv("PATH=...") followed by system("cmd") — attacker controls search path". This confirms putenv with untrusted input is a recognized, documented vulnerability pattern that our methodology already knows about but our taint rules don't implement.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The cwe-families doc lists "LoadLibrary(), dlopen() with user-controlled path" and "Plugin systems loading from untrusted paths" as detection signals, demonstrating the broader category of search path manipulation. CWE-427 (environment variable PATH manipulation via putenv) is the environment-variable variant of this same pattern family.
+  - [MEMORY] pattern :: CWE-78 command injection through environment variables — attacker-controlled environment variables can influence command behavior via PATH manipulation, LD_PRELOAD injection [cwe-78, command-injection, environment-variables, argsEnv] — Prior memory documents that environment variable manipulation is a recognized command injection vector. CWE-427 is the specific CWE for uncontrolled search path elements, which is the mechanism by which environment variable manipulation enables command injection. Adding putenv as a taint sink addresses both CWE-427 directly and the broader CWE-78 attack surface.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a well-structured taint rule proposal that correctly identifies the specific sink functions and their taint-sensitive parameters. putenv/setenv are legitimate sinks for CWE-427 in real-world code, not just Juliet benchmarks. The regex pattern is appropriately scoped and the argument-level specificity (e.g., second arg for setenv) reduces false positives. This complements P1 by providing the mechanistic detection rules.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology already recognizes environment modification via putenv as a vulnerability pattern, confirming these functions are valid taint sinks for CWE-427.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-427 is a recognized CWE in the family reference, and adding proper sink definitions for it follows established patterns for other CWE families like CWE-119's buffer operation sinks.
+- **[CWE Mapping Gap] [MODIFY]** Add CWE-427 (Uncontrolled Search Path Element) mapped to the `untrusted_search_path` SemanticPatternClass in scoring.rs. If `untrusted_search_path` doesn't exist as a SemanticPatternClass, it should be created. CWE-427 is about untrusted input being used to set environment variables (particularly PATH, LD_LIBRARY_PATH, etc.) that control where the system searches for executables and libraries. The primary sinks are `putenv()`, `_putenv()`, `setenv()`, and `_wputenv()`. The taint source is any external/untrusted input (network recv, file read, environment getenv, command-line args). Additionally, the vulnerability analysis agent prompt should be updated to recognize the pattern of untrusted data flowing into environment variable modification functions as a CWE-427 vulnerability. The knowledge pack vuln-analysis-methodology already documents this pattern under "Command Injection Through Indirection" (`putenv("PATH=...")` followed by `system("cmd")`), but the detection framework has no rules to operationalize this guidance.
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_05
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology explicitly documents "Environment modification: putenv('PATH=...') followed by system('cmd') — attacker controls search path" as a command injection through indirection pattern, confirming this is a recognized vulnerability class that the framework acknowledges but fails to detect.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-114 Process Control is documented with detection signals including "LoadLibrary(), dlopen() with user-controlled path" and "Plugin systems loading from untrusted paths" — CWE-427 is a sibling vulnerability class where untrusted input controls the search path for executables/libraries rather than directly specifying a library path. Both involve untrusted input controlling code loading, confirming this is part of a recognized vulnerability family.
+  - [MEMORY] pattern :: CWE-78 OS Command Injection involving environment variables in Java exec() — the argsEnv parameter as a CWE-78 sink because attacker-controlled environment variables influence command behavior via PATH manipulation [cwe-78, command-injection, environment-variables, argsEnv] — Prior analysis of CWE-78 already identified that attacker-controlled environment variables (including PATH) are a security concern that enables command injection through indirection. CWE-427 is the direct embodiment of this pattern — untrusted data flowing into putenv to set PATH.
+  Overfitting review: MODIFY | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal overlaps significantly with P1 (agent prompt) and P2 (taint rules). The CWE mapping portion (adding CWE-427 to scoring.rs) is necessary and complementary, but the rest duplicates P1 and P2. Should be scoped to only the scoring.rs mapping to avoid redundancy and confusion.
+  Suggested modification: Scope this proposal to only the CWE-427 → untrusted_search_path SemanticPatternClass mapping in scoring.rs. Remove the duplicated agent prompt guidance (covered by P1) and sink definitions (covered by P2). This ensures clean separation of concerns across the three proposals.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology documents the pattern but lacks operational scoring rules, confirming the CWE mapping portion of this proposal is needed. However, the agent prompt and sink portions duplicate P1 and P2.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[427] detection — case CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_01 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_01
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[427].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The core idea of using cross-file call graph and taint path tracing for indirect flows is sound and generalizable to real-world code where wrapper functions obscure dangerous sinks. However, the proposal is overly specific to a single Juliet case and the patch text is too vague to be actionable. It also largely duplicates P5. The guidance should be generalized and merged.
+  Suggested modification: Merge P4 and P5 into a single, generalized proposal: 'When direct API pattern matching fails for any taint-flow CWE (not just CWE-427), the agent should use get_cross_file_calls and get_taint_paths to trace data through wrapper/helper functions to reach known sinks.' Remove the case-specific references.
+  - [MEMORY] failure :: Function not found in analysis graph indicating incomplete graph construction [cwe-121] — The fn-insights knowledge documents a similar pattern where functions are absent from the analysis graph, suggesting that deeper graph traversal is a general need, not specific to CWE-427. This supports generalizing the proposal but also highlights that case-specific fixes risk overfitting.
+- **[Agent Capability Gap] [REJECT]** Enhance agent graph traversal for CWE-[427] detection — case CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_02 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_02
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[427].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: MEDIUM
+  Review reason: This is an exact duplicate of P4, differing only in the source case number (_01 vs _02). Both propose identical patch text and target the same CWE. Accepting both would create redundant guidance. P4 (with modifications) already covers this.
+  - [MEMORY] pattern :: Duplicate proposals targeting the same detection gap with identical remediation text indicate overfitting to individual test case variants rather than addressing the underlying systematic issue [cwe-427] — Two identical proposals for two sequential Juliet case variants (_01 and _02) is a clear sign of overfitting to benchmark case enumeration rather than addressing the root detection gap.
+
+---
+

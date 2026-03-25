@@ -1796,6 +1796,13 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "OpenSSL ECB mode cipher is insecure (preserves plaintext patterns); use CBC, GCM, or CTR mode",
         },
+        // OpenSSL weak hash detection (CWE-327/328 — from agentic cycle on CSE)
+        SourcePattern {
+            regex: r"\bEVP_(?:md5|sha1|md4|md2)\s*\(",
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "OpenSSL weak hash algorithm (MD5/SHA-1/MD4/MD2); use SHA-256 or SHA-3 for security purposes",
+        },
     ]
 }
 
