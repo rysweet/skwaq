@@ -6015,3 +6015,185 @@ These two rules together detect the general pattern: `HttpServletRequest.*input 
 
 ---
 
+## Cycle: juliet (2026-03-25 16:34 UTC)
+
+### Missed Cases (11 false negatives)
+
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_01**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_01.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-01.tmpl.c
+  */
+  ```
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_02**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_02.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-02.tmpl.c
+  */
+  ```
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_03**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_03.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-03.tmpl.c
+  */
+  ```
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_04**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_04.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-04.tmpl.c
+  */
+  ```
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_05**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_05.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-05.tmpl.c
+  */
+  ```
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_06**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_06.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-06.tmpl.c
+  */
+  ```
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_07**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_07.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-07.tmpl.c
+  */
+  ```
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_08**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_08.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-08.tmpl.c
+  */
+  ```
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_09**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_09.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-09.tmpl.c
+  */
+  ```
+- **CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_10**: Expected CWE-[427], detected CWE-[], missed CWE-[427]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_10.c
+  Label Definition File: CWE427_Uncontrolled_Search_Path_Element.label.xml
+  Template File: sources-sink-10.tmpl.c
+  */
+  ```
+
+### Reviewed Improvement Proposals (19 total; 11 accepted, 8 rejected)
+
+- **[CWE Mapping Gap] [ACCEPT]** Add CWE-427 (Uncontrolled Search Path Element) to scoring.rs with mapping to SemanticPatternClass::UntrustedSearchPath (or create this class if it doesn't exist). CWE-427 should be recognized as a distinct vulnerability class where untrusted input modifies environment variables that control executable search paths. This is related to but distinct from CWE-78 (OS Command Injection) — CWE-427 addresses the search path modification itself, while CWE-78 addresses the resulting command execution. The mapping enables the scoring system to recognize CWE-427 findings from the LLM semantic analyzer. Additionally, the vulnerability analysis agent prompt should include guidance for detecting CWE-427: when analyzing C/C++ code, identify calls to putenv(), _putenv(), or setenv() where the string argument contains PATH-related environment variables (PATH, LD_LIBRARY_PATH, LD_PRELOAD, CLASSPATH) and the value portion originates from untrusted input (network sockets via recv/recvfrom, file I/O, command-line arguments, or other external sources). The knowledge base's vuln-analysis-methodology already documents putenv("PATH=...") as an attack pattern under "Command Injection Through Indirection" but maps it only to CWE-78 — it should also reference CWE-427 for the path modification itself.
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_01
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The KB explicitly documents `putenv("PATH=...")` as a command injection indirection pattern and lists it under CWE-78 investigation approaches. This confirms the vulnerability pattern is known but not mapped to CWE-427. The KB states: "Environment modification: `putenv("PATH=...")` followed by `system("cmd")` — attacker controls search path". The CWE-427 mapping would capture the search path modification step specifically.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-427 is not listed in the CWE family reference at all, confirming it is a completely absent vulnerability class. The injection family section covers CWE-78 and CWE-89 but does not include search path manipulation, which is the root cause of this detection gap.
+  - [MEMORY] pattern :: CWE-78 OS Command Injection in Java servlet where user-controlled input flows into environment variables via Runtime.exec() argsEnv parameter [cwe-78, command-injection, environment-variables, argsEnv, taint-rule] — Prior memory documents the closely related pattern of attacker-controlled environment variables influencing command behavior via PATH manipulation. The same principle applies here — putenv() modifying PATH is the C equivalent of controlling Java's exec() environment array. Both are CWE-427 at the path modification level and CWE-78 at the command execution level.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: CWE-427 is a well-defined, distinct CWE that covers a real-world vulnerability class (uncontrolled search path elements). The proposal correctly distinguishes it from CWE-78 and provides a clear, generalizable mapping. The detection guidance covers multiple legitimate sources and sinks without being overly narrow. Adding this as a separate semantic class is architecturally sound since the search path modification vulnerability exists independently of whether command injection actually follows.
+  - [KB] kb source/cwe-families/cwe-families — The CWE family reference demonstrates how the system organizes CWE mappings hierarchically. CWE-427 is a legitimate, well-established CWE that represents a real vulnerability class distinct from CWE-78, warranting its own semantic class mapping.
+  - [KB] kb source/vuln-analysis-methodology/vuln-analysis-methodology — The methodology already documents putenv(PATH=...) patterns but only under CWE-78. Adding CWE-427 mapping is a natural extension that improves classification accuracy without breaking existing detections.
+- **[CWE Mapping Gap] [ACCEPT]** Add CWE-427 (Uncontrolled Search Path Element) to scoring.rs mapped to a new `untrusted_search_path` SemanticPatternClass. CWE-427 describes vulnerabilities where an attacker can modify elements of the search path (e.g., PATH, LD_LIBRARY_PATH) used to locate executables or libraries. The sink functions are `putenv()`, `_putenv()`, `setenv()`, and `_wputenv()` when the argument contains a path-related environment variable derived from untrusted input. Currently CWE-427 is entirely absent from the detection framework — it is not in the CWE knowledge base, the semantic class `untrusted_search_path` is not mapped, and `putenv`/`_putenv`/`setenv` are not recognized as dangerous sinks.
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_02
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The KB explicitly documents `putenv("PATH=...")` as a command injection through indirection pattern, confirming CWE-427 is a recognized vulnerability class that should be detectable. The methodology states "Environment modification: putenv('PATH=...') followed by system('cmd') — attacker controls search path."
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE families reference includes "Detection signals: LoadLibrary(), dlopen() with user-controlled path; Plugin systems loading from untrusted paths" which covers CWE-114 but omits the closely related CWE-427 pattern where environment variables (rather than explicit library paths) are poisoned. This confirms CWE-427 is in a gap between documented families.
+  - [MEMORY] pattern :: CWE-427 Uncontrolled Search Path Element detection failure in source-only C files. The vulnerability pattern: untrusted data from network socket flows into putenv/_putenv. CPG is empty. CWE-427 not in CWE knowledge base. Expected semantic class untrusted_search_path not mapped. [cwe-427, untrusted-search-path, putenv, setenv, environment-variable, taint-rule, cwe-mapping, first-instance] — First confirmed instance of CWE-427 detection failure, establishing that the entire untrusted_search_path semantic class is unmapped and the putenv sink is unrecognized.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is essentially the same proposal as P1 but from a different test case. It is well-scoped, correctly identifies the gap (CWE-427 absent from the framework), and the proposed mapping is generalizable. The inclusion of _wputenv for wide-char variants shows good real-world coverage. No overfitting concern since CWE-427 is a standard, broadly applicable vulnerability class.
+  - [KB] kb source/cwe-families/cwe-families — CWE-427 is a standard CWE that fits within the framework's existing pattern of mapping CWEs to semantic classes. The proposal adds a genuinely missing classification rather than overfitting to a specific test case.
+- **[Taint Rule Gap] [MODIFY]** Define environment-modifying functions as taint sinks for CWE-427 detection. Source = any untrusted input (recv, recvfrom, fgets, fread, getenv, argv, etc.); Sink = putenv/_putenv/setenv/_wputenv when the argument incorporates untrusted data into a path-controlling environment variable (e.g., PATH=, LD_LIBRARY_PATH=, LD_PRELOAD=). This covers the specific pattern in the Juliet test case where data received from a network socket via recv() is prepended with "PATH=" and passed to putenv(), allowing an attacker to control the search path for subsequent system()/exec() calls.
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_02
+  Suggested pattern: `\b(putenv|_putenv|setenv|_wputenv)\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The KB explicitly documents `putenv("PATH=...")` followed by `system("cmd")` as a recognized attack pattern under Command Injection Through Indirection, confirming putenv/setenv should be treated as dangerous sinks when processing untrusted input.
+  - [MEMORY] pattern :: CWE-427 Uncontrolled Search Path Element detection failure in source-only C files. The vulnerability pattern: untrusted data from network socket flows into putenv/_putenv. CPG is empty. CWE-427 not in CWE knowledge base. Expected semantic class untrusted_search_path not mapped. [cwe-427, untrusted-search-path, putenv, setenv, environment-variable, taint-rule, cwe-mapping, first-instance] — First confirmed instance of CWE-427 detection failure. Even if the CPG were populated, the framework has no taint rule recognizing putenv/setenv as sinks, so the data flow from recv() to putenv() would not be flagged.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: The taint rule itself is sound and generalizable — defining putenv/setenv family as sinks for untrusted input is correct. However, the regex pattern `\b(putenv|_putenv|setenv|_wputenv)\s*\(` alone cannot distinguish between path-controlling environment variables and other environment variable modifications. The proposal description mentions constraining to PATH-related variables, but the regex doesn't enforce this. Additionally, requiring that the argument 'incorporates untrusted data into a path-controlling environment variable' is a semantic check that a simple regex cannot perform. The rule should be accepted as a general sink definition but the description should clarify that the regex identifies candidate sinks, and semantic/taint analysis must confirm the PATH-controlling aspect.
+  Suggested modification: Keep the regex as a candidate sink identifier, but clarify that semantic analysis or taint tracking must verify: (1) the environment variable being set is a path-controlling variable (PATH, LD_LIBRARY_PATH, LD_PRELOAD, CLASSPATH, etc.), and (2) the value portion derives from untrusted input. The regex alone should flag all putenv/setenv calls for further analysis, not be the sole detection mechanism.
+  - [KB] kb source/vuln-analysis-methodology/vuln-analysis-methodology — The methodology already identifies putenv(PATH=...) as an attack pattern. A taint rule should leverage this by identifying putenv as a sink candidate, with semantic analysis confirming the PATH-controlling context.
+  - [MEMORY] insight :: Regex-only detection of complex semantic vulnerabilities risks both false positives (non-path env vars) and false negatives (indirect path construction) [cwe-427] — Pure regex matching of function calls without semantic context produces unreliable results for vulnerabilities that depend on argument content.
+- **[CWE Mapping Gap] [ACCEPT]** Add CWE-427 to the `untrusted_search_path` semantic class in scoring.rs. CWE-427 (Uncontrolled Search Path Element) covers vulnerabilities where an attacker can control elements of a search path (e.g., PATH, LD_LIBRARY_PATH) used by the application to locate executables or libraries. The mapping should be: `CWE-427 => SemanticPatternClass::UntrustedSearchPath`. Without this mapping, even if the vulnerability is detected by the LLM semantic analyzer, it cannot be scored correctly against the expected `untrusted_search_path` class.
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_03
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology KB explicitly documents "Environment modification: putenv('PATH=...') followed by system('cmd') — attacker controls search path" as a command injection through indirection pattern, confirming that putenv with untrusted input is a recognized vulnerability pattern that should be detected.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE families KB mentions "LoadLibrary(), dlopen() with user-controlled path" and "Plugin systems loading from untrusted paths" as detection signals, which are closely related to CWE-427's search path manipulation. CWE-427 belongs to this same vulnerability family but is not currently mapped.
+  - [MEMORY] pattern :: CWE-427 detection failure with empty CPG and missing CWE mapping for untrusted_search_path semantic class [cwe-427, untrusted-search-path, putenv, setenv, environment-variable, path-manipulation, empty-graph, source-code-not-ingested, cwe-mapping, taint-rule] — First instance of CWE-427 false negative confirms the entire vulnerability class is absent from detection — no CWE mapping, no sink definitions for putenv/setenv, and no agent guidance for environment variable manipulation vulnerabilities.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a focused, well-justified scoring mapping proposal. It correctly identifies that without the CWE-to-class mapping, detected vulnerabilities cannot be scored. The proposal is minimal, generalizable, and addresses a clear gap. It is essentially the same core request as P1 and P2 but more narrowly scoped to just the scoring mapping, which is appropriate.
+  - [KB] kb source/cwe-families/cwe-families — The CWE family reference demonstrates the system's approach to mapping CWEs to semantic classes. CWE-427 is a standard vulnerability class that warrants its own mapping for accurate scoring.
+- **[Taint Rule Gap] [MODIFY]** Define `putenv`, `_putenv`, and `setenv` as environment-manipulation sinks for CWE-427 when the argument is derived from untrusted input (network recv, file read, user input). The taint source is `recv()` (and similar network/file/user input functions) and the sink is `putenv()`/`_putenv()`/`setenv()`. This rule is needed so that the taint analysis engine can detect flows from untrusted data into environment variable setters that control search paths.
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_03
+  Suggested pattern: `\b(putenv|_putenv|setenv)\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology KB explicitly documents "Environment modification: putenv('PATH=...') followed by system('cmd') — attacker controls search path" as a command injection through indirection pattern, confirming that putenv with untrusted input is a recognized vulnerability pattern that should be detected.
+  - [MEMORY] pattern :: CWE-427 detection failure with empty CPG and missing CWE mapping for untrusted_search_path semantic class [cwe-427, untrusted-search-path, putenv, setenv, environment-variable, path-manipulation, empty-graph, source-code-not-ingested, cwe-mapping, taint-rule] — First instance of CWE-427 false negative confirms the entire vulnerability class is absent from detection — no CWE mapping, no sink definitions for putenv/setenv, and no agent guidance for environment variable manipulation vulnerabilities.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: Similar to P3, this taint rule is fundamentally sound but the regex `\b(putenv|_putenv|setenv)\s*\(` matches all calls to these functions regardless of whether the environment variable being set controls a search path. Real-world code frequently uses putenv/setenv for non-path variables (LANG, TZ, HOME, etc.), which would be false positives for CWE-427. The rule needs an additional constraint or a note that semantic analysis must verify the PATH-controlling nature of the variable. Also missing _wputenv which P3 includes.
+  Suggested modification: Add _wputenv to the regex for completeness. Document that this regex identifies candidate sinks only — taint analysis must additionally verify that the environment variable name corresponds to a search-path-controlling variable (PATH, LD_LIBRARY_PATH, LD_PRELOAD, CLASSPATH, DYLD_LIBRARY_PATH, etc.) and that the value portion is tainted. Updated regex: `\b(putenv|_putenv|_wputenv|setenv)\s*\(`
+  - [KB] kb source/vuln-analysis-methodology/vuln-analysis-methodology — The methodology documents putenv(PATH=...) specifically as an attack pattern, implying that the PATH-controlling context is essential to the vulnerability classification, not just the putenv call itself.
+  - [MEMORY] insight :: Sink identification regex should be paired with semantic constraints to avoid false positives in real-world code where environment variable setters are used for non-security-relevant variables [cwe-427] — Without semantic constraints on the environment variable name, the rule will flag benign setenv calls and produce excessive false positives in production codebases.
+- **[Agent Capability Gap] [ACCEPT]** Teach the vulnerability analysis agent (via AGENT_PROMPT or similar guidance mechanism) to recognize the pattern where untrusted data flows into environment variable setters such as putenv/setenv. The existing methodology knowledge pack already describes this pattern ('Environment modification: putenv("PATH=...") followed by system("cmd") — attacker controls search path') but the agent does not appear to apply it. The agent should be guided to check for recv()/read()/fgets() → putenv()/setenv() flows and flag them as CWE-427.
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_03
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology KB explicitly documents "Environment modification: putenv('PATH=...') followed by system('cmd') — attacker controls search path" as a command injection through indirection pattern, confirming that putenv with untrusted input is a recognized vulnerability pattern that should be detected.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE families KB mentions "LoadLibrary(), dlopen() with user-controlled path" and "Plugin systems loading from untrusted paths" as detection signals, which are closely related to CWE-427's search path manipulation. CWE-427 belongs to this same vulnerability family but is not currently mapped.
+  - [MEMORY] pattern :: CWE-427 detection failure with empty CPG and missing CWE mapping for untrusted_search_path semantic class [cwe-427, untrusted-search-path, putenv, setenv, environment-variable, path-manipulation, empty-graph, source-code-not-ingested, cwe-mapping, taint-rule] — First instance of CWE-427 false negative confirms the entire vulnerability class is absent from detection — no CWE mapping, no sink definitions for putenv/setenv, and no agent guidance for environment variable manipulation vulnerabilities.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal operationalizes existing knowledge-pack guidance that already documents the putenv/setenv pattern but isn't being applied. It targets a well-defined, real-world vulnerability pattern (untrusted input → environment variable modification) and is scoped to CWE-427 without over-generalizing. The guidance is generic enough to apply beyond Juliet test cases.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The knowledge pack already describes the pattern of putenv('PATH=...') followed by system('cmd') as a known vulnerability pattern, confirming this is a recognized real-world concern that the agent should detect.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-427 is a well-established CWE for uncontrolled search path elements, and the proposal correctly maps the taint flow pattern to this CWE.
+- **[Taint Rule Gap] [ACCEPT]** Add putenv, _putenv, and setenv as taint sinks for CWE-427 (Uncontrolled Search Path Element). These functions modify environment variables, and when the argument originates from untrusted input (network socket recv, file read, user input, etc.), it constitutes CWE-427. Specifically:
+- putenv / _putenv: type environment_variable_modification, CWE 427. The first (and only) argument is the taint-sensitive parameter (a string of the form "NAME=value" where an attacker controlling the value can manipulate PATH, LD_LIBRARY_PATH, LD_PRELOAD, etc.).
+- setenv: type environment_variable_modification, CWE 427. The second argument (value) is the taint-sensitive parameter.
+- Additionally required: Add CWE-427 → untrusted_search_path mapping in scoring.rs so the semantic class is properly scored.
+- All standard untrusted input sources (recv, recvfrom, fgets, fread, getenv, argv) already defined as taint sources should connect to these new sinks.
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_04
+  Suggested pattern: `\b(putenv|_putenv|setenv)\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology doc explicitly describes this exact pattern under "Command Injection Through Indirection": "Environment modification: putenv("PATH=...") followed by system("cmd") — attacker controls search path". This confirms putenv with untrusted input is a recognized, documented vulnerability pattern that our methodology already knows about but our taint rules don't implement.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The cwe-families doc lists "LoadLibrary(), dlopen() with user-controlled path" and "Plugin systems loading from untrusted paths" as detection signals, demonstrating the broader category of search path manipulation. CWE-427 (environment variable PATH manipulation via putenv) is the environment-variable variant of this same pattern family.
+  - [MEMORY] pattern :: CWE-78 command injection through environment variables — attacker-controlled environment variables can influence command behavior via PATH manipulation, LD_PRELOAD injection [cwe-78, command-injection, environment-variables, argsEnv] — Prior memory documents that environment variable manipulation is a recognized command injection vector. CWE-427 is the specific CWE for uncontrolled search path elements, which is the mechanism by which environment variable manipulation enables command injection. Adding putenv as a taint sink addresses both CWE-427 directly and the broader CWE-78 attack surface.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a well-structured taint rule proposal that correctly identifies the specific sink functions and their taint-sensitive parameters. putenv/setenv are legitimate sinks for CWE-427 in real-world code, not just Juliet benchmarks. The regex pattern is appropriately scoped and the argument-level specificity (e.g., second arg for setenv) reduces false positives. This complements P1 by providing the mechanistic detection rules.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology already recognizes environment modification via putenv as a vulnerability pattern, confirming these functions are valid taint sinks for CWE-427.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-427 is a recognized CWE in the family reference, and adding proper sink definitions for it follows established patterns for other CWE families like CWE-119's buffer operation sinks.
+- **[CWE Mapping Gap] [MODIFY]** Add CWE-427 (Uncontrolled Search Path Element) mapped to the `untrusted_search_path` SemanticPatternClass in scoring.rs. If `untrusted_search_path` doesn't exist as a SemanticPatternClass, it should be created. CWE-427 is about untrusted input being used to set environment variables (particularly PATH, LD_LIBRARY_PATH, etc.) that control where the system searches for executables and libraries. The primary sinks are `putenv()`, `_putenv()`, `setenv()`, and `_wputenv()`. The taint source is any external/untrusted input (network recv, file read, environment getenv, command-line args). Additionally, the vulnerability analysis agent prompt should be updated to recognize the pattern of untrusted data flowing into environment variable modification functions as a CWE-427 vulnerability. The knowledge pack vuln-analysis-methodology already documents this pattern under "Command Injection Through Indirection" (`putenv("PATH=...")` followed by `system("cmd")`), but the detection framework has no rules to operationalize this guidance.
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_05
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology explicitly documents "Environment modification: putenv('PATH=...') followed by system('cmd') — attacker controls search path" as a command injection through indirection pattern, confirming this is a recognized vulnerability class that the framework acknowledges but fails to detect.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-114 Process Control is documented with detection signals including "LoadLibrary(), dlopen() with user-controlled path" and "Plugin systems loading from untrusted paths" — CWE-427 is a sibling vulnerability class where untrusted input controls the search path for executables/libraries rather than directly specifying a library path. Both involve untrusted input controlling code loading, confirming this is part of a recognized vulnerability family.
+  - [MEMORY] pattern :: CWE-78 OS Command Injection involving environment variables in Java exec() — the argsEnv parameter as a CWE-78 sink because attacker-controlled environment variables influence command behavior via PATH manipulation [cwe-78, command-injection, environment-variables, argsEnv] — Prior analysis of CWE-78 already identified that attacker-controlled environment variables (including PATH) are a security concern that enables command injection through indirection. CWE-427 is the direct embodiment of this pattern — untrusted data flowing into putenv to set PATH.
+  Overfitting review: MODIFY | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal overlaps significantly with P1 (agent prompt) and P2 (taint rules). The CWE mapping portion (adding CWE-427 to scoring.rs) is necessary and complementary, but the rest duplicates P1 and P2. Should be scoped to only the scoring.rs mapping to avoid redundancy and confusion.
+  Suggested modification: Scope this proposal to only the CWE-427 → untrusted_search_path SemanticPatternClass mapping in scoring.rs. Remove the duplicated agent prompt guidance (covered by P1) and sink definitions (covered by P2). This ensures clean separation of concerns across the three proposals.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology documents the pattern but lacks operational scoring rules, confirming the CWE mapping portion of this proposal is needed. However, the agent prompt and sink portions duplicate P1 and P2.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[427] detection — case CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_01 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_01
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[427].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The core idea of using cross-file call graph and taint path tracing for indirect flows is sound and generalizable to real-world code where wrapper functions obscure dangerous sinks. However, the proposal is overly specific to a single Juliet case and the patch text is too vague to be actionable. It also largely duplicates P5. The guidance should be generalized and merged.
+  Suggested modification: Merge P4 and P5 into a single, generalized proposal: 'When direct API pattern matching fails for any taint-flow CWE (not just CWE-427), the agent should use get_cross_file_calls and get_taint_paths to trace data through wrapper/helper functions to reach known sinks.' Remove the case-specific references.
+  - [MEMORY] failure :: Function not found in analysis graph indicating incomplete graph construction [cwe-121] — The fn-insights knowledge documents a similar pattern where functions are absent from the analysis graph, suggesting that deeper graph traversal is a general need, not specific to CWE-427. This supports generalizing the proposal but also highlights that case-specific fixes risk overfitting.
+- **[Agent Capability Gap] [REJECT]** Enhance agent graph traversal for CWE-[427] detection — case CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_02 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [427] | From case: CWE427_Uncontrolled_Search_Path_Element__char_connect_socket_02
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[427].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: MEDIUM
+  Review reason: This is an exact duplicate of P4, differing only in the source case number (_01 vs _02). Both propose identical patch text and target the same CWE. Accepting both would create redundant guidance. P4 (with modifications) already covers this.
+  - [MEMORY] pattern :: Duplicate proposals targeting the same detection gap with identical remediation text indicate overfitting to individual test case variants rather than addressing the underlying systematic issue [cwe-427] — Two identical proposals for two sequential Juliet case variants (_01 and _02) is a clear sign of overfitting to benchmark case enumeration rather than addressing the root detection gap.
+
+---
+
