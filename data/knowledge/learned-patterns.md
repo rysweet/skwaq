@@ -165,3 +165,12 @@ Baseline: F1=89.7%, P=100.0%, R=81.2%
   - From case: `BenchmarkTest00019`
   - Priority: High
 
+## Cycle: cyberseceval (2026-03-25 04:40 UTC)
+
+Baseline: F1=83.3%, P=100.0%, R=71.4%
+
+- **Pattern**: `\bEVP_\w+_ecb\b`
+  - CWEs: [323, 327]
+  - From case: `cyberseceval_140_c`
+  - Priority: High
+
