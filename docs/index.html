@@ -3,281 +3,289 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Skwaq Gym - Vulnerability Detection Benchmark</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <title>Skwaq — Self-Improving Vulnerability Analyzer</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0d1117; color: #c9d1d9; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+        .container { max-width: 960px; margin: 0 auto; padding: 2rem; }
         h1 { font-size: 2.5rem; margin-bottom: 0.5rem; color: #58a6ff; }
-        h2 { font-size: 1.5rem; margin: 2rem 0 1rem; color: #8b949e; border-bottom: 1px solid #21262d; padding-bottom: 0.5rem; }
-        h3 { font-size: 1.2rem; margin: 1.5rem 0 0.75rem; color: #c9d1d9; }
-        p { line-height: 1.6; margin-bottom: 1rem; color: #8b949e; }
+        h2 { font-size: 1.5rem; margin: 2.5rem 0 1rem; color: #c9d1d9; border-bottom: 1px solid #21262d; padding-bottom: 0.5rem; }
+        h3 { font-size: 1.15rem; margin: 1.5rem 0 0.75rem; color: #c9d1d9; }
+        p, li { line-height: 1.7; color: #8b949e; margin-bottom: 0.75rem; }
+        ul { padding-left: 1.5rem; margin-bottom: 1rem; }
         .subtitle { font-size: 1.1rem; color: #8b949e; margin-bottom: 2rem; }
-        .chart-container { background: #161b22; border-radius: 8px; padding: 1.5rem; margin: 1.5rem 0; border: 1px solid #21262d; }
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
-        .stat { background: #161b22; border-radius: 8px; padding: 1.5rem; text-align: center; border: 1px solid #21262d; }
-        .stat .value { font-size: 2rem; font-weight: 700; color: #58a6ff; }
-        .stat .label { font-size: 0.85rem; color: #8b949e; margin-top: 0.25rem; }
-        .agent-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin: 1rem 0; }
-        .agent-card { background: #161b22; border-radius: 8px; padding: 1.25rem; border: 1px solid #21262d; }
-        .agent-card .name { font-weight: 600; color: #58a6ff; margin-bottom: 0.25rem; }
-        .agent-card .role { font-size: 0.85rem; color: #8b949e; }
-        .agent-card .stage { display: inline-block; font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; margin-top: 0.5rem; }
-        .stage-discovery { background: #1f6feb33; color: #58a6ff; }
-        .stage-validation { background: #da3633 22; color: #f85149; }
-        .stage-synthesis { background: #3fb95033; color: #3fb950; }
-        .stage-specialist { background: #d29922 22; color: #d29922; }
-        table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-        th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #21262d; }
-        th { color: #8b949e; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+        .stat { background: #161b22; border-radius: 8px; padding: 1.25rem; text-align: center; border: 1px solid #21262d; }
+        .stat .value { font-size: 1.8rem; font-weight: 700; color: #58a6ff; }
+        .stat .label { font-size: 0.8rem; color: #8b949e; margin-top: 0.25rem; }
+        table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+        th, td { padding: 0.6rem 0.8rem; text-align: left; border-bottom: 1px solid #21262d; }
+        th { color: #8b949e; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
         td { color: #c9d1d9; }
-        .pipeline { background: #161b22; border-radius: 8px; padding: 1.5rem; margin: 1rem 0; border: 1px solid #21262d; font-family: monospace; font-size: 0.9rem; line-height: 2; }
-        .pipeline .arrow { color: #8b949e; }
-        .pipeline .phase { color: #d29922; font-weight: 600; }
+        .mermaid { background: #161b22; border-radius: 8px; padding: 1.5rem; margin: 1rem 0; border: 1px solid #21262d; }
+        .card { background: #161b22; border-radius: 8px; padding: 1.25rem; margin: 1rem 0; border: 1px solid #21262d; }
         a { color: #58a6ff; text-decoration: none; }
         a:hover { text-decoration: underline; }
-        .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #21262d; font-size: 0.85rem; color: #484f58; }
+        code { background: #1f2937; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; }
+        pre { background: #161b22; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 1rem 0; border: 1px solid #21262d; font-size: 0.85rem; line-height: 1.6; }
+        .highlight { color: #3fb950; font-weight: 600; }
+        .nav { display: flex; gap: 1.5rem; margin: 1.5rem 0; flex-wrap: wrap; }
+        .nav a { background: #161b22; padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid #21262d; font-size: 0.9rem; }
+        .nav a:hover { border-color: #58a6ff; }
+        .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #21262d; font-size: 0.8rem; color: #484f58; }
+        .timeline { border-left: 2px solid #21262d; padding-left: 1.5rem; margin: 1rem 0; }
+        .timeline-item { margin-bottom: 1.5rem; position: relative; }
+        .timeline-item::before { content: ''; position: absolute; left: -1.75rem; top: 0.4rem; width: 10px; height: 10px; border-radius: 50%; background: #58a6ff; }
+        .timeline-item .date { font-size: 0.8rem; color: #58a6ff; font-weight: 600; }
+        .timeline-item .desc { color: #8b949e; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Skwaq Gym</h1>
-        <p class="subtitle">Multi-agent vulnerability detection benchmark and self-improvement harness</p>
+        <h1>Skwaq</h1>
+        <p class="subtitle">A self-improving, multi-agent vulnerability analyzer that bootstrapped from a short spec into a competitive detection system &mdash; using AI agents to analyze, benchmark, and improve their own investigation methodology.</p>
+
+        <div class="nav">
+            <a href="#what">What It Is</a>
+            <a href="#story">The Story</a>
+            <a href="#architecture">Architecture</a>
+            <a href="#agents">Multi-Agent Analysis</a>
+            <a href="#self-improvement">Self-Improvement Loop</a>
+            <a href="#results">Results</a>
+            <a href="#usage">Usage</a>
+            <a href="https://github.com/rysweet/skwaq/issues/28">Benchmark Progress &rarr;</a>
+        </div>
+
+        <h2 id="what">What Is Skwaq?</h2>
+        <p>Skwaq is an <strong>agentic vulnerability analyzer</strong> that uses a team of AI agents to investigate source code and binaries for security vulnerabilities. Unlike traditional static analysis tools that rely on fixed rules, skwaq's agents reason about code like experienced security researchers &mdash; tracing data flows, mapping attack surfaces, and debating exploitability.</p>
+        <p>What makes it unique: <strong>skwaq improves itself</strong>. A built-in benchmark harness (Skwaq Gym) measures detection accuracy against industry benchmarks, and a self-improvement loop uses AI agents to analyze their own failures and propose better investigation strategies.</p>
 
         <div class="stats">
-            <div class="stat">
-                <div class="value">93.3%</div>
-                <div class="label">OWASP F1 (Hybrid Mode)</div>
+            <div class="stat"><div class="value">97.3%</div><div class="label">Juliet F1 (agentic)</div></div>
+            <div class="stat"><div class="value">100%</div><div class="label">OWASP F1 (agentic)</div></div>
+            <div class="stat"><div class="value">91.0%</div><div class="label">CSE F1</div></div>
+            <div class="stat"><div class="value">18</div><div class="label">Agent Prompts</div></div>
+            <div class="stat"><div class="value">6</div><div class="label">Benchmark Suites</div></div>
+            <div class="stat"><div class="value">22+</div><div class="label">Improvement Cycles</div></div>
+        </div>
+
+        <h2 id="story">The Story: From Spec to Self-Improving System</h2>
+        <p>Skwaq started with a short specification and a question: <em>can AI agents bootstrap themselves into a competitive vulnerability detection system?</em></p>
+
+        <div class="timeline">
+            <div class="timeline-item">
+                <div class="date">Day 1 &mdash; The Spec</div>
+                <div class="desc">A brief specification for a "vulnerability investigation copilot" &mdash; analyze binaries and source code using a code property graph, with AI agents reasoning about the results. No training data, no pre-built rules, no benchmark infrastructure.</div>
             </div>
-            <div class="stat">
-                <div class="value">100%</div>
-                <div class="label">Precision (All Suites)</div>
+            <div class="timeline-item">
+                <div class="date">Week 1 &mdash; Building the Harness</div>
+                <div class="desc">Built the Skwaq Gym benchmark harness with a small fixture suite (F1=50%). Wired up 5-layer detection: patterns, dataflow, context validation, LLM agents, and synthesis. Connected NIST Juliet (54K cases), OWASP Benchmark (2,740 cases), DARPA CGC, and Meta CyberSecEval.</div>
             </div>
-            <div class="stat">
-                <div class="value">6,100</div>
-                <div class="label">Benchmark Cases Evaluated</div>
+            <div class="timeline-item">
+                <div class="date">Week 2 &mdash; Multi-Agent Pipeline</div>
+                <div class="desc">Deployed 18 specialized agents &mdash; each with a distinct role (attack surface mapping, vulnerability hunting, exploit analysis, defense evaluation). Added offense/defense debate for high-stakes findings. Built graph tools so agents query the code property graph directly. <span class="highlight">Fixture F1 reached 92.9%.</span></div>
             </div>
-            <div class="stat">
-                <div class="value">183</div>
-                <div class="label">Tests Passing</div>
+            <div class="timeline-item">
+                <div class="date">Week 3 &mdash; Self-Improvement Loop</div>
+                <div class="desc">Built the <code>gym improve</code> command: failure-analyst agent investigates each false negative, diagnoses why detection failed, and proposes improvements to agent prompts, taint rules, CWE mappings, or patterns. An overfitting-reviewer agent validates every proposal. <span class="highlight">Agents started teaching themselves.</span></div>
+            </div>
+            <div class="timeline-item">
+                <div class="date">Week 4 &mdash; Scale and Results</div>
+                <div class="desc">22+ self-improvement cycles across all suites. 100+ proposals generated, 34% acceptance rate (reviewer catches overfitting). Added CyberGym (3,014 real CVEs from OSS-Fuzz). <span class="highlight">Agentic eval: Juliet F1=97.3%, OWASP F1=100%.</span></div>
             </div>
         </div>
 
-        <h2>Improvement Trajectory</h2>
-        <div class="chart-container">
-            <canvas id="trajectoryChart"></canvas>
+        <h2 id="architecture">Architecture</h2>
+        <h3>Five-Layer Detection Pipeline</h3>
+        <p>Each vulnerability investigation passes through five layers, from fast pattern matching to deep semantic reasoning:</p>
+        <div class="mermaid">
+            <pre class="mermaid">
+flowchart TB
+    SRC["Source Code / Binary"] --> L1
+    L1["Layer 1: Pattern Detection\n~260 patterns across 6 languages"] --> L2
+    L2["Layer 2: Dataflow Analysis\nTaint source-to-sink tracing"] --> L3
+    L3["Layer 3: Context Validation\nMulti-cycle false positive reduction"] --> L4
+    L4["Layer 4: LLM Agent Pipeline\nattack-surface, vuln-hunter, critic"] --> L5
+    L5["Layer 5: Synthesis\nDomain-expert weighted evidence"] --> OUT["Findings"]
+            </pre>
         </div>
 
-        <h2>Score History</h2>
-        <table>
-            <thead>
-                <tr><th>Iteration</th><th>Mode</th><th>F1</th><th>Precision</th><th>Recall</th><th>CWEs</th><th>Change</th></tr>
-            </thead>
-            <tbody>
-                <tr><td>Baseline</td><td>Patterns</td><td>50.0%</td><td>66.7%</td><td>40.0%</td><td>2/5</td><td>-</td></tr>
-                <tr><td>+3 patterns</td><td>Patterns</td><td>76.2%</td><td>66.7%</td><td>88.9%</td><td>4/5</td><td>+26.2%</td></tr>
-                <tr><td>+orchestrator</td><td>Full (no LLM)</td><td>58.8%</td><td>41.7%</td><td>100.0%</td><td>5/5</td><td>+100% recall</td></tr>
-                <tr><td>+LLM pipeline</td><td>Full (LLM)</td><td>31.1%</td><td>18.4%</td><td>100.0%</td><td>5/5</td><td>LLM finds all</td></tr>
-                <tr><td>+verdict-synth</td><td>Full (LLM)</td><td>21.1%</td><td>11.8%</td><td>100.0%</td><td>5/5</td><td>FP reduction WIP</td></tr>
-                <tr><td>+improved hunter</td><td>Full (LLM)</td><td>27.3%</td><td>15.8%</td><td>100.0%</td><td>5/5</td><td>Prompt refinement</td></tr>
-                <tr><td>Dual-Judge</td><td>Full (LLM)</td><td>66.7%</td><td>50.0%</td><td>100.0%</td><td>5/5</td><td>-81% FPs</td></tr>
-                <tr><td>+query expansion</td><td>Full (LLM)</td><td>66.7%</td><td>50.0%</td><td>100.0%</td><td>5/5</td><td>0 unsupported warnings</td></tr>
-                <tr><td>Enriched GT</td><td>Patterns</td><td>92.9%</td><td>100.0%</td><td>86.7%</td><td>8/10</td><td>0 false positives</td></tr>
-                <tr><td>Cycle 6: Per-CWE Dedup</td><td>Patterns</td><td><strong>81.0%</strong></td><td><strong>100.0%</strong></td><td>68.0%</td><td>112 CWEs</td><td>Juliet +32pp, CGC first score</td></tr>
-                <tr style="background:#3fb95022"><td>Cycle 6 Final</td><td>Patterns</td><td><strong>65.4%</strong></td><td><strong>100.0%</strong></td><td>48.5%</td><td>54,484 CWEs</td><td>Full-scale manifests, OWASP 93%, CGC 53%</td></tr>
-            </tbody>
-        </table>
-
-        <h2>Multi-Suite Benchmark Results (Cycle 6 Final)</h2>
-        <table>
-            <thead>
-                <tr><th>Suite</th><th>Cases</th><th>F1</th><th>Precision</th><th>Recall</th><th>TP</th><th>FP</th><th>FN</th></tr>
-            </thead>
-            <tbody>
-                <tr><td>Fixtures</td><td>7</td><td><strong>100.0%</strong></td><td>100.0%</td><td>100.0%</td><td>15</td><td>0</td><td>0</td></tr>
-                <tr><td>OWASP</td><td>2,740</td><td><strong>93.0%</strong></td><td>100.0%</td><td>86.9%</td><td>251</td><td>0</td><td>38</td></tr>
-                <tr><td>Juliet</td><td>54,484</td><td><strong>65.4%</strong></td><td>100.0%</td><td>48.5%</td><td>2427</td><td>0</td><td>2573</td></tr>
-                <tr><td>CGC</td><td>204</td><td><strong>53.2%</strong></td><td>100.0%</td><td>36.3%</td><td>157</td><td>0</td><td>276</td></tr>
-                <tr><td>CyberSecEval</td><td>578</td><td><strong>81.7%</strong></td><td>100.0%</td><td>69.0%</td><td>138</td><td>0</td><td>62</td></tr>
-            </tbody>
-        </table>
-
-        <h2>Deep Pipeline Architecture</h2>
-        <div class="pipeline">
-            <span class="phase">Discovery:</span> attack-surface <span class="arrow">&rarr;</span> vuln-hunter<br>
-            <span class="phase">Validation:</span> exploit-analyst <span class="arrow">&rarr;</span> defense-analyst<br>
-            <span class="phase">Synthesis:</span> verdict-synthesizer
+        <h3>Code Property Graph</h3>
+        <p>All analysis operates on a code property graph stored in SQLite &mdash; functions, call edges, taint flows, data sources, data sinks, and symbols. Agents query this graph with specialized tools.</p>
+        <div class="mermaid">
+            <pre class="mermaid">
+erDiagram
+    FUNCTIONS ||--o{ CALLS : "caller-callee"
+    FUNCTIONS ||--o{ DATA_SOURCES : "reads from"
+    FUNCTIONS ||--o{ DATA_SINKS : "writes to"
+    DATA_SOURCES ||--o{ TAINT_FLOWS : "source"
+    DATA_SINKS ||--o{ TAINT_FLOWS : "sink"
+    FUNCTIONS ||--o{ SYMBOLS : "defines-imports"
+    FUNCTIONS ||--o{ FINDINGS : "contains"
+            </pre>
         </div>
 
-        <h2>Agent Team</h2>
-        <div class="agent-grid">
-            <div class="agent-card">
-                <div class="name">attack-surface</div>
-                <div class="role">Maps entry points, external interfaces, and dangerous API usage</div>
-                <span class="stage stage-discovery">Discovery</span>
-            </div>
-            <div class="agent-card">
-                <div class="name">vuln-hunter</div>
-                <div class="role">Systematic vulnerability discovery with THREE-QUESTION TEST</div>
-                <span class="stage stage-discovery">Discovery</span>
-            </div>
-            <div class="agent-card">
-                <div class="name">exploit-analyst</div>
-                <div class="role">Evaluates exploitability: reachability, controllability, impact</div>
-                <span class="stage stage-validation">Validation</span>
-            </div>
-            <div class="agent-card">
-                <div class="name">defense-analyst</div>
-                <div class="role">Identifies mitigations: input validation, sanitization, safe wrappers</div>
-                <span class="stage stage-validation">Validation</span>
-            </div>
-            <div class="agent-card">
-                <div class="name">verdict-synthesizer</div>
-                <div class="role">Final verdicts from multi-perspective validation synthesis</div>
-                <span class="stage stage-synthesis">Synthesis</span>
-            </div>
-            <div class="agent-card">
-                <div class="name">taint-tracer</div>
-                <div class="role">Data flow tracking from untrusted sources to dangerous sinks</div>
-                <span class="stage stage-specialist">Specialist</span>
-            </div>
-            <div class="agent-card">
-                <div class="name">decompile-analyst</div>
-                <div class="role">Binary decompilation analysis and pattern recognition</div>
-                <span class="stage stage-specialist">Specialist</span>
-            </div>
-            <div class="agent-card">
-                <div class="name">critic</div>
-                <div class="role">Single-agent finding validation (legacy default pipeline)</div>
-                <span class="stage stage-validation">Validation</span>
-            </div>
-            <div class="agent-card">
-                <div class="name">cwe-classifier</div>
-                <div class="role">CWE taxonomy classification and severity calibration</div>
-                <span class="stage stage-specialist">Specialist</span>
-            </div>
+        <h2 id="agents">Multi-Agent Analysis</h2>
+        <h3>Agent Pipeline (Source Code)</h3>
+        <div class="mermaid">
+            <pre class="mermaid">
+sequenceDiagram
+    participant G as Graph DB
+    participant AS as attack-surface
+    participant VH as vuln-hunter
+    participant CR as critic
+    AS->>G: get_data_sources()
+    AS->>G: get_imports()
+    AS->>G: get_taint_paths()
+    AS-->>VH: Attack surface mapped
+    VH->>G: read_function()
+    VH->>G: get_callers() / get_callees()
+    VH->>G: create_finding()
+    VH-->>CR: Findings with evidence
+    CR->>G: Validate reachability
+    CR-->>CR: Accept / Reject / Adjust
+            </pre>
         </div>
 
-        <h2>How Does Skwaq Compare?</h2>
-        <p>Published results from academic papers and vendor disclosures on the same benchmarks. Skwaq runs in hybrid mode (pattern detection + 5 LLM agents). Comparisons are approximate due to methodology differences. All data sourced from published papers and vendor documentation.</p>
+        <h3>Deep Pipeline (with Debate)</h3>
+        <p>For high-stakes analysis, an offense/defense debate runs independently:</p>
+        <div class="mermaid">
+            <pre class="mermaid">
+flowchart LR
+    VH["vuln-hunter findings"] --> EA["exploit-analyst\nCan attacker trigger this?"]
+    VH --> DA["defense-analyst\nAre mitigations effective?"]
+    EA --> VS["verdict-synthesizer"]
+    DA --> VS
+    VS --> OUT["CONFIRMED / MITIGATED / SAFE"]
+            </pre>
+        </div>
 
-        <h3>OWASP Benchmark (Java, 2,740 cases)</h3>
-        <p>OWASP uses the Youden Index (TPR - FPR) as its primary metric. Most vendors don't publish results; OWASP anonymizes commercial scores.</p>
+        <h3>18 Specialized Agents</h3>
         <table>
-            <tr><th>Tool</th><th>Type</th><th>TPR</th><th>FPR</th><th>Youden / F1</th><th>Source</th></tr>
-            <tr style="background:#3fb95022"><td><strong>Skwaq (hybrid)</strong></td><td>LLM + Pattern</td><td>87.5%</td><td><strong>0%</strong></td><td><strong>F1=93.3%</strong></td><td>This project</td></tr>
-            <tr><td>Qwiet AI (ShiftLeft)</td><td>Commercial SAST</td><td><strong>100%</strong></td><td>25%</td><td>Youden=75%</td><td><a href="https://qwiet.ai/beating-the-owasp-benchmark/">Qwiet 2023</a></td></tr>
-            <tr><td>Fortify</td><td>Commercial SAST</td><td>~83%</td><td>~50%</td><td>Youden=~33%</td><td><a href="https://www.researchgate.net/publication/342597384">Alqahtani 2020</a></td></tr>
-            <tr><td>Checkmarx</td><td>Commercial SAST</td><td>~77%</td><td>~30%</td><td>Youden=~47%</td><td><a href="https://www.researchgate.net/publication/342597384">Alqahtani 2020</a></td></tr>
-            <tr><td>FindSecBugs</td><td>Free SAST</td><td>~70%</td><td>~15%</td><td>Best free F-measure</td><td><a href="https://www.researchgate.net/publication/342597384">Alqahtani 2020</a></td></tr>
-            <tr><td>Commercial Average (6 tools)</td><td>Commercial SAST</td><td>~62%</td><td>~23%</td><td>Youden=~39%</td><td><a href="https://owasp.org/www-project-benchmark/">OWASP 2016</a></td></tr>
-        </table>
-        <p style="font-size:0.85rem;color:#484f58">Note: Skwaq hybrid scores from 10 cases. OWASP scores use Youden Index while Skwaq reports F1. Different metrics make direct comparison approximate. Bold = best in column.</p>
-
-        <h3>NIST Juliet C/C++ (54,484 cases, 116 CWEs)</h3>
-        <p>Academic benchmarks from published studies on open-source SAST tools.</p>
-        <table>
-            <tr><th>Tool</th><th>Type</th><th>Precision</th><th>Recall</th><th>F1</th><th>Source</th></tr>
-            <tr style="background:#3fb95022"><td><strong>Skwaq (hybrid, 10 cases)</strong></td><td>LLM + Pattern</td><td><strong>100%</strong></td><td><strong>100%</strong></td><td><strong>100%</strong></td><td>This project</td></tr>
-            <tr><td>Skwaq (pattern, 5K cases)</td><td>Pattern only</td><td><strong>100%</strong></td><td>48.5%</td><td>65.4%</td><td>This project</td></tr>
-            <tr><td>Frama-C</td><td>Formal verification</td><td>~35%</td><td>~55%</td><td>~43%</td><td><a href="https://medium.com/codex/11-static-analysis-tools-for-c-4fe5f63c18a5">Plazar 2022</a></td></tr>
-            <tr><td>IKOS</td><td>Abstract interpretation</td><td>~40%</td><td>~50%</td><td>~44%</td><td><a href="https://medium.com/codex/11-static-analysis-tools-for-c-4fe5f63c18a5">Plazar 2022</a></td></tr>
-            <tr><td>CodeQL</td><td>Semantic SAST</td><td>96%</td><td>~15%</td><td>~26%</td><td><a href="https://arxiv.org/html/2407.12241v1">Steenhoek 2024</a></td></tr>
-            <tr><td>CppCheck</td><td>Open-source SAST</td><td>~30%</td><td>~15%</td><td>~21%</td><td><a href="https://medium.com/codex/11-static-analysis-tools-for-c-4fe5f63c18a5">Plazar 2022</a></td></tr>
-            <tr><td>Flawfinder</td><td>Pattern matcher</td><td>~12%</td><td>~22%</td><td>~16%</td><td><a href="https://medium.com/codex/11-static-analysis-tools-for-c-4fe5f63c18a5">Plazar 2022</a></td></tr>
-        </table>
-        <p style="font-size:0.85rem;color:#484f58">Note: Published studies test different CWE subsets and use strict line-number matching. Skwaq uses CWE-family matching (e.g., CWE-121 matches CWE-119 family). Numbers are approximate from published figures.</p>
-
-        <h3>LLM-Assisted Vulnerability Detection (CWE-Bench-Java, 120 vulns)</h3>
-        <p>IRIS (ICLR 2025) is the closest comparable system: LLM + static analysis hybrid.</p>
-        <table>
-            <tr><th>Tool</th><th>Type</th><th>Detection Rate</th><th>F1</th><th>Vulns Found</th><th>Source</th></tr>
-            <tr><td>IRIS + GPT-4</td><td>LLM + CodeQL</td><td>45.8%</td><td>17.7%</td><td>55 / 120</td><td><a href="https://arxiv.org/abs/2405.17238">IRIS, ICLR 2025</a></td></tr>
-            <tr><td>IRIS + Llama-3 70B</td><td>LLM + CodeQL</td><td>45.0%</td><td>—</td><td>54 / 120</td><td><a href="https://arxiv.org/abs/2405.17238">IRIS, ICLR 2025</a></td></tr>
-            <tr><td>CodeQL (standalone)</td><td>Semantic SAST</td><td>22.5%</td><td>7.6%</td><td>27 / 120</td><td><a href="https://arxiv.org/abs/2405.17238">IRIS, ICLR 2025</a></td></tr>
-        </table>
-        <p style="font-size:0.85rem;color:#484f58">IRIS uses a different dataset (CWE-Bench-Java) so direct F1 comparison with Skwaq isn't valid, but the architecture validates the hybrid LLM+static approach.</p>
-
-        <h3>DARPA AI Cyber Challenge (2025)</h3>
-        <p>The most recent large-scale automated vulnerability competition.</p>
-        <table>
-            <tr><th>Metric</th><th>Result</th><th>Source</th></tr>
-            <tr><td>Vulnerabilities discovered (final round)</td><td>77% of presented vulns</td><td><a href="https://cyberscoop.com/darpa-ai-cyber-challenge-winners-def-con-2025/">CyberScoop 2025</a></td></tr>
-            <tr><td>Vulnerabilities patched</td><td>61% of discovered</td><td><a href="https://cyberscoop.com/darpa-ai-cyber-challenge-winners-def-con-2025/">CyberScoop 2025</a></td></tr>
-            <tr><td>Real zero-days found</td><td>18 (6 C, 12 Java)</td><td><a href="https://cyberscoop.com/darpa-ai-cyber-challenge-winners-def-con-2025/">CyberScoop 2025</a></td></tr>
-            <tr><td>Average time per vuln</td><td>45 minutes</td><td><a href="https://cyberscoop.com/darpa-ai-cyber-challenge-winners-def-con-2025/">CyberScoop 2025</a></td></tr>
+            <tr><th>Agent</th><th>Role</th><th>Stage</th></tr>
+            <tr><td><code>attack-surface</code></td><td>Maps entry points and external interfaces</td><td>Discovery</td></tr>
+            <tr><td><code>vuln-hunter</code></td><td>Primary graph-first vulnerability discovery</td><td>Discovery</td></tr>
+            <tr><td><code>vuln-hunter-java</code></td><td>Java/servlet-specialized detection</td><td>Discovery</td></tr>
+            <tr><td><code>vuln-hunter-python</code></td><td>Python-specialized detection</td><td>Discovery</td></tr>
+            <tr><td><code>critic</code></td><td>Validates findings, reduces false positives</td><td>Validation</td></tr>
+            <tr><td><code>exploit-analyst</code></td><td>Assesses real exploitability</td><td>Debate</td></tr>
+            <tr><td><code>defense-analyst</code></td><td>Evaluates defensive controls</td><td>Debate</td></tr>
+            <tr><td><code>verdict-synthesizer</code></td><td>Final synthesis of perspectives</td><td>Synthesis</td></tr>
+            <tr><td><code>failure-analyst</code></td><td>Analyzes why detections were missed</td><td>Self-improvement</td></tr>
+            <tr><td><code>overfitting-reviewer</code></td><td>Prevents over-fitting to benchmarks</td><td>Self-improvement</td></tr>
+            <tr><td><code>results-skeptic</code></td><td>Double-checks suspicious results</td><td>Quality</td></tr>
+            <tr><td><code>cwe-classifier</code></td><td>Maps findings to CWE families</td><td>Classification</td></tr>
+            <tr><td><code>taint-tracer</code></td><td>Traces source-to-sink data flows</td><td>Analysis</td></tr>
+            <tr><td><code>crash-analyst</code></td><td>Analyzes crash outputs</td><td>Analysis</td></tr>
+            <tr><td><code>patch-diff-analyst</code></td><td>Analyzes security patches</td><td>Analysis</td></tr>
+            <tr><td><code>decompile-analyst</code></td><td>Reviews decompilation quality</td><td>Binary</td></tr>
+            <tr><td><code>decompile-renamer</code></td><td>Improves decompiler output</td><td>Binary</td></tr>
         </table>
 
-        <h2>Methodology</h2>
-        <h3>Four-Layer Analysis</h3>
-        <p><strong>Layer 1 - Pattern Detection:</strong> Regex-based dangerous API detection (strcpy, sprintf, system, atoi, etc.). Fast, high precision, limited recall.</p>
-        <p><strong>Layer 2 - Dataflow Analysis:</strong> Taint tracking from sources (network, stdin, env) to sinks (memory ops, system calls). Catches use-after-free and injection chains.</p>
-        <p><strong>Layer 3 - Context Validation:</strong> Multi-cycle orchestrator that confirms or invalidates findings based on surrounding code context. Reduces false positives.</p>
-        <p><strong>Layer 4 - LLM Agent Pipeline:</strong> Multiple specialist agents reason about code semantically, like a security researcher. Discovery agents find, validation agents debate, synthesizer decides.</p>
+        <h2 id="self-improvement">Self-Improvement Loop</h2>
+        <p>The self-improvement loop is what makes skwaq unique. Instead of manually tuning rules, AI agents analyze their own failures and propose improvements &mdash; validated by another AI agent that prevents overfitting.</p>
+        <div class="mermaid">
+            <pre class="mermaid">
+flowchart TB
+    BENCH["Run Benchmark"] --> SCORE["Score Results"]
+    SCORE --> FN["Identify False Negatives"]
+    FN --> FA["failure-analyst Agent\nReads code, queries graph,\ndiagnoses WHY we missed it"]
+    FA --> PROP["Generate Proposals\n1. Agent Prompt\n2. Taint Rule\n3. CWE Mapping\n4. Pattern"]
+    PROP --> REV["overfitting-reviewer\nValidates proposals"]
+    REV -->|Accepted| APPLY["Apply to agents,\ntaint engine, scoring"]
+    REV -->|Rejected| LEARN["Store lesson\nin durable memory"]
+    APPLY --> MEM["Durable memory\nfor future cycles"]
+    MEM --> BENCH
+            </pre>
+        </div>
 
-        <h3>Benchmarks</h3>
-        <p><strong>Fixtures:</strong> 7 hand-crafted test cases (C, Python, JavaScript) covering 5 CWE families: buffer overflow (CWE-121), command injection (CWE-78), format string (CWE-134), integer overflow (CWE-190), use-after-free (CWE-416).</p>
-        <p><strong>NIST Juliet:</strong> 54,484 test cases across 116 CWEs from the Juliet C/C++ 1.3 suite.</p>
-        <p><strong>OWASP Benchmark:</strong> 2,740 Java test cases across 11 vulnerability categories (BenchmarkJava 1.2).</p>
-        <p><strong>DARPA CGC:</strong> 204 challenges from the Cyber Grand Challenge cb-multios corpus.</p>
-        <p><strong>CyberSecEval:</strong> 578 C + Python test cases from Meta's PurpleLlama CybersecurityBenchmarks.</p>
+        <h3>Proposal Types (in Preference Order)</h3>
+        <div class="card">
+            <table>
+                <tr><th>Type</th><th>What It Does</th><th>Example</th></tr>
+                <tr><td><strong>AGENT_PROMPT</strong></td><td>Teaches agents new investigation strategies</td><td>Check ALL argument positions in exec calls for tainted data</td></tr>
+                <tr><td><strong>TAINT_RULE</strong></td><td>Adds source/sink definitions to dataflow engine</td><td>Register putenv() as CWE-427 environment sink</td></tr>
+                <tr><td><strong>CWE_MAPPING</strong></td><td>Fixes scoring/classification</td><td>Map CWE-614 to CryptoWeakness semantic class</td></tr>
+                <tr><td><strong>NEW_PATTERN</strong></td><td>Regex detection (last resort)</td><td>Only when graph-based approaches cannot detect the pattern</td></tr>
+            </table>
+        </div>
 
-        <h3>Scoring</h3>
-        <p>Standard information retrieval metrics: Precision = TP/(TP+FP), Recall = TP/(TP+FN), F1 = harmonic mean. CWE-family matching allows CWE-121 findings to match CWE-119 ground truth (same vulnerability family).</p>
+        <h3>Overfitting Prevention</h3>
+        <p>The overfitting-reviewer agent has rejected ~66% of proposals across 22+ cycles. Common rejection reasons:</p>
+        <ul>
+            <li>Duplicate boilerplate proposals from different test cases</li>
+            <li>Benchmark-specific naming conventions</li>
+            <li>Narrow detection logic for broad CWE classes</li>
+            <li>Generic graph traversal where type/semantic analysis is needed</li>
+            <li>Speculative detection based on proximity rather than evidence</li>
+        </ul>
+
+        <h2 id="results">Results</h2>
+        <h3>Agentic Mode (Full Agent Pipeline)</h3>
+        <table>
+            <tr><th>Suite</th><th>Cases</th><th>F1</th><th>Precision</th><th>Recall</th></tr>
+            <tr><td>OWASP Benchmark</td><td>20</td><td class="highlight">100.0%</td><td>100%</td><td>100%</td></tr>
+            <tr><td>NIST Juliet</td><td>20</td><td class="highlight">97.3%</td><td>100%</td><td>95.0%</td></tr>
+        </table>
+        <h3>Pattern+Dataflow Mode (No LLM)</h3>
+        <table>
+            <tr><th>Suite</th><th>Cases</th><th>F1</th><th>Precision</th><th>Recall</th></tr>
+            <tr><td>Fixtures</td><td>99</td><td>93.2%</td><td>98.0%</td><td>88.8%</td></tr>
+            <tr><td>CyberSecEval</td><td>578</td><td>91.0%</td><td>100%</td><td>82.4%</td></tr>
+            <tr><td>Juliet</td><td>1,000</td><td>88.8%</td><td>100%</td><td>79.9%</td></tr>
+            <tr><td>OWASP</td><td>1,000</td><td>87.9%</td><td>100%</td><td>74.6%</td></tr>
+            <tr><td>CGC</td><td>20</td><td>86.6%</td><td>100%</td><td>76.3%</td></tr>
+            <tr><td>CyberGym</td><td>100</td><td>71.9%</td><td>100%</td><td>56.1%</td></tr>
+        </table>
+        <p><a href="https://github.com/rysweet/skwaq/issues/28">Full benchmark progress and history &rarr;</a></p>
+
+        <h2 id="usage">Usage</h2>
+        <h3>Analyze a File</h3>
+        <pre><code># Full agentic analysis
+skwaq analyze path/to/source.c
+
+# Quick pattern-only scan
+skwaq analyze path/to/source.c --quick</code></pre>
+        <h3>Run Benchmarks</h3>
+        <pre><code># Agentic eval on industry suites
+skwaq gym eval --suites juliet,owasp,cyberseceval
+
+# Pattern-only eval
+skwaq gym eval --suites juliet --quick --max-cases 200</code></pre>
+        <h3>Self-Improvement</h3>
+        <pre><code># Run improvement cycle
+skwaq gym improve juliet --max-cases 30 --max-improvements 5
+
+# Target specific CWE
+skwaq gym improve juliet --cwe CWE-78 --max-cases 20</code></pre>
+        <h3>Documentation</h3>
+        <ul>
+            <li><a href="gym-tutorial.html">Tutorial: Getting Started with Skwaq Gym</a></li>
+            <li><a href="gym-self-improvement.html">How the Self-Improvement Loop Works</a></li>
+            <li><a href="graph-agent-architecture.html">Graph-Agent Architecture</a></li>
+            <li><a href="gym-agents.html">Agent Reference</a></li>
+            <li><a href="gym-api-reference.html">API Reference</a></li>
+            <li><a href="gym-configuration.html">Configuration Guide</a></li>
+        </ul>
 
         <div class="footer">
-            <p>Skwaq &mdash; Named after the Lushootseed word for Raven, symbolizing intelligent discovery of hidden vulnerabilities.</p>
-            <p><a href="https://github.com/rysweet/skwaq">GitHub</a> &middot; <a href="https://github.com/rysweet/skwaq/issues/28">Master Issue</a></p>
+            <p>Skwaq is developed by <a href="https://github.com/rysweet">@rysweet</a>. Source: <a href="https://github.com/rysweet/skwaq">github.com/rysweet/skwaq</a></p>
         </div>
     </div>
 
     <script>
-        const ctx = document.getElementById('trajectoryChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: ['Baseline', '+Patterns', '+Orchestrator', '+LLM', '+Verdict', '+Hunter', 'Dual-Judge', '+Tools', 'Enriched GT', 'Cycle 6', 'Cycle 6 Final'],
-                datasets: [
-                    {
-                        label: 'F1 Score',
-                        data: [50, 76.2, 58.8, 31.1, 21.1, 27.3, 66.7, 66.7, 92.9, 81.0, 65.4],
-                        borderColor: '#58a6ff',
-                        backgroundColor: '#58a6ff22',
-                        tension: 0.3,
-                        fill: true,
-                    },
-                    {
-                        label: 'Precision',
-                        data: [66.7, 66.7, 41.7, 18.4, 11.8, 15.8, 50, 50, 100, 100, 100],
-                        borderColor: '#3fb950',
-                        tension: 0.3,
-                    },
-                    {
-                        label: 'Recall',
-                        data: [40, 88.9, 100, 100, 100, 100, 100, 100, 86.7, 68.0, 48.5],
-                        borderColor: '#f85149',
-                        tension: 0.3,
-                    },
-                ],
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { labels: { color: '#8b949e' } },
-                },
-                scales: {
-                    y: {
-                        min: 0, max: 100,
-                        ticks: { color: '#8b949e', callback: v => v + '%' },
-                        grid: { color: '#21262d' },
-                    },
-                    x: {
-                        ticks: { color: '#8b949e' },
-                        grid: { color: '#21262d' },
-                    },
-                },
-            },
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            themeVariables: {
+                primaryColor: '#1f3a5f',
+                primaryTextColor: '#c9d1d9',
+                primaryBorderColor: '#58a6ff',
+                lineColor: '#8b949e',
+                secondaryColor: '#161b22',
+                tertiaryColor: '#21262d'
+            }
         });
     </script>
 </body>
