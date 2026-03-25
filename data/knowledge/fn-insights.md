@@ -5370,3 +5370,41 @@ This guidance should be added to the agent's prompt as a general-purpose Java co
 
 ---
 
+## Cycle: juliet (2026-03-25 04:22 UTC)
+
+### Missed Cases (1 false negatives)
+
+- **CWE78_OS_Command_Injection__char_connect_socket_execl_22b**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE78_OS_Command_Injection__char_connect_socket_execl_22b.c
+  Label Definition File: CWE78_OS_Command_Injection.strings.label.xml
+  Template File: sources-sink-22b.tmpl.c
+  */
+  ```
+
+### Reviewed Improvement Proposals (2 total; 2 accepted, 0 rejected)
+
+- **[Taint Rule Gap] [ACCEPT]** Add the full POSIX exec family as CWE-78 command execution sinks in the taint framework. Register the following functions as taint sinks for OS command injection: execl, execlp, execle, execv, execvp, execvpe, fexecve. For these functions, any argument (not just the first) should be considered a sensitive parameter, since user-controlled data in any argument position to exec-family functions constitutes command injection. The taint source side (recv, recvfrom, read on socket descriptors) already exists as network input sources. Sink rule: Sink name: exec_family_command_execution, Sink type: command_injection, Functions: execl, execlp, execle, execv, execvp, execvpe, fexecve, CWE: 78, Argument positions: all (any tainted argument triggers the finding). This complements existing sinks for system() and popen() and covers the 'Command Injection Through Indirection' pattern already documented in the methodology knowledge pack.
+  CWEs: [78] | From case: CWE78_OS_Command_Injection__char_connect_socket_execl_22b
+  Suggested pattern: `\b(execl|execlp|execle|execv|execvp|execvpe|fexecve)\s*\(`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology explicitly documents 'Command Injection Through Indirection (CWE-78)' noting 'Spawn family: _spawnv, execlp etc. — user input may be in argv[2], not the command' and 'Use get_data_sources() to find all external inputs, then get_taint_paths() to check if ANY reach an execution function in ANY argument position.' This confirms execl/execlp should be treated as CWE-78 sinks with all argument positions sensitive.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-78 detection signals listed include 'system(), popen(), exec*() with string from untrusted source' — the exec*() wildcard explicitly covers execl but the taint framework needs explicit sink registrations for each function variant to actually detect the pattern.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 covers OS command injection where user input reaches command execution functions without sanitization. The execl family directly executes programs with user-supplied arguments, making them primary sinks for this CWE.
+  - [MEMORY] pattern :: CWE-78 command injection with empty CPG and exec-family sinks not registered [cwe-78, command-injection, execl, exec-family, recv, socket, network-source, cross-file-taint, empty-graph, source-code-not-ingested, taint-rule] — Confirmed that the CPG is completely empty for source-only C files (a known systemic issue across many CWE families), and that the exec family needs explicit sink registration to detect command injection through indirect execution paths.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: The POSIX exec family functions are well-established, standard OS command execution sinks that are universally recognized in real-world vulnerability analysis. Adding them as CWE-78 sinks is not overfitting to a specific Juliet test case — these functions are used extensively in production code and are documented in every major SAST tool's sink database. The regex pattern is clean and matches standard function call syntax. Treating all argument positions as sensitive is correct because exec-family functions can be exploited through argv manipulation, not just the program path (arg 0). This is a legitimate gap in the existing sink coverage.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 explicitly covers OS command injection, and the exec family of functions are canonical examples of command execution APIs that should be monitored for tainted input. This is a standard, well-documented vulnerability class.
+  - [MEMORY] insight :: exec-family functions are standard POSIX APIs present in virtually all C/C++ codebases that interact with the OS. Adding them as sinks generalizes well beyond Juliet test cases to real-world command injection detection. [cwe-78] — The exec family is a fundamental set of OS command execution primitives; their absence from sink rules represents a genuine coverage gap rather than a Juliet-specific issue.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[78] detection — case CWE78_OS_Command_Injection__char_connect_socket_execl_22b has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [78] | From case: CWE78_OS_Command_Injection__char_connect_socket_execl_22b
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[78].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The proposal's premise is partially incorrect — the exec-family APIs ARE regex-matchable (as demonstrated by P1's regex pattern). The claim that 'no regex-matchable APIs' exist in this case is inaccurate. However, the general guidance to use cross-file call graph traversal and taint path tracing for CWE-78 detection IS valuable and applicable to real-world scenarios where command execution happens through wrapper functions or indirect calls. The proposal should be reframed to not claim the absence of regex-matchable patterns but instead to serve as a complementary depth strategy for cases where direct API calls are wrapped or aliased.
+  Suggested modification: Reframe the prompt enhancement to: 'When direct sink API patterns (e.g., exec-family, system, popen) are not found at the immediate call site, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions and indirect call chains. This is especially important for CWE-78 detection where command execution may be abstracted behind helper functions.' Remove the incorrect claim that the specific case has no regex-matchable APIs.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 command injection can occur through direct or indirect paths to exec sinks. The proposal's general approach of deeper traversal is sound, but the justification based on the specific Juliet case is flawed since execl IS regex-matchable.
+  - [MEMORY] failure :: Agent capability gaps in graph construction have been observed (e.g., CWE121 function not found in analysis graph). Cross-file traversal guidance can help, but proposals must accurately characterize the detection gap they aim to fill. [cwe-78] — Previous failures show that graph incompleteness is a real issue, but the proposed fix should correctly identify the root cause rather than mischaracterizing what is and isn't pattern-matchable.
+
+---
+
