@@ -162,3 +162,5 @@ When standard API patterns are not found, use get_cross_file_calls and get_taint
 When analyzing `exec()` calls (sink type: command_execution), use get_taint_paths to check if any taint source flows into this sink. Also use get_cross_file_calls to trace the data across file boundaries.
 
 When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[79].
+
+When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[188].
