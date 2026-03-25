@@ -4757,3 +4757,177 @@ When analyzing Java servlet/web application source code, check for the following
 
 ---
 
+## Cycle: juliet (2026-03-25 01:17 UTC)
+
+### Missed Cases (22 false negatives)
+
+- **CWE457_Use_of_Uninitialized_Variable__char_pointer_01**: Expected CWE-[457], detected CWE-[], missed CWE-[457]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE457_Use_of_Uninitialized_Variable__char_pointer_01.c
+  Label Definition File: CWE457_Use_of_Uninitialized_Variable.c.label.xml
+  Template File: sources-sinks-01.tmpl.c
+  */
+  ```
+- **CWE457_Use_of_Uninitialized_Variable__char_pointer_02**: Expected CWE-[457], detected CWE-[], missed CWE-[457]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE457_Use_of_Uninitialized_Variable__char_pointer_02.c
+  Label Definition File: CWE457_Use_of_Uninitialized_Variable.c.label.xml
+  Template File: sources-sinks-02.tmpl.c
+  */
+  ```
+- **CWE457_Use_of_Uninitialized_Variable__char_pointer_03**: Expected CWE-[457], detected CWE-[], missed CWE-[457]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE457_Use_of_Uninitialized_Variable__char_pointer_03.c
+  Label Definition File: CWE457_Use_of_Uninitialized_Variable.c.label.xml
+  Template File: sources-sinks-03.tmpl.c
+  */
+  ```
+- **CWE457_Use_of_Uninitialized_Variable__char_pointer_04**: Expected CWE-[457], detected CWE-[], missed CWE-[457]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE457_Use_of_Uninitialized_Variable__char_pointer_04.c
+  Label Definition File: CWE457_Use_of_Uninitialized_Variable.c.label.xml
+  Template File: sources-sinks-04.tmpl.c
+  */
+  ```
+- **CWE457_Use_of_Uninitialized_Variable__char_pointer_05**: Expected CWE-[457], detected CWE-[], missed CWE-[457]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE457_Use_of_Uninitialized_Variable__char_pointer_05.c
+  Label Definition File: CWE457_Use_of_Uninitialized_Variable.c.label.xml
+  Template File: sources-sinks-05.tmpl.c
+  */
+  ```
+- **CWE457_Use_of_Uninitialized_Variable__char_pointer_06**: Expected CWE-[457], detected CWE-[], missed CWE-[457]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE457_Use_of_Uninitialized_Variable__char_pointer_06.c
+  Label Definition File: CWE457_Use_of_Uninitialized_Variable.c.label.xml
+  Template File: sources-sinks-06.tmpl.c
+  */
+  ```
+- **CWE457_Use_of_Uninitialized_Variable__char_pointer_07**: Expected CWE-[457], detected CWE-[], missed CWE-[457]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE457_Use_of_Uninitialized_Variable__char_pointer_07.c
+  Label Definition File: CWE457_Use_of_Uninitialized_Variable.c.label.xml
+  Template File: sources-sinks-07.tmpl.c
+  */
+  ```
+- **CWE457_Use_of_Uninitialized_Variable__char_pointer_08**: Expected CWE-[457], detected CWE-[], missed CWE-[457]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE457_Use_of_Uninitialized_Variable__char_pointer_08.c
+  Label Definition File: CWE457_Use_of_Uninitialized_Variable.c.label.xml
+  Template File: sources-sinks-08.tmpl.c
+  */
+  ```
+- **CWE457_Use_of_Uninitialized_Variable__char_pointer_09**: Expected CWE-[457], detected CWE-[], missed CWE-[457]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE457_Use_of_Uninitialized_Variable__char_pointer_09.c
+  Label Definition File: CWE457_Use_of_Uninitialized_Variable.c.label.xml
+  Template File: sources-sinks-09.tmpl.c
+  */
+  ```
+- **CWE457_Use_of_Uninitialized_Variable__char_pointer_10**: Expected CWE-[457], detected CWE-[], missed CWE-[457]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE457_Use_of_Uninitialized_Variable__char_pointer_10.c
+  Label Definition File: CWE457_Use_of_Uninitialized_Variable.c.label.xml
+  Template File: sources-sinks-10.tmpl.c
+  */
+  ```
+
+### Reviewed Improvement Proposals (29 total; 12 accepted, 17 rejected)
+
+- **[Agent Capability Gap] [ACCEPT]** Add explicit CWE-457 (Use of Uninitialized Variable) detection guidance to the vulnerability analysis agent prompt. When analyzing C/C++ source code, the agent should look for: (1) Local variables (especially pointers) declared without an initializer that are subsequently used (read, dereferenced, passed as arguments) before any assignment on all code paths. (2) Key detection pattern: A declaration like `type * var;` or `type var;` (without `= ...`) followed by a use of `var` (function call argument, dereference, arithmetic) with no intervening assignment `var = ...` on the execution path. (3) Pointer types are highest risk: an uninitialized pointer (`char *data;` then `printLine(data)`) causes undefined behavior on dereference. Uninitialized integers/structs may cause logic bugs or information disclosure. (4) Distinguish from safe patterns: variables initialized on the line after declaration, variables initialized in all branches of a conditional before use, and output parameters (passed by reference to be written) are NOT vulnerable.
+  CWEs: [457] | From case: CWE457_Use_of_Uninitialized_Variable__char_pointer_01
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology document lists 'Null pointer deref (CWE-476): dereferencing without null check' as a memory safety detection signal. CWE-457 is closely related — dereferencing an uninitialized pointer is at least as dangerous as dereferencing a null pointer. The agent's semantic analysis strategy section notes that some vulnerability classes 'CANNOT be found by matching API names. They require reasoning about program behavior.' CWE-457 is exactly such a class — it requires reasoning about variable initialization state, not matching function names.
+  - [MEMORY] pattern :: CWE-190 Integer Overflow detection failure in source-only C files with empty CPG — recurring systematic failure across 8+ instances where source-only C files produce empty code property graphs [cwe-190, empty-graph, source-code-not-ingested, agent-prompt, recurring-failure] — The identical root cause (empty CPG for source-only C files) has been confirmed across 8+ CWE-190/191 instances. The same infrastructure limitation blocks CWE-457 detection. The proven fix approach for these cases is AGENT_PROMPT improvement to the semantic analyzer, combined with CWE_MAPPING additions, since graph-based analysis cannot operate on an empty graph.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal describes a genuinely useful and generalizable detection pattern for CWE-457. The guidance covers the core concept (declaration without initializer followed by use before assignment on all paths), addresses risk prioritization (pointers > scalars), and explicitly distinguishes safe patterns to reduce false positives. The pattern applies broadly to real-world C/C++ code, not just Juliet test cases. The safe-pattern exclusions (output parameters, all-branch initialization) demonstrate awareness of real-world coding idioms.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-457 is a well-established CWE in the memory safety / initialization family. The proposal correctly targets a real vulnerability class not currently covered, and the detection logic is general-purpose rather than tailored to a specific Juliet test structure.
+  - [MEMORY] failure :: Agent capability gaps have been observed where functions or vulnerability classes are missing from analysis, leading to missed detections [cwe-457] — Similar to the CWE-121 detection gap noted in memory, CWE-457 appears to be an entirely missing detection capability that needs explicit guidance to close.
+- **[CWE Mapping Gap] [ACCEPT]** Add CWE-457 → `uninitialized_var` semantic class mapping in `scoring.rs` so that when the agent identifies an uninitialized variable usage vulnerability, the scoring layer correctly classifies it as CWE-457. Currently CWE-457 is not present in the CWE knowledge base (`lookup_cwe` returned 'not found') and the semantic class `uninitialized_var` is not mapped in scoring.rs.
+  CWEs: [457] | From case: CWE457_Use_of_Uninitialized_Variable__char_pointer_01
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology document lists memory safety detection signals including null pointer dereference. CWE-457 is a related memory safety issue that needs its own semantic class mapping to be properly classified by the scoring layer.
+  - [MEMORY] pattern :: CWE-190 Integer Overflow detection failure in source-only C files with empty CPG — recurring systematic failure across 8+ instances where source-only C files produce empty code property graphs [cwe-190, empty-graph, source-code-not-ingested, agent-prompt, recurring-failure] — The proven fix approach for source-only file detection failures includes CWE_MAPPING additions alongside AGENT_PROMPT improvements. Without the mapping, even correct agent identification of the vulnerability cannot be properly scored.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a necessary infrastructure fix. Without CWE-457 in the knowledge base and scoring mappings, even if the agent correctly identifies uninitialized variable usage, the finding cannot be properly classified. This is a straightforward mapping addition that enables correct scoring for a well-known CWE, not an overfitting concern.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference demonstrates the system maintains CWE mappings for vulnerability classification. CWE-457 is a standard CWE that should be present alongside existing families like CWE-119 and its children.
+  - [MEMORY] failure :: Agent capability gaps where CWE lookups return not found indicate missing infrastructure rather than detection logic issues [cwe-457] — The 'not found' status for CWE-457 is an infrastructure gap analogous to missing function extraction noted for CWE-121, requiring a mapping fix.
+- **[CWE Mapping Gap] [MODIFY]** Add CWE-457 to `scoring.rs` mapped to `SemanticPatternClass::UninitializedVar` (or create this class if it does not exist). The mapping should recognize that CWE-457 (Use of Uninitialized Variable) belongs to the `uninitialized_var` semantic class. Additionally, the vulnerability analysis agent prompt should be updated to explicitly instruct: "When analyzing C/C++ source code, detect CWE-457 (Use of Uninitialized Variable) by identifying local variables (especially pointers, integers, and structs) that are declared without an initializer and subsequently used (passed to a function, dereferenced, returned, or read in an expression) before any assignment on all reachable code paths. Consider control flow: if a variable is only initialized inside a conditional branch that may not execute (e.g., `if(0)`, one arm of an `if/else`), and the variable is used after the conditional, flag it as potentially uninitialized. This is a logic/semantic vulnerability — do not rely on API name matching."
+  CWEs: [457] | From case: CWE457_Use_of_Uninitialized_Variable__char_pointer_02
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology document identifies "Semantic Investigation Strategies (Beyond Pattern Matching)" as necessary for vulnerability classes that "CANNOT be found by matching API names" and "require reasoning about program behavior" — CWE-457 uninitialized variable detection is exactly such a semantic vulnerability requiring initialization state reasoning.
+  - [MEMORY] pattern :: CWE-457 Use of Uninitialized Variable detection failure in source-only C files. The vulnerability is a local pointer variable declared but never assigned a value, then passed to a function that dereferences it. The CPG is completely empty because source C files are not compiled into binaries. [cwe-457, uninitialized-variable, semantic-analysis, empty-graph, source-code-not-ingested, agent-prompt, cwe-mapping, logic-vulnerability, c-pointer] — Prior memory from a previous CWE-457 case confirms the identical root cause — empty CPG, missing CWE mapping, and missing agent prompt instructions. This is a recurring pattern requiring the same dual fix: CWE_MAPPING + AGENT_PROMPT.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: This proposal combines CWE mapping (same as P2) with agent prompt guidance (similar to P1) into a single proposal. The mapping portion is fine. However, the prompt guidance mentions specific Juliet control-flow patterns like `if(0)` which are synthetic constructs rarely seen in real code. The guidance should focus on general dead-code/unreachable-branch analysis rather than calling out specific constant-condition patterns from Juliet.
+  Suggested modification: Remove the specific `if(0)` example from the prompt guidance. Replace with more general language: 'Consider control flow: if a variable is only initialized inside a conditional branch that may not execute (e.g., branches guarded by conditions that may be false, or only one arm of an if/else), and the variable is used after the conditional, flag it as potentially uninitialized.' This avoids overfitting to Juliet's specific constant-condition patterns while preserving the general principle.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology should guide general vulnerability analysis, not pattern-match on synthetic test constructs like if(0). Overly specific examples risk overfitting to benchmark structure.
+  - [MEMORY] insight :: Proposals that duplicate functionality across multiple IDs should be consolidated, and Juliet-specific patterns should be generalized [cwe-457] — This proposal overlaps significantly with P1 and P2; the unique addition (control-flow specifics) contains Juliet-specific patterns that reduce generality.
+- **[Agent Capability Gap] [MODIFY]** Add explicit instructions to the vulnerability analysis agent's prompt to detect CWE-457 Use of Uninitialized Variable patterns in C/C++ source code. The instruction should read: 'When analyzing C/C++ code, check for local variables (especially pointers) that are declared without an initializer and then used (passed as a function argument, dereferenced, read, or returned) before being assigned a value on all reachable code paths. Flag these as CWE-457 (Use of Uninitialized Variable) with semantic class uninitialized_var. Pay attention to control flow: if a variable is only initialized inside one branch of a conditional, and the other branch (or the fall-through path) reaches a use of that variable, it is uninitialized on that path. Constants in conditions like if(5==5) always evaluate to true, but the declaration type var; without = value is always suspicious when followed by a use without intervening assignment.' Additionally, ensure CWE-457 maps to SemanticPatternClass::UninitializedVar (or equivalent uninitialized_var) in scoring.rs. This is the third confirmed instance of this detection gap across CWE-457 Juliet variants.
+  CWEs: [457] | From case: CWE457_Use_of_Uninitialized_Variable__char_pointer_03
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology documentation states 'These vulnerability classes CANNOT be found by matching API names. They require reasoning about program behavior.' CWE-457 is precisely such a semantic vulnerability — it requires path-sensitive reasoning about variable initialization state, confirming that an AGENT_PROMPT (to guide semantic reasoning) is the correct fix type rather than a regex pattern.
+  - [MEMORY] pattern :: CWE-457 Use of Uninitialized Variable detection failure in source-only C files, second confirmed instance. A local pointer variable (char *) is declared without an initializer and then passed to a function (printLine) that reads its value. [cwe-457, uninitialized-variable, semantic-analysis, empty-graph, source-code-not-ingested, agent-prompt, cwe-mapping, logic-vulnerability, c-pointer, recurring-failure] — Two prior instances of CWE-457 false negatives have been documented with identical root cause analysis: empty CPG + missing CWE mapping + need for semantic agent prompt. This third instance confirms the pattern is systemic and the proposed dual fix (AGENT_PROMPT + CWE_MAPPING) is correct.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: This is largely a duplicate of P1 and P3 combined. The specific mention of `if(5==5)` is a direct Juliet pattern reference that overfits to the benchmark's constant-condition style. While the core detection logic is sound and generalizable, the Juliet-specific examples and the note about 'third confirmed instance' suggest this proposal is driven by benchmark coverage rather than real-world need. The mapping portion duplicates P2/P5.
+  Suggested modification: Remove the `if(5==5)` specific example and the 'third confirmed instance' language. Consolidate with P1 rather than creating a separate prompt instruction. The core guidance about control-flow-aware uninitialized variable detection is valuable but should not include benchmark-specific constant-condition examples.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Methodology guidance should be general-purpose. References to specific Juliet constructs like if(5==5) indicate overfitting to benchmark patterns rather than real-world vulnerability detection.
+  - [MEMORY] insight :: Repeated proposals for the same CWE from different Juliet variants risk accumulating benchmark-specific heuristics [cwe-457] — Multiple proposals for CWE-457 from different _01, _02, _03 variants suggest the proposals are tracking benchmark coverage rather than identifying distinct real-world patterns.
+- **[CWE Mapping Gap] [ACCEPT]** Ensure CWE-457 is added to the CWE knowledge base (lookup_cwe currently returns not found) and mapped to SemanticPatternClass::UninitializedVar (or equivalent uninitialized_var) in scoring.rs so that any findings produced by the semantic analyzer can be correctly classified.
+  CWEs: [457] | From case: CWE457_Use_of_Uninitialized_Variable__char_pointer_03
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — CWE-457 is not in the CWE knowledge base (lookup_cwe returns not found) and the semantic class uninitialized_var is likely not mapped in scoring.rs. Even if the agent could analyze the source code, findings would not map to the correct CWE/semantic class.
+  - [MEMORY] pattern :: CWE-457 Use of Uninitialized Variable detection failure in source-only C files, second confirmed instance. A local pointer variable (char *) is declared without an initializer and then passed to a function (printLine) that reads its value. [cwe-457, uninitialized-variable, semantic-analysis, empty-graph, source-code-not-ingested, agent-prompt, cwe-mapping, logic-vulnerability, c-pointer, recurring-failure] — Two prior instances of CWE-457 false negatives have been documented with identical root cause analysis: empty CPG + missing CWE mapping + need for semantic agent prompt. This third instance confirms the pattern is systemic and the proposed dual fix (AGENT_PROMPT + CWE_MAPPING) is correct.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a clean, minimal infrastructure fix identical in intent to P2. It addresses a genuine gap (CWE-457 not in the knowledge base) without any benchmark-specific logic. Only one of P2 and P5 needs to be implemented since they are duplicates, but the proposal itself is sound and not overfitting.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-457 is a standard, well-known CWE that should be in any comprehensive vulnerability knowledge base. Its absence is a coverage gap, not a benchmark-specific issue.
+  - [MEMORY] failure :: CWE lookup returning not found indicates missing infrastructure for a standard vulnerability class [cwe-457] — This is the same infrastructure gap as P2 addresses. The fix is necessary and general-purpose.
+- **[CWE Mapping Gap] [ACCEPT]** Add CWE-457 to the SemanticPatternClass mapping in scoring.rs, mapping it to `uninitialized_var` (or creating this class if it doesn't exist). CWE-457 (Use of Uninitialized Variable) is a well-defined vulnerability class in the MITRE CWE database covering cases where a variable is used before being properly initialized. The semantic class should match when the LLM analyzer identifies patterns where: (a) a local variable is declared without initialization, (b) the variable is subsequently read/used (passed to a function, dereferenced, returned, used in an expression) on at least one reachable code path where no assignment occurs. Additionally, the vulnerability analysis agent prompt should be enhanced to explicitly check for CWE-457 patterns: "When analyzing C/C++ code, check for local variables (especially pointers) declared without initializers that are read or used before any assignment on all reachable code paths. Consider control flow: if a variable is only initialized inside a conditional branch, it may be uninitialized on the else branch. Flag as CWE-457 (Use of Uninitialized Variable) when a variable can be used while still holding its uninitialized value."
+  CWEs: [457] | From case: CWE457_Use_of_Uninitialized_Variable__char_pointer_04
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology document lists "logic flaws" as a category for manual review and notes that some vulnerability classes "CANNOT be found by matching API names" and "require reasoning about program behavior" — CWE-457 is exactly this type: it requires reasoning about initialization state across code paths, not API matching.
+  - [MEMORY] pattern :: CWE-457 Use of Uninitialized Variable detection failure in source-only C files, third confirmed instance. A local pointer variable (char *) is declared without an initializer and then passed to a function (printLine) that reads its value. [cwe-457, uninitialized-variable, semantic-analysis, empty-graph, source-code-not-ingested, agent-prompt, cwe-mapping, logic-vulnerability, c-pointer, recurring-failure, third-instance] — Three prior instances confirm this is a recurring systemic gap (now 4 instances). Both the CWE mapping and the agent prompt need improvement, not just this single test case. The pattern generalizes to all C/C++ code where local variables may be used before initialization.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: CWE-457 is a well-defined, distinct vulnerability class in the MITRE CWE taxonomy. Adding it to the semantic pattern class mapping is a necessary infrastructure change for any CWE-457 detection. The proposal is well-scoped: it defines clear conditions for matching (declaration without initializer + use on reachable path without assignment) and addresses both the scoring infrastructure gap and the agent prompt. The guidance about control flow branches is general and applicable to real-world code, not just Juliet patterns. Low overfitting risk because uninitialized variable usage is a genuine, common real-world vulnerability pattern.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-457 is a distinct CWE class not currently in the family reference. Adding it as a semantic pattern class is a legitimate gap-fill analogous to how CWE-119 family members are mapped.
+  - [MEMORY] failure :: Agent capability gaps in CWE mapping prevent scoring of correctly detected vulnerabilities [cwe-457] — Similar to the CWE-121 agent capability gap documented in fn-insights, if CWE-457 has no scoring mapping, correct detections cannot produce findings.
+- **[CWE Mapping Gap] [MODIFY]** Add CWE-457 to the semantic class mapping in scoring.rs, mapping it to the `uninitialized_var` SemanticPatternClass. This is a prerequisite for any CWE-457 detection to produce scored findings. Additionally, the vulnerability analysis agent prompt should be enhanced to explicitly instruct the LLM to look for CWE-457 patterns when analyzing C/C++ source code: "When examining C/C++ code, check for local variables (especially pointers) that are declared without an initializer and subsequently used (read, passed to a function, or dereferenced) before being assigned a value on all reachable code paths. This constitutes CWE-457 (Use of Uninitialized Variable). Pay special attention to control flow conditions that may leave a variable uninitialized — e.g., when initialization only occurs in one branch of an if/else, or when the initializing branch is guarded by a condition that may be false." The CWE mapping is the critical first fix since without it, even correct LLM detection cannot produce a scored finding.
+  CWEs: [457] | From case: CWE457_Use_of_Uninitialized_Variable__char_pointer_05
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology doc states "These vulnerability classes CANNOT be found by matching API names. They require reasoning about program behavior." CWE-457 is exactly such a semantic vulnerability — it requires reasoning about variable initialization state across control flow paths, confirming that an agent prompt improvement (not a regex) is the right approach.
+  - [MEMORY] pattern :: CWE-457 Use of Uninitialized Variable detection failure in source-only C files, fourth confirmed instance. The CPG is empty because source C files are not compiled into binaries. CWE-457 is not in the CWE knowledge base. The expected semantic class 'uninitialized_var' is likely not mapped in scoring.rs. [cwe-457, uninitialized-variable, semantic-analysis, empty-graph, cwe-mapping, agent-prompt, recurring-failure, fourth-instance] — Four prior instances confirm this is a recurring systemic gap, not a one-off miss. The consistent failure across variants 01-04 with different control flow obfuscation (constant true/false, global variables, static const ints, 5==5 conditions) demonstrates the fix must be general-purpose, not variant-specific.
+  Overfitting review: MODIFY | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal is substantially identical to P1 — same CWE mapping addition, same semantic class, same prompt enhancement for CWE-457. Having two near-duplicate proposals risks redundant implementation. The content itself is sound and well-generalized, but it should be deduplicated with P1.
+  Suggested modification: Merge this proposal with P1 to avoid duplicate implementation. If P1 is accepted, mark this as superseded. If maintained separately, ensure only one canonical mapping and prompt change is applied.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-457 mapping is a legitimate gap, but the same fix should not be proposed twice from two nearly identical Juliet cases (char_pointer_04 vs char_pointer_05).
+  - [MEMORY] insight :: Duplicate proposals from minor Juliet case variants indicate over-indexing on individual test cases rather than generalizing [cwe-457] — Two proposals from char_pointer_04 and char_pointer_05 performing the same fix suggests Juliet-case-level granularity rather than CWE-level generalization.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[457] detection — case CWE457_Use_of_Uninitialized_Variable__char_pointer_01 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [457] | From case: CWE457_Use_of_Uninitialized_Variable__char_pointer_01
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[457].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The core insight — that CWE-457 detection requires data flow / control flow analysis rather than API pattern matching — is valid and generalizable. However, the proposed patch text ('use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks') is generic boilerplate that doesn't capture CWE-457 specifics. CWE-457 is about initialization state tracking, not about sinks per se. The patch should be tailored to describe checking whether a variable has been assigned on all reachable paths before its use, which is a definition-use analysis, not a traditional taint flow to sinks pattern.
+  Suggested modification: Revise the patch to be CWE-457-specific: 'For CWE-457 detection, analyze control flow to determine if a local variable has a reaching definition (assignment) on ALL paths from declaration to each use point. Use data flow analysis to track variable initialization state through conditional branches, loops, and function calls. Flag uses where at least one feasible path lacks an initializing assignment.' Remove the generic sink-tracing language which is more appropriate for injection or overflow CWEs.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology should guide CWE-specific analysis patterns rather than applying a one-size-fits-all taint-to-sink approach to all CWEs.
+  - [MEMORY] insight :: CWE-457 requires definition-use chain analysis, not traditional source-sink taint tracking [cwe-457] — Applying sink-oriented language to an initialization-state problem indicates the proposal is templated rather than CWE-aware.
+- **[Agent Capability Gap] [REJECT]** Enhance agent graph traversal for CWE-[457] detection — case CWE457_Use_of_Uninitialized_Variable__char_pointer_02 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [457] | From case: CWE457_Use_of_Uninitialized_Variable__char_pointer_02
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[457].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: MEDIUM
+  Review reason: This is a verbatim duplicate of P3 — identical patch text, identical proposal kind, identical target CWE, only differing in the originating Juliet case number (char_pointer_02 vs char_pointer_01). This indicates over-indexing on individual Juliet test cases. One proposal covering CWE-457 graph traversal enhancement is sufficient; duplicates add no value and risk cluttering the improvement pipeline.
+  - [MEMORY] insight :: Duplicate proposals from minor Juliet case variants are a strong overfitting signal — improvements should target CWE classes, not individual test case IDs [cwe-457] — Three identical proposals from char_pointer_01, _02, _03 demonstrate that the proposal generator is emitting per-case rather than per-CWE improvements.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The fn-insights pattern shows that fixes should be generalized across cases sharing the same root cause, not duplicated per case.
+- **[Agent Capability Gap] [REJECT]** Enhance agent graph traversal for CWE-[457] detection — case CWE457_Use_of_Uninitialized_Variable__char_pointer_03 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [457] | From case: CWE457_Use_of_Uninitialized_Variable__char_pointer_03
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[457].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: MEDIUM
+  Review reason: This is a verbatim duplicate of P3 and P4 — identical patch text, identical kind, identical CWE target. Only the Juliet case number differs (char_pointer_03). Three identical proposals for the same improvement is clear evidence of per-test-case overfitting. A single, well-crafted proposal (P3 with modifications) covers this need entirely.
+  - [MEMORY] insight :: Duplicate proposals from minor Juliet case variants are a strong overfitting signal — improvements should target CWE classes, not individual test case IDs [cwe-457] — Three identical proposals from char_pointer_01, _02, _03 demonstrate that the proposal generator is emitting per-case rather than per-CWE improvements.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The fn-insights pattern shows that fixes should be generalized across cases sharing the same root cause, not duplicated per case.
+
+---
+

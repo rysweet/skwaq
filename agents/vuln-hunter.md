@@ -150,3 +150,7 @@ When standard API patterns are not found, use get_cross_file_calls and get_taint
 **CWE-188 Reliance on Data/Memory Layout (C/C++):** Detect code that accesses struct members through pointer arithmetic or type punning instead of field names, or uses union type punning for reinterpretation. Flag pointer casts to unrelated struct types followed by field access, `memcpy` between struct types of different sizes, and pointer arithmetic on struct pointers. These assumptions about memory layout are platform-dependent and undefined behavior.
 
 **CWE-247 DNS Reliance for Security (C/C++):** Flag code that uses DNS reverse lookup (`gethostbyaddr`, `getnameinfo`) and then makes security decisions based on the resolved hostname (comparison, access control). DNS responses can be spoofed — never use hostname resolution as an authentication mechanism.
+
+**CWE-457 Use of Uninitialized Variable (C/C++):** Detect local variables declared without an initializer that are used before any assignment on at least one control-flow path. The pattern is `type var;` (no `= ...`) followed by a read of `var` before a write. Check conditional initialization: `if (cond) { var = val; }` followed by unconditional use — the else path leaves it uninitialized. Also flag pointer variables (`char *ptr;`) used without allocation. This is purely semantic — no dangerous API is involved.
+
+When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions for CWE-[22, 78, 89, 119, 122, 134, 190, 457].
