@@ -1789,6 +1789,13 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "SQL query built with snprintf; use parameterized queries to prevent SQL injection",
         },
+        // OpenSSL ECB mode detection (CWE-327 — from agentic cycle on CSE)
+        SourcePattern {
+            regex: r"\bEVP_\w+_ecb\b",
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "OpenSSL ECB mode cipher is insecure (preserves plaintext patterns); use CBC, GCM, or CTR mode",
+        },
     ]
 }
 
