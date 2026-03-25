@@ -13,7 +13,8 @@
         h2 { font-size: 1.5rem; margin: 2.5rem 0 1rem; color: #c9d1d9; border-bottom: 1px solid #21262d; padding-bottom: 0.5rem; }
         h3 { font-size: 1.15rem; margin: 1.5rem 0 0.75rem; color: #c9d1d9; }
         p, li { line-height: 1.7; color: #8b949e; margin-bottom: 0.75rem; }
-        ul { padding-left: 1.5rem; margin-bottom: 1rem; }
+        ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+        ol li { margin-bottom: 1rem; }
         .subtitle { font-size: 1.1rem; color: #8b949e; margin-bottom: 2rem; }
         .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
         .stat { background: #161b22; border-radius: 8px; padding: 1.25rem; text-align: center; border: 1px solid #21262d; }
@@ -23,22 +24,18 @@
         th, td { padding: 0.6rem 0.8rem; text-align: left; border-bottom: 1px solid #21262d; }
         th { color: #8b949e; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
         td { color: #c9d1d9; }
-        .mermaid { background: #161b22; border-radius: 8px; padding: 1.5rem; margin: 1rem 0; border: 1px solid #21262d; }
         .card { background: #161b22; border-radius: 8px; padding: 1.25rem; margin: 1rem 0; border: 1px solid #21262d; }
         a { color: #58a6ff; text-decoration: none; }
         a:hover { text-decoration: underline; }
         code { background: #1f2937; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; }
         pre { background: #161b22; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 1rem 0; border: 1px solid #21262d; font-size: 0.85rem; line-height: 1.6; }
+        pre.mermaid { background: #161b22; border-radius: 8px; padding: 1.5rem; margin: 1rem 0; border: 1px solid #21262d; }
         .highlight { color: #3fb950; font-weight: 600; }
         .nav { display: flex; gap: 1.5rem; margin: 1.5rem 0; flex-wrap: wrap; }
         .nav a { background: #161b22; padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid #21262d; font-size: 0.9rem; }
         .nav a:hover { border-color: #58a6ff; }
         .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #21262d; font-size: 0.8rem; color: #484f58; }
-        .timeline { border-left: 2px solid #21262d; padding-left: 1.5rem; margin: 1rem 0; }
-        .timeline-item { margin-bottom: 1.5rem; position: relative; }
-        .timeline-item::before { content: ''; position: absolute; left: -1.75rem; top: 0.4rem; width: 10px; height: 10px; border-radius: 50%; background: #58a6ff; }
-        .timeline-item .date { font-size: 0.8rem; color: #58a6ff; font-weight: 600; }
-        .timeline-item .desc { color: #8b949e; }
+        .step-num { display: inline-block; background: #58a6ff; color: #0d1117; width: 1.6rem; height: 1.6rem; border-radius: 50%; text-align: center; line-height: 1.6rem; font-weight: 700; font-size: 0.85rem; margin-right: 0.5rem; vertical-align: middle; }
     </style>
 </head>
 <body>
@@ -60,10 +57,10 @@
         <h2 id="what">What Is Skwaq?</h2>
         <p>Skwaq is an <strong>agentic vulnerability analyzer</strong> that uses a team of AI agents to investigate source code and binaries for security vulnerabilities. Unlike traditional static analysis tools that rely on fixed rules, skwaq's agents reason about code like experienced security researchers &mdash; tracing data flows, mapping attack surfaces, and debating exploitability.</p>
         <p>What makes it unique: <strong>skwaq improves itself</strong>. A built-in benchmark harness (Skwaq Gym) measures detection accuracy against industry benchmarks, and a self-improvement loop uses AI agents to analyze their own failures and propose better investigation strategies.</p>
+        <p>Built from the <a href="https://github.com/rysweet/skwaq/blob/main/Specifications/SKWAQ_V2_SPEC.md">Skwaq V2 Specification</a>.</p>
 
         <div class="stats">
             <div class="stat"><div class="value">97.3%</div><div class="label">Juliet F1 (agentic)</div></div>
-            <div class="stat"><div class="value">100%</div><div class="label">OWASP F1 (agentic)</div></div>
             <div class="stat"><div class="value">91.0%</div><div class="label">CSE F1</div></div>
             <div class="stat"><div class="value">18</div><div class="label">Agent Prompts</div></div>
             <div class="stat"><div class="value">6</div><div class="label">Benchmark Suites</div></div>
@@ -73,34 +70,45 @@
         <h2 id="story">The Story: From Spec to Self-Improving System</h2>
         <p>Skwaq started with a short specification and a question: <em>can AI agents bootstrap themselves into a competitive vulnerability detection system?</em></p>
 
-        <div class="timeline">
-            <div class="timeline-item">
-                <div class="date">Day 1 &mdash; The Spec</div>
-                <div class="desc">A brief specification for a "vulnerability investigation copilot" &mdash; analyze binaries and source code using a code property graph, with AI agents reasoning about the results. No training data, no pre-built rules, no benchmark infrastructure.</div>
-            </div>
-            <div class="timeline-item">
-                <div class="date">Week 1 &mdash; Building the Harness</div>
-                <div class="desc">Built the Skwaq Gym benchmark harness with a small fixture suite (F1=50%). Wired up 5-layer detection: patterns, dataflow, context validation, LLM agents, and synthesis. Connected NIST Juliet (54K cases), OWASP Benchmark (2,740 cases), DARPA CGC, and Meta CyberSecEval.</div>
-            </div>
-            <div class="timeline-item">
-                <div class="date">Week 2 &mdash; Multi-Agent Pipeline</div>
-                <div class="desc">Deployed 18 specialized agents &mdash; each with a distinct role (attack surface mapping, vulnerability hunting, exploit analysis, defense evaluation). Added offense/defense debate for high-stakes findings. Built graph tools so agents query the code property graph directly. <span class="highlight">Fixture F1 reached 92.9%.</span></div>
-            </div>
-            <div class="timeline-item">
-                <div class="date">Week 3 &mdash; Self-Improvement Loop</div>
-                <div class="desc">Built the <code>gym improve</code> command: failure-analyst agent investigates each false negative, diagnoses why detection failed, and proposes improvements to agent prompts, taint rules, CWE mappings, or patterns. An overfitting-reviewer agent validates every proposal. <span class="highlight">Agents started teaching themselves.</span></div>
-            </div>
-            <div class="timeline-item">
-                <div class="date">Week 4 &mdash; Scale and Results</div>
-                <div class="desc">22+ self-improvement cycles across all suites. 100+ proposals generated, 34% acceptance rate (reviewer catches overfitting). Added CyberGym (3,014 real CVEs from OSS-Fuzz). <span class="highlight">Agentic eval: Juliet F1=97.3%, OWASP F1=100%.</span></div>
-            </div>
-        </div>
+        <ol>
+            <li>
+                <strong><span class="step-num">1</span> The Spec</strong><br>
+                A brief <a href="https://github.com/rysweet/skwaq/blob/main/Specifications/SKWAQ_V2_SPEC.md">specification</a> for a "vulnerability investigation copilot" &mdash; analyze binaries and source code using a code property graph, with AI agents reasoning about the results. No training data, no pre-built rules, no benchmark infrastructure.
+            </li>
+            <li>
+                <strong><span class="step-num">2</span> Building the Harness</strong><br>
+                Built the Skwaq Gym benchmark harness with a small fixture suite (F1=50%). Wired up 5-layer detection: patterns, dataflow, context validation, LLM agents, and synthesis. Connected NIST Juliet (54K cases), OWASP Benchmark (2,740 cases), DARPA CGC, and Meta CyberSecEval. Development orchestrated by <a href="https://github.com/rysweet/amplihack">amplihack-recipe-runner</a>, which enforces a 23-step workflow with quality gates at every stage.
+            </li>
+            <li>
+                <strong><span class="step-num">3</span> Leveraging the Graph Database</strong><br>
+                Built a code property graph using <a href="https://github.com/rysweet/RustyClawd">RustyClawd</a> &mdash; a Rust-based code analysis engine that extracts functions, call edges, taint flows, data sources, data sinks, and symbols into a queryable graph. Agents query this graph with specialized tools, enabling cross-file analysis, recursive call-graph traversal, and taint source-to-sink tracing that static patterns alone can't achieve.
+            </li>
+            <li>
+                <strong><span class="step-num">4</span> Multi-Agent Pipeline</strong><br>
+                Deployed 18 specialized agents &mdash; each with a distinct role (attack surface mapping, vulnerability hunting, exploit analysis, defense evaluation). Added offense/defense debate for high-stakes findings. Built graph tools so agents query the code property graph directly. <span class="highlight">Fixture F1 reached 92.9%.</span>
+            </li>
+            <li>
+                <strong><span class="step-num">5</span> Self-Improvement Loop</strong><br>
+                Built the <code>gym improve</code> command: failure-analyst agent investigates each false negative, diagnoses why detection failed, and proposes improvements to agent prompts, taint rules, CWE mappings, or patterns. An overfitting-reviewer agent validates every proposal. <span class="highlight">Agents started teaching themselves.</span>
+            </li>
+            <li>
+                <strong><span class="step-num">6</span> Agent Knowledge Graph Packs</strong><br>
+                Integrated <a href="https://github.com/rysweet/agent-kgpacks">agent-kgpacks</a> &mdash; portable knowledge graph packages that encode vulnerability patterns, CWE taxonomies, and investigation strategies. Agents load domain-specific knowledge packs to bootstrap expertise without re-learning from scratch.
+            </li>
+            <li>
+                <strong><span class="step-num">7</span> Agent Memory</strong><br>
+                Added durable agent memory (adapted from <a href="https://github.com/rysweet/amplihack">amplihack-memory-lib</a>'s cognitive memory model) so investigation insights persist across cycles. Agents remember which detection strategies worked, which proposals were rejected and why, and which CWE-specific instructions improved recall &mdash; building institutional knowledge over 22+ improvement cycles.
+            </li>
+            <li>
+                <strong><span class="step-num">8</span> Scale and Results</strong><br>
+                22+ self-improvement cycles across all suites. 100+ proposals generated, 34% acceptance rate (reviewer catches overfitting). Added CyberGym (3,014 real CVEs from OSS-Fuzz). <span class="highlight">Agentic eval: Juliet F1=97.3%.</span>
+            </li>
+        </ol>
 
         <h2 id="architecture">Architecture</h2>
         <h3>Five-Layer Detection Pipeline</h3>
         <p>Each vulnerability investigation passes through five layers, from fast pattern matching to deep semantic reasoning:</p>
-        <div class="mermaid">
-            <pre class="mermaid">
+        <pre class="mermaid">
 flowchart TB
     SRC["Source Code / Binary"] --> L1
     L1["Layer 1: Pattern Detection\n~260 patterns across 6 languages"] --> L2
@@ -108,13 +116,11 @@ flowchart TB
     L3["Layer 3: Context Validation\nMulti-cycle false positive reduction"] --> L4
     L4["Layer 4: LLM Agent Pipeline\nattack-surface, vuln-hunter, critic"] --> L5
     L5["Layer 5: Synthesis\nDomain-expert weighted evidence"] --> OUT["Findings"]
-            </pre>
-        </div>
+        </pre>
 
         <h3>Code Property Graph</h3>
         <p>All analysis operates on a code property graph stored in SQLite &mdash; functions, call edges, taint flows, data sources, data sinks, and symbols. Agents query this graph with specialized tools.</p>
-        <div class="mermaid">
-            <pre class="mermaid">
+        <pre class="mermaid">
 erDiagram
     FUNCTIONS ||--o{ CALLS : "caller-callee"
     FUNCTIONS ||--o{ DATA_SOURCES : "reads from"
@@ -123,13 +129,11 @@ erDiagram
     DATA_SINKS ||--o{ TAINT_FLOWS : "sink"
     FUNCTIONS ||--o{ SYMBOLS : "defines-imports"
     FUNCTIONS ||--o{ FINDINGS : "contains"
-            </pre>
-        </div>
+        </pre>
 
         <h2 id="agents">Multi-Agent Analysis</h2>
         <h3>Agent Pipeline (Source Code)</h3>
-        <div class="mermaid">
-            <pre class="mermaid">
+        <pre class="mermaid">
 sequenceDiagram
     participant G as Graph DB
     participant AS as attack-surface
@@ -145,21 +149,18 @@ sequenceDiagram
     VH-->>CR: Findings with evidence
     CR->>G: Validate reachability
     CR-->>CR: Accept / Reject / Adjust
-            </pre>
-        </div>
+        </pre>
 
         <h3>Deep Pipeline (with Debate)</h3>
         <p>For high-stakes analysis, an offense/defense debate runs independently:</p>
-        <div class="mermaid">
-            <pre class="mermaid">
+        <pre class="mermaid">
 flowchart LR
     VH["vuln-hunter findings"] --> EA["exploit-analyst\nCan attacker trigger this?"]
     VH --> DA["defense-analyst\nAre mitigations effective?"]
     EA --> VS["verdict-synthesizer"]
     DA --> VS
     VS --> OUT["CONFIRMED / MITIGATED / SAFE"]
-            </pre>
-        </div>
+        </pre>
 
         <h3>18 Specialized Agents</h3>
         <table>
@@ -185,8 +186,7 @@ flowchart LR
 
         <h2 id="self-improvement">Self-Improvement Loop</h2>
         <p>The self-improvement loop is what makes skwaq unique. Instead of manually tuning rules, AI agents analyze their own failures and propose improvements &mdash; validated by another AI agent that prevents overfitting.</p>
-        <div class="mermaid">
-            <pre class="mermaid">
+        <pre class="mermaid">
 flowchart TB
     BENCH["Run Benchmark"] --> SCORE["Score Results"]
     SCORE --> FN["Identify False Negatives"]
@@ -197,8 +197,7 @@ flowchart TB
     REV -->|Rejected| LEARN["Store lesson\nin durable memory"]
     APPLY --> MEM["Durable memory\nfor future cycles"]
     MEM --> BENCH
-            </pre>
-        </div>
+        </pre>
 
         <h3>Proposal Types (in Preference Order)</h3>
         <div class="card">
@@ -222,31 +221,45 @@ flowchart TB
         </ul>
 
         <h2 id="results">Results</h2>
-        <h3>Agentic Mode (Full Agent Pipeline)</h3>
+
+        <h3>Benchmark Suites</h3>
         <table>
-            <tr><th>Suite</th><th>Cases</th><th>F1</th><th>Precision</th><th>Recall</th></tr>
-            <tr><td>OWASP Benchmark</td><td>20</td><td class="highlight">100.0%</td><td>100%</td><td>100%</td></tr>
-            <tr><td>NIST Juliet</td><td>20</td><td class="highlight">97.3%</td><td>100%</td><td>95.0%</td></tr>
+            <tr><th>Suite</th><th>Source</th><th>Cases</th><th>Languages</th><th>Focus</th></tr>
+            <tr><td><a href="https://samate.nist.gov/SARD/test-suites/112">Juliet</a></td><td>NIST</td><td>54,488</td><td>C/C++</td><td>116 CWEs, synthetic variants</td></tr>
+            <tr><td><a href="https://owasp.org/www-project-benchmark/">OWASP Benchmark</a></td><td>OWASP Foundation</td><td>2,740</td><td>Java</td><td>Web app vulns (XSS, SQLi, crypto)</td></tr>
+            <tr><td><a href="https://github.com/meta-llama/PurpleLlama/tree/main/CybersecurityBenchmarks">CyberSecEval</a></td><td>Meta</td><td>578</td><td>C/C++, Python</td><td>Real-world vuln patterns</td></tr>
+            <tr><td><a href="https://github.com/trailofbits/cb-multios">CGC</a></td><td>DARPA</td><td>300</td><td>C</td><td>Real challenge binaries (patched/unpatched)</td></tr>
+            <tr><td><a href="https://cybergym.io/">CyberGym</a></td><td>UC Berkeley</td><td>3,014</td><td>C/C++</td><td>Real OSS-Fuzz CVEs from 188 projects</td></tr>
+            <tr><td>Fixtures</td><td>skwaq team</td><td>99</td><td>Mixed</td><td>Regression suite</td></tr>
         </table>
-        <h3>Pattern+Dataflow Mode (No LLM)</h3>
+
+        <h3>Current Baselines &mdash; Pattern+Dataflow Mode (No LLM)</h3>
         <table>
-            <tr><th>Suite</th><th>Cases</th><th>F1</th><th>Precision</th><th>Recall</th></tr>
-            <tr><td>Fixtures</td><td>99</td><td>93.2%</td><td>98.0%</td><td>88.8%</td></tr>
-            <tr><td>CyberSecEval</td><td>578</td><td>91.0%</td><td>100%</td><td>82.4%</td></tr>
-            <tr><td>Juliet</td><td>1,000</td><td>88.8%</td><td>100%</td><td>79.9%</td></tr>
-            <tr><td>OWASP</td><td>1,000</td><td>87.9%</td><td>100%</td><td>74.6%</td></tr>
-            <tr><td>CGC</td><td>20</td><td>86.6%</td><td>100%</td><td>76.3%</td></tr>
-            <tr><td>CyberGym</td><td>100</td><td>71.9%</td><td>100%</td><td>56.1%</td></tr>
+            <tr><th>Suite</th><th>Cases</th><th>F1</th><th>Precision</th><th>Recall</th><th>TP</th><th>FP</th><th>FN</th><th>TN</th></tr>
+            <tr><td>Fixtures</td><td>99</td><td class="highlight">93.2%</td><td>98.0%</td><td>88.8%</td><td>103</td><td>2</td><td>13</td><td>11</td></tr>
+            <tr><td><a href="https://github.com/meta-llama/PurpleLlama/tree/main/CybersecurityBenchmarks">CSE</a></td><td>578</td><td class="highlight">91.0%</td><td>100%</td><td>82.4%</td><td>476</td><td>0</td><td>102</td><td>0</td></tr>
+            <tr><td><a href="https://samate.nist.gov/SARD/test-suites/112">Juliet</a></td><td>1,000</td><td class="highlight">88.8%</td><td>100%</td><td>79.9%</td><td>798</td><td>0</td><td>201</td><td>1</td></tr>
+            <tr><td><a href="https://owasp.org/www-project-benchmark/">OWASP</a></td><td>1,000</td><td class="highlight">87.9%</td><td>100%</td><td>74.6%</td><td>405</td><td>0</td><td>111</td><td>484</td></tr>
+            <tr><td><a href="https://github.com/trailofbits/cb-multios">CGC</a></td><td>20</td><td class="highlight">86.6%</td><td>100%</td><td>76.3%</td><td>29</td><td>0</td><td>9</td><td>4</td></tr>
+            <tr><td><a href="https://cybergym.io/">CyberGym</a></td><td>100</td><td>71.9%</td><td>100%</td><td>56.1%</td><td>64</td><td>0</td><td>50</td><td>0</td></tr>
         </table>
+
+        <p><strong>Key differentiator:</strong> Skwaq maintains <span class="highlight">100% precision</span> across all benchmarks (0 false positives). Most tools trade precision for recall.</p>
         <p><a href="https://github.com/rysweet/skwaq/issues/28">Full benchmark progress and history &rarr;</a></p>
 
         <h2 id="usage">Usage</h2>
-        <h3>Analyze a File</h3>
-        <pre><code># Full agentic analysis
-skwaq analyze path/to/source.c
+        <h3>Analyze a Source Repository</h3>
+        <pre><code># Full agentic analysis of a repo
+skwaq analyze /path/to/repo
 
-# Quick pattern-only scan
+# Quick pattern-only scan of a single file
 skwaq analyze path/to/source.c --quick</code></pre>
+        <h3>Binary Analysis</h3>
+        <pre><code># Analyze a compiled binary (decompile + graph + agents)
+skwaq analyze path/to/binary --binary
+
+# Analyze a stripped binary with decompiler renaming
+skwaq analyze path/to/binary --binary --decompile-rename</code></pre>
         <h3>Run Benchmarks</h3>
         <pre><code># Agentic eval on industry suites
 skwaq gym eval --suites juliet,owasp,cyberseceval
@@ -261,16 +274,16 @@ skwaq gym improve juliet --max-cases 30 --max-improvements 5
 skwaq gym improve juliet --cwe CWE-78 --max-cases 20</code></pre>
         <h3>Documentation</h3>
         <ul>
-            <li><a href="gym-tutorial.html">Tutorial: Getting Started with Skwaq Gym</a></li>
-            <li><a href="gym-self-improvement.html">How the Self-Improvement Loop Works</a></li>
-            <li><a href="graph-agent-architecture.html">Graph-Agent Architecture</a></li>
-            <li><a href="gym-agents.html">Agent Reference</a></li>
-            <li><a href="gym-api-reference.html">API Reference</a></li>
-            <li><a href="gym-configuration.html">Configuration Guide</a></li>
+            <li><a href="https://github.com/rysweet/skwaq/blob/main/docs/gym-tutorial.md">Tutorial: Getting Started with Skwaq Gym</a></li>
+            <li><a href="https://github.com/rysweet/skwaq/blob/main/docs/gym-self-improvement.md">How the Self-Improvement Loop Works</a></li>
+            <li><a href="https://github.com/rysweet/skwaq/blob/main/docs/graph-agent-architecture.md">Graph-Agent Architecture</a></li>
+            <li><a href="https://github.com/rysweet/skwaq/blob/main/docs/gym-agents.md">Agent Reference</a></li>
+            <li><a href="https://github.com/rysweet/skwaq/blob/main/docs/gym-api-reference.md">API Reference</a></li>
+            <li><a href="https://github.com/rysweet/skwaq/blob/main/docs/gym-configuration.md">Configuration Guide</a></li>
         </ul>
 
         <div class="footer">
-            <p>Skwaq is developed by <a href="https://github.com/rysweet">@rysweet</a>. Source: <a href="https://github.com/rysweet/skwaq">github.com/rysweet/skwaq</a></p>
+            <p>Skwaq is developed by <a href="https://github.com/rysweet">@rysweet</a>. Source: <a href="https://github.com/rysweet/skwaq">github.com/rysweet/skwaq</a> | <a href="https://github.com/rysweet/skwaq/blob/main/docs/atlas/README.md">Code Atlas</a></p>
         </div>
     </div>
 
