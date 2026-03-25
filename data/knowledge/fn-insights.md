@@ -5026,3 +5026,182 @@ When analyzing Java source code, identify command injection by tracing taint fro
 
 ---
 
+## Cycle: juliet (2026-03-25 02:15 UTC)
+
+### Missed Cases (9 false negatives)
+
+- **CWE190_Integer_Overflow__char_fscanf_add_22a**: Expected CWE-[190], detected CWE-[], missed CWE-[190]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE190_Integer_Overflow__char_fscanf_add_22a.c
+  Label Definition File: CWE190_Integer_Overflow.label.xml
+  Template File: sources-sinks-22a.tmpl.c
+  */
+  ```
+- **CWE190_Integer_Overflow__char_fscanf_add_51a**: Expected CWE-[190], detected CWE-[], missed CWE-[190]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE190_Integer_Overflow__char_fscanf_add_51a.c
+  Label Definition File: CWE190_Integer_Overflow.label.xml
+  Template File: sources-sinks-51a.tmpl.c
+  */
+  ```
+- **CWE190_Integer_Overflow__char_fscanf_add_52a**: Expected CWE-[190], detected CWE-[], missed CWE-[190]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE190_Integer_Overflow__char_fscanf_add_52a.c
+  Label Definition File: CWE190_Integer_Overflow.label.xml
+  Template File: sources-sinks-52a.tmpl.c
+  */
+  ```
+- **CWE190_Integer_Overflow__char_fscanf_add_52b**: Expected CWE-[190], detected CWE-[], missed CWE-[190]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE190_Integer_Overflow__char_fscanf_add_52b.c
+  Label Definition File: CWE190_Integer_Overflow.label.xml
+  Template File: sources-sinks-52b.tmpl.c
+  */
+  ```
+- **CWE190_Integer_Overflow__char_fscanf_add_53a**: Expected CWE-[190], detected CWE-[], missed CWE-[190]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE190_Integer_Overflow__char_fscanf_add_53a.c
+  Label Definition File: CWE190_Integer_Overflow.label.xml
+  Template File: sources-sinks-53a.tmpl.c
+  */
+  ```
+- **CWE190_Integer_Overflow__char_fscanf_add_53b**: Expected CWE-[190], detected CWE-[], missed CWE-[190]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE190_Integer_Overflow__char_fscanf_add_53b.c
+  Label Definition File: CWE190_Integer_Overflow.label.xml
+  Template File: sources-sinks-53b.tmpl.c
+  */
+  ```
+- **CWE190_Integer_Overflow__char_fscanf_add_53c**: Expected CWE-[190], detected CWE-[], missed CWE-[190]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE190_Integer_Overflow__char_fscanf_add_53c.c
+  Label Definition File: CWE190_Integer_Overflow.label.xml
+  Template File: sources-sinks-53c.tmpl.c
+  */
+  ```
+- **CWE190_Integer_Overflow__char_fscanf_add_54a**: Expected CWE-[190], detected CWE-[], missed CWE-[190]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE190_Integer_Overflow__char_fscanf_add_54a.c
+  Label Definition File: CWE190_Integer_Overflow.label.xml
+  Template File: sources-sinks-54a.tmpl.c
+  */
+  ```
+- **CWE190_Integer_Overflow__char_fscanf_add_54b**: Expected CWE-[190], detected CWE-[], missed CWE-[190]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE190_Integer_Overflow__char_fscanf_add_54b.c
+  Label Definition File: CWE190_Integer_Overflow.label.xml
+  Template File: sources-sinks-54b.tmpl.c
+  */
+  ```
+
+### Reviewed Improvement Proposals (16 total; 8 accepted, 8 rejected)
+
+- **[Agent Capability Gap] [MODIFY]** Modify the vulnerability analysis agent's system prompt to include explicit instructions for detecting CWE-190 (Integer Overflow or Wraparound). Add the following instruction block: "When analyzing C/C++ source code, flag CWE-190 Integer Overflow when ALL of the following conditions are met: (1) External input is read via fscanf, scanf, fgets, recv, read, or similar I/O functions into a variable of a bounded integer type (char, short, int, unsigned char, unsigned short, unsigned int). (2) Arithmetic operations (addition, subtraction, multiplication, left shift) are performed on that variable. (3) There is NO overflow guard before the arithmetic — i.e., no comparison against the type's maximum value (CHAR_MAX, SHRT_MAX, INT_MAX, UCHAR_MAX, USHRT_MAX, UINT_MAX) or equivalent range check. This applies even when the arithmetic occurs in a different function or file from the input source — trace the data flow through function parameters, return values, and global variables. For char types specifically, adding 1 to a char read from fscanf without checking against CHAR_MAX is CWE-190."
+  CWEs: [190] | From case: CWE190_Integer_Overflow__char_fscanf_add_22a
+  - [KB] cwe/CWE-190/CWE-190 Integer Overflow or Wraparound — CWE-190 is defined as "Integer arithmetic that wraps leading to unexpected values" — this directly matches the pattern where fscanf reads a char and addition is performed without overflow guard.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology explicitly documents "Integer overflow (CWE-190): arithmetic on untrusted sizes" as a memory safety pattern to check, and describes the investigation approach: "external input → type conversion or arithmetic → use as size, index, or loop bound" — confirming this is a known detection gap in the methodology that the agent should be taught.
+  - [MEMORY] pattern :: CWE-190 Integer Overflow detection failure in source-only C files, eighth+ confirmed instance. The CPG is empty because source C files are not compiled into binaries. [cwe-190, integer-overflow, char-overflow, fscanf, addition, arithmetic, semantic-analysis, empty-graph, agent-prompt, recurring-failure] — This is the 9th+ confirmed instance of this exact failure pattern. The root cause (empty CPG + missing agent prompt instructions) has been consistently identified across all instances, confirming the AGENT_PROMPT fix is the correct and generalizable solution.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: The core detection logic is sound and generalizable to real-world integer overflow patterns. However, the last sentence ('For char types specifically, adding 1 to a char read from fscanf without checking against CHAR_MAX is CWE-190') is overly specific to the Juliet test case and risks overfitting the prompt to that exact pattern. The general three-condition framework is sufficient without the char-specific example. Also, subtraction should be flagged as CWE-191, not CWE-190.
+  Suggested modification: Remove the char-specific sentence at the end. Change subtraction to map to CWE-191 (Integer Underflow) rather than CWE-190. The three general conditions are sufficient and broadly applicable without test-case-specific examples.
+  - [KB] cwe/CWE-190/CWE-190 Integer Overflow or Wraparound — CWE-190 covers integer arithmetic that wraps leading to unexpected values. The proposal correctly targets this but includes overly specific char examples from the test case.
+- **[Agent Capability Gap] [MODIFY]** Update the vulnerability analysis agent prompt (e.g., vuln_analysis_agent.md or equivalent) to include explicit CWE-190/CWE-191 detection instructions. Add the following guidance block to the agent's system prompt:
+
+## Integer Overflow/Underflow Detection (CWE-190, CWE-191)
+When analyzing C/C++ source code, flag potential integer overflow or underflow when ALL of these conditions are met:
+1. TAINT SOURCE: Data originates from external input (fscanf, scanf, fgets, fread, recv, recvfrom, getchar, fgetc, read, getenv, argv)
+2. BOUNDED TYPE: The data is stored in a bounded integer type (char, short, int, unsigned char, unsigned short, unsigned int) — not just long/size_t
+3. ARITHMETIC SINK: The tainted value undergoes arithmetic (+, -, *, <<) without a preceding range check against the type's limits (CHAR_MAX, CHAR_MIN, SHRT_MAX, SHRT_MIN, INT_MAX, INT_MIN, UCHAR_MAX, USHRT_MAX, UINT_MAX)
+4. CROSS-FILE FLOW: If the tainted value is passed as a function argument to another function (possibly in a different file), follow the data flow through the parameter to the arithmetic operation in the callee
+
+Report as CWE-190 (Integer Overflow) for addition, multiplication, left-shift. Report as CWE-191 (Integer Underflow) for subtraction on signed types.
+
+This instruction is generalizable to all real-world C/C++ code where external input flows into unchecked arithmetic on bounded types. It covers cross-file data flow via function parameters (variant 51), global variables (variant 22), and direct same-function patterns (variant 01).
+  CWEs: [190] | From case: CWE190_Integer_Overflow__char_fscanf_add_51a
+  - [KB] cwe/CWE-190/CWE-190 Integer Overflow or Wraparound — Confirms CWE-190 is specifically about integer arithmetic that wraps leading to unexpected values, matching the vulnerability pattern where fscanf-read char undergoes unchecked addition
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology doc explicitly lists "Integer overflow (CWE-190): arithmetic on untrusted sizes" and "Array index from narrowed type: char index = large_value" as investigation patterns, confirming the agent should already be looking for this but lacks explicit prompt instructions to do so
+  - [MEMORY] pattern :: CWE-190 Integer Overflow detection failure in source-only C files, 9th+ confirmed instance with empty CPG and missing agent prompt instructions [cwe-190, integer-overflow, char-overflow, fscanf, addition, arithmetic, semantic-analysis, empty-graph, agent-prompt, recurring-failure] — 10+ prior instances confirm this is a systematic detection gap requiring AGENT_PROMPT improvement, not an isolated case
+  Overfitting review: MODIFY | Risk: LOW | Applicability: HIGH
+  Review reason: This is the most well-structured and generalizable of the CWE-190 prompt proposals. The four-condition framework (TAINT SOURCE, BOUNDED TYPE, ARITHMETIC SINK, CROSS-FILE FLOW) is clean and applicable to real-world code. However, the final paragraph referencing Juliet variant numbers (variant 51, variant 22, variant 01) is test-suite-specific metadata that should be removed to avoid overfitting. Also, excluding long/size_t is somewhat arbitrary — long can overflow too in real-world code, though it's less common in Juliet tests.
+  Suggested modification: Remove the final paragraph that references Juliet variant numbers (variant 51, variant 22, variant 01). Remove the exclusion of long/size_t from BOUNDED TYPE — long and size_t can also overflow in real-world scenarios. The core four-condition framework should stand on its own.
+  - [KB] cwe/CWE-190/CWE-190 Integer Overflow or Wraparound — CWE-190 covers integer arithmetic wraparound. The proposal correctly identifies the taint-source-to-arithmetic-sink pattern with proper CWE-190/191 differentiation.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference confirms memory safety and integer issues are distinct families. CWE-190 is not under CWE-119; this proposal correctly treats it as its own detection category.
+- **[Agent Capability Gap] [REJECT]** Modify the vulnerability analysis agent's system prompt to include explicit instructions for detecting integer overflow (CWE-190) when analyzing source code. The agent should look for the following general pattern: (1) External input from functions like `fscanf`, `scanf`, `fgets`, `recv`, `read`, `getchar` flows into a bounded integer type (`char`, `short`, `int`, `unsigned char`, `unsigned short`), (2) Arithmetic operations (`+`, `-`, `*`, `<<`) are performed on that value, (3) No overflow guard is present before the arithmetic (i.e., no comparison against `CHAR_MAX`, `SHRT_MAX`, `INT_MAX`, `UCHAR_MAX`, `USHRT_MAX`, `UINT_MAX`, or equivalent bounds). The prompt addition should read: "When analyzing C/C++ code, check for integer overflow (CWE-190): if external input is read into a bounded integer type (char, short, int) and arithmetic is subsequently performed on it without first checking that the operation will not exceed the type's maximum value (e.g., CHAR_MAX, INT_MAX), flag this as a potential CWE-190 integer overflow. Track the tainted value across function call boundaries, including cross-file calls where the value is passed as a parameter." Additionally, ensure CWE-190 is mapped to `SemanticPatternClass::IntegerOverflow` (or equivalent `integer_overflow` class) in `scoring.rs` so that when the agent does identify this pattern, it is correctly classified.
+  CWEs: [190] | From case: CWE190_Integer_Overflow__char_fscanf_add_52a
+  - [KB] cwe/CWE-190/CWE-190 Integer Overflow or Wraparound — Confirms the vulnerability class: integer arithmetic that wraps leading to unexpected values, which is exactly what occurs when adding 1 to a char at CHAR_MAX without bounds checking
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Methodology doc explicitly lists "Integer overflow (CWE-190): arithmetic on untrusted sizes" as a memory safety check and describes the pattern "external input → type conversion or arithmetic → use as size, index, or loop bound" — the agent prompt should encode this guidance
+  - [KB] knowledge-pack/codeql-variant-analysis/codeql-variant-analysis — CodeQL patterns document "Integer Overflow in Size Calculation" as a known vulnerability pattern class, confirming this is a well-established detection target
+  - [MEMORY] pattern :: CWE-190 Integer Overflow detection failure in source-only C files, 10th+ confirmed instance with cross-file function parameter flow [cwe-190, integer-overflow, char-overflow, fscanf, addition, arithmetic, semantic-analysis, empty-graph, agent-prompt, recurring-failure] — 10+ prior instances confirm this is a systematic gap requiring AGENT_PROMPT fix for the semantic analyzer to detect integer overflow when untrusted input flows into bounded integer types and unchecked arithmetic is performed
+  Overfitting review: REJECT | Risk: MEDIUM | Applicability: HIGH
+  Review reason: This proposal is largely redundant with P1 and P2, and it conflates two distinct concerns: agent prompt modification and scoring infrastructure (CWE mapping in scoring.rs). The prompt portion overlaps significantly with P2 which is better structured. The scoring.rs mapping concern is already addressed by P5 as a standalone proposal. Accepting this alongside P2 would create conflicting or duplicate prompt instructions. The proposal also incorrectly lumps subtraction under CWE-190 rather than CWE-191.
+  - [KB] cwe/CWE-190/CWE-190 Integer Overflow or Wraparound — The CWE definition covers wraparound from arithmetic. While the detection logic is sound, this proposal duplicates P2's coverage and mixes concerns with the scoring mapping already in P5.
+- **[Agent Capability Gap] [REJECT]** Modify the vulnerability analysis agent's system prompt to include explicit instructions for detecting CWE-190 integer overflow patterns when analyzing source code directly (without CPG). The agent should be instructed: "When analyzing C/C++ source code, check for integer overflow (CWE-190) by looking for: (1) External input functions (fscanf, scanf, fgets, recv, read) writing into bounded integer types (char, short, int, unsigned variants), followed by (2) arithmetic operations (+, -, *, <<) on those values without prior range checks against type limits (CHAR_MAX, SHRT_MAX, INT_MAX, UCHAR_MAX, etc.). For multi-file flow variants, trace function parameter passing across files — if a function receives a parameter and passes it unchanged to another function, follow the chain to identify the ultimate sink where unchecked arithmetic occurs. Flag the entire chain as CWE-190 when the source is external input and the sink is unchecked arithmetic on a bounded type."
+  CWEs: [190] | From case: CWE190_Integer_Overflow__char_fscanf_add_52b
+  - [KB] cwe/CWE-190/CWE-190 Integer Overflow or Wraparound — CWE-190 is defined as integer arithmetic that wraps leading to unexpected values, exactly matching the vulnerability pattern where fscanf-sourced char data undergoes unchecked addition causing wraparound
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology explicitly documents "Integer overflow (CWE-190): arithmetic on untrusted sizes" and "Array index from narrowed type: char index = large_value" as detection signals, confirming this is a known pattern the agent should detect but currently misses
+  - [MEMORY] pattern :: CWE-190 Integer Overflow detection failure in source-only C files, 11th+ confirmed instance with three-file chain variant 52a [cwe-190, integer-overflow, char-overflow, fscanf, addition, arithmetic, empty-graph, source-code-not-ingested, agent-prompt, recurring-failure, cross-file-flow, three-file-chain] — Memory confirms this is the 12th+ instance of the exact same systematic failure pattern: empty CPG for source-only C files combined with missing agent instructions for CWE-190 detection, validating that the proposed AGENT_PROMPT fix is the correct generalized solution
+  Overfitting review: REJECT | Risk: MEDIUM | Applicability: HIGH
+  Review reason: This proposal is redundant with P1 and P2, all targeting the same CWE-190 agent prompt modification. It originates from the callee side (52b) of the same multi-file Juliet pattern as P3 (52a). The 'multi-file flow variants' and 'follow the chain' language, while valid, is already better expressed in P2's CROSS-FILE FLOW condition. Accepting multiple overlapping prompt modifications for the same CWE creates confusion and prompt bloat.
+  - [KB] cwe/CWE-190/CWE-190 Integer Overflow or Wraparound — CWE-190 detection is valid but this proposal duplicates P2's already comprehensive coverage of the same detection pattern including cross-file flow.
+- **[CWE Mapping Gap] [ACCEPT]** Add a mapping in scoring.rs to map CWE-190 to the 'integer_overflow' SemanticPatternClass so that findings involving integer overflow are correctly classified and scored.
+  CWEs: [190] | From case: CWE190_Integer_Overflow__char_fscanf_add_52b
+  - [KB] cwe/CWE-190/CWE-190 Integer Overflow or Wraparound — CWE-190 is the canonical CWE for integer overflow/wraparound, and the scoring system currently lacks a mapping from this CWE to the integer_overflow semantic class, causing classification gaps
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology explicitly lists integer overflow (CWE-190) as a known vulnerability pattern, confirming the scoring system should have a corresponding semantic class mapping
+  - [MEMORY] pattern :: CWE-190 Integer Overflow detection failure in source-only C files, 11th+ confirmed instance with three-file chain variant 52a [cwe-190, integer-overflow, char-overflow, fscanf, addition, arithmetic, empty-graph, source-code-not-ingested, agent-prompt, recurring-failure, cross-file-flow, three-file-chain] — Repeated failures confirm the missing CWE-190 to integer_overflow semantic class mapping is a systematic gap that must be addressed alongside the agent prompt fix
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a necessary infrastructure fix. Without a CWE-190 to SemanticPatternClass mapping, even if the agent correctly identifies integer overflow, the scoring system cannot classify it properly. This is a clean, isolated change with no overfitting risk — it's a straightforward CWE-to-pattern-class mapping that is required for any CWE-190 detection to be scored correctly. It complements whichever prompt proposal is accepted (P2 recommended).
+  - [KB] cwe/CWE-190/CWE-190 Integer Overflow or Wraparound — CWE-190 is a well-defined CWE that needs proper scoring infrastructure. Without this mapping, agent findings for integer overflow cannot be evaluated.
+  - [MEMORY] failure :: Function not found in the analysis graph, indicating incomplete graph construction or missing function extraction [cwe-121] — Past failures show that infrastructure gaps (missing graph nodes, missing mappings) are a common root cause of missed detections. The scoring.rs mapping gap is analogous — a systemic infrastructure issue, not an overfitting concern.
+- **[Agent Capability Gap] [ACCEPT]** Modify the vulnerability analysis agent's system prompt to include explicit instructions for detecting CWE-190 (Integer Overflow or Wraparound). Add the following instruction block:
+
+**Integer Overflow Detection (CWE-190):** When analyzing C/C++ source code, flag potential integer overflow when ALL of the following conditions are met: (1) An external input function (`fscanf`, `scanf`, `fgets`, `fread`, `recv`, `recvfrom`, `read`, `getchar`, `fgetc`) reads a value into a bounded integer type (`char`, `short`, `int`, `unsigned char`, `unsigned short`, `unsigned int`), (2) That value subsequently undergoes arithmetic operations (`+`, `-`, `*`, `<<`, or compound assignment `+=`, `-=`, `*=`, `<<=`) without a preceding bounds check against the type's maximum or minimum (`CHAR_MAX`, `CHAR_MIN`, `SHRT_MAX`, `INT_MAX`, `UINT_MAX`, etc.), (3) The arithmetic result could exceed the type's representable range. This pattern applies even when the tainted data flows through function call chains across multiple files — trace the data parameter forward through callee functions to find the arithmetic sink.
+  CWEs: [190] | From case: CWE190_Integer_Overflow__char_fscanf_add_53a
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology doc explicitly lists "Integer overflow (CWE-190): arithmetic on untrusted sizes" as a memory safety pattern to check, and describes the investigation approach: "external input → type conversion or arithmetic → use as size, index, or loop bound." This confirms the agent prompt should include explicit CWE-190 detection guidance.
+  - [KB] cwe/CWE-190/CWE-190 Integer Overflow or Wraparound — CWE-190 is defined as "Integer arithmetic that wraps leading to unexpected values," directly matching the vulnerability pattern where fscanf-read char data undergoes addition without overflow guard.
+  - [MEMORY] pattern :: CWE-190 Integer Overflow detection failure across 12+ prior instances with empty CPG and missing agent prompt instructions [cwe-190, integer-overflow, char-overflow, fscanf, addition, arithmetic, semantic-analysis, empty-graph, agent-prompt, recurring-failure] — 12+ prior instances confirm this is a systematic detection gap requiring both AGENT_PROMPT and CWE_MAPPING fixes, not a one-off issue.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal provides well-structured, generalizable detection guidance for CWE-190. The conditions listed (external input → bounded integer type → unchecked arithmetic) are canonical patterns for integer overflow detection, not overfit to a single Juliet case. The explicit mention of cross-file taint tracing and the broad list of input sources and arithmetic operators make this applicable to real-world code. The three-condition conjunction prevents over-flagging.
+  - [KB] cwe/CWE-190/CWE-190 Integer Overflow or Wraparound — The proposal directly aligns with the CWE-190 definition of integer arithmetic that wraps leading to unexpected values, and the conditions described are standard patterns for this CWE.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-190 is a well-established family member under integer-related vulnerabilities; the proposal's detection criteria match the general pattern rather than being specific to one test case.
+- **[CWE Mapping Gap] [ACCEPT]** Ensure CWE-190 is mapped to the `integer_overflow` semantic pattern class in scoring.rs so that findings flagged as integer overflow are correctly scored and attributed to CWE-190.
+  CWEs: [190] | From case: CWE190_Integer_Overflow__char_fscanf_add_53a
+  - [KB] cwe/CWE-190/CWE-190 Integer Overflow or Wraparound — CWE-190 must be mapped to the integer_overflow semantic class to ensure proper scoring of integer overflow findings.
+  - [MEMORY] pattern :: CWE-190 Integer Overflow detection failure across 12+ prior instances with empty CPG and missing agent prompt instructions [cwe-190, integer-overflow, char-overflow, fscanf, addition, arithmetic, semantic-analysis, empty-graph, agent-prompt, recurring-failure] — Repeated failures to detect CWE-190 indicate the CWE mapping may be missing from scoring.rs, contributing to the systematic detection gap.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a straightforward infrastructure fix — ensuring the scoring system correctly maps integer overflow findings to CWE-190. Without this mapping, even correct detections would not be scored properly. This is a necessary plumbing change with no overfitting risk since it applies universally to all CWE-190 findings.
+  - [KB] cwe/CWE-190/CWE-190 Integer Overflow or Wraparound — The CWE-190 definition confirms that integer overflow findings should be attributed to this CWE; the mapping is a correct and necessary system configuration.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[190] detection — case CWE190_Integer_Overflow__char_fscanf_add_22a has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [190] | From case: CWE190_Integer_Overflow__char_fscanf_add_22a
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[190].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The proposal addresses a real limitation (cross-file taint tracing for integer overflow), but it is nearly identical to P4 and P5. These should be consolidated into a single general-purpose enhancement rather than three separate case-specific proposals. Additionally, the patch text is generic and could benefit from specifying how the graph traversal depth or strategy should be configured for integer overflow specifically.
+  Suggested modification: Consolidate P3, P4, and P5 into a single proposal: 'Enhance agent graph traversal to support cross-file taint flow tracing for all CWE detection, with specific emphasis on following integer data through wrapper/relay function chains (e.g., functions named *_b, *_c, *_d or numbered call chain patterns). Specify a minimum traversal depth of 4-5 function hops for taint propagation.'
+  - [MEMORY] insight :: Duplicate proposals targeting the same general capability gap across slightly different Juliet variants indicate overfitting to test case naming patterns rather than addressing the root capability gap once [cwe-190] — Three nearly identical proposals for the same underlying issue suggest case-specific thinking rather than generalized improvement.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The fn-insights knowledge mentions incomplete graph construction as a known failure mode; this proposal addresses a similar root cause but should be generalized.
+- **[Agent Capability Gap] [REJECT]** Enhance agent graph traversal for CWE-[190] detection — case CWE190_Integer_Overflow__char_fscanf_add_51a has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [190] | From case: CWE190_Integer_Overflow__char_fscanf_add_51a
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[190].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: MEDIUM
+  Review reason: This is a duplicate of P3 with only the case number changed (51a vs 22a). The patch text is identical. Having multiple identical proposals for different Juliet variants is a sign of overfitting to individual test cases rather than addressing the general capability. This should be consolidated with P3 into a single enhancement.
+  - [MEMORY] pattern :: Duplicate proposals across Juliet variants with identical patch text indicate overfitting to benchmark test case enumeration rather than a generalized fix [cwe-190] — Identical patch text across different case numbers confirms this is redundant with P3 and does not add new detection capability.
+- **[Agent Capability Gap] [REJECT]** Enhance agent graph traversal for CWE-[190] detection — case CWE190_Integer_Overflow__char_fscanf_add_52a has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [190] | From case: CWE190_Integer_Overflow__char_fscanf_add_52a
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[190].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: MEDIUM
+  Review reason: This is a duplicate of P3 and P4 with only the case number changed (52a vs 22a/51a). The patch text is identical. This further confirms overfitting to individual Juliet test case variants. A single consolidated proposal (as suggested in P3's modification) would cover all these cases.
+  - [MEMORY] pattern :: Third identical proposal across Juliet variants confirms systematic overfitting to benchmark enumeration [cwe-190] — Three identical patches differing only in case number is a clear overfitting signal; one generalized proposal suffices.
+
+---
+
