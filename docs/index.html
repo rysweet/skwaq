@@ -14,7 +14,7 @@
         h3 { font-size: 1.15rem; margin: 1.5rem 0 0.75rem; color: #c9d1d9; }
         p, li { line-height: 1.7; color: #8b949e; margin-bottom: 0.75rem; }
         ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
-        ol li { margin-bottom: 1rem; }
+        ul[style] li { margin-bottom: 1rem; }
         .subtitle { font-size: 1.1rem; color: #8b949e; margin-bottom: 2rem; }
         .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
         .stat { background: #161b22; border-radius: 8px; padding: 1.25rem; text-align: center; border: 1px solid #21262d; }
@@ -68,7 +68,7 @@
         <h2 id="story">The Story: From Spec to Self-Improving System</h2>
         <p>Skwaq started with a short specification and a question: <em>can AI agents bootstrap themselves into a competitive vulnerability detection system?</em></p>
 
-        <ol>
+        <ul style="list-style:none; padding-left:0;">
             <li>
                 <img src="https://img.shields.io/badge/-1-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 1"> <strong>The Spec</strong><br>
                 A brief <a href="https://github.com/rysweet/skwaq/blob/main/Specifications/SKWAQ_V2_SPEC.md">specification</a> for a "vulnerability investigation copilot" &mdash; analyze binaries and source code using a code property graph, with AI agents reasoning about the results. No training data, no pre-built rules, no benchmark infrastructure.
@@ -101,7 +101,7 @@
                 <img src="https://img.shields.io/badge/-8-2563eb?style=for-the-badge&labelColor=2563eb" alt="Step 8"> <strong>Scale and Results</strong><br>
                 22+ self-improvement cycles across all suites. 100+ proposals generated, 34% acceptance rate (reviewer catches overfitting). Added CyberGym (3,014 real CVEs from OSS-Fuzz). <span class="highlight">Agentic eval: Juliet F1=97.3%.</span>
             </li>
-        </ol>
+        </ul>
 
         <h2 id="architecture">Architecture</h2>
         <h3>Five-Layer Detection Pipeline</h3>
