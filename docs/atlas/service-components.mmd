@@ -1,0 +1,166 @@
+%% Layer 3 — Service Components: module structure within each crate
+graph TD
+    subgraph "skwaq-core"
+        CORE_LIB["lib.rs"]
+
+        subgraph "agents/"
+            A_DEF["definition"]
+            A_DISC["discovery"]
+            A_MCP["mcp_client"]
+            A_OUT["output_schema"]
+            A_PIPE["pipeline"]
+            A_RUN["runner"]
+            A_TDEF["tool_definitions"]
+            A_TEXE["tool_executor"]
+            A_TRAN["tool_translate"]
+        end
+
+        subgraph "analysis/"
+            AN_FIND["findings"]
+            AN_HARD["hardening"]
+            AN_ORCH["orchestrator"]
+            AN_PAT["patterns"]
+            AN_PATB["patterns_binary"]
+            AN_PATS["patterns_source"]
+            AN_PCTX["perspective_context"]
+            AN_PDF["perspective_dataflow"]
+            AN_PPAT["perspective_pattern"]
+            AN_SEM["semantic_classifier"]
+            AN_SGR["semgrep"]
+            AN_SEV["severity"]
+            AN_SURF["surface"]
+            AN_SURB["surface_binary"]
+            AN_SURS["surface_source"]
+            AN_TAINT["taint"]
+            AN_VAR["variant"]
+        end
+
+        subgraph "binary/"
+            B_CACHE["cache"]
+            B_GHIDRA["ghidra"]
+            B_NATIVE["native"]
+            B_SUB["subprocess"]
+            B_TYPES["types"]
+        end
+
+        subgraph "graph/"
+            G_BUILD["builder"]
+            G_BUILDB["builder_binary"]
+            G_BUILDG["builder_ghidra"]
+            G_BUILDS["builder_source"]
+            G_DB["db"]
+            G_QUERY["queries"]
+            G_TYPES["types"]
+        end
+
+        subgraph "investigation/"
+            I_ANNOT["annotations"]
+            I_HYPO["hypotheses"]
+            I_MGR["manager"]
+        end
+
+        subgraph "knowledge/"
+            K_CWE["cwe"]
+            K_PAT["patterns"]
+            K_SRCH["search"]
+        end
+
+        subgraph "llm/"
+            L_TRAITS["traits"]
+        end
+
+        subgraph "memory/"
+            M_EXP["experience"]
+            M_PAT["pattern"]
+            M_STORE["store"]
+        end
+
+        subgraph "reporting/"
+            R_JSON["json"]
+            R_MD["markdown"]
+            R_SARIF["sarif"]
+        end
+
+        subgraph "skills/"
+            SK_DISC["discovery"]
+        end
+
+        subgraph "source/"
+            S_PARSE["parser"]
+            S_TSF["tree_sitter_flow"]
+        end
+
+        CORE_CFG["config"]
+        CORE_ERR["error"]
+    end
+
+    subgraph "skwaq-gym"
+        GYM_LIB["lib.rs"]
+
+        subgraph "adapters/"
+            AD_BM["binmetric"]
+            AD_BP["binpool"]
+            AD_CGC["cgc"]
+            AD_CG["cybergym"]
+            AD_CSE["cyberseceval"]
+            AD_FIX["fixtures"]
+            AD_JUL["juliet"]
+            AD_OW["owasp"]
+            AD_RW["realworld"]
+        end
+
+        GYM_AG["agentic"]
+        GYM_DASH["dashboard"]
+        GYM_DL["download"]
+        GYM_GT["ground_truth"]
+        GYM_HIST["history"]
+        GYM_IMP["improve"]
+        GYM_SCR["scoring"]
+        GYM_THR["throttle"]
+
+        subgraph "reporting/"
+            GR_JSON["json_report"]
+            GR_MD["markdown_report"]
+            GR_TERM["terminal"]
+        end
+    end
+
+    subgraph "skwaq (cli)"
+        CLI_MAIN["main.rs"]
+        CLI_LIB["lib.rs"]
+
+        subgraph "commands/"
+            C_AGENT["agents_cmd"]
+            C_ANAL["analyze"]
+            C_ANNOT["annotate_cmd"]
+            C_CHKSEC["checksec_cmd"]
+            C_COMMON["common"]
+            C_CONFIG["config_cmd"]
+            C_DIFF["diff_analyze"]
+            C_DOC["doctor"]
+            C_FUZZ["fuzz_cmd"]
+            C_GYM["gym_cmd"]
+            C_HYPO["hypothesize_cmd"]
+            C_INGEST["ingest"]
+            C_INVEST["investigate"]
+            C_INVBIN["investigate_binary"]
+            C_KB["kb_cmd"]
+            C_MEM["memory_cmd"]
+            C_RPT["report"]
+            C_SELF["selftest_cmd"]
+            C_SKILL["skills_cmd"]
+            C_STR["strings_cmd"]
+            C_SURF["surface_cmd"]
+            C_SYM["symbols_cmd"]
+            C_TAINT["taint_cmd"]
+            C_VER["version_cmd"]
+            C_VIZ["viz_cmd"]
+            C_XREF["xrefs_cmd"]
+        end
+    end
+
+    CORE_LIB --> A_DEF & AN_FIND & B_CACHE & G_DB & I_ANNOT & K_CWE & L_TRAITS & M_EXP & R_JSON & SK_DISC & S_PARSE & CORE_CFG & CORE_ERR
+
+    GYM_LIB --> AD_BM & GYM_AG & GYM_DASH & GYM_DL & GYM_GT & GYM_HIST & GYM_IMP & GYM_SCR & GYM_THR & GR_JSON
+
+    CLI_MAIN --> C_AGENT & C_ANAL & C_ANNOT & C_CHKSEC & C_CONFIG & C_DIFF & C_DOC & C_FUZZ & C_GYM & C_HYPO & C_INGEST & C_INVEST & C_INVBIN & C_KB & C_MEM & C_RPT & C_SELF & C_SKILL & C_STR & C_SURF & C_SYM & C_TAINT & C_VER & C_VIZ & C_XREF

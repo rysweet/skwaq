@@ -1,0 +1,192 @@
+// Layer 3 — Service Components: module structure within each crate
+digraph service_components {
+    rankdir=TB;
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=9];
+    edge [color="#999999", arrowsize=0.6];
+    compound=true;
+
+    // ─── skwaq-core ────────────────────────────────────────────────────
+    subgraph cluster_core {
+        label="skwaq-core"; style=filled; fillcolor="#E8F5E9"; color="#2E7D32";
+
+        core_lib [label="lib.rs", fillcolor="#C8E6C9"];
+        core_config [label="config", fillcolor="#F1F8E9"];
+        core_error [label="error", fillcolor="#F1F8E9"];
+
+        subgraph cluster_core_agents {
+            label="agents/"; color="#6A1B9A"; fillcolor="#F3E5F5"; style=filled;
+            a_definition [label="definition", fillcolor="#E1BEE7"];
+            a_discovery [label="discovery", fillcolor="#E1BEE7"];
+            a_mcp_client [label="mcp_client", fillcolor="#E1BEE7"];
+            a_output_schema [label="output_schema", fillcolor="#E1BEE7"];
+            a_pipeline [label="pipeline", fillcolor="#E1BEE7"];
+            a_runner [label="runner", fillcolor="#E1BEE7"];
+            a_tool_definitions [label="tool_definitions", fillcolor="#E1BEE7"];
+            a_tool_executor [label="tool_executor", fillcolor="#E1BEE7"];
+            a_tool_translate [label="tool_translate", fillcolor="#E1BEE7"];
+        }
+
+        subgraph cluster_core_analysis {
+            label="analysis/"; color="#B71C1C"; fillcolor="#FFEBEE"; style=filled;
+            an_findings [label="findings", fillcolor="#FFCDD2"];
+            an_hardening [label="hardening", fillcolor="#FFCDD2"];
+            an_orchestrator [label="orchestrator", fillcolor="#EF9A9A"];
+            an_patterns [label="patterns", fillcolor="#FFCDD2"];
+            an_patterns_binary [label="patterns_binary", fillcolor="#FFCDD2"];
+            an_patterns_source [label="patterns_source", fillcolor="#FFCDD2"];
+            an_perspective_context [label="perspective_context", fillcolor="#FFCDD2"];
+            an_perspective_dataflow [label="perspective_dataflow", fillcolor="#FFCDD2"];
+            an_perspective_pattern [label="perspective_pattern", fillcolor="#FFCDD2"];
+            an_semantic_classifier [label="semantic_classifier", fillcolor="#FFCDD2"];
+            an_semgrep [label="semgrep", fillcolor="#FFCDD2"];
+            an_severity [label="severity", fillcolor="#FFCDD2"];
+            an_surface [label="surface", fillcolor="#FFCDD2"];
+            an_surface_binary [label="surface_binary", fillcolor="#FFCDD2"];
+            an_surface_source [label="surface_source", fillcolor="#FFCDD2"];
+            an_taint [label="taint", fillcolor="#FFCDD2"];
+            an_variant [label="variant", fillcolor="#FFCDD2"];
+        }
+
+        subgraph cluster_core_binary {
+            label="binary/"; color="#0D47A1"; fillcolor="#E3F2FD"; style=filled;
+            b_cache [label="cache", fillcolor="#BBDEFB"];
+            b_ghidra [label="ghidra", fillcolor="#BBDEFB"];
+            b_native [label="native", fillcolor="#BBDEFB"];
+            b_subprocess [label="subprocess", fillcolor="#BBDEFB"];
+            b_types [label="types", fillcolor="#BBDEFB"];
+        }
+
+        subgraph cluster_core_graph {
+            label="graph/"; color="#E65100"; fillcolor="#FFF3E0"; style=filled;
+            g_builder [label="builder", fillcolor="#FFE0B2"];
+            g_builder_binary [label="builder_binary", fillcolor="#FFE0B2"];
+            g_builder_ghidra [label="builder_ghidra", fillcolor="#FFE0B2"];
+            g_builder_source [label="builder_source", fillcolor="#FFE0B2"];
+            g_db [label="db", fillcolor="#FFCC80"];
+            g_queries [label="queries", fillcolor="#FFE0B2"];
+            g_types [label="types", fillcolor="#FFE0B2"];
+        }
+
+        subgraph cluster_core_investigation {
+            label="investigation/"; color="#004D40"; fillcolor="#E0F2F1"; style=filled;
+            i_annotations [label="annotations", fillcolor="#B2DFDB"];
+            i_hypotheses [label="hypotheses", fillcolor="#B2DFDB"];
+            i_manager [label="manager", fillcolor="#B2DFDB"];
+        }
+
+        subgraph cluster_core_knowledge {
+            label="knowledge/"; color="#1A237E"; fillcolor="#E8EAF6"; style=filled;
+            k_cwe [label="cwe", fillcolor="#C5CAE9"];
+            k_patterns [label="patterns", fillcolor="#C5CAE9"];
+            k_search [label="search", fillcolor="#C5CAE9"];
+        }
+
+        subgraph cluster_core_llm {
+            label="llm/"; color="#880E4F"; fillcolor="#FCE4EC"; style=filled;
+            l_traits [label="traits", fillcolor="#F8BBD0"];
+        }
+
+        subgraph cluster_core_memory {
+            label="memory/"; color="#311B92"; fillcolor="#EDE7F6"; style=filled;
+            m_experience [label="experience", fillcolor="#D1C4E9"];
+            m_pattern [label="pattern", fillcolor="#D1C4E9"];
+            m_store [label="store", fillcolor="#D1C4E9"];
+        }
+
+        subgraph cluster_core_reporting {
+            label="reporting/"; color="#33691E"; fillcolor="#F1F8E9"; style=filled;
+            r_json [label="json", fillcolor="#DCEDC8"];
+            r_markdown [label="markdown", fillcolor="#DCEDC8"];
+            r_sarif [label="sarif", fillcolor="#DCEDC8"];
+        }
+
+        subgraph cluster_core_skills {
+            label="skills/"; color="#F57F17"; fillcolor="#FFFDE7"; style=filled;
+            sk_discovery [label="discovery", fillcolor="#FFF9C4"];
+        }
+
+        subgraph cluster_core_source {
+            label="source/"; color="#006064"; fillcolor="#E0F7FA"; style=filled;
+            s_parser [label="parser", fillcolor="#B2EBF2"];
+            s_tree_sitter_flow [label="tree_sitter_flow", fillcolor="#B2EBF2"];
+        }
+    }
+
+    // ─── skwaq-gym ─────────────────────────────────────────────────────
+    subgraph cluster_gym {
+        label="skwaq-gym"; style=filled; fillcolor="#FFF3E0"; color="#E65100";
+
+        gym_lib [label="lib.rs", fillcolor="#FFE0B2"];
+        gym_agentic [label="agentic", fillcolor="#FFCC80"];
+        gym_dashboard [label="dashboard", fillcolor="#FFE0B2"];
+        gym_download [label="download", fillcolor="#FFE0B2"];
+        gym_ground_truth [label="ground_truth", fillcolor="#FFE0B2"];
+        gym_history [label="history", fillcolor="#FFE0B2"];
+        gym_improve [label="improve", fillcolor="#FFCC80"];
+        gym_scoring [label="scoring", fillcolor="#FFCC80"];
+        gym_throttle [label="throttle", fillcolor="#FFE0B2"];
+
+        subgraph cluster_gym_adapters {
+            label="adapters/"; color="#4E342E"; fillcolor="#EFEBE9"; style=filled;
+            ad_binmetric [label="binmetric", fillcolor="#D7CCC8"];
+            ad_binpool [label="binpool", fillcolor="#D7CCC8"];
+            ad_cgc [label="cgc", fillcolor="#D7CCC8"];
+            ad_cybergym [label="cybergym", fillcolor="#D7CCC8"];
+            ad_cyberseceval [label="cyberseceval", fillcolor="#D7CCC8"];
+            ad_fixtures [label="fixtures", fillcolor="#D7CCC8"];
+            ad_juliet [label="juliet", fillcolor="#D7CCC8"];
+            ad_owasp [label="owasp", fillcolor="#D7CCC8"];
+            ad_realworld [label="realworld", fillcolor="#D7CCC8"];
+        }
+
+        subgraph cluster_gym_reporting {
+            label="reporting/"; color="#33691E"; fillcolor="#F1F8E9"; style=filled;
+            gr_json [label="json_report", fillcolor="#DCEDC8"];
+            gr_markdown [label="markdown_report", fillcolor="#DCEDC8"];
+            gr_terminal [label="terminal", fillcolor="#DCEDC8"];
+        }
+    }
+
+    // ─── skwaq (cli) ───────────────────────────────────────────────────
+    subgraph cluster_cli {
+        label="skwaq (cli)"; style=filled; fillcolor="#E3F2FD"; color="#1565C0";
+
+        cli_main [label="main.rs", fillcolor="#BBDEFB"];
+        cli_lib [label="lib.rs", fillcolor="#BBDEFB"];
+
+        subgraph cluster_cli_commands {
+            label="commands/"; color="#0D47A1"; fillcolor="#E8EAF6"; style=filled;
+            c_agents_cmd [label="agents_cmd", fillcolor="#C5CAE9"];
+            c_analyze [label="analyze", fillcolor="#C5CAE9"];
+            c_annotate_cmd [label="annotate_cmd", fillcolor="#C5CAE9"];
+            c_checksec_cmd [label="checksec_cmd", fillcolor="#C5CAE9"];
+            c_common [label="common", fillcolor="#C5CAE9"];
+            c_config_cmd [label="config_cmd", fillcolor="#C5CAE9"];
+            c_diff_analyze [label="diff_analyze", fillcolor="#C5CAE9"];
+            c_doctor [label="doctor", fillcolor="#C5CAE9"];
+            c_fuzz_cmd [label="fuzz_cmd", fillcolor="#C5CAE9"];
+            c_gym_cmd [label="gym_cmd", fillcolor="#C5CAE9"];
+            c_hypothesize_cmd [label="hypothesize_cmd", fillcolor="#C5CAE9"];
+            c_ingest [label="ingest", fillcolor="#C5CAE9"];
+            c_investigate [label="investigate", fillcolor="#C5CAE9"];
+            c_investigate_binary [label="investigate_binary", fillcolor="#C5CAE9"];
+            c_kb_cmd [label="kb_cmd", fillcolor="#C5CAE9"];
+            c_memory_cmd [label="memory_cmd", fillcolor="#C5CAE9"];
+            c_report [label="report", fillcolor="#C5CAE9"];
+            c_selftest_cmd [label="selftest_cmd", fillcolor="#C5CAE9"];
+            c_skills_cmd [label="skills_cmd", fillcolor="#C5CAE9"];
+            c_strings_cmd [label="strings_cmd", fillcolor="#C5CAE9"];
+            c_surface_cmd [label="surface_cmd", fillcolor="#C5CAE9"];
+            c_symbols_cmd [label="symbols_cmd", fillcolor="#C5CAE9"];
+            c_taint_cmd [label="taint_cmd", fillcolor="#C5CAE9"];
+            c_version_cmd [label="version_cmd", fillcolor="#C5CAE9"];
+            c_viz_cmd [label="viz_cmd", fillcolor="#C5CAE9"];
+            c_xrefs_cmd [label="xrefs_cmd", fillcolor="#C5CAE9"];
+        }
+    }
+
+    // Cross-crate dependency edges
+    cli_main -> core_lib [style=bold, color="#2E7D32", label="uses"];
+    cli_main -> gym_lib [style=bold, color="#E65100", label="uses"];
+    gym_lib -> core_lib [style=bold, color="#2E7D32", label="uses"];
+}

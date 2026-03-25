@@ -1,0 +1,137 @@
+%% Layer 4 — Data Flow: The 5-layer detection pipeline
+%%   patterns → dataflow → context → agents → synthesis
+graph TD
+    subgraph "Input"
+        SRC["Source Code<br/>(ingest)"]
+        BIN["Binary<br/>(ingest)"]
+    end
+
+    subgraph "Pre-processing"
+        PARSE["source::parser<br/>tree-sitter parse"]
+        GOBLIN["binary::native<br/>goblin ELF parse"]
+        GHIDRA["binary::ghidra<br/>Ghidra decompile"]
+        GRAPH_BUILD["graph::builder<br/>Build code property graph"]
+        GRAPH_DB["graph::db<br/>SQLite graph store"]
+    end
+
+    subgraph "Layer 1 — Pattern Detection"
+        direction TB
+        PAT_PERSP["analysis::perspective_pattern"]
+        PAT_SRC["analysis::patterns_source<br/>regex + tree-sitter patterns"]
+        PAT_BIN["analysis::patterns_binary<br/>binary signature patterns"]
+        SEMGREP["analysis::semgrep<br/>SemgrepRunner"]
+        SURFACE["analysis::surface<br/>Attack surface identification"]
+        SEM_CLASS["analysis::semantic_classifier<br/>SemanticPatternClassifier"]
+    end
+
+    subgraph "Layer 2 — Dataflow Analysis"
+        direction TB
+        DF_PERSP["analysis::perspective_dataflow"]
+        TAINT["analysis::taint<br/>TaintAnalyzer<br/>source → sink paths"]
+        TSF["source::tree_sitter_flow<br/>AST-level data flow"]
+    end
+
+    subgraph "Layer 3 — Context Validation"
+        direction TB
+        CTX_PERSP["analysis::perspective_context"]
+        VARIANT["analysis::variant<br/>VariantAnalyzer"]
+        HARDENING["analysis::hardening<br/>Binary hardening checks"]
+        SEVERITY["analysis::severity<br/>compute_severity"]
+    end
+
+    subgraph "Layer 4 — LLM Agent Pipeline"
+        direction TB
+        ORCH["analysis::orchestrator<br/>AnalysisOrchestrator<br/>(multi-cycle)"]
+
+        subgraph "Default Pipeline"
+            AG_RENAME["decompile-renamer"]
+            AG_ATTACK["attack-surface"]
+            AG_VULN["vuln-hunter<br/>(+ python/java variants)"]
+            AG_CRITIC["critic"]
+        end
+
+        subgraph "Deep Pipeline"
+            AG_EXPLOIT["exploit-analyst"]
+            AG_DEFENSE["defense-analyst"]
+            AG_VERDICT["verdict-synthesizer"]
+        end
+
+        subgraph "Improvement Agents"
+            AG_FAILURE["failure-analyst"]
+            AG_OVERFIT["overfitting-reviewer"]
+        end
+
+        subgraph "Specialist Agents"
+            AG_TAINT["taint-tracer"]
+            AG_CRASH["crash-analyst"]
+            AG_CWE["cwe-classifier"]
+            AG_DECOMP["decompile-analyst"]
+            AG_PATCH["patch-diff-analyst"]
+            AG_SKEPTIC["results-skeptic"]
+        end
+
+        RUNNER["agents::runner<br/>AgentRunner"]
+        TOOLS["agents::tool_executor<br/>execute_tool"]
+        MEMORY["memory::store<br/>MemoryStore"]
+        KNOWLEDGE["knowledge::search<br/>CWE + patterns"]
+    end
+
+    subgraph "Layer 5 — Synthesis"
+        direction TB
+        SYNTH["gym::agentic<br/>synthesis routing"]
+        CONSENSUS["Consensus early-exit"]
+        SEMANTIC["Semantic-confidence fast path"]
+        EXPERT["Expert-routed domain prompts"]
+        FULL_SYNTH["Full LLM synthesis"]
+    end
+
+    subgraph "Output"
+        FINDINGS["analysis::findings<br/>Finding objects"]
+        SCORE["gym::scoring<br/>CWE + semantic scoring"]
+        REPORT["reporting::{json,markdown,sarif}"]
+        HISTORY["gym::history<br/>HistoryDb"]
+        IMPROVE["gym::improve<br/>ImprovementCycle"]
+    end
+
+    %% Pre-processing flow
+    SRC --> PARSE --> GRAPH_BUILD
+    BIN --> GOBLIN --> GRAPH_BUILD
+    BIN --> GHIDRA --> GRAPH_BUILD
+    GRAPH_BUILD --> GRAPH_DB
+
+    %% Layer 1
+    GRAPH_DB --> PAT_PERSP
+    PAT_PERSP --> PAT_SRC & PAT_BIN & SEMGREP & SURFACE & SEM_CLASS
+
+    %% Layer 2
+    PAT_PERSP --> DF_PERSP
+    GRAPH_DB --> DF_PERSP
+    DF_PERSP --> TAINT & TSF
+
+    %% Layer 3
+    DF_PERSP --> CTX_PERSP
+    CTX_PERSP --> VARIANT & HARDENING & SEVERITY
+
+    %% Layer 4
+    CTX_PERSP --> ORCH
+    ORCH --> RUNNER
+    RUNNER --> AG_RENAME --> AG_ATTACK --> AG_VULN --> AG_CRITIC
+    RUNNER --> AG_EXPLOIT & AG_DEFENSE --> AG_VERDICT
+    RUNNER --> TOOLS
+    TOOLS --> GRAPH_DB
+    TOOLS --> MEMORY
+    TOOLS --> KNOWLEDGE
+    AG_FAILURE -.-> IMPROVE
+    AG_OVERFIT -.-> IMPROVE
+
+    %% Layer 5
+    ORCH --> SYNTH
+    SYNTH --> CONSENSUS & SEMANTIC & EXPERT & FULL_SYNTH
+
+    %% Output
+    SYNTH --> FINDINGS
+    FINDINGS --> SCORE
+    FINDINGS --> REPORT
+    SCORE --> HISTORY
+    HISTORY --> IMPROVE
+    IMPROVE -.->|"next cycle"| ORCH

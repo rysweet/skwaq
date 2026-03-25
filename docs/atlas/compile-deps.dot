@@ -1,0 +1,132 @@
+// Layer 2 — Compile Deps: Cargo dependency graph between workspace crates and key external deps
+digraph compile_deps {
+    rankdir=LR;
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=10];
+    edge [color="#666666"];
+    compound=true;
+
+    // Workspace crates
+    subgraph cluster_workspace {
+        label="Workspace Crates";
+        style=filled; fillcolor="#E3F2FD"; color="#1565C0";
+        cli  [label="skwaq\n(cli bin)", fillcolor="#BBDEFB"];
+        gym  [label="skwaq-gym", fillcolor="#BBDEFB"];
+        core [label="skwaq-core", fillcolor="#BBDEFB"];
+    }
+
+    // Internal git deps
+    subgraph cluster_rustyclawd {
+        label="RustyClawd (git)";
+        style=filled; fillcolor="#FCE4EC"; color="#C62828";
+        rc_core  [label="rustyclawd-core", fillcolor="#F8BBD0"];
+        rc_tools [label="rustyclawd-tools", fillcolor="#F8BBD0"];
+    }
+
+    // Async
+    subgraph cluster_async {
+        label="Async / Runtime";
+        style=dashed; color="#00695C";
+        tokio [label="tokio", fillcolor="#B2DFDB"];
+        futures [label="futures", fillcolor="#B2DFDB"];
+        async_trait [label="async-trait", fillcolor="#B2DFDB"];
+    }
+
+    // CLI/TUI
+    subgraph cluster_cli_ui {
+        label="CLI / TUI";
+        style=dashed; color="#4A148C";
+        clap [label="clap", fillcolor="#E1BEE7"];
+        ratatui [label="ratatui", fillcolor="#E1BEE7"];
+        crossterm [label="crossterm", fillcolor="#E1BEE7"];
+        indicatif [label="indicatif", fillcolor="#E1BEE7"];
+    }
+
+    // Serialization
+    subgraph cluster_serde {
+        label="Serialization";
+        style=dashed; color="#E65100";
+        serde [label="serde", fillcolor="#FFE0B2"];
+        serde_json [label="serde_json", fillcolor="#FFE0B2"];
+        serde_yaml [label="serde_yaml_ng", fillcolor="#FFE0B2"];
+        toml_dep [label="toml", fillcolor="#FFE0B2"];
+    }
+
+    // Error handling
+    subgraph cluster_error {
+        label="Errors";
+        style=dashed; color="#B71C1C";
+        anyhow [label="anyhow", fillcolor="#FFCDD2"];
+        thiserror [label="thiserror", fillcolor="#FFCDD2"];
+    }
+
+    // Logging
+    subgraph cluster_log {
+        label="Logging";
+        style=dashed; color="#1B5E20";
+        tracing [label="tracing", fillcolor="#C8E6C9"];
+        tracing_sub [label="tracing-subscriber", fillcolor="#C8E6C9"];
+    }
+
+    // Binary analysis
+    subgraph cluster_binary {
+        label="Binary / Source Analysis";
+        style=dashed; color="#0D47A1";
+        goblin [label="goblin", fillcolor="#BBDEFB"];
+        tree_sitter [label="tree-sitter", fillcolor="#BBDEFB"];
+        tree_sitter_c [label="tree-sitter-c", fillcolor="#BBDEFB"];
+    }
+
+    // Storage
+    rusqlite [label="rusqlite", fillcolor="#D7CCC8"];
+
+    // Network
+    reqwest [label="reqwest", fillcolor="#B3E5FC"];
+
+    // Archive / Parallel
+    subgraph cluster_archive {
+        label="Archive / Parallel";
+        style=dashed; color="#37474F";
+        flate2 [label="flate2", fillcolor="#CFD8DC"];
+        tar_dep [label="tar", fillcolor="#CFD8DC"];
+        zip_dep [label="zip", fillcolor="#CFD8DC"];
+        walkdir [label="walkdir", fillcolor="#CFD8DC"];
+        rayon [label="rayon", fillcolor="#CFD8DC"];
+    }
+
+    // Utilities
+    subgraph cluster_util {
+        label="Utilities";
+        style=dashed; color="#795548";
+        chrono [label="chrono", fillcolor="#D7CCC8"];
+        uuid [label="uuid", fillcolor="#D7CCC8"];
+        sha2 [label="sha2", fillcolor="#D7CCC8"];
+        regex [label="regex", fillcolor="#D7CCC8"];
+        dirs [label="dirs", fillcolor="#D7CCC8"];
+        tempfile [label="tempfile", fillcolor="#D7CCC8"];
+    }
+
+    // Workspace edges (bold)
+    cli -> core [style=bold, color="#1565C0", label="path"];
+    cli -> gym  [style=bold, color="#1565C0", label="path"];
+    cli -> rc_tools [style=bold, color="#C62828", label="workspace"];
+    gym -> core [style=bold, color="#1565C0", label="path"];
+    core -> rc_core [style=bold, color="#C62828", label="workspace"];
+
+    // CLI external edges
+    cli -> {tokio clap tracing tracing_sub anyhow};
+    cli -> {serde serde_json uuid chrono dirs tempfile};
+
+    // Gym external edges
+    gym -> {tokio async_trait futures rayon};
+    gym -> {serde serde_json toml_dep anyhow thiserror tracing};
+    gym -> {reqwest rusqlite chrono uuid sha2 tempfile dirs};
+    gym -> {flate2 tar_dep zip_dep walkdir indicatif regex};
+
+    // Core external edges
+    gym -> {tokio async_trait reqwest} [style=dotted]; // already drawn
+    core -> {tokio async_trait reqwest};
+    core -> {serde serde_json serde_yaml toml_dep};
+    core -> {anyhow thiserror tracing};
+    core -> {rusqlite goblin tree_sitter tree_sitter_c};
+    core -> {chrono uuid sha2 regex dirs tempfile};
+}
