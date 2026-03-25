@@ -110,6 +110,27 @@ fn python_patterns() -> &'static [SourcePattern] {
             severity: Severity::Critical,
             reason: "SQL injection via string concatenation; use parameterized queries",
         },
+        // Python SQL injection via .format() (CWE-89 — from agentic cycle)
+        SourcePattern {
+            regex: r#"\bcursor\.execute\s*\([^)]*\.format\s*\("#,
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "SQL injection via .format(); use parameterized queries with placeholders",
+        },
+        // Broader execute with string building (CWE-89)
+        SourcePattern {
+            regex: r#"\b(?:execute|executemany|executescript)\s*\([^)]*(?:\+|%|\.format)\s*"#,
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "SQL query built with string operations; use parameterized queries",
+        },
+        // Hardcoded private keys (CWE-312/798 — from agentic cycle)
+        SourcePattern {
+            regex: r"-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----",
+            category: DangerCategory::Crypto,
+            severity: Severity::Critical,
+            reason: "Hardcoded private key in source code; use key management service or environment variables",
+        },
         // Weak cryptography (CWE-327) — from PR #107
         SourcePattern {
             regex: r"\bhashlib\.md5\s*\(",
