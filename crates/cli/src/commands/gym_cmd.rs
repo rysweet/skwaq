@@ -114,6 +114,11 @@ pub enum GymSub {
         /// Output directory for results
         #[arg(long)]
         output: Option<PathBuf>,
+
+        /// Create a git tag and GitHub release with the eval results.
+        /// Tag format: eval-YYYY-MM-DD[-vN] (auto-increments if date already exists).
+        #[arg(long)]
+        tag: bool,
     },
 
     /// Run self-improvement loop: analyze failures and propose fixes
@@ -359,6 +364,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             llm_only,
             adaptive,
             output,
+            tag,
         } => {
             let mode = if *quick {
                 "pattern-only"
@@ -643,6 +649,84 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             println!("Metadata: {}", eval_dir.join("metadata.json").display());
             println!("Summary: {}", eval_dir.join("summary.md").display());
             println!("Dashboard: {}", eval_dir.join("dashboard.md").display());
+
+            if *tag {
+                println!();
+                println!("=== Tagging ===");
+                let tag_name = skwaq_gym::tagging::next_tag_name(&skwaq_root)?;
+
+                // Collect per-CWE results across all suites for the tag payload
+                let mut all_cwe_tag_results = Vec::new();
+                for suite_name in &suite_list {
+                    let suite_dir = eval_dir.join(suite_name);
+                    let shard_count = suite_shards.get(*suite_name).copied().unwrap_or(1);
+                    if let Ok(reports) = load_shard_reports(suite_name, &suite_dir, shard_count) {
+                        for report in &reports {
+                            for cwe in &report.per_cwe {
+                                all_cwe_tag_results.push(skwaq_gym::tagging::CweTagResult {
+                                    suite: suite_name.to_string(),
+                                    cwe_id: cwe.cwe_id,
+                                    total_cases: cwe.total_cases,
+                                    true_positives: cwe.true_positives,
+                                    false_positives: cwe.false_positives,
+                                    false_negatives: cwe.false_negatives,
+                                    detection_rate: cwe.detection_rate,
+                                    precision: cwe.precision,
+                                });
+                            }
+                        }
+                    }
+                }
+
+                let payload = skwaq_gym::tagging::EvalTagPayload {
+                    tag_name: tag_name.clone(),
+                    commit: eval_metadata.git_commit.clone(),
+                    timestamp: eval_metadata.started_at.clone(),
+                    mode: eval_metadata.mode.clone(),
+                    suites: eval_metadata.suites.clone(),
+                    procs_per_suite: eval_metadata.procs_per_suite,
+                    concurrency: eval_metadata.concurrency,
+                    llm_backend: eval_metadata.llm_backend.clone(),
+                    llm_model: eval_metadata.llm_model.clone(),
+                    binary_mode: eval_metadata.binary_mode,
+                    skwaq_version: eval_metadata.skwaq_version.clone(),
+                    git_dirty: eval_metadata.git_dirty,
+                    suite_results: summaries
+                        .iter()
+                        .map(|s| skwaq_gym::tagging::SuiteTagResult {
+                            suite: s.suite.clone(),
+                            f1: s.f1,
+                            precision: s.precision,
+                            recall: s.recall,
+                            true_positives: s.true_positives,
+                            false_positives: s.false_positives,
+                            false_negatives: s.false_negatives,
+                            true_negatives: s.true_negatives,
+                        })
+                        .collect(),
+                    per_cwe: all_cwe_tag_results,
+                    reproducible_command: skwaq_gym::tagging::build_reproducible_command(
+                        suites,
+                        *max_cases,
+                        *procs,
+                        *concurrency,
+                        *quick,
+                        *llm_only,
+                        *adaptive,
+                    ),
+                };
+
+                let results_json = eval_dir.join("summary.json");
+                match skwaq_gym::tagging::tag_eval_results(&skwaq_root, &payload, &results_json) {
+                    Ok(created_tag) => {
+                        println!("  Tag created: {}", created_tag);
+                    }
+                    Err(e) => {
+                        eprintln!("WARNING: Tagging failed: {}", e);
+                        eprintln!("  Results are still saved in: {}", eval_dir.display());
+                    }
+                }
+            }
         }
         GymSub::Improve {
             suite,
