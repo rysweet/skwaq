@@ -77,6 +77,33 @@ fn execute_query_graph(
         }));
     }
 
+    // Try native Cypher via LadybugDB first — no translation needed
+    if db.has_ladybug() {
+        match db.cypher_query(query) {
+            Ok(rows) if !rows.is_empty() => {
+                let json_rows: Vec<Vec<String>> = rows
+                    .iter()
+                    .map(|row| row.iter().map(|v| format!("{v}")).collect())
+                    .collect();
+                return Ok(serde_json::json!({
+                    "status": "ok",
+                    "query": query,
+                    "backend": "ladybugdb",
+                    "rows": json_rows,
+                    "row_count": json_rows.len()
+                }));
+            }
+            Ok(_) => {
+                // Empty result from LadybugDB — fall through to SQL
+                // (data may only be in SQLite during migration)
+            }
+            Err(e) => {
+                tracing::debug!("LadybugDB query failed, falling back to SQL: {e}");
+            }
+        }
+    }
+
+    // Fallback: translate Cypher → SQL
     let (sql, params) = match translate_to_sql(query, investigation_id) {
         Ok(pair) => pair,
         Err(msg) => {
@@ -93,6 +120,7 @@ fn execute_query_graph(
         Ok(rows) => Ok(serde_json::json!({
             "status": "ok",
             "query": query,
+            "backend": "sqlite",
             "rows": rows,
             "row_count": rows.len()
         })),
