@@ -7,6 +7,7 @@
 //! - `builder_source`: populates from parsed source files
 
 use super::db::GraphDb;
+use super::ladybug_db::LadybugGraphDb;
 use serde::Serialize;
 
 /// Counts of nodes inserted by `build_from_binary_info`.
@@ -43,17 +44,33 @@ pub struct SourceInsertCounts {
 /// Fluent builder for inserting analysis data into the graph.
 pub struct GraphBuilder<'a> {
     db: &'a GraphDb,
+    /// Optional LadybugDB backend for dual-write during migration.
+    ladybug: Option<&'a LadybugGraphDb>,
 }
 
 impl<'a> GraphBuilder<'a> {
-    /// Create a new builder backed by `db`.
+    /// Create a new builder backed by SQLite only.
     pub fn new(db: &'a GraphDb) -> Self {
-        Self { db }
+        Self { db, ladybug: None }
     }
 
-    /// Access the underlying database handle.
+    /// Create a builder that writes to both SQLite and LadybugDB.
+    pub fn with_ladybug(db: &'a GraphDb, ladybug: &'a LadybugGraphDb) -> Self {
+        Self {
+            db,
+            ladybug: Some(ladybug),
+        }
+    }
+
+    /// Access the underlying SQLite database handle.
     pub(crate) fn db(&self) -> &GraphDb {
         self.db
+    }
+
+    /// Access the LadybugDB handle (if configured).
+    #[allow(dead_code)]
+    pub(crate) fn ladybug(&self) -> Option<&LadybugGraphDb> {
+        self.ladybug
     }
 
     /// Insert a function node into the graph.
@@ -69,6 +86,18 @@ impl<'a> GraphBuilder<'a> {
              VALUES (?1, ?2, ?3, '', 0.0)",
             &[&id, &name, &address],
         )?;
+        if let Some(lg) = &self.ladybug {
+            let cypher = format!(
+                "CREATE (f:Function {{id: '{}', name: '{}', address: '{}'}})",
+                id.replace('\'', "\\'"),
+                name.replace('\'', "\\'"),
+                address.replace('\'', "\\'"),
+            );
+            if let Err(e) = lg.execute(&cypher) {
+                // Log but don't fail — LadybugDB is secondary during migration
+                tracing::debug!("LadybugDB insert_function failed (non-fatal): {e}");
+            }
+        }
         Ok(())
     }
 
@@ -78,6 +107,16 @@ impl<'a> GraphBuilder<'a> {
             "INSERT OR IGNORE INTO calls (caller_id, callee_id) VALUES (?1, ?2)",
             &[&caller_id, &callee_id],
         )?;
+        if let Some(lg) = &self.ladybug {
+            let cypher = format!(
+                "MATCH (a:Function {{id: '{}'}}), (b:Function {{id: '{}'}}) CREATE (a)-[:CALLS]->(b)",
+                caller_id.replace('\'', "\\'"),
+                callee_id.replace('\'', "\\'"),
+            );
+            if let Err(e) = lg.execute(&cypher) {
+                tracing::debug!("LadybugDB insert_call failed (non-fatal): {e}");
+            }
+        }
         Ok(())
     }
 
@@ -87,6 +126,17 @@ impl<'a> GraphBuilder<'a> {
             "INSERT OR IGNORE INTO data_sources (id, name, source_type) VALUES (?1, ?2, ?3)",
             &[&id, &name, &kind],
         )?;
+        if let Some(lg) = &self.ladybug {
+            let cypher = format!(
+                "CREATE (s:DataSource {{id: '{}', name: '{}', source_type: '{}'}})",
+                id.replace('\'', "\\'"),
+                name.replace('\'', "\\'"),
+                kind.replace('\'', "\\'"),
+            );
+            if let Err(e) = lg.execute(&cypher) {
+                tracing::debug!("LadybugDB insert_string_source failed (non-fatal): {e}");
+            }
+        }
         Ok(())
     }
 
@@ -96,6 +146,17 @@ impl<'a> GraphBuilder<'a> {
             "INSERT OR IGNORE INTO data_sinks (id, name, sink_type) VALUES (?1, ?2, ?3)",
             &[&id, &name, &kind],
         )?;
+        if let Some(lg) = &self.ladybug {
+            let cypher = format!(
+                "CREATE (k:DataSink {{id: '{}', name: '{}', sink_type: '{}'}})",
+                id.replace('\'', "\\'"),
+                name.replace('\'', "\\'"),
+                kind.replace('\'', "\\'"),
+            );
+            if let Err(e) = lg.execute(&cypher) {
+                tracing::debug!("LadybugDB insert_data_sink failed (non-fatal): {e}");
+            }
+        }
         Ok(())
     }
 
@@ -111,6 +172,18 @@ impl<'a> GraphBuilder<'a> {
              VALUES (?1, ?2, ?3, 0)",
             &[&source_id, &sink_id, &path],
         )?;
+        if let Some(lg) = &self.ladybug {
+            let cypher = format!(
+                "MATCH (s:DataSource {{id: '{}'}}), (k:DataSink {{id: '{}'}}) \
+                 CREATE (s)-[:TAINT_FLOW {{path: '{}', sanitized: 0}}]->(k)",
+                source_id.replace('\'', "\\'"),
+                sink_id.replace('\'', "\\'"),
+                path.replace('\'', "\\'"),
+            );
+            if let Err(e) = lg.execute(&cypher) {
+                tracing::debug!("LadybugDB insert_taint_flow failed (non-fatal): {e}");
+            }
+        }
         Ok(())
     }
 }

@@ -1,23 +1,22 @@
 //! Graph database for storing analysis artifacts.
 //!
-//! Uses SQLite with a graph-like schema as the default backend.
-//! Designed to be swappable to LadybugDB/Kuzu when native linking
-//! issues are resolved (kuzu and lbug crates have CXX-bridge linking
-//! problems in downstream consumers as of March 2026).
-//!
-//! The schema uses Cypher-inspired naming so migration to LadybugDB
-//! will be straightforward: node tables become NODE TABLEs, relationships
-//! become REL TABLEs, and queries become Cypher.
+//! Primary backend is LadybugDB (native Cypher graph database).
+//! SQLite is retained for backward compatibility during migration.
+//! New graph queries should use `cypher()`, not raw SQL.
 
 use std::path::Path;
 
+use super::ladybug_db::LadybugGraphDb;
+
 /// Wrapper around the graph database.
 ///
-/// Currently backed by SQLite tables that model a property graph.
-/// Will migrate to LadybugDB (lbug crate) when CXX-bridge linking
-/// issues are resolved.
+/// Provides both SQL (legacy, via `execute`/`conn`) and Cypher
+/// (preferred, via `cypher`/`cypher_query`) interfaces. The Cypher
+/// interface is backed by LadybugDB for native graph traversals.
 pub struct GraphDb {
     conn: rusqlite::Connection,
+    /// LadybugDB backend for native Cypher queries.
+    ladybug: Option<LadybugGraphDb>,
 }
 
 impl GraphDb {
@@ -27,7 +26,15 @@ impl GraphDb {
         let db_file = path.join("skwaq.db");
         let conn = rusqlite::Connection::open(&db_file)?;
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
-        let gdb = Self { conn };
+        // Open LadybugDB alongside SQLite
+        let ladybug = match LadybugGraphDb::open(path) {
+            Ok(lg) => Some(lg),
+            Err(e) => {
+                tracing::warn!("LadybugDB unavailable, using SQLite only: {e}");
+                None
+            }
+        };
+        let gdb = Self { conn, ladybug };
         gdb.ensure_schema()?;
         Ok(gdb)
     }
@@ -35,7 +42,8 @@ impl GraphDb {
     /// Open an in-memory database (for tests).
     pub fn in_memory() -> anyhow::Result<Self> {
         let conn = rusqlite::Connection::open_in_memory()?;
-        let gdb = Self { conn };
+        let ladybug = LadybugGraphDb::in_memory().ok();
+        let gdb = Self { conn, ladybug };
         gdb.ensure_schema()?;
         Ok(gdb)
     }
@@ -55,9 +63,41 @@ impl GraphDb {
         Ok(())
     }
 
-    /// Get a reference to the underlying connection for complex queries.
+    /// Get a reference to the underlying SQLite connection for complex queries.
+    /// Prefer `cypher()` or `cypher_query()` for graph traversals.
     pub fn conn(&self) -> &rusqlite::Connection {
         &self.conn
+    }
+
+    /// Execute a Cypher query via LadybugDB. Returns rows as Vec<Vec<Value>>.
+    /// Falls back to an error if LadybugDB is not available.
+    #[allow(dead_code)]
+    pub fn cypher_query(&self, cypher: &str) -> anyhow::Result<Vec<Vec<lbug::Value>>> {
+        match &self.ladybug {
+            Some(lg) => lg.query(cypher),
+            None => anyhow::bail!("LadybugDB not available for Cypher query"),
+        }
+    }
+
+    /// Execute a Cypher statement (no results expected).
+    #[allow(dead_code)]
+    pub fn cypher_execute(&self, cypher: &str) -> anyhow::Result<()> {
+        match &self.ladybug {
+            Some(lg) => lg.execute(cypher),
+            None => anyhow::bail!("LadybugDB not available for Cypher execute"),
+        }
+    }
+
+    /// Check if LadybugDB is available for native Cypher queries.
+    #[allow(dead_code)]
+    pub fn has_ladybug(&self) -> bool {
+        self.ladybug.is_some()
+    }
+
+    /// Get the LadybugDB handle directly.
+    #[allow(dead_code)] // Used by agent tools migrating to Cypher
+    pub fn ladybug(&self) -> Option<&LadybugGraphDb> {
+        self.ladybug.as_ref()
     }
 
     fn ensure_schema(&self) -> anyhow::Result<()> {
