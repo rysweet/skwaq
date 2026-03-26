@@ -331,12 +331,15 @@ impl Gym {
 
                 let data_dir = &data_dir;
                 let config = &config;
+                const MAX_RETRIES: u32 = 3;
 
                 let mut pending: FuturesUnordered<
                     Pin<Box<dyn std::future::Future<Output = CaseResult<'_>>>>,
                 > = FuturesUnordered::new();
                 let mut case_iter = cases.iter().enumerate();
                 let mut completed = 0usize;
+                let mut retry_queue: Vec<(usize, &ground_truth::TestCase, u32)> = Vec::new();
+                let mut total_retries = 0usize;
 
                 // Seed the initial batch
                 for _ in 0..concurrency {
@@ -391,16 +394,65 @@ impl Gym {
                             outcomes.push(outcome);
                         }
                         Ok(Err(e)) => {
-                            tracing::warn!("[{}/{}] Case {} failed: {}", i, total, case.id, e);
+                            let msg = e.to_string();
+                            let is_retryable = msg.contains("429")
+                                || msg.contains("rate")
+                                || msg.contains("Rate")
+                                || msg.contains("Timeout")
+                                || msg.contains("timed out")
+                                || msg.contains("throttl")
+                                || msg.contains("error sending request");
+                            // Extract retry count from the case index (stored as i)
+                            let retry_count = retry_queue
+                                .iter()
+                                .filter(|(idx, _, _)| *idx == i)
+                                .map(|(_, _, r)| *r)
+                                .next()
+                                .unwrap_or(0);
+                            if is_retryable && retry_count < MAX_RETRIES {
+                                tracing::info!(
+                                    "[{}/{}] Case {} failed (retryable), requeueing (attempt {}/{}): {}",
+                                    i, total, case.id, retry_count + 1, MAX_RETRIES, msg.chars().take(80).collect::<String>()
+                                );
+                                retry_queue.push((i, case, retry_count + 1));
+                                total_retries += 1;
+                            } else {
+                                tracing::warn!(
+                                    "[{}/{}] Case {} failed (not retryable or max retries): {}",
+                                    i,
+                                    total,
+                                    case.id,
+                                    e
+                                );
+                            }
                         }
                         Err(_) => {
-                            tracing::warn!(
-                                "[{}/{}] Case {} timed out after {}s",
-                                i,
-                                total,
-                                case.id,
-                                timeout_secs
-                            );
+                            let retry_count = retry_queue
+                                .iter()
+                                .filter(|(idx, _, _)| *idx == i)
+                                .map(|(_, _, r)| *r)
+                                .next()
+                                .unwrap_or(0);
+                            if retry_count < MAX_RETRIES {
+                                tracing::info!(
+                                    "[{}/{}] Case {} timed out, requeueing (attempt {}/{})",
+                                    i,
+                                    total,
+                                    case.id,
+                                    retry_count + 1,
+                                    MAX_RETRIES
+                                );
+                                retry_queue.push((i, case, retry_count + 1));
+                                total_retries += 1;
+                            } else {
+                                tracing::warn!(
+                                    "[{}/{}] Case {} timed out after {}s (max retries exhausted)",
+                                    i,
+                                    total,
+                                    case.id,
+                                    timeout_secs
+                                );
+                            }
                         }
                     }
 
@@ -412,7 +464,20 @@ impl Gym {
                         concurrency
                     };
                     while pending.len() < target {
-                        if let Some((next_i, &next_case)) = case_iter.next() {
+                        // Prefer retries over new cases (they've already waited).
+                        if let Some((retry_i, retry_case, _retry_count)) = retry_queue.pop() {
+                            let suite = suite_name.clone();
+                            pending.push(Box::pin(async move {
+                                // Brief delay before retry to avoid hammering.
+                                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                                let result = tokio::time::timeout(
+                                    std::time::Duration::from_secs(timeout_secs),
+                                    adapter.run_case(retry_case, data_dir, config),
+                                )
+                                .await;
+                                (retry_i, retry_case, suite, result)
+                            }));
+                        } else if let Some((next_i, &next_case)) = case_iter.next() {
                             let suite = suite_name.clone();
                             pending.push(Box::pin(async move {
                                 let result = tokio::time::timeout(
@@ -426,6 +491,14 @@ impl Gym {
                             break;
                         }
                     }
+                }
+
+                if total_retries > 0 {
+                    tracing::info!(
+                        "{}: {} cases retried due to API errors",
+                        suite_name,
+                        total_retries
+                    );
                 }
 
                 // Log final adaptive throttle stats
