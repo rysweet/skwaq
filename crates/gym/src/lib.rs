@@ -13,6 +13,7 @@ pub mod improve;
 pub mod reporting;
 pub mod scoring;
 pub mod shared_throttle;
+pub mod tagging;
 pub mod throttle;
 
 use futures::stream::{FuturesUnordered, StreamExt};
