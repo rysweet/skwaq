@@ -1,0 +1,18 @@
+# Cargo configuration for skwaq
+#
+# Build optimizations to manage disk usage and build times.
+
+[profile.dev]
+# Use thin LTO in dev for faster linking and smaller artifacts
+# debug = "line-tables-only" saves ~60% disk vs full debug info
+debug = "line-tables-only"
+# Split debug info into a separate file (don't embed in binary)
+split-debuginfo = "unpacked"
+# Incremental compilation helps rebuild speed but uses more disk
+incremental = true
+
+[profile.release]
+# Strip debug info from release builds
+strip = "debuginfo"
+# Use LTO for smaller binaries
+lto = "thin"
