@@ -14,7 +14,7 @@ Replace the sections below with information about your project.
 
 ## Overview
 
-AI-powered vulnerability discovery CLI for binaries and source code. Skwaq builds a Code Property Graph from binary analysis, detects dangerous API usage patterns, traces taint flows, and uses AI agents to reason about vulnerabilities. It complements tools like Ghidra and IDA Pro - it's the reasoning layer on top.
+**A self-improving, multi-agent vulnerability analyzer.** **[Website](https://rysweet.github.io/skwaq/)** | **[Benchmark Progress](https://github.com/rysweet/skwaq/issues/28)** | **[Specification](Specifications/SKWAQ_V2_SPEC.md)** | **[Code Atlas](docs/atlas/README.md)**
 
 ## Architecture
 

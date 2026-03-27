@@ -5,6 +5,7 @@ use opentelemetry::trace::TracerProvider as _;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::Layer as _;
 
 use skwaq::commands::{Cli, Commands};
 
@@ -27,12 +28,13 @@ async fn main() -> anyhow::Result<()> {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(filter));
 
     if let Some(provider) = otel_provider {
-        // With OTEL: fmt layer + tracing-opentelemetry layer
+        // With OTEL: fmt layer (respects verbosity) + OTEL layer (always captures info+ spans)
         let otel_layer = tracing_opentelemetry::layer().with_tracer(provider.tracer("skwaq"));
+        let otel_filter =
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
         tracing_subscriber::registry()
-            .with(env_filter)
-            .with(tracing_subscriber::fmt::layer())
-            .with(otel_layer)
+            .with(tracing_subscriber::fmt::layer().with_filter(env_filter))
+            .with(otel_layer.with_filter(otel_filter))
             .init();
     } else {
         // Without OTEL: fmt only (graceful degradation if telemetry dir fails)
