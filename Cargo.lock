@@ -3152,7 +3152,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 [[package]]
 name = "rustyclawd-core"
 version = "0.1.0"
-source = "git+https://github.com/rysweet/RustyClawd?rev=8bf3b0745c67e108b874bcc0508fe351d72a6f8d#8bf3b0745c67e108b874bcc0508fe351d72a6f8d"
+source = "git+https://github.com/rysweet/RustyClawd?rev=800a7c0#800a7c0e734b07aa8e47e817333d4e9030096071"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3174,7 +3174,7 @@ dependencies = [
 [[package]]
 name = "rustyclawd-tools"
 version = "0.1.0"
-source = "git+https://github.com/rysweet/RustyClawd?rev=8bf3b0745c67e108b874bcc0508fe351d72a6f8d#8bf3b0745c67e108b874bcc0508fe351d72a6f8d"
+source = "git+https://github.com/rysweet/RustyClawd?rev=800a7c0#800a7c0e734b07aa8e47e817333d4e9030096071"
 dependencies = [
  "anyhow",
  "async-stream",

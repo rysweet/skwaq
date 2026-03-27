@@ -12,8 +12,8 @@ repository = "https://github.com/rysweet/skwaq"
 [workspace.dependencies]
 # RustyClawd agent framework — pinned to a known-good main commit for reproducible builds.
 # To update: run `cargo update -p rustyclawd-core -p rustyclawd-tools --precise <commit>`
-rustyclawd-core = { git = "https://github.com/rysweet/RustyClawd", rev = "8bf3b0745c67e108b874bcc0508fe351d72a6f8d" }
-rustyclawd-tools = { git = "https://github.com/rysweet/RustyClawd", rev = "8bf3b0745c67e108b874bcc0508fe351d72a6f8d" }
+rustyclawd-core = { git = "https://github.com/rysweet/RustyClawd", rev = "800a7c0" }
+rustyclawd-tools = { git = "https://github.com/rysweet/RustyClawd", rev = "800a7c0" }
 
 # Async
 tokio = { version = "1", features = ["full"] }

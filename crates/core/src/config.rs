@@ -37,6 +37,8 @@ pub struct LlmConfig {
     pub copilot: CopilotConfig,
     #[serde(default)]
     pub ollama: OllamaConfig,
+    #[serde(default)]
+    pub azure: AzureConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,6 +63,34 @@ pub struct OllamaConfig {
     pub model: String,
     #[serde(default = "default_embedding_model")]
     pub embedding_model: String,
+}
+
+/// Azure OpenAI configuration for Azure AI Foundry deployments.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AzureConfig {
+    /// Azure AI Services endpoint (e.g. "https://xxx.cognitiveservices.azure.com/")
+    #[serde(default)]
+    pub endpoint: String,
+    /// Model deployment name (e.g. "gpt-51-skwaq")
+    #[serde(default)]
+    pub deployment: String,
+    /// Azure OpenAI API version
+    #[serde(default = "default_azure_api_version")]
+    pub api_version: String,
+}
+
+impl Default for AzureConfig {
+    fn default() -> Self {
+        Self {
+            endpoint: String::new(),
+            deployment: String::new(),
+            api_version: default_azure_api_version(),
+        }
+    }
+}
+
+fn default_azure_api_version() -> String {
+    "2024-10-21".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -153,6 +183,7 @@ impl Default for LlmConfig {
             embeddings: default_ollama(),
             copilot: CopilotConfig::default(),
             ollama: OllamaConfig::default(),
+            azure: AzureConfig::default(),
         }
     }
 }

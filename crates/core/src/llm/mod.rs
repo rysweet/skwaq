@@ -28,6 +28,7 @@ use anyhow::Context;
 /// Backend selection is explicit:
 /// - `"copilot"` -- GitHub Copilot via `api.githubcopilot.com`.
 /// - `"anthropic"` -- Anthropic Messages API (`ANTHROPIC_API_KEY`).
+/// - `"azure"` -- Azure AI Foundry via `DefaultAzureCredential`.
 ///
 /// Any other value is rejected. skwaq does not silently switch providers.
 pub async fn create_client(config: &LlmConfig) -> anyhow::Result<Client> {
@@ -36,12 +37,12 @@ pub async fn create_client(config: &LlmConfig) -> anyhow::Result<Client> {
 
 /// Create a client for reasoning stages using `[llm].reasoning`.
 pub async fn create_reasoning_client(config: &LlmConfig) -> anyhow::Result<Client> {
-    create_client_for_backend(config.reasoning.trim(), "llm.reasoning").await
+    create_client_for_backend(config, config.reasoning.trim(), "llm.reasoning").await
 }
 
 /// Create a client for decompilation stages using `[llm].decompilation`.
 pub async fn create_decompilation_client(config: &LlmConfig) -> anyhow::Result<Client> {
-    create_client_for_backend(config.decompilation.trim(), "llm.decompilation").await
+    create_client_for_backend(config, config.decompilation.trim(), "llm.decompilation").await
 }
 
 /// Create the clients needed by the agent pipeline.
@@ -78,29 +79,42 @@ pub async fn create_pipeline_clients(
         (&reasoning_backend, &decompilation_backend)
     {
         if reasoning_backend == decompilation_backend {
-            let client = create_client_for_backend_name(reasoning_backend, "llm.reasoning").await?;
+            let client =
+                create_client_for_backend_name(config, reasoning_backend, "llm.reasoning").await?;
             return Ok((Some(client.clone()), Some(client)));
         }
     }
 
     let reasoning = match reasoning_backend {
-        Some(backend) => Some(create_client_for_backend_name(&backend, "llm.reasoning").await?),
+        Some(backend) => {
+            Some(create_client_for_backend_name(config, &backend, "llm.reasoning").await?)
+        }
         None => None,
     };
     let decompilation = match decompilation_backend {
-        Some(backend) => Some(create_client_for_backend_name(&backend, "llm.decompilation").await?),
+        Some(backend) => {
+            Some(create_client_for_backend_name(config, &backend, "llm.decompilation").await?)
+        }
         None => None,
     };
 
     Ok((reasoning, decompilation))
 }
 
-async fn create_client_for_backend(raw_backend: &str, field_name: &str) -> anyhow::Result<Client> {
+async fn create_client_for_backend(
+    config: &LlmConfig,
+    raw_backend: &str,
+    field_name: &str,
+) -> anyhow::Result<Client> {
     let backend = validate_backend_name(raw_backend, field_name)?;
-    create_client_for_backend_name(&backend, field_name).await
+    create_client_for_backend_name(config, &backend, field_name).await
 }
 
-async fn create_client_for_backend_name(backend: &str, field_name: &str) -> anyhow::Result<Client> {
+async fn create_client_for_backend_name(
+    config: &LlmConfig,
+    backend: &str,
+    field_name: &str,
+) -> anyhow::Result<Client> {
     match backend {
         "copilot" => {
             let client = Client::new_copilot().await.map_err(|e| {
@@ -109,6 +123,25 @@ async fn create_client_for_backend_name(backend: &str, field_name: &str) -> anyh
             Ok(client)
         }
         "anthropic" => create_anthropic_client(),
+        "azure" => {
+            let azure = &config.azure;
+            anyhow::ensure!(
+                !azure.endpoint.is_empty(),
+                "Azure backend selected for {field_name} but [llm.azure] endpoint is not set"
+            );
+            anyhow::ensure!(
+                !azure.deployment.is_empty(),
+                "Azure backend selected for {field_name} but [llm.azure] deployment is not set"
+            );
+            let client =
+                Client::new_azure_foundry(&azure.endpoint, &azure.deployment, &azure.api_version)
+                    .map_err(|e| {
+                    anyhow::anyhow!(
+                        "Failed to create Azure AI Foundry client for {field_name}: {e}"
+                    )
+                })?;
+            Ok(client)
+        }
         _ => unreachable!("validate_backend_name rejected unsupported backends"),
     }
 }
@@ -196,14 +229,14 @@ fn create_anthropic_client() -> anyhow::Result<Client> {
 
 fn validate_backend_name(raw_backend: &str, field_name: &str) -> anyhow::Result<String> {
     let backend = raw_backend.trim().to_ascii_lowercase();
-    if !matches!(backend.as_str(), "copilot" | "anthropic") {
+    if !matches!(backend.as_str(), "copilot" | "anthropic" | "azure") {
         let display = if backend.is_empty() {
             "<empty>"
         } else {
             backend.as_str()
         };
         anyhow::bail!(
-            "Unsupported {} backend {:?}. Set {} explicitly to \"copilot\" or \"anthropic\"; hidden fallback is disabled.",
+            "Unsupported {} backend {:?}. Set {} explicitly to \"copilot\", \"anthropic\", or \"azure\"; hidden fallback is disabled.",
             field_name,
             display,
             field_name
