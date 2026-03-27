@@ -78,7 +78,8 @@ fn execute_query_graph(
     }
 
     // Try native Cypher via LadybugDB first — no translation needed
-    if db.has_ladybug() {
+    {
+        // LadybugDB is always available
         match db.cypher_query(query) {
             Ok(rows) if !rows.is_empty() => {
                 let json_rows: Vec<Vec<String>> = rows
@@ -120,7 +121,7 @@ fn execute_query_graph(
         Ok(rows) => Ok(serde_json::json!({
             "status": "ok",
             "query": query,
-            "backend": "sqlite",
+            "backend": "sqlite-legacy",
             "rows": rows,
             "row_count": rows.len()
         })),
@@ -225,6 +226,35 @@ fn execute_get_callers(
         .unwrap_or("unknown");
     tracing::info!("Tool get_callers: {func_name}");
 
+    // Try native Cypher via LadybugDB
+    {
+        // LadybugDB is always available
+        let cypher = format!(
+            "MATCH (caller:Function)-[:CALLS]->(callee:Function {{name: '{}'}}) RETURN caller.name, caller.address",
+            func_name.replace('\'', "\\'")
+        );
+        if let Ok(rows) = db.cypher_query(&cypher) {
+            if !rows.is_empty() {
+                let callers: Vec<serde_json::Value> = rows
+                    .iter()
+                    .filter_map(|r| {
+                        let name = crate::graph::LadybugGraphDb::as_str(&r[0])?;
+                        let addr = crate::graph::LadybugGraphDb::as_str(&r[1]).unwrap_or("");
+                        Some(serde_json::json!({"name": name, "address": addr}))
+                    })
+                    .collect();
+                return Ok(serde_json::json!({
+                    "status": "ok",
+                    "function": func_name,
+                    "callers": callers,
+                    "count": callers.len(),
+                    "backend": "ladybugdb"
+                }));
+            }
+        }
+    }
+
+    // Legacy SQL path — data may only be in SQLite for pre-migration DBs
     let mut stmt = db.conn().prepare(
         "SELECT f1.name, f1.address FROM calls c \
          JOIN functions f1 ON c.caller_id = f1.id \
@@ -237,19 +267,8 @@ fn execute_get_callers(
     })?;
 
     let callers: Vec<serde_json::Value> = rows
-        .filter_map(|r| match r {
-            Ok(v) => Some(v),
-            Err(e) => {
-                tracing::warn!("Error reading caller row: {e}");
-                None
-            }
-        })
-        .map(|(name, addr)| {
-            serde_json::json!({
-                "name": name,
-                "address": addr
-            })
-        })
+        .filter_map(|r| r.ok())
+        .map(|(name, addr)| serde_json::json!({"name": name, "address": addr}))
         .collect();
 
     Ok(serde_json::json!({
@@ -272,6 +291,35 @@ fn execute_get_callees(
         .unwrap_or("unknown");
     tracing::info!("Tool get_callees: {func_name}");
 
+    // Try native Cypher via LadybugDB
+    {
+        // LadybugDB is always available
+        let cypher = format!(
+            "MATCH (caller:Function {{name: '{}'}})-[:CALLS]->(callee:Function) RETURN callee.name, callee.address",
+            func_name.replace('\'', "\\'")
+        );
+        if let Ok(rows) = db.cypher_query(&cypher) {
+            if !rows.is_empty() {
+                let callees: Vec<serde_json::Value> = rows
+                    .iter()
+                    .filter_map(|r| {
+                        let name = crate::graph::LadybugGraphDb::as_str(&r[0])?;
+                        let addr = crate::graph::LadybugGraphDb::as_str(&r[1]).unwrap_or("");
+                        Some(serde_json::json!({"name": name, "address": addr}))
+                    })
+                    .collect();
+                return Ok(serde_json::json!({
+                    "status": "ok",
+                    "function": func_name,
+                    "callees": callees,
+                    "count": callees.len(),
+                    "backend": "ladybugdb"
+                }));
+            }
+        }
+    }
+
+    // Legacy SQL path — data may only be in SQLite for pre-migration DBs
     let mut stmt = db.conn().prepare(
         "SELECT f2.name, f2.address FROM calls c \
          JOIN functions f1 ON c.caller_id = f1.id \
@@ -284,19 +332,8 @@ fn execute_get_callees(
     })?;
 
     let callees: Vec<serde_json::Value> = rows
-        .filter_map(|r| match r {
-            Ok(v) => Some(v),
-            Err(e) => {
-                tracing::warn!("Error reading callee row: {e}");
-                None
-            }
-        })
-        .map(|(name, addr)| {
-            serde_json::json!({
-                "name": name,
-                "address": addr
-            })
-        })
+        .filter_map(|r| r.ok())
+        .map(|(name, addr)| serde_json::json!({"name": name, "address": addr}))
         .collect();
 
     Ok(serde_json::json!({
@@ -767,6 +804,32 @@ fn execute_get_data_sources(
 ) -> anyhow::Result<serde_json::Value> {
     tracing::info!("Tool get_data_sources for investigation {investigation_id}");
 
+    // Try Cypher first
+    {
+        // LadybugDB is always available
+        if let Ok(rows) = db
+            .cypher_query("MATCH (s:DataSource) RETURN s.name, s.source_type, s.location LIMIT 100")
+        {
+            if !rows.is_empty() {
+                let sources: Vec<serde_json::Value> = rows
+                    .iter()
+                    .filter_map(|r| {
+                        let name = crate::graph::LadybugGraphDb::as_str(&r[0])?;
+                        let src_type = crate::graph::LadybugGraphDb::as_str(&r[1]).unwrap_or("");
+                        let location = crate::graph::LadybugGraphDb::as_str(&r[2]).unwrap_or("");
+                        Some(serde_json::json!({"name": name, "source_type": src_type, "location": location}))
+                    })
+                    .collect();
+                return Ok(serde_json::json!({
+                    "status": "ok",
+                    "data_sources": sources,
+                    "count": sources.len(),
+                    "backend": "ladybugdb"
+                }));
+            }
+        }
+    }
+
     let mut stmt = db.conn().prepare(
         "SELECT name, source_type, location FROM data_sources \
          WHERE investigation_id = ?1 LIMIT 100",
@@ -805,6 +868,29 @@ fn execute_get_imports(
     _args: &serde_json::Value,
 ) -> anyhow::Result<serde_json::Value> {
     tracing::info!("Tool get_imports for investigation {investigation_id}");
+
+    // Try Cypher first
+    {
+        // LadybugDB is always available
+        if let Ok(rows) = db.cypher_query("MATCH (s:Symbol) WHERE s.symbol_type = 'import' RETURN s.name, s.symbol_type LIMIT 100") {
+            if !rows.is_empty() {
+                let imports: Vec<serde_json::Value> = rows
+                    .iter()
+                    .filter_map(|r| {
+                        let name = crate::graph::LadybugGraphDb::as_str(&r[0])?;
+                        let sym_type = crate::graph::LadybugGraphDb::as_str(&r[1]).unwrap_or("");
+                        Some(serde_json::json!({"name": name, "symbol_type": sym_type}))
+                    })
+                    .collect();
+                return Ok(serde_json::json!({
+                    "status": "ok",
+                    "imports": imports,
+                    "count": imports.len(),
+                    "backend": "ladybugdb"
+                }));
+            }
+        }
+    }
 
     let mut stmt = db.conn().prepare(
         "SELECT name, symbol_type FROM symbols \
