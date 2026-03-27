@@ -81,6 +81,15 @@ impl LadybugGraphDb {
         }
     }
 
+    /// Extract a float from a LadybugDB Value.
+    pub fn as_f64(val: &lbug::Value) -> Option<f64> {
+        match val {
+            lbug::Value::Double(d) => Some(*d),
+            lbug::Value::Int64(n) => Some(*n as f64),
+            _ => None,
+        }
+    }
+
     /// Create the graph schema.
     fn ensure_schema(&self) -> anyhow::Result<()> {
         let stmts = [

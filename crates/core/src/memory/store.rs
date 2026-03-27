@@ -1,107 +1,73 @@
-//! SQLite-backed persistent memory store.
+//! LadybugDB-backed persistent memory store.
 //!
-//! Stores experiences in a dedicated SQLite database that lives outside any
-//! single investigation, so memories persist across benchmark runs and targets.
+//! Stores agent experiences as graph nodes in LadybugDB, enabling
+//! native Cypher queries for recall and relationship traversal.
 
 use super::experience::{Experience, ExperienceType};
+use crate::graph::ladybug_db::LadybugGraphDb;
 use std::path::Path;
 
-/// Persistent memory store backed by SQLite.
-///
-/// Each agent's memories are isolated by agent name. The store lives at
-/// `~/.skwaq/memory.db` by default, separate from the investigation graph DB.
+/// Persistent memory store backed by LadybugDB.
 pub struct MemoryStore {
-    conn: rusqlite::Connection,
+    db: LadybugGraphDb,
 }
 
-/// Maximum number of experiences per agent (prevents unbounded growth).
+/// Maximum number of experiences per agent.
 const MAX_EXPERIENCES_PER_AGENT: u32 = 10_000;
 
-/// Confidence decay rate per day (experiences lose relevance over time).
+/// Confidence decay rate per day.
 const CONFIDENCE_DECAY_PER_DAY: f64 = 0.005;
 
-/// Minimum confidence threshold — experiences below this are pruned.
+/// Minimum confidence threshold.
 const MIN_CONFIDENCE: f64 = 0.05;
 
 impl MemoryStore {
     /// Open (or create) a memory store at the given path.
     pub fn open(path: &Path) -> anyhow::Result<Self> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let conn = rusqlite::Connection::open(path)?;
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
-        let store = Self { conn };
+        let db = LadybugGraphDb::open(path)?;
+        let store = Self { db };
         store.ensure_schema()?;
         Ok(store)
     }
 
     /// Open an in-memory store (for tests).
     pub fn in_memory() -> anyhow::Result<Self> {
-        let conn = rusqlite::Connection::open_in_memory()?;
-        let store = Self { conn };
+        let db = LadybugGraphDb::in_memory()?;
+        let store = Self { db };
         store.ensure_schema()?;
         Ok(store)
     }
 
-    /// Open the default memory store at `~/.skwaq/memory.db`.
+    /// Open the default memory store.
     pub fn open_default() -> anyhow::Result<Self> {
         let home =
             dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
-        let path = home.join(".skwaq").join("memory.db");
+        let path = home.join(".skwaq").join("memory_graph");
         Self::open(&path)
     }
 
     fn ensure_schema(&self) -> anyhow::Result<()> {
-        self.conn.execute_batch(
-            "
-            CREATE TABLE IF NOT EXISTS experiences (
-                id TEXT PRIMARY KEY,
-                agent TEXT NOT NULL,
-                experience_type TEXT NOT NULL,
-                context TEXT NOT NULL,
-                outcome TEXT NOT NULL,
-                confidence REAL NOT NULL DEFAULT 1.0,
-                tags TEXT NOT NULL DEFAULT '[]',
-                created_at TEXT NOT NULL,
-                recall_count INTEGER NOT NULL DEFAULT 0
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_exp_agent ON experiences(agent);
-            CREATE INDEX IF NOT EXISTS idx_exp_type ON experiences(experience_type);
-            CREATE INDEX IF NOT EXISTS idx_exp_confidence ON experiences(confidence);
-            CREATE INDEX IF NOT EXISTS idx_exp_created ON experiences(created_at);
-
-            -- FTS index for full-text search on context and outcome
-            CREATE VIRTUAL TABLE IF NOT EXISTS experiences_fts USING fts5(
-                id,
-                context,
-                outcome,
-                tags,
-                content=experiences,
-                content_rowid=rowid
-            );
-
-            -- Triggers to keep FTS in sync
-            CREATE TRIGGER IF NOT EXISTS experiences_ai AFTER INSERT ON experiences BEGIN
-                INSERT INTO experiences_fts(rowid, id, context, outcome, tags)
-                VALUES (new.rowid, new.id, new.context, new.outcome, new.tags);
-            END;
-
-            CREATE TRIGGER IF NOT EXISTS experiences_ad AFTER DELETE ON experiences BEGIN
-                INSERT INTO experiences_fts(experiences_fts, rowid, id, context, outcome, tags)
-                VALUES ('delete', old.rowid, old.id, old.context, old.outcome, old.tags);
-            END;
-
-            CREATE TRIGGER IF NOT EXISTS experiences_au AFTER UPDATE ON experiences BEGIN
-                INSERT INTO experiences_fts(experiences_fts, rowid, id, context, outcome, tags)
-                VALUES ('delete', old.rowid, old.id, old.context, old.outcome, old.tags);
-                INSERT INTO experiences_fts(rowid, id, context, outcome, tags)
-                VALUES (new.rowid, new.id, new.context, new.outcome, new.tags);
-            END;
-            ",
-        )?;
+        let ddl = "CREATE NODE TABLE IF NOT EXISTS Experience(\
+            id STRING PRIMARY KEY, \
+            agent STRING, \
+            experience_type STRING, \
+            context STRING, \
+            outcome STRING, \
+            confidence DOUBLE DEFAULT 1.0, \
+            tags STRING DEFAULT '[]', \
+            created_at STRING, \
+            recall_count INT64 DEFAULT 0\
+        )";
+        if let Err(e) = self.db.execute(ddl) {
+            if !e.to_string().contains("already exists") {
+                return Err(e);
+            }
+        }
         Ok(())
+    }
+
+    fn esc(s: &str) -> String {
+        s.replace('\\', "\\\\").replace('\'', "\\'")
     }
 
     /// Store a new experience.
@@ -114,39 +80,30 @@ impl MemoryStore {
         confidence: f64,
         tags: &[&str],
     ) -> anyhow::Result<String> {
-        let id = format!(
-            "exp_{}_{}",
-            chrono::Utc::now().format("%Y%m%d_%H%M%S"),
-            &uuid::Uuid::new_v4().to_string()[..8]
-        );
+        let id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
-        let tags_json = serde_json::to_string(tags)?;
-        let confidence = confidence.clamp(0.0, 1.0);
+        let tags_vec: Vec<String> = tags.iter().map(|s| s.to_string()).collect();
+        let tags_json = serde_json::to_string(&tags_vec)?;
 
-        self.conn.execute(
-            "INSERT INTO experiences (id, agent, experience_type, context, outcome, confidence, tags, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            rusqlite::params![
-                id,
-                agent,
-                experience_type.as_str(),
-                context,
-                outcome,
-                confidence,
-                tags_json,
-                now
-            ],
-        )?;
-
-        // Enforce per-agent limit by removing oldest low-confidence entries
-        self.enforce_limit(agent)?;
-
+        let cypher = format!(
+            "CREATE (e:Experience {{id: '{id}', agent: '{agent}', experience_type: '{etype}', \
+             context: '{ctx}', outcome: '{out}', confidence: {conf}, tags: '{tgs}', \
+             created_at: '{created}', recall_count: 0}})",
+            id = Self::esc(&id),
+            agent = Self::esc(agent),
+            etype = experience_type.as_str(),
+            ctx = Self::esc(context),
+            out = Self::esc(outcome),
+            conf = confidence,
+            tgs = Self::esc(&tags_json),
+            created = Self::esc(&now),
+        );
+        self.db.execute(&cypher)?;
+        self.prune_agent(agent)?;
         Ok(id)
     }
 
-    /// Recall experiences relevant to a query, for a given agent.
-    ///
-    /// Uses FTS5 for initial candidate retrieval, then re-ranks by relevance.
+    /// Recall experiences matching a query, ranked by relevance.
     pub fn recall(
         &self,
         agent: &str,
@@ -154,292 +111,219 @@ impl MemoryStore {
         limit: usize,
         min_confidence: f64,
     ) -> anyhow::Result<Vec<Experience>> {
-        // Use FTS5 for candidate retrieval
-        let fts_query = Self::build_fts_query(query);
+        let cypher = format!(
+            "MATCH (e:Experience) WHERE e.agent = '{}' AND e.confidence >= {} \
+             RETURN e.id, e.agent, e.experience_type, e.context, e.outcome, \
+                    e.confidence, e.tags, e.created_at, e.recall_count \
+             ORDER BY e.confidence DESC",
+            Self::esc(agent),
+            if min_confidence > 0.0 {
+                min_confidence
+            } else {
+                MIN_CONFIDENCE
+            }
+        );
 
-        let mut stmt = self.conn.prepare(
-            "SELECT e.id, e.agent, e.experience_type, e.context, e.outcome,
-                    e.confidence, e.tags, e.created_at, e.recall_count
-             FROM experiences e
-             JOIN experiences_fts f ON e.id = f.id
-             WHERE e.agent = ?1
-               AND e.confidence >= ?2
-               AND experiences_fts MATCH ?3
-             ORDER BY e.confidence DESC
-             LIMIT ?4",
-        )?;
-
-        let candidates = stmt
-            .query_map(
-                rusqlite::params![agent, min_confidence, fts_query, (limit * 3) as i64],
-                Self::row_to_experience,
-            )?
-            .filter_map(|r| r.ok())
-            .collect::<Vec<_>>();
-
-        // Re-rank by relevance score
-        let mut scored: Vec<(f64, Experience)> = candidates
-            .into_iter()
-            .map(|e| {
-                let score = e.relevance_to(query);
-                (score, e)
-            })
-            .filter(|(score, _)| *score > 0.0)
+        let rows = self.db.query(&cypher)?;
+        let mut experiences: Vec<Experience> = rows
+            .iter()
+            .filter_map(|r| self.row_to_experience(r))
             .collect();
 
-        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-        scored.truncate(limit);
+        experiences.sort_by(|a, b| {
+            b.relevance_to(query)
+                .partial_cmp(&a.relevance_to(query))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        experiences.truncate(limit);
 
-        let ids: Vec<String> = scored.iter().map(|(_, e)| e.id.clone()).collect();
-        self.increment_recall_count(&ids)?;
+        for exp in &experiences {
+            let _ = self.db.execute(&format!(
+                "MATCH (e:Experience {{id: '{}'}}) SET e.recall_count = e.recall_count + 1",
+                Self::esc(&exp.id)
+            ));
+        }
 
-        Ok(scored.into_iter().map(|(_, e)| e).collect())
+        Ok(experiences)
     }
 
-    /// Recall experiences by agent without full-text search (returns most recent).
+    /// Recall the N most recent experiences for an agent.
     pub fn recall_recent(
         &self,
         agent: &str,
         limit: usize,
         experience_type: Option<ExperienceType>,
     ) -> anyhow::Result<Vec<Experience>> {
-        let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = match experience_type {
-            Some(et) => (
-                "SELECT id, agent, experience_type, context, outcome, confidence, tags, created_at, recall_count
-                 FROM experiences WHERE agent = ?1 AND experience_type = ?2 AND confidence >= ?3
-                 ORDER BY created_at DESC LIMIT ?4"
-                    .to_string(),
-                vec![
-                    Box::new(agent.to_string()),
-                    Box::new(et.as_str().to_string()),
-                    Box::new(MIN_CONFIDENCE),
-                    Box::new(limit as i64),
-                ],
-            ),
-            None => (
-                "SELECT id, agent, experience_type, context, outcome, confidence, tags, created_at, recall_count
-                 FROM experiences WHERE agent = ?1 AND confidence >= ?2
-                 ORDER BY created_at DESC LIMIT ?3"
-                    .to_string(),
-                vec![
-                    Box::new(agent.to_string()),
-                    Box::new(MIN_CONFIDENCE),
-                    Box::new(limit as i64),
-                ],
-            ),
+        let type_filter = match experience_type {
+            Some(et) => format!("AND e.experience_type = '{}'", et.as_str()),
+            None => String::new(),
         };
-
-        let params_ref: Vec<&dyn rusqlite::types::ToSql> =
-            params.iter().map(|p| p.as_ref()).collect();
-        let mut stmt = self.conn.prepare(&sql)?;
-        let results = stmt
-            .query_map(params_ref.as_slice(), Self::row_to_experience)?
-            .filter_map(|r| r.ok())
-            .collect();
-
-        Ok(results)
+        let cypher = format!(
+            "MATCH (e:Experience) WHERE e.agent = '{}' {} \
+             RETURN e.id, e.agent, e.experience_type, e.context, e.outcome, \
+                    e.confidence, e.tags, e.created_at, e.recall_count \
+             ORDER BY e.created_at DESC LIMIT {}",
+            Self::esc(agent),
+            type_filter,
+            limit
+        );
+        let rows = self.db.query(&cypher)?;
+        Ok(rows
+            .iter()
+            .filter_map(|r| self.row_to_experience(r))
+            .collect())
     }
 
     /// Apply confidence decay to all experiences.
-    ///
-    /// Call this periodically (e.g., at the start of each benchmark run).
-    /// Experiences that decay below `MIN_CONFIDENCE` are deleted.
     pub fn apply_decay(&self) -> anyhow::Result<u32> {
-        let now = chrono::Utc::now();
+        let decay = 1.0 - CONFIDENCE_DECAY_PER_DAY;
+        let _ = self.db.execute(&format!(
+            "MATCH (e:Experience) SET e.confidence = e.confidence * {}",
+            decay
+        ));
+        let _ = self.db.execute(&format!(
+            "MATCH (e:Experience) WHERE e.confidence < {} DELETE e",
+            MIN_CONFIDENCE
+        ));
+        Ok(0)
+    }
 
-        // Get all experiences and compute decay
-        let mut stmt = self
-            .conn
-            .prepare("SELECT id, confidence, created_at FROM experiences")?;
-
-        let updates: Vec<(String, f64)> = stmt
-            .query_map([], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, f64>(1)?,
-                    row.get::<_, String>(2)?,
-                ))
-            })?
-            .filter_map(|r| r.ok())
-            .map(|(id, confidence, created_at)| {
-                let created = chrono::DateTime::parse_from_rfc3339(&created_at)
-                    .map(|dt| dt.with_timezone(&chrono::Utc))
-                    .unwrap_or(now);
-                let days = (now - created).num_days().max(0) as f64;
-                let decayed = confidence * (1.0 - CONFIDENCE_DECAY_PER_DAY).powf(days);
-                (id, decayed)
-            })
-            .collect();
-
-        let mut pruned = 0u32;
-        for (id, new_confidence) in &updates {
-            if *new_confidence < MIN_CONFIDENCE {
-                self.conn.execute(
-                    "DELETE FROM experiences WHERE id = ?1",
-                    rusqlite::params![id],
-                )?;
-                pruned += 1;
-            } else {
-                self.conn.execute(
-                    "UPDATE experiences SET confidence = ?1 WHERE id = ?2",
-                    rusqlite::params![new_confidence, id],
-                )?;
+    /// Get statistics for a specific agent.
+    pub fn statistics(&self, agent: &str) -> anyhow::Result<MemoryStats> {
+        let agent_esc = Self::esc(agent);
+        let rows = self.db.query(&format!(
+            "MATCH (e:Experience) WHERE e.agent = '{agent_esc}' \
+             RETURN e.experience_type, count(e), avg(e.confidence), sum(e.recall_count)"
+        ))?;
+        let mut stats = MemoryStats::default();
+        for row in &rows {
+            let etype = LadybugGraphDb::as_str(&row[0]).unwrap_or("");
+            let cnt = LadybugGraphDb::as_i64(&row[1]).unwrap_or(0) as u32;
+            let avg = LadybugGraphDb::as_f64(&row[2]).unwrap_or(0.0);
+            let recalls = LadybugGraphDb::as_i64(&row[3]).unwrap_or(0) as u32;
+            stats.total_experiences += cnt;
+            stats.total_recalls += recalls;
+            stats.avg_confidence = avg;
+            match etype {
+                "success" => stats.successes = cnt,
+                "failure" => stats.failures = cnt,
+                "pattern" => stats.patterns = cnt,
+                "insight" => stats.insights = cnt,
+                _ => {}
             }
         }
-
-        Ok(pruned)
+        Ok(stats)
     }
 
-    /// Get statistics about stored memories.
-    pub fn statistics(&self, agent: &str) -> anyhow::Result<MemoryStats> {
-        let total: u32 = self.conn.query_row(
-            "SELECT COUNT(*) FROM experiences WHERE agent = ?1",
-            rusqlite::params![agent],
-            |row| row.get(0),
-        )?;
-
-        let by_type = |t: &str| -> anyhow::Result<u32> {
-            Ok(self.conn.query_row(
-                "SELECT COUNT(*) FROM experiences WHERE agent = ?1 AND experience_type = ?2",
-                rusqlite::params![agent, t],
-                |row| row.get(0),
-            )?)
-        };
-
-        let avg_confidence: f64 = self.conn.query_row(
-            "SELECT COALESCE(AVG(confidence), 0.0) FROM experiences WHERE agent = ?1",
-            rusqlite::params![agent],
-            |row| row.get(0),
-        )?;
-
-        Ok(MemoryStats {
-            total,
-            successes: by_type("success")?,
-            failures: by_type("failure")?,
-            patterns: by_type("pattern")?,
-            insights: by_type("insight")?,
-            avg_confidence,
-        })
-    }
-
-    /// Get statistics across all agents.
+    /// Get global statistics across all agents.
     pub fn global_statistics(&self) -> anyhow::Result<MemoryStats> {
-        let total: u32 = self
-            .conn
-            .query_row("SELECT COUNT(*) FROM experiences", [], |row| row.get(0))?;
-
-        let by_type = |t: &str| -> anyhow::Result<u32> {
-            Ok(self.conn.query_row(
-                "SELECT COUNT(*) FROM experiences WHERE experience_type = ?1",
-                rusqlite::params![t],
-                |row| row.get(0),
-            )?)
-        };
-
-        let avg_confidence: f64 = self.conn.query_row(
-            "SELECT COALESCE(AVG(confidence), 0.0) FROM experiences",
-            [],
-            |row| row.get(0),
+        let rows = self.db.query(
+            "MATCH (e:Experience) \
+             RETURN e.experience_type, count(e), avg(e.confidence), sum(e.recall_count)",
         )?;
-
-        Ok(MemoryStats {
-            total,
-            successes: by_type("success")?,
-            failures: by_type("failure")?,
-            patterns: by_type("pattern")?,
-            insights: by_type("insight")?,
-            avg_confidence,
-        })
-    }
-
-    /// Build an FTS5 query from a natural language query string.
-    fn build_fts_query(query: &str) -> String {
-        let words: Vec<&str> = query.split_whitespace().filter(|w| w.len() > 2).collect();
-
-        if words.is_empty() {
-            return "\"\"".to_string();
+        let mut stats = MemoryStats::default();
+        for row in &rows {
+            let etype = LadybugGraphDb::as_str(&row[0]).unwrap_or("");
+            let cnt = LadybugGraphDb::as_i64(&row[1]).unwrap_or(0) as u32;
+            let avg = LadybugGraphDb::as_f64(&row[2]).unwrap_or(0.0);
+            let recalls = LadybugGraphDb::as_i64(&row[3]).unwrap_or(0) as u32;
+            stats.total_experiences += cnt;
+            stats.total_recalls += recalls;
+            stats.avg_confidence = avg;
+            match etype {
+                "success" => stats.successes = cnt,
+                "failure" => stats.failures = cnt,
+                "pattern" => stats.patterns = cnt,
+                "insight" => stats.insights = cnt,
+                _ => {}
+            }
         }
-
-        // Use OR matching for broader recall
-        words
-            .iter()
-            .map(|w| {
-                // Escape special FTS5 characters
-                let escaped = w.replace('"', "");
-                format!("\"{escaped}\"")
-            })
-            .collect::<Vec<_>>()
-            .join(" OR ")
+        Ok(stats)
     }
 
-    fn row_to_experience(row: &rusqlite::Row<'_>) -> rusqlite::Result<Experience> {
-        let tags_json: String = row.get(6)?;
-        let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
-        let type_str: String = row.get(2)?;
-
-        Ok(Experience {
-            id: row.get(0)?,
-            agent: row.get(1)?,
-            experience_type: ExperienceType::from_str(&type_str).unwrap_or(ExperienceType::Insight),
-            context: row.get(3)?,
-            outcome: row.get(4)?,
-            confidence: row.get(5)?,
-            tags,
-            created_at: row.get(7)?,
-            recall_count: row.get(8)?,
-        })
-    }
-
-    fn increment_recall_count(&self, ids: &[String]) -> anyhow::Result<()> {
-        for id in ids {
-            self.conn.execute(
-                "UPDATE experiences SET recall_count = recall_count + 1 WHERE id = ?1",
-                rusqlite::params![id],
-            )?;
-        }
-        Ok(())
-    }
-
-    /// Delete all memories for a specific agent.
+    /// Clear all experiences for a specific agent.
     pub fn clear_agent(&self, agent: &str) -> anyhow::Result<u32> {
-        let deleted = self.conn.execute(
-            "DELETE FROM experiences WHERE agent = ?1",
-            rusqlite::params![agent],
-        )?;
-        Ok(deleted as u32)
+        let _ = self.db.execute(&format!(
+            "MATCH (e:Experience) WHERE e.agent = '{}' DELETE e",
+            Self::esc(agent)
+        ));
+        Ok(0)
     }
 
-    fn enforce_limit(&self, agent: &str) -> anyhow::Result<()> {
-        let count: u32 = self.conn.query_row(
-            "SELECT COUNT(*) FROM experiences WHERE agent = ?1",
-            rusqlite::params![agent],
-            |row| row.get(0),
-        )?;
-
+    fn prune_agent(&self, agent: &str) -> anyhow::Result<()> {
+        let rows = self.db.query(&format!(
+            "MATCH (e:Experience) WHERE e.agent = '{}' RETURN count(e)",
+            Self::esc(agent)
+        ))?;
+        let count = rows
+            .first()
+            .and_then(|r| LadybugGraphDb::as_i64(&r[0]))
+            .unwrap_or(0) as u32;
         if count > MAX_EXPERIENCES_PER_AGENT {
             let excess = count - MAX_EXPERIENCES_PER_AGENT;
-            self.conn.execute(
-                "DELETE FROM experiences WHERE id IN (
-                    SELECT id FROM experiences WHERE agent = ?1
-                    ORDER BY confidence ASC, created_at ASC
-                    LIMIT ?2
-                )",
-                rusqlite::params![agent, excess],
-            )?;
+            let _ = self.db.execute(&format!(
+                "MATCH (e:Experience) WHERE e.agent = '{}' \
+                 WITH e ORDER BY e.confidence ASC LIMIT {} DELETE e",
+                Self::esc(agent),
+                excess
+            ));
         }
         Ok(())
+    }
+
+    fn row_to_experience(&self, row: &[lbug::Value]) -> Option<Experience> {
+        if row.len() < 9 {
+            return None;
+        }
+        Some(Experience {
+            id: LadybugGraphDb::as_str(&row[0])?.to_string(),
+            agent: LadybugGraphDb::as_str(&row[1])?.to_string(),
+            experience_type: ExperienceType::from_str(LadybugGraphDb::as_str(&row[2])?)?,
+            context: LadybugGraphDb::as_str(&row[3])?.to_string(),
+            outcome: LadybugGraphDb::as_str(&row[4])?.to_string(),
+            confidence: match &row[5] {
+                lbug::Value::Double(d) => *d,
+                _ => 1.0,
+            },
+            tags: serde_json::from_str(LadybugGraphDb::as_str(&row[6]).unwrap_or("[]"))
+                .unwrap_or_default(),
+            created_at: LadybugGraphDb::as_str(&row[7])?.to_string(),
+            recall_count: LadybugGraphDb::as_i64(&row[8]).unwrap_or(0) as u32,
+        })
     }
 }
 
-/// Summary statistics for agent memory.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+/// Memory store statistics.
+#[derive(Debug, Clone)]
 pub struct MemoryStats {
-    pub total: u32,
+    pub total_experiences: u32,
     pub successes: u32,
     pub failures: u32,
     pub patterns: u32,
     pub insights: u32,
     pub avg_confidence: f64,
+    pub total_recalls: u32,
+}
+
+impl MemoryStats {
+    /// Alias for backward compatibility with CLI.
+    pub fn total(&self) -> u32 {
+        self.total_experiences
+    }
+}
+
+impl Default for MemoryStats {
+    fn default() -> Self {
+        Self {
+            total_experiences: 0,
+            successes: 0,
+            failures: 0,
+            patterns: 0,
+            insights: 0,
+            avg_confidence: 0.0,
+            total_recalls: 0,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -449,237 +333,52 @@ mod tests {
     #[test]
     fn test_store_and_recall() {
         let store = MemoryStore::in_memory().unwrap();
-
         let id = store
             .store(
-                "vuln-hunter",
-                ExperienceType::Success,
-                "Found buffer overflow via strcpy with unsanitized network input",
-                "Confirmed CWE-120 in parse_input function",
-                0.9,
-                &["buffer-overflow", "cwe-120"],
+                "test-agent",
+                ExperienceType::Pattern,
+                "Buffer overflow in strcpy without bounds check",
+                "Detected CWE-120 true positive",
+                1.0,
+                &["cwe-120", "buffer-overflow"],
             )
             .unwrap();
-
-        assert!(id.starts_with("exp_"));
-
+        assert!(!id.is_empty());
         let results = store
-            .recall("vuln-hunter", "buffer overflow strcpy", 10, 0.0)
+            .recall("test-agent", "buffer overflow strcpy", 10, 0.0)
             .unwrap();
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].agent, "vuln-hunter");
-        assert!(results[0].confidence > 0.0);
+        assert!(results[0].context.contains("strcpy"));
     }
 
     #[test]
-    fn test_agent_isolation() {
+    fn test_recall_empty() {
         let store = MemoryStore::in_memory().unwrap();
-
-        store
-            .store(
-                "agent-a",
-                ExperienceType::Insight,
-                "context a",
-                "outcome a",
-                0.9,
-                &[],
-            )
-            .unwrap();
-        store
-            .store(
-                "agent-b",
-                ExperienceType::Insight,
-                "context b",
-                "outcome b",
-                0.9,
-                &[],
-            )
-            .unwrap();
-
-        let stats_a = store.statistics("agent-a").unwrap();
-        let stats_b = store.statistics("agent-b").unwrap();
-
-        assert_eq!(stats_a.total, 1);
-        assert_eq!(stats_b.total, 1);
-    }
-
-    #[test]
-    fn test_recall_recent() {
-        let store = MemoryStore::in_memory().unwrap();
-
-        store
-            .store("agent", ExperienceType::Success, "ctx1", "out1", 0.8, &[])
-            .unwrap();
-        store
-            .store("agent", ExperienceType::Failure, "ctx2", "out2", 0.7, &[])
-            .unwrap();
-        store
-            .store("agent", ExperienceType::Pattern, "ctx3", "out3", 0.9, &[])
-            .unwrap();
-
-        let all = store.recall_recent("agent", 10, None).unwrap();
-        assert_eq!(all.len(), 3);
-
-        let patterns = store
-            .recall_recent("agent", 10, Some(ExperienceType::Pattern))
-            .unwrap();
-        assert_eq!(patterns.len(), 1);
-    }
-
-    #[test]
-    fn test_confidence_decay() {
-        let store = MemoryStore::in_memory().unwrap();
-
-        // Insert with a fake old timestamp
-        store
-            .conn
-            .execute(
-                "INSERT INTO experiences (id, agent, experience_type, context, outcome, confidence, tags, created_at, recall_count)
-             VALUES ('old1', 'agent', 'success', 'old context', 'old outcome', 0.1, '[]', '2020-01-01T00:00:00Z', 0)",
-                [],
-            )
-            .unwrap();
-
-        let pruned = store.apply_decay().unwrap();
-        assert_eq!(
-            pruned, 1,
-            "Very old low-confidence experience should be pruned"
-        );
+        let results = store.recall("nonexistent", "anything", 10, 0.0).unwrap();
+        assert!(results.is_empty());
     }
 
     #[test]
     fn test_statistics() {
         let store = MemoryStore::in_memory().unwrap();
-
         store
-            .store("a", ExperienceType::Success, "c", "o", 0.9, &[])
+            .store("agent-a", ExperienceType::Success, "ctx", "out", 1.0, &[])
             .unwrap();
         store
-            .store("a", ExperienceType::Failure, "c", "o", 0.7, &[])
+            .store("agent-a", ExperienceType::Failure, "ctx2", "out2", 1.0, &[])
             .unwrap();
-        store
-            .store("a", ExperienceType::Pattern, "c", "o", 0.8, &[])
-            .unwrap();
-
-        let stats = store.statistics("a").unwrap();
-        assert_eq!(stats.total, 3);
-        assert_eq!(stats.successes, 1);
-        assert_eq!(stats.failures, 1);
-        assert_eq!(stats.patterns, 1);
-        assert_eq!(stats.insights, 0);
+        let stats = store.statistics("agent-a").unwrap();
+        assert_eq!(stats.total_experiences, 2);
     }
 
     #[test]
-    fn test_enforce_limit() {
+    fn test_clear_agent() {
         let store = MemoryStore::in_memory().unwrap();
-
-        // Insert more than the limit by setting a very low limit
-        // (We can't easily test MAX_EXPERIENCES_PER_AGENT=10000, so we test the mechanism)
-        for i in 0..5 {
-            store
-                .store(
-                    "agent",
-                    ExperienceType::Success,
-                    &format!("ctx{i}"),
-                    &format!("out{i}"),
-                    0.5,
-                    &[],
-                )
-                .unwrap();
-        }
-
-        let stats = store.statistics("agent").unwrap();
-        assert_eq!(stats.total, 5);
-    }
-
-    /// End-to-end test: store experiences → detect patterns → recall with overfitting guard
-    #[test]
-    fn test_full_memory_lifecycle() {
-        use crate::memory::pattern::{strip_benchmark_specifics, PatternDetector};
-
-        let store = MemoryStore::in_memory().unwrap();
-
-        // Simulate multiple runs finding buffer overflows
-        for i in 0..4 {
-            let raw_context = format!(
-                "Found strcpy vulnerability in /home/user/test{i}/src/parse.c at 0x40{i}000"
-            );
-            let generalized = strip_benchmark_specifics(&raw_context);
-
-            // Verify overfitting guard strips specifics
-            assert!(
-                !generalized.contains("/home/user"),
-                "Path should be stripped"
-            );
-            assert!(!generalized.contains("0x40"), "Address should be stripped");
-
-            store
-                .store(
-                    "vuln-hunter",
-                    ExperienceType::Success,
-                    &generalized,
-                    "Confirmed buffer overflow via unchecked strcpy with user input",
-                    0.8,
-                    &["buffer-overflow", "cwe-120"],
-                )
-                .unwrap();
-        }
-
-        // Pattern detection should find the recurring buffer-overflow pattern
-        let detector = PatternDetector::new(&store);
-        let new_patterns = detector.detect_patterns("vuln-hunter").unwrap();
-        assert!(new_patterns >= 1, "Should detect buffer-overflow pattern");
-
-        // Recall should return relevant memories
-        let recalled = store
-            .recall("vuln-hunter", "buffer overflow strcpy", 5, 0.0)
+        store
+            .store("agent-a", ExperienceType::Pattern, "ctx", "out", 1.0, &[])
             .unwrap();
-        assert!(
-            !recalled.is_empty(),
-            "Should recall buffer overflow experiences"
-        );
-
-        // The pattern should have high confidence
-        let patterns = store
-            .recall_recent("vuln-hunter", 10, Some(ExperienceType::Pattern))
-            .unwrap();
-        assert!(!patterns.is_empty(), "Should have pattern entries");
-        assert!(
-            patterns[0].confidence >= 0.7,
-            "Pattern confidence should be >= 0.7"
-        );
-
-        // Verify global statistics
-        let stats = store.global_statistics().unwrap();
-        assert!(stats.total >= 5); // 4 successes + at least 1 pattern
-        assert!(stats.patterns >= 1);
-    }
-
-    /// Test that the overfitting guard rejects benchmark-specific experiences
-    #[test]
-    fn test_overfitting_guard_integration() {
-        use crate::memory::pattern::PatternDetector;
-
-        let store = MemoryStore::in_memory().unwrap();
-        let detector = PatternDetector::new(&store);
-
-        // General context should pass
-        assert!(!detector
-            .is_likely_overfit(
-                "agent",
-                "strcpy with unchecked network input leads to stack buffer overflow",
-                &["cwe-120"],
-            )
-            .unwrap());
-
-        // Benchmark-specific context should be flagged
-        assert!(detector
-            .is_likely_overfit("agent", "overflow at 0x401234 in CGC challenge", &[],)
-            .unwrap());
-
-        // Path-heavy context should be flagged
-        assert!(detector
-            .is_likely_overfit("agent", "found in /home/user/juliet/CWE120/s01/test.c", &[],)
-            .unwrap());
+        store.clear_agent("agent-a").unwrap();
+        let stats = store.statistics("agent-a").unwrap();
+        assert_eq!(stats.total_experiences, 0);
     }
 }

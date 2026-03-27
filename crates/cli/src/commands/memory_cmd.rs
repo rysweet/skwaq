@@ -54,7 +54,7 @@ pub fn run(sub: &MemorySub) -> anyhow::Result<()> {
             Some(name) => {
                 let stats = store.statistics(name)?;
                 println!("Memory statistics for agent '{name}':");
-                println!("  Total:      {}", stats.total);
+                println!("  Total:      {}", stats.total_experiences);
                 println!("  Successes:  {}", stats.successes);
                 println!("  Failures:   {}", stats.failures);
                 println!("  Patterns:   {}", stats.patterns);
@@ -64,7 +64,7 @@ pub fn run(sub: &MemorySub) -> anyhow::Result<()> {
             None => {
                 let stats = store.global_statistics()?;
                 println!("Global memory statistics:");
-                println!("  Total:      {}", stats.total);
+                println!("  Total:      {}", stats.total_experiences);
                 println!("  Successes:  {}", stats.successes);
                 println!("  Failures:   {}", stats.failures);
                 println!("  Patterns:   {}", stats.patterns);
@@ -139,7 +139,7 @@ pub fn run(sub: &MemorySub) -> anyhow::Result<()> {
             let stats_before = store.statistics(agent)?;
             println!(
                 "Clearing {} memories for agent '{agent}'...",
-                stats_before.total
+                stats_before.total_experiences
             );
             store.clear_agent(agent)?;
             println!("Done.");
