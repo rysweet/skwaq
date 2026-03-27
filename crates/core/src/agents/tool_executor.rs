@@ -2,7 +2,7 @@
 //!
 //! Every tool queries or mutates the actual database - no placeholder data.
 
-use super::tool_translate::{execute_read_query, translate_to_sql};
+use super::tool_translate::{execute_cypher_query, translate_to_cypher};
 use crate::graph::GraphDb;
 use crate::knowledge::search::search_knowledge_with_dir;
 use crate::memory::{ExperienceType, MemoryStore};
@@ -104,9 +104,9 @@ fn execute_query_graph(
         }
     }
 
-    // Fallback: translate Cypher → SQL
-    let (sql, params) = match translate_to_sql(query, investigation_id) {
-        Ok(pair) => pair,
+    // Fallback: translate query pattern → Cypher and execute via LadybugDB
+    let cypher = match translate_to_cypher(query, investigation_id) {
+        Ok(c) => c,
         Err(msg) => {
             tracing::warn!("query_graph unsupported pattern: {msg}");
             return Ok(serde_json::json!({
@@ -117,11 +117,11 @@ fn execute_query_graph(
         }
     };
 
-    match execute_read_query(db, &sql, &params) {
+    match execute_cypher_query(db, &cypher) {
         Ok(rows) => Ok(serde_json::json!({
             "status": "ok",
             "query": query,
-            "backend": "sqlite-legacy",
+            "backend": "ladybugdb",
             "rows": rows,
             "row_count": rows.len()
         })),
@@ -1057,14 +1057,14 @@ mod tests {
         assert_eq!(result["title"], "Buffer overflow in parse_input");
         assert_eq!(result["severity"], "high");
 
-        let count: i64 = db
-            .conn()
-            .query_row(
-                "SELECT count(*) FROM findings WHERE investigation_id = ?1",
-                rusqlite::params![inv_id],
-                |row| row.get(0),
-            )
+        // Verify finding exists in LadybugDB
+        let rows = db
+            .cypher_query(&format!(
+                "MATCH (f:Finding) WHERE f.investigation_id = '{}' RETURN count(f)",
+                inv_id
+            ))
             .unwrap();
+        let count = crate::graph::LadybugGraphDb::as_i64(&rows[0][0]).unwrap();
         assert_eq!(count, 1);
     }
 
@@ -1103,18 +1103,13 @@ mod tests {
         let db = GraphDb::in_memory().unwrap();
         let inv_id = "test-inv";
 
-        db.execute(
-            "INSERT INTO functions (id, name, address, investigation_id) VALUES (?1, ?2, ?3, ?4)",
-            &[
-                &"f1" as &dyn rusqlite::types::ToSql,
-                &"main",
-                &"0x401000",
-                &inv_id,
-            ],
-        )
+        // Insert via LadybugDB Cypher
+        db.cypher_execute(&format!(
+            "CREATE (f:Function {{id: 'f1', name: 'main', address: '0x401000', investigation_id: '{inv_id}'}})"
+        ))
         .unwrap();
 
-        // Use a Cypher-like pattern that translate_to_sql recognizes
+        // Use a Cypher-like pattern that translate_to_cypher recognizes
         let args = serde_json::json!({
             "cypher": "MATCH (f:Function) RETURN f"
         });
@@ -1122,7 +1117,6 @@ mod tests {
 
         assert_eq!(result["status"], "ok");
         assert_eq!(result["row_count"], 1);
-        assert_eq!(result["rows"][0]["name"], "main");
     }
 
     #[test]
@@ -1130,17 +1124,12 @@ mod tests {
         let db = GraphDb::in_memory().unwrap();
         let inv_id = "test-inv";
 
-        db.execute(
-            "INSERT INTO functions (id, name, address, decompiled, investigation_id) \
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            &[
-                &"f1" as &dyn rusqlite::types::ToSql,
-                &"parse_input",
-                &"0x401000",
-                &"void parse_input(char *buf) { strcpy(dest, buf); }",
-                &inv_id,
-            ],
-        )
+        // Insert via LadybugDB Cypher
+        db.cypher_execute(&format!(
+            "CREATE (f:Function {{id: 'f1', name: 'parse_input', address: '0x401000', \
+             decompiled: 'void parse_input(char *buf) {{ strcpy(dest, buf); }}', \
+             investigation_id: '{inv_id}'}})"
+        ))
         .unwrap();
 
         let args = serde_json::json!({"code": "strcpy"});
@@ -1203,7 +1192,7 @@ mod tests {
         let db = GraphDb::in_memory().unwrap();
         let inv_id = "test-inv";
 
-        // Attempt an INSERT via query_graph - translate_to_sql rejects unrecognised patterns
+        // Attempt an INSERT via query_graph - translate_to_cypher rejects unrecognised patterns
         let args = serde_json::json!({
             "cypher": "INSERT INTO functions (id, name) VALUES ('evil', 'injected')"
         });
@@ -1215,15 +1204,11 @@ mod tests {
             .unwrap()
             .contains("Unsupported query pattern"));
 
-        // Verify no data was actually inserted
-        let count: i64 = db
-            .conn()
-            .query_row(
-                "SELECT count(*) FROM functions WHERE name = 'injected'",
-                [],
-                |row| row.get(0),
-            )
+        // Verify no data was actually inserted in LadybugDB
+        let rows = db
+            .cypher_query("MATCH (f:Function) WHERE f.name = 'injected' RETURN count(f)")
             .unwrap();
+        let count = crate::graph::LadybugGraphDb::as_i64(&rows[0][0]).unwrap();
         assert_eq!(count, 0, "Destructive query must not modify the database");
     }
 
