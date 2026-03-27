@@ -1,0 +1,30 @@
+# Azure AI Foundry configuration for skwaq.
+# Uses GPT-5.1 deployed on the DefenderATEVET17 tenant.
+# Auth: az login as ryan.sweet@DefenderATEVET17.onmicrosoft.com
+
+[general]
+database_path = ".skwaq/graph"
+log_level = "info"
+
+[llm]
+reasoning = "azure"
+decompilation = "azure"
+embeddings = "ollama"
+
+[llm.azure]
+endpoint = "https://rysweetballist5347662217.cognitiveservices.azure.com/"
+deployment = "gpt-51-skwaq"
+api_version = "2024-10-21"
+
+[llm.copilot]
+model = "claude-opus-4.6"
+
+[llm.ollama]
+host = "http://localhost:11434"
+model = "llama3.1"
+embedding_model = "nomic-embed-text"
+
+[analysis]
+max_taint_depth = 15
+false_positive_target = 0.15
+default_token_budget = 250000

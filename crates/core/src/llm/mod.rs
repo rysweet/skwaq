@@ -133,6 +133,10 @@ async fn create_client_for_backend_name(
                 !azure.deployment.is_empty(),
                 "Azure backend selected for {field_name} but [llm.azure] deployment is not set"
             );
+            // If api_key is set in config, inject it as env var for RustyClawd's AzureAuth
+            if let Some(ref key) = azure.api_key {
+                std::env::set_var("AZURE_OPENAI_API_KEY", key);
+            }
             let client =
                 Client::new_azure_foundry(&azure.endpoint, &azure.deployment, &azure.api_version)
                     .map_err(|e| {
