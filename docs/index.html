@@ -350,6 +350,61 @@ skwaq gym improve juliet --max-cases 30 --max-improvements 5
 
 # Target specific CWE
 skwaq gym improve juliet --cwe CWE-78 --max-cases 20</code></pre>
+        <h3>Running with Different Models</h3>
+        <p>Skwaq supports multiple LLM backends. Configure in <code>skwaq.toml</code>:</p>
+
+        <h4>Azure AI Foundry (GPT-5.4)</h4>
+        <pre><code># skwaq.toml
+[llm]
+reasoning = "azure"
+decompilation = "azure"
+
+[llm.azure]
+endpoint = "https://your-resource.cognitiveservices.azure.com/"
+deployment = "gpt-54-skwaq"
+api_version = "2024-10-21"</code></pre>
+        <pre><code># Deploy model (idempotent)
+bash infra/azure/setup.sh
+
+# Run eval with GPT-5.4
+skwaq gym eval --suites juliet --max-cases 100 --adaptive -j 4</code></pre>
+
+        <h4>Anthropic Claude (via Azure MaaS)</h4>
+        <pre><code># skwaq.toml
+[llm]
+reasoning = "anthropic"
+decompilation = "anthropic"
+
+# Auth: set ANTHROPIC_API_KEY or use Azure MaaS endpoint</code></pre>
+
+        <h4>GitHub Copilot (Claude Opus 4.6)</h4>
+        <pre><code># skwaq.toml
+[llm]
+reasoning = "copilot"
+decompilation = "copilot"
+
+[llm.copilot]
+model = "claude-opus-4.6"</code></pre>
+
+        <h4>Comparing Models</h4>
+        <p>Run the same eval suite with each backend, then compare with the TUI dashboard:</p>
+        <pre><code># 1. Edit skwaq.toml to use GPT-5.4 (azure backend)
+skwaq gym eval --suites juliet,owasp --max-cases 200 --adaptive -j 4
+
+# 2. Edit skwaq.toml to use Claude Opus (copilot backend)
+skwaq gym eval --suites juliet,owasp --max-cases 200 --adaptive -j 4
+
+# 3. Compare results in the live dashboard
+export SKWAQ_ROOT=/path/to/skwaq
+skwaq gym dashboard --live
+
+# 4. Or view the static snapshot
+skwaq gym dashboard --tui</code></pre>
+        <p>The dashboard shows F1/precision/recall per suite, trend sparklines across runs,
+        agent stats with per-agent token usage, and the active model in the title bar.
+        Each eval run is recorded in the history DB, so you can track how scores
+        change when switching models.</p>
+
         <h3>Documentation</h3>
         <ul>
             <li><a href="https://github.com/rysweet/skwaq/blob/main/docs/gym-tutorial.md">Tutorial: Getting Started with Skwaq Gym</a></li>
