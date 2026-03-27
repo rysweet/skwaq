@@ -27,16 +27,12 @@ impl<'a> TaintAnalyzer<'a> {
         // Strategy 1: Pre-computed taint flows
         results.extend(self.query_precomputed_flows()?);
 
-        // Strategy 2: Call-graph traversal — try Cypher, fall back to CTE
-        if self.db.has_ladybug() {
-            let cypher_results = self.discover_paths_via_cypher()?;
-            if !cypher_results.is_empty() {
-                results.extend(cypher_results);
-            } else {
-                // LadybugDB had no data — fall back to SQL
-                results.extend(self.discover_paths_via_call_graph()?);
-            }
+        // Strategy 2: Call-graph traversal via native Cypher
+        let cypher_results = self.discover_paths_via_cypher()?;
+        if !cypher_results.is_empty() {
+            results.extend(cypher_results);
         } else {
+            // Data not yet in LadybugDB — legacy SQL path for pre-migration DBs
             results.extend(self.discover_paths_via_call_graph()?);
         }
 
@@ -49,7 +45,8 @@ impl<'a> TaintAnalyzer<'a> {
 
     /// Query pre-computed taint flows — try Cypher first, fall back to SQL.
     fn query_precomputed_flows(&self) -> anyhow::Result<Vec<TaintPath>> {
-        if self.db.has_ladybug() {
+        {
+            // LadybugDB is always available
             if let Ok(rows) = self.db.cypher_query(
                 "MATCH (s:DataSource)-[t:TAINT_FLOW]->(k:DataSink) \
                  WHERE t.sanitized = 0 \
@@ -79,7 +76,7 @@ impl<'a> TaintAnalyzer<'a> {
             }
         }
 
-        // SQL fallback
+        // Legacy SQL path — data may only be in SQLite for pre-migration DBs
         let mut stmt = self.db.conn().prepare(
             "SELECT s.name, k.name, tf.path FROM taint_flows tf \
              JOIN data_sources s ON tf.source_id = s.id \
@@ -156,7 +153,7 @@ impl<'a> TaintAnalyzer<'a> {
         Ok(results)
     }
 
-    /// SQL fallback: recursive CTE call-graph traversal (when LadybugDB unavailable).
+    /// Legacy SQL path — data may only be in SQLite for pre-migration DBs: recursive CTE call-graph traversal (when LadybugDB unavailable).
     fn discover_paths_via_call_graph(&self) -> anyhow::Result<Vec<TaintPath>> {
         let mut src_stmt = self
             .db

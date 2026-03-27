@@ -10,13 +10,12 @@ use super::ladybug_db::LadybugGraphDb;
 
 /// Wrapper around the graph database.
 ///
-/// Provides both SQL (legacy, via `execute`/`conn`) and Cypher
-/// (preferred, via `cypher`/`cypher_query`) interfaces. The Cypher
-/// interface is backed by LadybugDB for native graph traversals.
+/// Backed by LadybugDB for native Cypher graph queries and SQLite for
+/// legacy schema compatibility. LadybugDB is REQUIRED — not optional.
 pub struct GraphDb {
     conn: rusqlite::Connection,
     /// LadybugDB backend for native Cypher queries.
-    ladybug: Option<LadybugGraphDb>,
+    ladybug: LadybugGraphDb,
 }
 
 impl GraphDb {
@@ -26,14 +25,7 @@ impl GraphDb {
         let db_file = path.join("skwaq.db");
         let conn = rusqlite::Connection::open(&db_file)?;
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
-        // Open LadybugDB alongside SQLite
-        let ladybug = match LadybugGraphDb::open(path) {
-            Ok(lg) => Some(lg),
-            Err(e) => {
-                tracing::warn!("LadybugDB unavailable, using SQLite only: {e}");
-                None
-            }
-        };
+        let ladybug = LadybugGraphDb::open(path)?;
         let gdb = Self { conn, ladybug };
         gdb.ensure_schema()?;
         Ok(gdb)
@@ -42,7 +34,7 @@ impl GraphDb {
     /// Open an in-memory database (for tests).
     pub fn in_memory() -> anyhow::Result<Self> {
         let conn = rusqlite::Connection::open_in_memory()?;
-        let ladybug = LadybugGraphDb::in_memory().ok();
+        let ladybug = LadybugGraphDb::in_memory()?;
         let gdb = Self { conn, ladybug };
         gdb.ensure_schema()?;
         Ok(gdb)
@@ -69,35 +61,28 @@ impl GraphDb {
         &self.conn
     }
 
-    /// Execute a Cypher query via LadybugDB. Returns rows as Vec<Vec<Value>>.
-    /// Falls back to an error if LadybugDB is not available.
+    /// Execute a Cypher query via LadybugDB.
     #[allow(dead_code)]
     pub fn cypher_query(&self, cypher: &str) -> anyhow::Result<Vec<Vec<lbug::Value>>> {
-        match &self.ladybug {
-            Some(lg) => lg.query(cypher),
-            None => anyhow::bail!("LadybugDB not available for Cypher query"),
-        }
+        self.ladybug.query(cypher)
     }
 
     /// Execute a Cypher statement (no results expected).
     #[allow(dead_code)]
     pub fn cypher_execute(&self, cypher: &str) -> anyhow::Result<()> {
-        match &self.ladybug {
-            Some(lg) => lg.execute(cypher),
-            None => anyhow::bail!("LadybugDB not available for Cypher execute"),
-        }
+        self.ladybug.execute(cypher)
     }
 
-    /// Check if LadybugDB is available for native Cypher queries.
+    /// LadybugDB is always available.
     #[allow(dead_code)]
     pub fn has_ladybug(&self) -> bool {
-        self.ladybug.is_some()
+        true
     }
 
-    /// Get the LadybugDB handle directly.
-    #[allow(dead_code)] // Used by agent tools migrating to Cypher
-    pub fn ladybug(&self) -> Option<&LadybugGraphDb> {
-        self.ladybug.as_ref()
+    /// Get the LadybugDB handle.
+    #[allow(dead_code)]
+    pub fn ladybug(&self) -> &LadybugGraphDb {
+        &self.ladybug
     }
 
     fn ensure_schema(&self) -> anyhow::Result<()> {
