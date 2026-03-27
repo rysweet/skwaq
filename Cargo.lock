@@ -1681,7 +1681,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.3",
+ "socket2 0.5.10",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -3006,7 +3006,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.6.3",
+ "socket2 0.5.10",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -3044,7 +3044,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.6.3",
+ "socket2 0.5.10",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -3515,7 +3515,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 [[package]]
 name = "rustyclawd-core"
 version = "0.1.0"
-source = "git+https://github.com/rysweet/RustyClawd?rev=0198b74#0198b74d6dd4d177e64f584e7e707a3d2a9402d3"
+source = "git+https://github.com/rysweet/RustyClawd?rev=4121bb1#4121bb1033db5ca32bc5e647036cbc9f6037fc98"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3537,7 +3537,7 @@ dependencies = [
 [[package]]
 name = "rustyclawd-tools"
 version = "0.1.0"
-source = "git+https://github.com/rysweet/RustyClawd?rev=0198b74#0198b74d6dd4d177e64f584e7e707a3d2a9402d3"
+source = "git+https://github.com/rysweet/RustyClawd?rev=4121bb1#4121bb1033db5ca32bc5e647036cbc9f6037fc98"
 dependencies = [
  "anyhow",
  "async-stream",
