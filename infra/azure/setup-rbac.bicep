@@ -2,9 +2,9 @@
 // Assigns Cognitive Services OpenAI User role to a principal on an AI Services resource.
 // Usage:
 //   az deployment group create \
-//     --resource-group rysweet-ballistae \
+//     --resource-group <your-rg> \
 //     --template-file infra/azure/setup-rbac.bicep \
-//     --parameters accountName=rysweetballist5347662217 \
+//     --parameters accountName=<your-account> \
 //                  principalId=<user-or-managed-identity-object-id>
 
 @description('Name of the existing Azure AI Services account')

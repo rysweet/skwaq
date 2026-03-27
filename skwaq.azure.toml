@@ -1,6 +1,6 @@
-# Azure AI Foundry configuration for skwaq.
-# Uses GPT-5.1 deployed on the DefenderATEVET17 tenant.
-# Auth: az login as ryan.sweet@DefenderATEVET17.onmicrosoft.com
+# Azure AI Foundry configuration for skwaq (EXAMPLE).
+# Copy this file, fill in your values, and reference it.
+# Do NOT commit real endpoints or credentials.
 
 [general]
 database_path = ".skwaq/graph"
@@ -12,9 +12,10 @@ decompilation = "azure"
 embeddings = "ollama"
 
 [llm.azure]
-endpoint = "https://rysweetballist5347662217.cognitiveservices.azure.com/"
-deployment = "gpt-51-skwaq"
+endpoint = "https://<your-resource>.cognitiveservices.azure.com/"
+deployment = "<your-deployment-name>"
 api_version = "2024-10-21"
+# api_key = "set AZURE_OPENAI_API_KEY env var instead"
 
 [llm.copilot]
 model = "claude-opus-4.6"
