@@ -163,11 +163,12 @@ pub fn validate_benchmark_copilot_config_for_pipeline(
     require_reasoning: bool,
     require_decompilation: bool,
 ) -> anyhow::Result<()> {
+    let allowed = ["copilot", "azure"];
     if require_reasoning {
         let backend = validate_backend_name(config.reasoning.trim(), "llm.reasoning")?;
-        if backend != "copilot" {
+        if !allowed.contains(&backend.as_str()) {
             anyhow::bail!(
-                "Hybrid benchmark runs require [llm].reasoning = \"copilot\", found {:?}",
+                "Benchmark runs require [llm].reasoning = \"copilot\" or \"azure\", found {:?}",
                 config.reasoning
             );
         }
@@ -176,19 +177,22 @@ pub fn validate_benchmark_copilot_config_for_pipeline(
     if require_decompilation {
         let decompilation =
             validate_backend_name(config.decompilation.trim(), "llm.decompilation")?;
-        if decompilation != "copilot" {
+        if !allowed.contains(&decompilation.as_str()) {
             anyhow::bail!(
-                "Hybrid benchmark runs require [llm].decompilation = \"copilot\", found {:?}",
+                "Benchmark runs require [llm].decompilation = \"copilot\" or \"azure\", found {:?}",
                 config.decompilation
             );
         }
     }
 
-    if require_reasoning || require_decompilation {
+    // Model validation only applies to copilot backend
+    let reasoning_backend =
+        validate_backend_name(config.reasoning.trim(), "llm.reasoning").unwrap_or_default();
+    if reasoning_backend == "copilot" && (require_reasoning || require_decompilation) {
         let model = config.copilot.model.trim();
         if model.is_empty() || !model.to_ascii_lowercase().contains("opus") {
             anyhow::bail!(
-                "Hybrid benchmark runs require an Opus-class Copilot model, found {:?}. \
+                "Copilot benchmark runs require an Opus-class model, found {:?}. \
                  Set [llm.copilot].model = \"claude-opus-4.6\".",
                 config.copilot.model
             );
@@ -211,9 +215,10 @@ pub async fn ensure_benchmark_copilot_ready_for_pipeline(
     let _ = create_pipeline_clients(config, require_reasoning, require_decompilation)
         .await
         .context(
-        "Hybrid benchmark runs require working GitHub Copilot authentication. \
-         Run `gh auth login` / `gh auth refresh --scopes copilot`, or set GH_TOKEN/GITHUB_TOKEN with Copilot access.",
-    )?;
+            "Benchmark runs require working LLM authentication. \
+         For copilot: `gh auth login` / `gh auth refresh --scopes copilot`. \
+         For azure: set AZURE_OPENAI_API_KEY or run `az login`.",
+        )?;
     Ok(())
 }
 
@@ -313,7 +318,7 @@ mod tests {
         let err = validate_benchmark_copilot_config(&config).unwrap_err();
         assert!(err
             .to_string()
-            .contains("require [llm].reasoning = \"copilot\""));
+            .contains("require [llm].reasoning = \"copilot\" or \"azure\""));
     }
 
     #[test]
@@ -322,7 +327,7 @@ mod tests {
         config.copilot.model = "gpt-4o".into();
 
         let err = validate_benchmark_copilot_config(&config).unwrap_err();
-        assert!(err.to_string().contains("Opus-class Copilot model"));
+        assert!(err.to_string().contains("Opus-class model"));
     }
 
     #[test]
@@ -335,7 +340,7 @@ mod tests {
         let err = validate_benchmark_copilot_config(&config).unwrap_err();
         assert!(err
             .to_string()
-            .contains("require [llm].decompilation = \"copilot\""));
+            .contains("require [llm].decompilation = \"copilot\" or \"azure\""));
     }
 
     #[tokio::test]
