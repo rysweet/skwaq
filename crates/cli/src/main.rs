@@ -1,6 +1,9 @@
 //! skwaq CLI entry point.
 
 use clap::Parser;
+use opentelemetry::trace::TracerProvider as _;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
 use skwaq::commands::{Cli, Commands};
@@ -16,11 +19,25 @@ async fn main() -> anyhow::Result<()> {
         2 => "debug",
         _ => "trace",
     };
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(filter)),
-        )
-        .init();
+
+    // Initialize OTEL tracer provider for span export (Tier 1: file exporter)
+    let telemetry_dir = skwaq_gym::telemetry::default_telemetry_dir();
+    let otel_provider = skwaq_gym::telemetry::init_tracer_provider(&telemetry_dir, None).ok();
+
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(filter));
+
+    if let Some(provider) = otel_provider {
+        // With OTEL: fmt layer + tracing-opentelemetry layer
+        let otel_layer = tracing_opentelemetry::layer().with_tracer(provider.tracer("skwaq"));
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(tracing_subscriber::fmt::layer())
+            .with(otel_layer)
+            .init();
+    } else {
+        // Without OTEL: fmt only (graceful degradation if telemetry dir fails)
+        tracing_subscriber::fmt().with_env_filter(env_filter).init();
+    }
 
     match &cli.command {
         Commands::Gym { sub } => {
