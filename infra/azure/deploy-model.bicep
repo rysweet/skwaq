@@ -1,25 +1,45 @@
 // deploy-model.bicep
-// Deploys an OpenAI model to an existing Azure AI Services resource.
-// Usage:
+// Deploys any model (OpenAI or Anthropic MaaS) to an Azure AI Services resource.
+// Idempotent — safe to run multiple times.
+//
+// Usage (GPT-5.4):
 //   az deployment group create \
 //     --resource-group <your-rg> \
 //     --template-file infra/azure/deploy-model.bicep \
 //     --parameters accountName=<your-account> \
-//                  deploymentName=gpt-51 \
-//                  modelName=gpt-5.1 \
-//                  modelVersion=2025-11-13
+//                  deploymentName=gpt-54 \
+//                  modelName=gpt-5.4 \
+//                  modelVersion=2026-03-05 \
+//                  modelFormat=OpenAI
+//
+// Usage (Claude Opus 4.6 — requires quota):
+//   az deployment group create \
+//     --resource-group <your-rg> \
+//     --template-file infra/azure/deploy-model.bicep \
+//     --parameters accountName=<your-account> \
+//                  deploymentName=claude-opus-46 \
+//                  modelName=claude-opus-4-6 \
+//                  modelVersion=1 \
+//                  modelFormat=Anthropic
 
-@description('Name of the existing Azure AI Services / Cognitive Services account')
+@description('Name of the existing Azure AI Services account')
 param accountName string
 
 @description('Name for the model deployment')
 param deploymentName string
 
-@description('Model name (e.g. gpt-5.1, gpt-5.4)')
+@description('Model name (e.g. gpt-5.4, claude-opus-4-6)')
 param modelName string
 
 @description('Model version')
 param modelVersion string
+
+@description('Model format: OpenAI for GPT models, Anthropic for Claude models')
+@allowed([
+  'OpenAI'
+  'Anthropic'
+])
+param modelFormat string = 'OpenAI'
 
 @description('SKU name for the deployment')
 @allowed([
@@ -47,7 +67,7 @@ resource deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01
   }
   properties: {
     model: {
-      format: 'OpenAI'
+      format: modelFormat
       name: modelName
       version: modelVersion
     }
@@ -57,4 +77,4 @@ resource deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01
 output deploymentName string = deployment.name
 output endpoint string = account.properties.endpoint
 output modelName string = modelName
-output modelVersion string = modelVersion
+output modelFormat string = modelFormat
