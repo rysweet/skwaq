@@ -32,9 +32,17 @@ toml = "0.8"
 anyhow = "1"
 thiserror = "2"
 
-# Logging
+# Logging / Observability
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }
+tracing-opentelemetry = "0.28"
+opentelemetry = "0.27"
+opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.27", features = ["tonic"] }
+
+# TUI
+ratatui = "0.29"
+crossterm = "0.28"
 
 # HTTP
 reqwest = { version = "0.12", features = ["json", "stream"] }
@@ -56,6 +64,7 @@ sha2 = "0.10"
 tempfile = "3"
 dirs = "6"
 libc = "0.2"
+humantime = "2"
 
 [profile.release]
 opt-level = 3

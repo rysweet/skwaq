@@ -23,3 +23,6 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 dirs = { workspace = true }
 tempfile = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+tracing-opentelemetry = { workspace = true }

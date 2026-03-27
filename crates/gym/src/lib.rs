@@ -14,7 +14,9 @@ pub mod reporting;
 pub mod scoring;
 pub mod shared_throttle;
 pub mod tagging;
+pub mod telemetry;
 pub mod throttle;
+pub mod tui;
 
 use futures::stream::{FuturesUnordered, StreamExt};
 use std::pin::Pin;

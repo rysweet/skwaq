@@ -27,12 +27,24 @@ zip = "2"
 walkdir = "2"
 rayon = "1"
 futures = "0.3"
+futures-util = "0.3"
 indicatif = "0.17"
 regex = "1"
 memmap2 = "0.9.10"
+humantime = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+ratatui = { workspace = true }
+crossterm = { workspace = true }
 
 [features]
 test-heuristic-api = []
+otlp = ["opentelemetry-otlp"]
+
+[dependencies.opentelemetry-otlp]
+workspace = true
+optional = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
