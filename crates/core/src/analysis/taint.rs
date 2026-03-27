@@ -1,19 +1,8 @@
 //! Taint analysis via graph traversal and source-level chain detection.
 //!
-//! `TaintAnalyzer` queries the SQLite graph for data-flow paths from
-//! sources to sinks that lack sanitisation, producing candidate
-//! vulnerability findings.
-//!
-//! Two strategies are used:
-//! 1. Pre-computed taint flows (from the `taint_flows` table populated
-//!    during ingestion).
-//! 2. On-the-fly call-chain traversal using a recursive CTE to discover
-//!    paths from data sources to data sinks through the call graph.
-//!
-//! Additionally, `detect_stack_buffer_write_chains` performs source-level
-//! detection of CWE-121 (stack-based buffer overflow) by tracing fixed-size
-//! stack buffer declarations to downstream unbounded write operations within
-//! the same function scope.
+//! `TaintAnalyzer` queries the graph for data-flow paths from sources to
+//! sinks that lack sanitisation. Uses native Cypher via LadybugDB when
+//! available, falling back to SQLite recursive CTEs.
 
 use crate::graph::GraphDb;
 use regex::Regex;
@@ -32,17 +21,24 @@ impl<'a> TaintAnalyzer<'a> {
 
     /// Find data-flow paths from sources to sinks where no sanitiser
     /// appears along the path.
-    ///
-    /// First checks pre-computed `taint_flows`, then uses a recursive CTE
-    /// to discover additional paths through the call graph.
     pub fn find_unsanitized_paths(&self) -> anyhow::Result<Vec<TaintPath>> {
         let mut results = Vec::new();
 
-        // Strategy 1: Pre-computed taint flows from ingestion
+        // Strategy 1: Pre-computed taint flows
         results.extend(self.query_precomputed_flows()?);
 
-        // Strategy 2: On-the-fly discovery via recursive CTE
-        results.extend(self.discover_paths_via_call_graph()?);
+        // Strategy 2: Call-graph traversal — try Cypher, fall back to CTE
+        if self.db.has_ladybug() {
+            let cypher_results = self.discover_paths_via_cypher()?;
+            if !cypher_results.is_empty() {
+                results.extend(cypher_results);
+            } else {
+                // LadybugDB had no data — fall back to SQL
+                results.extend(self.discover_paths_via_call_graph()?);
+            }
+        } else {
+            results.extend(self.discover_paths_via_call_graph()?);
+        }
 
         // Deduplicate by (source, sink) pair
         results.sort_by(|a, b| (&a.source, &a.sink).cmp(&(&b.source, &b.sink)));
@@ -51,8 +47,39 @@ impl<'a> TaintAnalyzer<'a> {
         Ok(results)
     }
 
-    /// Query the pre-computed taint_flows table.
+    /// Query pre-computed taint flows — try Cypher first, fall back to SQL.
     fn query_precomputed_flows(&self) -> anyhow::Result<Vec<TaintPath>> {
+        if self.db.has_ladybug() {
+            if let Ok(rows) = self.db.cypher_query(
+                "MATCH (s:DataSource)-[t:TAINT_FLOW]->(k:DataSink) \
+                 WHERE t.sanitized = 0 \
+                 RETURN s.name, k.name, t.path",
+            ) {
+                if !rows.is_empty() {
+                    return Ok(rows
+                        .iter()
+                        .filter_map(|r| {
+                            let source = crate::graph::LadybugGraphDb::as_str(&r[0])?;
+                            let sink = crate::graph::LadybugGraphDb::as_str(&r[1])?;
+                            let path_str =
+                                crate::graph::LadybugGraphDb::as_str(&r[2]).unwrap_or("");
+                            Some(TaintPath {
+                                source: source.to_string(),
+                                sink: sink.to_string(),
+                                hops: path_str
+                                    .split("->")
+                                    .map(|s| s.trim().to_string())
+                                    .filter(|s| !s.is_empty())
+                                    .collect(),
+                                sanitized: false,
+                            })
+                        })
+                        .collect());
+                }
+            }
+        }
+
+        // SQL fallback
         let mut stmt = self.db.conn().prepare(
             "SELECT s.name, k.name, tf.path FROM taint_flows tf \
              JOIN data_sources s ON tf.source_id = s.id \
@@ -75,12 +102,10 @@ impl<'a> TaintAnalyzer<'a> {
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
 
-    /// Use a recursive CTE to trace call chains from functions matching
-    /// data source names to functions matching data sink names.
-    fn discover_paths_via_call_graph(&self) -> anyhow::Result<Vec<TaintPath>> {
-        let max_depth = self.max_depth;
-
-        // Get all data source function names
+    /// Native Cypher call-graph traversal via LadybugDB.
+    /// Replaces the recursive CTE with `[:CALLS*1..N]` variable-length path.
+    fn discover_paths_via_cypher(&self) -> anyhow::Result<Vec<TaintPath>> {
+        // Get source and sink names from SQLite (they're always there)
         let mut src_stmt = self
             .db
             .conn()
@@ -89,7 +114,6 @@ impl<'a> TaintAnalyzer<'a> {
             .query_map([], |row| row.get::<_, String>(0))?
             .collect::<Result<Vec<_>, _>>()?;
 
-        // Get all data sink function names
         let mut sink_stmt = self
             .db
             .conn()
@@ -104,9 +128,60 @@ impl<'a> TaintAnalyzer<'a> {
 
         let mut results = Vec::new();
 
-        // For each source, trace call chains and see if any reach a sink
         for source in &sources {
-            // Find the function id(s) matching this source name
+            // Native Cypher variable-length path — no recursive CTE needed
+            let cypher = format!(
+                "MATCH (src:Function {{name: '{}'}})-[:CALLS*1..{}]->(sink:Function) \
+                 RETURN sink.name",
+                source.replace('\'', "\\'"),
+                self.max_depth
+            );
+
+            if let Ok(rows) = self.db.cypher_query(&cypher) {
+                for row in &rows {
+                    if let Some(func_name) = crate::graph::LadybugGraphDb::as_str(&row[0]) {
+                        if sinks.iter().any(|s| s == func_name) {
+                            results.push(TaintPath {
+                                source: source.clone(),
+                                sink: func_name.to_string(),
+                                hops: vec![source.clone(), func_name.to_string()],
+                                sanitized: false,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// SQL fallback: recursive CTE call-graph traversal (when LadybugDB unavailable).
+    fn discover_paths_via_call_graph(&self) -> anyhow::Result<Vec<TaintPath>> {
+        let mut src_stmt = self
+            .db
+            .conn()
+            .prepare("SELECT DISTINCT name FROM data_sources")?;
+        let sources: Vec<String> = src_stmt
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let mut sink_stmt = self
+            .db
+            .conn()
+            .prepare("SELECT DISTINCT name FROM data_sinks")?;
+        let sinks: Vec<String> = sink_stmt
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if sources.is_empty() || sinks.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut results = Vec::new();
+        let max_depth = self.max_depth;
+
+        for source in &sources {
             let mut id_stmt = self
                 .db
                 .conn()
@@ -116,7 +191,6 @@ impl<'a> TaintAnalyzer<'a> {
                 .collect::<Result<Vec<_>, _>>()?;
 
             for source_id in &source_ids {
-                // Recursive CTE to walk the call graph
                 let sql = "WITH RECURSIVE call_chain(func_id, func_name, path, depth) AS ( \
                          SELECT f.id, f.name, f.name, 0 \
                          FROM functions f WHERE f.id = ?1 \
@@ -152,8 +226,6 @@ impl<'a> TaintAnalyzer<'a> {
         Ok(results)
     }
 }
-
-/// A single unsanitized taint path from source to sink.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaintPath {
     pub source: String,
