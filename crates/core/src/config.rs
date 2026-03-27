@@ -73,7 +73,8 @@ pub struct AzureConfig {
     /// Azure AI Services endpoint (e.g. "https://xxx.cognitiveservices.azure.com/")
     #[serde(default)]
     pub endpoint: String,
-    /// Model deployment name (e.g. "gpt-51-skwaq")
+    /// Model deployment name(s). Comma-separated for round-robin load balancing
+    /// across multiple deployments (e.g. "gpt-54-skwaq,gpt-54-skwaq-2,gpt-54-skwaq-3").
     #[serde(default)]
     pub deployment: String,
     /// Azure OpenAI API version

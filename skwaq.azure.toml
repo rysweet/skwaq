@@ -13,7 +13,10 @@ embeddings = "ollama"
 
 [llm.azure]
 endpoint = "https://<your-resource>.cognitiveservices.azure.com/"
-deployment = "<your-deployment-name>"
+# Single deployment:
+# deployment = "<your-deployment-name>"
+# Round-robin across multiple deployments (3x throughput):
+deployment = "<deploy-1>,<deploy-2>,<deploy-3>"
 api_version = "2024-10-21"
 # api_key = "set AZURE_OPENAI_API_KEY env var instead"
 
