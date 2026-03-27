@@ -111,6 +111,14 @@ impl AgentRunner {
         db: &GraphDb,
         budget: &mut TokenBudget,
     ) -> anyhow::Result<AgentResult> {
+        let _agent_span = tracing::info_span!(
+            "gym.agent",
+            agent_name = %agent.name,
+            model = %agent.model,
+            investigation_id = %investigation_id,
+        )
+        .entered();
+
         let all_tools = agent_tools();
         let tools = filter_tools(&all_tools, &agent.tools);
         let model = &agent.model;

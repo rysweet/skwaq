@@ -313,6 +313,14 @@ impl Gym {
             if concurrency <= 1 {
                 // Sequential mode (original behavior)
                 for (i, case) in cases.iter().enumerate() {
+                    let _case_span = tracing::info_span!(
+                        "gym.case",
+                        suite = %suite_name,
+                        case_id = %case.id,
+                        case_index = i,
+                        total_cases = total,
+                    )
+                    .entered();
                     if i % 10 == 0 && i > 0 {
                         tracing::info!("[{}/{}] Processing {}", i, total, case.id);
                     }

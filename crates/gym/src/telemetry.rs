@@ -24,6 +24,13 @@ fn resolve_telemetry_dir(configured: &str) -> PathBuf {
     PathBuf::from(configured)
 }
 
+/// Default telemetry directory path.
+pub fn default_telemetry_dir() -> String {
+    dirs::home_dir()
+        .map(|h| h.join(".skwaq/telemetry").to_string_lossy().into_owned())
+        .unwrap_or_else(|| "~/.skwaq/telemetry".to_string())
+}
+
 /// Ensure the telemetry directory exists.
 fn ensure_dir(dir: &Path) -> anyhow::Result<()> {
     if !dir.exists() {

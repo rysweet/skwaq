@@ -87,6 +87,13 @@ where
         return Ok("Analysis stopped: token budget exhausted.".into());
     }
 
+    let _llm_span = tracing::info_span!(
+        "llm.request",
+        model = %model,
+        tools_count = tools.len(),
+    )
+    .entered();
+
     let mut request = CreateMessageRequest::new(model, vec![Message::user(user_prompt)], 128_000)
         .with_system(system_prompt.to_string());
 
@@ -108,6 +115,11 @@ where
         .map_err(|e| anyhow::anyhow!("LLM tool loop failed: {e}"))?;
 
     budget.track(&response.usage);
+    tracing::info!(
+        tokens_in = response.usage.input_tokens,
+        tokens_out = response.usage.output_tokens,
+        "LLM request complete"
+    );
 
     Ok(text_content(&response))
 }
