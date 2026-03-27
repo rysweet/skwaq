@@ -255,6 +255,26 @@ impl Gym {
                 None
             };
 
+            // Shared cross-process rate controller for coordinating API usage
+            let shared_rc = if adaptive {
+                match shared_throttle::SharedRateController::open_default(
+                    concurrency as u32,
+                    1,
+                    concurrency as u32 * 2,
+                ) {
+                    Ok(rc) => {
+                        tracing::info!("Shared rate controller active: {}", rc.stats());
+                        Some(rc)
+                    }
+                    Err(e) => {
+                        tracing::debug!("Shared rate controller unavailable: {e}");
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
             tracing::info!(
                 "{}: {} cases (skip={}, concurrency={}, adaptive={})",
                 suite_name,
@@ -386,6 +406,28 @@ impl Gym {
                         rc.record(call_outcome);
                     }
 
+                    // Also update shared cross-process rate controller
+                    if let Some(ref src) = shared_rc {
+                        match call_outcome {
+                            throttle::CallOutcome::Success => src.record_success(),
+                            throttle::CallOutcome::RateLimited => {
+                                // Extract retry-after from error if available
+                                let retry_secs = if let Ok(Err(e)) = &result {
+                                    let msg = e.to_string();
+                                    // Parse "delay_secs=NNNN" or "retry after NNNNs"
+                                    msg.split("delay_secs=")
+                                        .nth(1)
+                                        .and_then(|s| s.split('.').next())
+                                        .and_then(|s| s.parse::<u64>().ok())
+                                } else {
+                                    None
+                                };
+                                src.record_rate_limit(retry_secs);
+                            }
+                            throttle::CallOutcome::OtherError => src.record_error(),
+                        }
+                    }
+
                     match result {
                         Ok(Ok(findings)) => {
                             let mut outcome = scoring::score_case(case, &findings, &|f| {
@@ -458,12 +500,22 @@ impl Gym {
                     }
 
                     // Feed new cases into the pool.
-                    // In adaptive mode, respect the rate controller's current concurrency.
-                    let target = if let Some(ref rc) = rate_controller {
+                    // In adaptive mode, respect BOTH per-process and shared rate controllers.
+                    let mut target = if let Some(ref rc) = rate_controller {
                         rc.concurrency() as usize
                     } else {
                         concurrency
                     };
+                    // Shared controller can further reduce concurrency or pause entirely
+                    if let Some(ref src) = shared_rc {
+                        let shared_conc = src.concurrency() as usize;
+                        if shared_conc == 0 {
+                            // Globally paused — don't feed any new cases
+                            target = 0;
+                        } else {
+                            target = target.min(shared_conc);
+                        }
+                    }
                     while pending.len() < target {
                         // Prefer retries over new cases (they've already waited).
                         if let Some((retry_i, retry_case, _retry_count)) = retry_queue.pop() {
