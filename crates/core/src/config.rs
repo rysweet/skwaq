@@ -77,6 +77,9 @@ pub struct AzureConfig {
     /// Azure OpenAI API version
     #[serde(default = "default_azure_api_version")]
     pub api_version: String,
+    /// API key (optional; if unset, uses AZURE_OPENAI_API_KEY env or bearer token)
+    #[serde(default)]
+    pub api_key: Option<String>,
 }
 
 impl Default for AzureConfig {
@@ -85,6 +88,7 @@ impl Default for AzureConfig {
             endpoint: String::new(),
             deployment: String::new(),
             api_version: default_azure_api_version(),
+            api_key: None,
         }
     }
 }
