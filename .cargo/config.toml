@@ -16,3 +16,8 @@ incremental = true
 strip = "debuginfo"
 # Use LTO for smaller binaries
 lto = "thin"
+
+[target.x86_64-unknown-linux-gnu]
+# Allow multiple definitions to resolve zstd symbol conflicts between
+# lbug (LadybugDB, bundles its own zstd) and the zstd crate.
+rustflags = ["-C", "link-args=-Wl,--allow-multiple-definition"]
