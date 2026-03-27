@@ -6731,3 +6731,193 @@ This guidance lets the agent recognize `argv[1]` as user input, see it used in `
 
 ---
 
+## Cycle: juliet (2026-03-27 10:12 UTC)
+
+### Missed Cases (54 false negatives)
+
+- **CWE78_OS_Command_Injection__char_connect_socket_execl_22b**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE78_OS_Command_Injection__char_connect_socket_execl_22b.c
+  Label Definition File: CWE78_OS_Command_Injection.strings.label.xml
+  Template File: sources-sink-22b.tmpl.c
+  */
+  ```
+- **CWE78_OS_Command_Injection__char_connect_socket_execl_51a**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE78_OS_Command_Injection__char_connect_socket_execl_51a.c
+  Label Definition File: CWE78_OS_Command_Injection.strings.label.xml
+  Template File: sources-sink-51a.tmpl.c
+  */
+  ```
+- **CWE78_OS_Command_Injection__char_connect_socket_execl_52a**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE78_OS_Command_Injection__char_connect_socket_execl_52a.c
+  Label Definition File: CWE78_OS_Command_Injection.strings.label.xml
+  Template File: sources-sink-52a.tmpl.c
+  */
+  ```
+- **CWE78_OS_Command_Injection__char_connect_socket_execl_52b**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE78_OS_Command_Injection__char_connect_socket_execl_52b.c
+  Label Definition File: CWE78_OS_Command_Injection.strings.label.xml
+  Template File: sources-sink-52b.tmpl.c
+  */
+  ```
+- **CWE78_OS_Command_Injection__char_connect_socket_execl_53a**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE78_OS_Command_Injection__char_connect_socket_execl_53a.c
+  Label Definition File: CWE78_OS_Command_Injection.strings.label.xml
+  Template File: sources-sink-53a.tmpl.c
+  */
+  ```
+- **CWE78_OS_Command_Injection__char_connect_socket_execl_53b**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE78_OS_Command_Injection__char_connect_socket_execl_53b.c
+  Label Definition File: CWE78_OS_Command_Injection.strings.label.xml
+  Template File: sources-sink-53b.tmpl.c
+  */
+  ```
+- **CWE78_OS_Command_Injection__char_connect_socket_execl_53c**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE78_OS_Command_Injection__char_connect_socket_execl_53c.c
+  Label Definition File: CWE78_OS_Command_Injection.strings.label.xml
+  Template File: sources-sink-53c.tmpl.c
+  */
+  ```
+- **CWE78_OS_Command_Injection__char_connect_socket_execl_54a**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE78_OS_Command_Injection__char_connect_socket_execl_54a.c
+  Label Definition File: CWE78_OS_Command_Injection.strings.label.xml
+  Template File: sources-sink-54a.tmpl.c
+  */
+  ```
+- **CWE78_OS_Command_Injection__char_connect_socket_execl_54b**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE78_OS_Command_Injection__char_connect_socket_execl_54b.c
+  Label Definition File: CWE78_OS_Command_Injection.strings.label.xml
+  Template File: sources-sink-54b.tmpl.c
+  */
+  ```
+- **CWE78_OS_Command_Injection__char_connect_socket_execl_54c**: Expected CWE-[78], detected CWE-[], missed CWE-[78]
+  ```
+  /* TEMPLATE GENERATED TESTCASE FILE
+  Filename: CWE78_OS_Command_Injection__char_connect_socket_execl_54c.c
+  Label Definition File: CWE78_OS_Command_Injection.strings.label.xml
+  Template File: sources-sink-54c.tmpl.c
+  */
+  ```
+
+### Reviewed Improvement Proposals (59 total; 57 accepted, 2 rejected)
+
+- **[Taint Rule Gap] [MODIFY]** Add command-injection taint definitions for C exec-family process-launch APIs: treat `recv` as a `network_input` taint source for string buffers written through pointer arguments; treat `execl`, `execle`, `execlp`, `execv`, `execve`, `execvp`, `execvpe`, and Windows `_execl*` variants as `command_execution` sinks; flag when tainted data flows into any argv element of an `exec*` call, with elevated confidence when the executable/first args indicate a shell invocation pattern such as `sh`/`/bin/sh` with `-c` or `cmd.exe` with `/c`. This addresses semantic, inter-file source-to-sink command injection flows where untrusted network input reaches shell-backed exec calls.
+  CWEs: [78] | From case: CWE78_OS_Command_Injection__char_connect_socket_execl_22b
+  - [KB] knowledge-pack/codeql-variant-analysis/codeql-variant-analysis — The KB explicitly recommends taint tracking from network input sources such as `recv` to dangerous sinks such as `system` and `exec`; this case is exactly a network-input-to-exec sink flow.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE-78 family guidance lists `exec*()` with strings from untrusted sources as a detection signal, confirming that `execl` should be treated as a command-injection sink.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 covers OS command injection where external input is incorporated into OS command execution; tainting `recv` input into `execl` arguments matches this definition.
+  - [MEMORY] failure :: No relevant prior durable memory was recalled for this pattern, so KB evidence is the basis for the proposed taint-rule addition. [cwe-78] — The analyst explicitly noted no relevant prior memory, indicating this proposal is supported by the cited knowledge sources rather than recalled prior cases.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: The core idea is broadly applicable and correctly aligned to CWE-78 because it models untrusted input reaching OS command execution APIs. However, flagging tainted data flowing into any argv element of any `exec*` call is too broad and risks overfitting Juliet patterns into a high-noise real-world rule: not every tainted argv element to `execve`-style APIs constitutes command injection unless a shell or command processor interprets it, or unless policy explicitly treats arbitrary process execution with attacker-controlled program/arguments as CWE-78. The shell-pattern confidence boost is useful, but the base rule should distinguish shell-interpreted arguments from general process-spawn arguments to preserve real-world precision.
+  Suggested modification: Limit primary CWE-78 reporting to shell-interpreted cases (`sh -c`, `/bin/sh -c`, `cmd.exe /c`, similar command processors). For non-shell `exec*` uses, either lower confidence, require attacker control of the executable/path plus argument vector under a dangerous-command-execution policy, or map separately only when product semantics indicate OS command construction rather than simple argument passing. Keep inter-file taint and `recv` source modeling.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — Supports that the correct conceptual target is OS command injection, which is strongest when untrusted input is interpreted as a command by a shell or command processor.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Methodology guidance favors judging real-world generality and accurate CWE mapping, which argues against an overly broad sink rule that treats all `exec*` argv elements as equally CWE-78-relevant.
+- **[Taint Rule Gap] [ACCEPT]** Add a taint rule for C/C++ OS command injection that treats `recv`, `recvfrom`, and `WSARecv` as untrusted input sources and the `exec*` family—specifically `execl`, `execle`, `execlp`, `execv`, `execve`, `execvp`, plus Windows `_execl` variants—as command-execution sinks for CWE-78. The sink semantics should mark arguments that are interpreted by a shell or command processor as dangerous, including wrapper-macro calls that resolve to those APIs. This should support graph-based detection of network-sourced strings flowing through one or more functions and reaching `exec*()` or shell execution without sanitization, and taint must survive interprocedural calls across files so calls like `badSink(data)` are analyzed even when the actual `execl` is in a companion translation unit.
+  CWEs: [78] | From case: CWE78_OS_Command_Injection__char_connect_socket_execl_51a
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 explicitly covers OS command injection, and this case matches the canonical pattern of untrusted input reaching command execution.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The knowledge pack lists `exec*()` with untrusted input as a detection signal for CWE-78, directly supporting adding `exec*` sink modeling.
+  - [KB] knowledge-pack/codeql-variant-analysis/codeql-variant-analysis — This guidance recommends taint tracking from network inputs such as `recv` to dangerous sinks such as system calls, which is exactly the missing source→sink model here.
+  - [KB] knowledge-pack/learned-patterns/learned-patterns — Previously learned patterns already identify command injection as `recv`/other untrusted input reaching `system|popen|exec*`; this supports formalizing the gap as a taint rule rather than a benchmark-specific regex.
+  - [MEMORY] failure :: No relevant durable memory was returned, so the proposal is based on the CWE and knowledge-pack evidence above. [cwe-78] — The analyst explicitly noted no relevant durable memory, so this reference preserves that evidence state while keeping the proposal grounded in the cited knowledge sources.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal is well-scoped for real-world use: it models common network input sources, command-execution sinks, shell/command-processor semantics, wrapper macros, and cross-file interprocedural propagation. It avoids the main overfitting pitfall by focusing danger on arguments interpreted by a shell or command processor instead of declaring every `exec*` argument inherently vulnerable. The CWE-78 mapping is accurate for the shell-executed cases described, and the graph/interprocedural emphasis addresses realistic code structure rather than only a Juliet-specific pattern.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — Directly supports modeling shell or command-processor interpreted arguments as OS command injection sinks.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The recalled failure about a function missing from the analysis graph reinforces the need for interprocedural and cross-file analysis so wrapper and companion-unit sinks are not missed.
+  - [MEMORY] failure :: Missing functions or incomplete graph construction can hide true source-to-sink flows across helpers and files. [cwe-119] — Generalized lesson: robust graph construction and interprocedural analysis improve detection generality beyond single-function benchmark matching.
+- **[Taint Rule Gap] [MODIFY]** Add `execl` and `_execl` as OS command injection sinks in the taint framework for CWE-78 / semantic class `command_injection`. Model them as command-execution sinks where any non-constant argument after the path/program name may be attacker-controlled, with special emphasis on shell-launch patterns such as `execl("/bin/sh", "sh", "-c", tainted, NULL)` and Windows `cmd.exe /c`. This should be implemented as a sink rule, not a regex, so existing interprocedural taint can connect external sources like `recv`, `recvfrom`, `read` on sockets, environment, and file input to `exec*` usage across helper functions and files. Concretely: sink names `execl`, `_execl`; sink type command execution; vulnerable argument model variadic argv positions, especially arguments following `-c` or `/c`, but more generally any tainted command/argument string passed to `exec*`; CWE mapping CWE-78 / `command_injection`.
+  CWEs: [78] | From case: CWE78_OS_Command_Injection__char_connect_socket_execl_52a
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology guidance explicitly says command injection is not limited to `system(user_input)` and calls out spawn/exec-family APIs, recommending taint checks from external inputs to execution functions in any argument position. That directly matches this missed `execl` case.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 is the correct classification for untrusted input reaching an OS command execution primitive like `execl` when used to invoke a shell or command interpreter.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The family guidance lists `exec*()` as a core detection signal for OS command injection, confirming that missing `execl` sink coverage would cause a systematic false negative for this vulnerability class.
+  - [MEMORY] failure :: No relevant durable memory was recalled for this case, so the proposal is grounded in the CWE/knowledge-pack evidence and the observed absence of taint source/sink coverage in the current analysis. — The absence of recalled durable memory reinforces that the proposal is based on the provided knowledge evidence and the observed taint-model gap rather than prior case-specific memory.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: Using sink semantics instead of regex is a strong, generalizable improvement, and the shell examples are correctly mapped to CWE-78. But limiting sinks to only `execl` and `_execl` is narrower than the stated general semantic goal and risks benchmark overfitting to the specific Juliet case. Also, treating any non-constant argument after the program name as CWE-78-vulnerable is broader than justified for non-shell invocations. The proposal should be generalized across the relevant exec family while prioritizing shell-interpreted positions for command injection.
+  Suggested modification: Extend sink coverage to the broader `exec*` family and Windows command-execution equivalents, while restricting high-confidence CWE-78 findings to shell/command-processor interpreted arguments such as positions after `-c` or `/c`. Keep sink-based interprocedural taint, but avoid declaring every tainted non-constant argv element a command-injection finding by default.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — Supports the shell-command interpretation focus and cautions against overgeneralizing all process arguments as command injection.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Methodology emphasizes real-world generality and accurate CWE mapping; a rule tailored only to `execl`/`_execl` from one benchmark case is less general than the underlying vulnerability pattern.
+- **[Taint Rule Gap] [ACCEPT]** Add OS-command-execution sink definitions for the exec family in the C/C++ taint framework, with special handling for shell invocation patterns. Specifically: add sinks for `execl`, `execle`, `execlp`, `execv`, `execve`, `execvp`, `execvpe`, and Windows equivalents already modeled elsewhere if applicable; mark as CWE-78 sinks when any argument representing the command string or shell `-c`/`/c` payload is tainted; for `execl`-style variadics, treat arguments after the program path as sink positions, and elevate confidence when the path/program is `/bin/sh`, `sh`, `cmd.exe`, or `cmd` and a subsequent argument is `-c` or `/c`, because the following argument is interpreted as a command string; ensure taint propagates interprocedurally through simple pass-through wrapper functions across files so that socket/file/env/user-input sources flowing through helper sinks are still reported.
+  CWEs: [78] | From case: CWE78_OS_Command_Injection__char_connect_socket_execl_52b
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 explicitly covers OS command injection; here untrusted input is forwarded toward an `execl`-based shell execution path, which matches the expected weakness.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology guidance explicitly calls out OS command injection via `system(), exec(), popen() with user input`, supporting modeling `execl`/exec-family APIs as dangerous taint sinks rather than relying on regex-only matching.
+  - [KB] knowledge-pack/codeql-variant-analysis/codeql-variant-analysis — The recommended approach is source-to-sink taint tracking across program flow, including transformed or forwarded data. This case is exactly a multi-step wrapper flow from network input to an exec sink.
+  - [MEMORY] failure :: No relevant prior durable memory was recalled for this pattern, which further suggests this exec-family command-injection flow is not yet well captured in our learned detection coverage. [command-injection, exec-family, interprocedural-taint] — The absence of prior durable memory for this pattern supports adding explicit exec-family taint modeling and interprocedural propagation to improve coverage.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is the strongest proposal for balancing generality and precision. It generalizes beyond a single Juliet function to the exec family, correctly centers CWE-78 on command-string or shell-payload arguments, models variadics sensibly, and preserves interprocedural propagation across wrappers and files. The confidence elevation for canonical shell patterns improves prioritization without forcing an overly narrow benchmark-specific rule.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — Justifies mapping tainted shell command strings and `/c`/`-c` payloads to CWE-78.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The analysis-graph failure example supports the proposal's insistence on interprocedural propagation across wrappers and files so sink calls in companion units are not missed.
+  - [MEMORY] failure :: Cross-file helper functions can hide the actual sink unless the analysis preserves taint through pass-through wrappers. [cwe-119] — General lesson from prior analysis failures: robust graph and interprocedural handling reduces benchmark-specific blind spots and improves real-world detection.
+- **[Taint Rule Gap] [MODIFY]** Add a command-injection taint rule for C/C++ that treats network-derived input as tainted and detects flows into OS command execution APIs. Sources should include `recv`, `recvfrom`, `read` on socket-backed descriptors, and similar network-input APIs. Sinks should include `execl`, `execlp`, `execle`, `execv`, `execvp`, `execve`, `system`, and `popen`. Semantics should classify as `command_injection` / CWE-78 when tainted string data flows into shell-invoking arguments such as `/bin/sh -c <tainted>` or `cmd.exe /c <tainted>`, or directly into `exec*` command/path/argv parameters without strict allowlisting. Ensure taint propagates interprocedurally across wrapper/helper functions and across source files so multi-hop flows like source-in-file-A → helper-B → helper-C → sink-D are preserved.
+  CWEs: [78] | From case: CWE78_OS_Command_Injection__char_connect_socket_execl_53a
+  - [KB] knowledge-pack/cwe-families/cwe-families — The knowledge pack explicitly lists CWE-78 detection signals as `system()`, `popen()`, and `exec*()` with strings from untrusted sources, directly supporting modeling `exec*` APIs as taint sinks for command injection.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — CWE-78 confirms the vulnerability class is OS command injection, so a taint rule connecting untrusted input to OS command execution sinks is the correct semantic fix.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology guidance says to map entry points such as network interfaces and perform data-flow analysis from sources to sinks; this supports adding network-input sources and interprocedural sink tracking rather than a benchmark-specific regex.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: The broad source and sink coverage is valuable and real-world relevant, especially by including `system` and `popen`, which are classic CWE-78 sinks. However, the clause that classifies flows directly into `exec*` command/path/argv parameters as command injection 'without strict allowlisting' is too expansive and policy-laden for a default CWE-78 rule. Many benign programs pass untrusted strings as arguments to non-shell `exec*` calls without constituting command injection. This should be narrowed to shell-interpreted payloads or downgraded for non-shell `exec*` uses.
+  Suggested modification: Keep the broad source set and include `system`/`popen`, but make high-confidence CWE-78 findings require shell interpretation (`system`, `popen`, `sh -c`, `cmd.exe /c`, similar). For direct non-shell `exec*` argv/path flows, emit lower-confidence findings or require additional evidence such as attacker control of the executable path, unsafe command construction semantics, or product-specific policy definitions.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — Strongly supports `system`, `popen`, and shell-invoking `exec*` patterns as canonical OS command injection sinks.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Methodology guidance on real-world generality and CWE accuracy argues for avoiding an overbroad default rule that labels all tainted non-shell `exec*` argument flows as CWE-78.
+- **[Agent Capability Gap] [ACCEPT]** Enhance agent graph traversal for CWE-[78] detection — case CWE78_OS_Command_Injection__char_connect_socket_execl_22b has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [78] | From case: CWE78_OS_Command_Injection__char_connect_socket_execl_22b
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[78].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: The proposal generalizes beyond the named Juliet case because it replaces brittle regex/API matching with cross-file call graph traversal and taint-flow analysis, which are broadly applicable techniques for detecting OS command injection through wrappers and indirect sinks. The CWE mapping is accurate: the proposal explicitly targets data flowing into dangerous command-execution sinks, which aligns with CWE-78 rather than a memory-safety CWE. Overfitting risk is low because the trigger condition is generic ('when standard API patterns are not found') and the remediation is methodology-level rather than case-specific.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Supports judging proposals by whether they improve general vulnerability-analysis methodology rather than memorizing benchmark-specific signatures; deeper graph and taint analysis is a methodology-level improvement.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — Confirms that tracing untrusted data to command-execution sinks is the correct conceptual mapping for OS command injection.
+  - [MEMORY] failure :: A prior missed Juliet case occurred because the function was absent from the analysis graph, showing that incomplete graph construction can cause false negatives and that deeper traversal is a generalized fix pattern. [cwe-121] — Even though the recalled failure involved a different CWE family, it demonstrates the broader lesson that better graph coverage/traversal addresses structural analysis gaps in a non-overfit way.
+- **[Agent Capability Gap] [ACCEPT]** Enhance agent graph traversal for CWE-[78] detection — case CWE78_OS_Command_Injection__char_connect_socket_execl_51a has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [78] | From case: CWE78_OS_Command_Injection__char_connect_socket_execl_51a
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[78].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal is materially the same as P1 and remains appropriately general. It addresses a realistic detection gap in which command injection is hidden behind wrapper functions or interprocedural flows, making regex-only sink hunting insufficient. The recommendation applies to real-world codebases with helper layers, dispatch functions, and split source files. The CWE assignment to CWE-78 is accurate because the focus is on command-execution data flow, not buffer handling or out-of-bounds memory behavior.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Methodology guidance favors analysis improvements that extend coverage through deeper structural reasoning, which matches the proposed use of cross-file calls and taint paths.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — Validates that identifying untrusted input reaching OS command sinks is the correct vulnerability class for this proposal.
+  - [MEMORY] failure :: General lesson from prior benchmark misses: relying on shallow graph extraction or direct pattern matches can miss vulnerabilities when the relevant function or path is indirect. [cwe-121] — This remembered lesson supports the claim that deeper traversal is a broadly useful fix rather than benchmark memorization.
+- **[Agent Capability Gap] [ACCEPT]** Enhance agent graph traversal for CWE-[78] detection — case CWE78_OS_Command_Injection__char_connect_socket_execl_52a has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [78] | From case: CWE78_OS_Command_Injection__char_connect_socket_execl_52a
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[78].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: The proposal is a sound, generalized enhancement for interprocedural command-injection detection. Case 52-style Juliet flows often involve function-pointer or wrapper-style indirection, but the proposed behavior does not hardcode that case structure; it instructs the agent to escalate from shallow heuristics to taint/call-graph reasoning whenever direct API matches are absent. That makes it applicable to production code with abstraction layers. The CWE mapping remains correct for CWE-78 because the dangerous condition is OS command execution influenced by untrusted input.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Supports favoring improvements that broaden analysis depth and resilience to indirect code structure, which is exactly what this proposal does.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — Provides the authoritative CWE meaning, matching the proposal's sink-oriented taint tracing for OS command injection.
+  - [MEMORY] failure :: Observed benchmark failures can stem from analysis graph incompleteness, suggesting that stronger traversal and path reconstruction improve detection across cases, not just one template. [cwe-121] — This memory justifies accepting graph/taint-depth improvements as a generalized remedy to structural blind spots.
+- **[Agent Capability Gap] [ACCEPT]** Enhance agent graph traversal for CWE-[78] detection — case CWE78_OS_Command_Injection__char_connect_socket_execl_52b has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [78] | From case: CWE78_OS_Command_Injection__char_connect_socket_execl_52b
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[78].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is another instance of the same methodology improvement and should be accepted for the same reason: it avoids overfitting to literal API names and instead promotes source-to-sink reasoning across files and wrappers. That is a realistic requirement in nontrivial software and directly addresses a class of false negatives. The proposal does not misuse CWE taxonomy; it properly targets OS command injection (CWE-78), not memory corruption CWEs.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — General methodological grounding supports deeper graph traversal and taint tracing as robust detection strategies.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — Confirms the vulnerability class targeted by tracing attacker-controlled data into command execution.
+  - [MEMORY] failure :: Past analysis gaps caused by missing or incomplete function graph coverage illustrate why escalating to richer graph traversal is broadly beneficial. [cwe-121] — The lesson is cross-cutting: graph insufficiency causes misses, so a traversal enhancement is not overfit to this single benchmark case.
+- **[Agent Capability Gap] [ACCEPT]** Enhance agent graph traversal for CWE-[78] detection — case CWE78_OS_Command_Injection__char_connect_socket_execl_53a has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [78] | From case: CWE78_OS_Command_Injection__char_connect_socket_execl_53a
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[78].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: Accepted because it proposes a generally useful fallback strategy for CWE-78 detection when superficial signatures fail. Interprocedural taint analysis to indirect command sinks is highly relevant in real code and substantially reduces benchmark-specific overfitting. The proposal is correctly scoped to command injection and avoids confusing it with unrelated memory-safety issues such as out-of-bounds writes. Its only case-specific element is the motivating example, not the actual rule.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Endorses evaluating improvements on general analytical utility; this proposal improves the agent's generic ability to trace vulnerable flows.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command — Establishes that the proposal's focus on dangerous command sinks and tainted input is an accurate CWE-78 mapping.
+  - [KB] cwe/CWE-787/CWE-787 Out-of-bounds Write — Helps rule out incorrect memory-safety categorization by contrast; this proposal is about command execution, not buffer writes.
+
+---
+
