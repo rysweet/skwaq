@@ -13,6 +13,8 @@ pub struct Config {
     pub analysis: AnalysisConfig,
     #[serde(default)]
     pub output: OutputConfig,
+    #[serde(default)]
+    pub observability: ObservabilityConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -226,6 +228,36 @@ impl Default for OutputConfig {
     fn default() -> Self {
         Self {
             default_format: default_format(),
+        }
+    }
+}
+
+/// Observability configuration for OpenTelemetry export.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ObservabilityConfig {
+    /// OTLP gRPC endpoint (e.g. "http://localhost:4317"). When set, spans are
+    /// exported via OTLP in addition to the local JSONL file.
+    #[serde(default)]
+    pub otlp_endpoint: Option<String>,
+    /// Azure Monitor connection string. When set, spans are exported to
+    /// Application Insights.
+    #[serde(default)]
+    pub azure_monitor_connection_string: Option<String>,
+    /// Local telemetry directory. Defaults to ~/.skwaq/telemetry.
+    #[serde(default = "default_telemetry_dir")]
+    pub telemetry_dir: String,
+}
+
+fn default_telemetry_dir() -> String {
+    "~/.skwaq/telemetry".into()
+}
+
+impl Default for ObservabilityConfig {
+    fn default() -> Self {
+        Self {
+            otlp_endpoint: None,
+            azure_monitor_connection_string: None,
+            telemetry_dir: default_telemetry_dir(),
         }
     }
 }
