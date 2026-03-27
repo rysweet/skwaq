@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// LadybugDB-backed graph database.
+#[derive(Clone)]
 pub struct LadybugGraphDb {
     db: Arc<lbug::Database>,
     #[allow(dead_code)] // Used in Phase 2 for db path discovery

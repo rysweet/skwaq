@@ -8,6 +8,7 @@ use crate::graph::ladybug_db::LadybugGraphDb;
 use std::path::Path;
 
 /// Persistent memory store backed by LadybugDB.
+#[derive(Clone)]
 pub struct MemoryStore {
     db: LadybugGraphDb,
 }

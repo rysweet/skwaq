@@ -1685,23 +1685,27 @@ static FULL_PIPELINE_CLIENTS: tokio::sync::OnceCell<skwaq_core::agents::Pipeline
 
 /// Open the default durable memory store for agents.
 ///
+/// Shared durable memory store — opened once, reused across all parallel
+/// gym cases. LadybugDB supports multiple connections from the same Database
+/// handle within one process; it's concurrent *file opens* that crash.
+static MEMORY_STORE: std::sync::OnceLock<Option<skwaq_core::memory::MemoryStore>> =
+    std::sync::OnceLock::new();
+
 /// Returns `None` if memory cannot be initialized (non-fatal — agents
 /// simply run without cross-run learning).
 fn open_memory_store() -> Option<skwaq_core::memory::MemoryStore> {
-    // Use in-memory store for gym runs to avoid LadybugDB file lock
-    // contention when running parallel evaluations. Each process gets
-    // its own isolated memory — cross-run learning uses the knowledge
-    // base (fn-insights.md) instead of the durable memory store.
-    match skwaq_core::memory::MemoryStore::in_memory() {
-        Ok(store) => {
-            tracing::info!("Agent memory enabled (in-memory for gym parallelism)");
-            Some(store)
-        }
-        Err(e) => {
-            tracing::warn!("Could not open memory store: {e}. Running without memory.");
-            None
-        }
-    }
+    MEMORY_STORE
+        .get_or_init(|| match skwaq_core::memory::MemoryStore::open_default() {
+            Ok(store) => {
+                tracing::info!("Durable agent memory enabled (shared across gym cases)");
+                Some(store)
+            }
+            Err(e) => {
+                tracing::warn!("Could not open durable memory store: {e}. Running without memory.");
+                None
+            }
+        })
+        .clone()
 }
 
 /// Run the LLM agent pipeline and fail explicitly if the client is unavailable.
