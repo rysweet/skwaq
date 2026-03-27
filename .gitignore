@@ -56,3 +56,5 @@ ghidra_projects/
 # Node (if frontend added later)
 node_modules/
 skwaq.toml
+logs/
+outputs/sessions/

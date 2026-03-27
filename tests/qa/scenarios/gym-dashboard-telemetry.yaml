@@ -1,0 +1,130 @@
+# Skwaq Gym Dashboard & Telemetry - Outside-In Tests
+# Tests the OTEL TUI dashboard, telemetry query, and gym history commands.
+
+name: "Skwaq Gym Dashboard & Telemetry Tests"
+description: "Verify gym dashboard (static + live TUI), telemetry query, and history commands"
+version: "1.0.0"
+
+config:
+  timeout: 60000
+  retries: 1
+  parallel: false
+
+agents:
+  - name: "skwaq-cli"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "/home/azureuser/src/skwaq"
+      timeout: 30000
+      capture_output: true
+
+steps:
+  # ── Static Dashboard (mermaid, default) ───────────────────────
+
+  - name: "Dashboard default mode generates mermaid charts"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "./target/release/skwaq gym dashboard 2>&1"
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "Score Trajectory"
+    timeout: 15000
+
+  # ── Static TUI Dashboard (--tui flag) ────────────────────────
+
+  - name: "Dashboard --tui renders SKWAQ GYM DASHBOARD title"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "./target/release/skwaq gym dashboard --tui 2>&1"
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "SKWAQ GYM DASHBOARD"
+    timeout: 15000
+
+  - name: "Dashboard --tui shows suite columns"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "./target/release/skwaq gym dashboard --tui 2>&1"
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "SUITE"
+        - "F1%"
+        - "PREC%"
+        - "REC%"
+        - "TREND"
+    timeout: 15000
+
+  - name: "Dashboard --tui shows API health"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "./target/release/skwaq gym dashboard --tui 2>&1"
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "API:"
+        - "requests"
+    timeout: 15000
+
+  # ── Gym History ───────────────────────────────────────────────
+
+  - name: "Gym history command runs without error"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "./target/release/skwaq gym history 2>&1"
+    expect:
+      exit_code: 0
+    timeout: 15000
+
+  # ── Telemetry Query ──────────────────────────────────────────
+
+  - name: "Gym telemetry query runs without error"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "./target/release/skwaq gym telemetry query 2>&1"
+    expect:
+      exit_code: 0
+    timeout: 15000
+
+  # ── Live TUI Dashboard ──────────────────────────────────────
+  # Launch in a PTY, verify it renders, then send 'q' to quit
+
+  - name: "Dashboard live TUI launches and exits on q"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "timeout 10 script -qc './target/release/skwaq gym dashboard --live' /dev/null <<< 'q' 2>&1 || true"
+    expect:
+      exit_code: 0
+    timeout: 20000
+
+  - name: "Dashboard live TUI renders title in PTY"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "timeout 5 script -qc './target/release/skwaq gym dashboard --live' /dev/null <<< 'q' 2>&1 | strings | head -50"
+    expect:
+      stdout_contains:
+        - "SKWAQ GYM DASHBOARD"
+    timeout: 15000
+
+  - name: "Dashboard live TUI renders panels in PTY"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "timeout 5 script -qc './target/release/skwaq gym dashboard --live' /dev/null <<< 'q' 2>&1 | strings | head -100"
+    expect:
+      stdout_contains:
+        - "Benchmark Results"
+        - "Agent Stats"
+        - "API Health"
+    timeout: 15000

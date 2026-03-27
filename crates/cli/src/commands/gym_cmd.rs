@@ -154,12 +154,52 @@ pub enum GymSub {
         suite: Option<String>,
     },
 
-    /// Generate dashboard: mermaid charts + scores table from run history
-    Dashboard,
+    /// Generate dashboard: mermaid charts + scores table from run history.
+    /// Use --live for a real-time ratatui TUI, or --tui for a static snapshot.
+    Dashboard {
+        /// Launch live interactive TUI dashboard (ratatui)
+        #[arg(long, conflicts_with = "tui")]
+        live: bool,
+
+        /// Show static TUI snapshot of latest run (ratatui)
+        #[arg(long, conflicts_with = "live")]
+        tui: bool,
+    },
+
+    /// Query and manage OpenTelemetry span telemetry
+    Telemetry {
+        #[command(subcommand)]
+        action: TelemetrySub,
+    },
 
     /// Preflight check: verify Copilot backend, auth, model, and no-fallback readiness.
     /// Run this before hybrid benchmark runs to ensure the LLM pipeline will work.
     Preflight,
+}
+
+#[derive(Subcommand)]
+pub enum TelemetrySub {
+    /// Query recorded spans and print a summary
+    Query {
+        /// Filter spans by name (substring match)
+        #[arg(long)]
+        name: Option<String>,
+
+        /// Filter spans by attribute key=value (e.g. "suite=juliet")
+        #[arg(long)]
+        attr: Option<String>,
+
+        /// Maximum number of spans to return
+        #[arg(long, default_value = "500")]
+        limit: usize,
+    },
+
+    /// Rotate the spans JSONL file (archive when over size limit)
+    Rotate {
+        /// Maximum file size in bytes before rotation (default 50 MB)
+        #[arg(long, default_value = "52428800")]
+        max_bytes: u64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -805,15 +845,51 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
 
             skwaq_gym::improve::print_proposals(&cycle);
         }
-        GymSub::Dashboard => {
-            println!(
-                "{}",
-                skwaq_gym::dashboard::generate_charts(&gym.history_db)?
-            );
-            println!(
-                "{}",
-                skwaq_gym::dashboard::generate_scores_table(&gym.history_db)?
-            );
+        GymSub::Dashboard { live, tui } => {
+            if *live {
+                let telemetry_dir = default_telemetry_dir();
+                skwaq_gym::tui::run_live(&gym.history_db, &telemetry_dir)?;
+            } else if *tui {
+                let telemetry_dir = default_telemetry_dir();
+                skwaq_gym::tui::run_static(&gym.history_db, &telemetry_dir)?;
+            } else {
+                println!(
+                    "{}",
+                    skwaq_gym::dashboard::generate_charts(&gym.history_db)?
+                );
+                println!(
+                    "{}",
+                    skwaq_gym::dashboard::generate_scores_table(&gym.history_db)?
+                );
+            }
+        }
+        GymSub::Telemetry { action } => {
+            let telemetry_dir = default_telemetry_dir();
+            match action {
+                TelemetrySub::Query { name, attr, limit } => {
+                    let attr_filter = attr.as_ref().map(|a| {
+                        let mut parts = a.splitn(2, '=');
+                        let key = parts.next().unwrap_or("").to_string();
+                        let val = parts.next().unwrap_or("").to_string();
+                        (key, val)
+                    });
+                    let spans = skwaq_gym::telemetry::query_spans(
+                        &telemetry_dir,
+                        name.as_deref(),
+                        attr_filter.as_ref().map(|(k, v)| (k.as_str(), v.as_str())),
+                        *limit,
+                    )?;
+                    if spans.is_empty() {
+                        println!("No spans found.");
+                    } else {
+                        skwaq_gym::telemetry::print_span_summary(&spans);
+                    }
+                }
+                TelemetrySub::Rotate { max_bytes } => {
+                    skwaq_gym::telemetry::rotate_spans_file(&telemetry_dir, *max_bytes)?;
+                    println!("Telemetry spans file rotated.");
+                }
+            }
         }
         GymSub::Preflight => {
             run_preflight().await?;
@@ -821,6 +897,12 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn default_telemetry_dir() -> String {
+    dirs::home_dir()
+        .map(|h| h.join(".skwaq/telemetry").to_string_lossy().into_owned())
+        .unwrap_or_else(|| "~/.skwaq/telemetry".to_string())
 }
 
 async fn ensure_hybrid_benchmark_ready() -> anyhow::Result<()> {
