@@ -102,6 +102,12 @@ impl LadybugGraphDb {
             "CREATE NODE TABLE IF NOT EXISTS Finding(id STRING PRIMARY KEY, title STRING DEFAULT '', evidence STRING DEFAULT '', agent STRING DEFAULT '', timestamp STRING DEFAULT '', investigation_id STRING DEFAULT '', status STRING DEFAULT 'new', cycle_discovered INT64 DEFAULT 0, cycle_last_updated INT64 DEFAULT 0, severity STRING DEFAULT '', category STRING DEFAULT '')",
             "CREATE NODE TABLE IF NOT EXISTS StringLiteral(id STRING PRIMARY KEY, value STRING DEFAULT '', offset STRING DEFAULT '', investigation_id STRING DEFAULT '')",
             "CREATE NODE TABLE IF NOT EXISTS Investigation(id STRING PRIMARY KEY, name STRING DEFAULT '', target STRING DEFAULT '', status STRING DEFAULT '', created_at STRING DEFAULT '', updated_at STRING DEFAULT '')",
+            "CREATE NODE TABLE IF NOT EXISTS Cwe(id STRING PRIMARY KEY, cwe_id STRING DEFAULT '', name STRING DEFAULT '', description STRING DEFAULT '')",
+            "CREATE NODE TABLE IF NOT EXISTS Annotation(id STRING PRIMARY KEY, content STRING DEFAULT '', agent STRING DEFAULT '', timestamp STRING DEFAULT '', investigation_id STRING DEFAULT '')",
+            "CREATE NODE TABLE IF NOT EXISTS BasicBlock(id STRING PRIMARY KEY, address STRING DEFAULT '', size INT64 DEFAULT 0, investigation_id STRING DEFAULT '')",
+            "CREATE NODE TABLE IF NOT EXISTS Vulnerability(id STRING PRIMARY KEY, name STRING DEFAULT '', severity STRING DEFAULT '', description STRING DEFAULT '', investigation_id STRING DEFAULT '')",
+            "CREATE NODE TABLE IF NOT EXISTS Hypothesis(id STRING PRIMARY KEY, description STRING DEFAULT '', status STRING DEFAULT '', agent STRING DEFAULT '', investigation_id STRING DEFAULT '')",
+            "CREATE NODE TABLE IF NOT EXISTS AgentAction(id STRING PRIMARY KEY, action STRING DEFAULT '', agent STRING DEFAULT '', timestamp STRING DEFAULT '', investigation_id STRING DEFAULT '')",
             // Relationship tables
             "CREATE REL TABLE IF NOT EXISTS CALLS(FROM Function TO Function)",
             "CREATE REL TABLE IF NOT EXISTS TAINT_FLOW(FROM DataSource TO DataSink, path STRING DEFAULT '', sanitized INT64 DEFAULT 0)",
