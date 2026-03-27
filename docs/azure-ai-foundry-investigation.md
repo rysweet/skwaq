@@ -1,33 +1,23 @@
 # Azure AI Foundry Investigation for Skwaq
 
 **Date:** 2026-07-17
-**Tenant:** DefenderATEVET17 (`3cd87a41-1f61-4aef-a212-cefdecd9a2d1`)
-**Subscription:** `9b00bc5e-9abc-45de-9958-02a9d9277b16`
-**Authenticated as:** `ryan.sweet@DefenderATEVET17.onmicrosoft.com`
+**Tenant:** *(redacted — set via `az login`)*
+**Subscription:** *(redacted)*
+**Authenticated as:** *(redacted)*
 
 ## 1. Current Azure Environment
 
 ### Subscription & Auth
 
-The Azure CLI is authenticated to the DefenderATEVET17 tenant with a single
+The Azure CLI is authenticated to the target tenant with a single
 subscription in `Enabled` state. `DefaultAzureCredential` will work via
 `az login` (CLI auth) or a managed identity assigned to the compute running
 skwaq.
 
 ### Existing Cognitive Services Resources
 
-The `rysweet-ballistae` resource group in **eastus2** already has three
-resources:
-
-| Name | Kind | Location |
-|------|------|----------|
-| `rysweet-ballistae` | CognitiveServices | eastus2 |
-| `rysweet-ballisae-openai` | OpenAI | eastus2 |
-| `rysweetballist5347662217` | AIServices | eastus2 |
-
-The AIServices resource has endpoint
-`https://rysweetballist5347662217.cognitiveservices.azure.com/` and currently
-hosts a single **gpt-4o** deployment.
+The resource group in **eastus2** has an AIServices resource with endpoint
+`https://<resource>.cognitiveservices.azure.com/` hosting model deployments.
 
 ## 2. Model Availability
 
@@ -44,7 +34,7 @@ Both eastus and eastus2 have the full GPT-5 family. Key models for skwaq:
 | gpt-5.3-codex | 2026-02-24 | Standard, GlobalStandard, ... | chatCompletion |
 
 **GPT-5.4 is Generally Available** with lifecycle deprecation date 2027-03-05.
-It can be deployed on the existing `rysweetballist5347662217` AIServices
+It can be deployed on the existing `<resource>` AIServices
 resource or a new one.
 
 ### Claude Opus (❌ Not Available)
@@ -80,11 +70,11 @@ The simplest path — add a deployment to the existing resource:
 // Adds a GPT-5.1 deployment to the existing AIServices resource.
 // Usage:
 //   az deployment group create \
-//     --resource-group rysweet-ballistae \
+//     --resource-group <resource-group> \
 //     --template-file deploy-gpt51.bicep
 
 resource existingAIServices 'Microsoft.CognitiveServices/accounts@2024-10-01' existing = {
-  name: 'rysweetballist5347662217'
+  name: '<resource>'
 }
 
 resource gpt51Deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
@@ -315,7 +305,7 @@ decompilation = "azure"
 embeddings = "ollama"
 
 [llm.azure]
-endpoint = "https://rysweetballist5347662217.cognitiveservices.azure.com/"
+endpoint = "https://<resource>.cognitiveservices.azure.com/"
 deployment = "gpt-51-skwaq"
 api_version = "2024-10-21"
 
@@ -400,7 +390,7 @@ Opus for equivalent benchmark runs.
    (one deployment, no new resources). This can be done in minutes:
    ```bash
    az deployment group create \
-     --resource-group rysweet-ballistae \
+     --resource-group <resource-group> \
      --template-file deploy-gpt51.bicep
    ```
 
@@ -409,7 +399,7 @@ Opus for equivalent benchmark runs.
    TOKEN=$(az account get-access-token \
      --resource https://cognitiveservices.azure.com \
      --query accessToken -o tsv)
-   curl -s https://rysweetballist5347662217.cognitiveservices.azure.com/openai/deployments/gpt-51-skwaq/chat/completions?api-version=2024-10-21 \
+   curl -s https://<resource>.cognitiveservices.azure.com/openai/deployments/gpt-51-skwaq/chat/completions?api-version=2024-10-21 \
      -H "Authorization: Bearer $TOKEN" \
      -H "Content-Type: application/json" \
      -d '{"messages":[{"role":"user","content":"Hello"}],"max_tokens":10}'

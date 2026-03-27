@@ -2,10 +2,10 @@
 // Deploys an OpenAI model to an existing Azure AI Services resource.
 // Usage:
 //   az deployment group create \
-//     --resource-group rysweet-ballistae \
+//     --resource-group <your-rg> \
 //     --template-file infra/azure/deploy-model.bicep \
-//     --parameters accountName=rysweetballist5347662217 \
-//                  deploymentName=gpt-51-skwaq \
+//     --parameters accountName=<your-account> \
+//                  deploymentName=gpt-51 \
 //                  modelName=gpt-5.1 \
 //                  modelVersion=2025-11-13
 
