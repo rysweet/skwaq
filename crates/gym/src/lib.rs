@@ -313,6 +313,14 @@ impl Gym {
             )
             .entered();
 
+            // Register active run for dashboard visibility (removed on drop)
+            let _active_run_guard = crate::telemetry::register_active_run(
+                &crate::telemetry::default_telemetry_dir(),
+                &suite_name,
+                total,
+                concurrency,
+            );
+
             // Run cases with in-process async concurrency.
             // Each case creates its own in-memory GraphDb, so no shared state.
             // Concurrency > 1 lets multiple LLM API calls overlap (network I/O).
