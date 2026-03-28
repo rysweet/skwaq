@@ -111,11 +111,12 @@ impl AgentRunner {
         db: &GraphDb,
         budget: &mut TokenBudget,
     ) -> anyhow::Result<AgentResult> {
-        let _agent_span = tracing::info_span!(
+        let agent_span = tracing::info_span!(
             "gym.agent",
             agent_name = %agent.name,
             model = %agent.model,
             investigation_id = %investigation_id,
+            tokens_out = tracing::field::Empty,
         )
         .entered();
 
@@ -143,6 +144,7 @@ impl AgentRunner {
         .await?;
 
         let tokens_used = budget.used - tokens_before;
+        agent_span.record("tokens_out", tokens_used);
         let (parsed_output, parsed_output_error) =
             parse_structured_output_for_agent(agent, &output);
         let context_frame = AgentContextFrame::from_agent(
@@ -175,6 +177,15 @@ impl AgentRunner {
         memory: &MemoryStore,
         budget: &mut TokenBudget,
     ) -> anyhow::Result<AgentResult> {
+        let agent_span = tracing::info_span!(
+            "gym.agent",
+            agent_name = %agent.name,
+            model = %agent.model,
+            investigation_id = %investigation_id,
+            tokens_out = tracing::field::Empty,
+        )
+        .entered();
+
         let all_tools = agent_tools();
         let tools = filter_tools(&all_tools, &agent.tools);
         let model = &agent.model;
@@ -208,6 +219,7 @@ impl AgentRunner {
         .await?;
 
         let tokens_used = budget.used - tokens_before;
+        agent_span.record("tokens_out", tokens_used);
         let (parsed_output, parsed_output_error) =
             parse_structured_output_for_agent(agent, &output);
         let context_frame = AgentContextFrame::from_agent(

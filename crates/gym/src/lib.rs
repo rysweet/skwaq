@@ -304,6 +304,15 @@ impl Gym {
                 .history_db
                 .start_run(&suite_name, &commit, &run_metadata)?;
 
+            let _run_span = tracing::info_span!(
+                "gym.run",
+                suite = %suite_name,
+                total_cases = total,
+                concurrency = concurrency,
+                cases_completed = tracing::field::Empty,
+            )
+            .entered();
+
             // Run cases with in-process async concurrency.
             // Each case creates its own in-memory GraphDb, so no shared state.
             // Concurrency > 1 lets multiple LLM API calls overlap (network I/O).

@@ -9,7 +9,7 @@ agent attention, not as conclusions.
 ## Architecture Overview
 
 ```
-Source Code → CPG Builder → SQLite Property Graph
+Source Code → CPG Builder → LadybugDB Property Graph
                                     │
                            ┌────────┴────────┐
                            │  Enriched        │
@@ -38,7 +38,7 @@ Source Code → CPG Builder → SQLite Property Graph
                     │ get_cross_file_calls     │
                     │ get_data_sources         │
                     │ get_imports              │
-                    │ query_graph (SQL/Cypher) │
+                    │ query_graph (Cypher)     │
                     │ read_function            │
                     └──────────────────────────┘
                                     │
@@ -245,60 +245,37 @@ Returns all imported symbols for the current investigation.
 | unistd.h | import |
 ```
 
-## SQL Passthrough in `query_graph`
+## Cypher Query Pipeline in `query_graph`
 
-The `query_graph` tool accepts both Cypher queries (translated to SQL) and
-direct SQL SELECT statements. When an agent issues a SQL query, it passes
-through a three-layer security check:
+The `query_graph` tool accepts Cypher queries and executes them against
+LadybugDB. The pipeline has two steps:
 
-### Layer 1: Keyword Blocklist
+1. **Raw Cypher** — If the LLM emits valid Cypher, execute it directly
+   via `db.cypher_query()`.
+2. **Translated Cypher** — If raw execution fails, `translate_to_cypher()`
+   pattern-matches the query and emits a safe Cypher string with
+   `investigation_id` filtering and `LIMIT` clauses.
 
-The query is rejected if it contains any DML or dangerous keywords:
+If both steps fail, an error is returned to the agent.
 
-```
-INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, REPLACE, TRUNCATE,
-ATTACH, DETACH, LOAD_EXTENSION, PRAGMA, VACUUM, REINDEX
-```
+### Security Controls
 
-Additionally, comment sequences (`--`, `/*`) and semicolons (`;`) are
-rejected to prevent query stacking and comment-based injection.
-
-### Layer 2: Table Whitelist
-
-All table references in the query are extracted and checked against the
-18 allowed CPG tables:
-
-```
-functions, calls, data_sources, data_sinks, taint_flows, symbols,
-string_literals, func_references_string, investigations, findings,
-analysis_runs, function_analysis, finding_cwes, finding_evidence,
-agent_memory, investigation_files, knowledge_entries, analysis_hints
-```
-
-Any reference to a table not in this list causes rejection.
-
-### Layer 3: SQLite Read-Only Check
-
-The prepared statement is checked via `stmt.readonly()` before execution.
-This catches any DML that slipped past the keyword blocklist.
+| Control | Description |
+|---------|-------------|
+| String escaping | All interpolated values pass through `esc()` |
+| Investigation scoping | Every generated Cypher includes `WHERE ... investigation_id = '{inv}'` |
+| Result limits | Every `RETURN` includes `LIMIT` (20–50 depending on query type) |
+| ID validation | `validate_investigation_id()` rejects injection characters |
+| No passthrough | Unrecognized patterns are rejected, not executed |
 
 ### Error Handling
 
-If a SQL query fails validation, the agent receives a sanitized error:
+Cypher errors are returned to the agent as structured messages. Raw
+database error strings are sanitized to prevent information leakage
+about the graph schema.
 
-```
-Query rejected: references disallowed table 'sqlite_master'
-```
-
-Raw SQL error messages are never exposed to the agent to prevent
-information leakage about the database schema.
-
-### Cypher Fallback
-
-If the input does not start with a SQL keyword (`SELECT`, `WITH`), it is
-treated as a Cypher query and passed through the existing Cypher-to-SQL
-translator. This maintains backward compatibility with existing agent
-prompts that use Cypher syntax.
+See [Tool Translate: Cypher Migration](tool-translate-cypher-migration.md)
+for the complete API reference and safety rules.
 
 ## Agent Methodology: Graph-First Detection
 
@@ -467,9 +444,10 @@ entirely — no empty section headers are emitted.
 
 ## Configuration
 
-No additional configuration is required. The graph tools use the same SQLite
-database that the CPG builder populates during analysis. The context budget
-allocations are compile-time constants.
+No additional configuration is required. The graph tools use the LadybugDB
+property graph that the CPG builder populates during analysis. SQLite is
+retained only for the `lookup_cwe` tool (static reference table). The context
+budget allocations are compile-time constants.
 
 ### Token Budget Impact
 
@@ -481,9 +459,9 @@ The per-case token budget (50K target, 100K max) remains unchanged.
 
 | Control | Description |
 |---------|-------------|
-| SQL parameterization | All queries use `?` placeholders — no string interpolation |
-| SQL passthrough defense-in-depth | Keyword blocklist → table whitelist → `stmt.readonly()` |
-| Sanitized error messages | SQL errors are never exposed to agents |
+| Cypher escaping | All interpolated values pass through `esc()` — no raw string embedding |
+| Investigation scoping | Every Cypher query filters by `investigation_id` — no cross-investigation leakage |
+| Sanitized error messages | Database errors are never exposed to agents |
 | Path traversal prevention | AgentPrompt/CweMapping file paths are canonicalized and directory-checked |
 | TaintRule validation | Pipe-delimited format strictly validated (3 parts, length limits) |
 | Server-side UUIDs | TaintRule inserts use `uuid::Uuid::new_v4()`, never agent-provided IDs |

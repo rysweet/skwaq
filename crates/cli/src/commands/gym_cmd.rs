@@ -1260,7 +1260,27 @@ fn parse_cwe_number(s: &str) -> anyhow::Result<u32> {
 }
 
 /// Find the workspace root by looking for Cargo.toml with [workspace].
+///
+/// Resolution order:
+/// 1. `SKWAQ_ROOT` env var (explicit override for installed binary usage)
+/// 2. Walk up from current directory looking for Cargo.toml with [workspace]
 fn find_skwaq_root() -> anyhow::Result<PathBuf> {
+    // Check SKWAQ_ROOT env var first — lets the installed binary work from anywhere
+    if let Ok(root) = std::env::var("SKWAQ_ROOT") {
+        let root = PathBuf::from(root);
+        let cargo_toml = root.join("Cargo.toml");
+        if cargo_toml.exists() {
+            let content = std::fs::read_to_string(&cargo_toml)?;
+            if content.contains("[workspace]") {
+                return Ok(root);
+            }
+        }
+        anyhow::bail!(
+            "SKWAQ_ROOT={} does not contain a workspace Cargo.toml",
+            root.display()
+        );
+    }
+
     let mut dir = std::env::current_dir()?;
     loop {
         let cargo_toml = dir.join("Cargo.toml");
@@ -1271,7 +1291,10 @@ fn find_skwaq_root() -> anyhow::Result<PathBuf> {
             }
         }
         if !dir.pop() {
-            anyhow::bail!("Could not find skwaq workspace root (Cargo.toml with [workspace])");
+            anyhow::bail!(
+                "Could not find skwaq workspace root (Cargo.toml with [workspace]).\n\
+                 Hint: run from inside the repo, or set SKWAQ_ROOT=/path/to/skwaq"
+            );
         }
     }
 }

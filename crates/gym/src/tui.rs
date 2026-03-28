@@ -32,8 +32,10 @@ pub fn run_live(history_db: &HistoryDb, telemetry_dir: &str) -> anyhow::Result<(
     let mut last_tick = Instant::now();
 
     loop {
+        let elapsed_since_tick = last_tick.elapsed();
+        let secs_until_refresh = tick_rate.saturating_sub(elapsed_since_tick).as_secs();
         let state = DashboardState::load(history_db, telemetry_dir)?;
-        terminal.draw(|f| render(f, &state))?;
+        terminal.draw(|f| render(f, &state, Some(secs_until_refresh)))?;
 
         let timeout = tick_rate.saturating_sub(last_tick.elapsed());
         if event::poll(timeout)? {
@@ -81,15 +83,26 @@ struct AgentStats {
     avg_duration_ms: f64,
 }
 
+struct ActiveJob {
+    suite: String,
+    completed: u64,
+    total: u64,
+    concurrency: u64,
+    avg_case_ms: f64,
+    eta_secs: Option<u64>,
+}
+
 struct ApiHealth {
     total_requests: u64,
     rate_limit_retries: u64,
     errors: u64,
+    model: String,
 }
 
 struct DashboardState {
     suites: Vec<SuiteStats>,
     agents: Vec<AgentStats>,
+    active_jobs: Vec<ActiveJob>,
     api_health: ApiHealth,
     recent_span_count: usize,
 }
@@ -168,6 +181,82 @@ impl DashboardState {
             })
             .collect();
 
+        // Active jobs from gym.run spans (unfinished = still running)
+        // and gym.case spans for progress tracking
+        let run_spans =
+            query_spans(telemetry_dir, Some("gym.run"), None, 100).unwrap_or_default();
+        let case_spans =
+            query_spans(telemetry_dir, Some("gym.case"), None, 50000).unwrap_or_default();
+
+        // Count completed cases per suite and compute avg duration
+        let mut case_counts: std::collections::HashMap<String, (u64, f64)> =
+            std::collections::HashMap::new();
+        for span in &case_spans {
+            let suite = span
+                .attributes
+                .get("suite")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            if !suite.is_empty() {
+                let entry = case_counts.entry(suite).or_insert((0, 0.0));
+                entry.0 += 1;
+                entry.1 += span.duration_ms;
+            }
+        }
+
+        let mut active_jobs = Vec::new();
+        for span in &run_spans {
+            let suite = span
+                .attributes
+                .get("suite")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string();
+            let total: u64 = span
+                .attributes
+                .get("total_cases")
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+            let concurrency: u64 = span
+                .attributes
+                .get("concurrency")
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(1);
+            let (completed, total_case_ms) =
+                case_counts.get(&suite).copied().unwrap_or((0, 0.0));
+
+            let avg_case_ms = if completed > 0 {
+                total_case_ms / completed as f64
+            } else {
+                0.0
+            };
+            let remaining = total.saturating_sub(completed);
+            let eta_secs = if completed > 0 && remaining > 0 {
+                // Account for concurrency in ETA
+                let effective_concurrency = concurrency.max(1) as f64;
+                Some(
+                    ((remaining as f64 * avg_case_ms) / (effective_concurrency * 1000.0)) as u64,
+                )
+            } else {
+                None
+            };
+
+            // Only show as active if there are remaining cases
+            if remaining > 0 {
+                active_jobs.push(ActiveJob {
+                    suite,
+                    completed,
+                    total,
+                    concurrency,
+                    avg_case_ms,
+                    eta_secs,
+                });
+            }
+        }
+
         // API health from LLM request spans
         let llm_spans =
             query_spans(telemetry_dir, Some("llm.request"), None, 10000).unwrap_or_default();
@@ -180,14 +269,23 @@ impl DashboardState {
             .iter()
             .filter(|s| s.status.contains("Error"))
             .count() as u64;
+        // Extract model from most recent LLM span
+        let model = llm_spans
+            .last()
+            .and_then(|s| s.attributes.get("model"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string();
 
         Ok(DashboardState {
             suites,
             agents,
+            active_jobs,
             api_health: ApiHealth {
                 total_requests,
                 rate_limit_retries,
                 errors,
+                model,
             },
             recent_span_count: agent_spans.len() + llm_spans.len(),
         })
@@ -196,17 +294,34 @@ impl DashboardState {
 
 // ── TUI rendering ──────────────────────────────────────────────────
 
-fn render(f: &mut Frame, state: &DashboardState) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3), // Title
+fn render(f: &mut Frame, state: &DashboardState, refresh_countdown: Option<u64>) {
+    let has_active_jobs = !state.active_jobs.is_empty();
+
+    let constraints = if has_active_jobs {
+        vec![
+            Constraint::Length(3),  // Title
+            Constraint::Length(2 + state.active_jobs.len() as u16 + 1), // Active jobs
+            Constraint::Min(8),    // Main content
+            Constraint::Length(4), // API Health
+        ]
+    } else {
+        vec![
+            Constraint::Length(3),  // Title
             Constraint::Min(10),   // Main content
             Constraint::Length(4), // API Health
-        ])
+        ]
+    };
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(constraints)
         .split(f.area());
 
     // Title bar
+    let refresh_text = match refresh_countdown {
+        Some(s) => format!("  refresh {s}s  [q] quit"),
+        None => "  [q] quit".to_string(),
+    };
     let title = Paragraph::new(Line::from(vec![
         Span::styled(
             " SKWAQ GYM DASHBOARD ",
@@ -216,24 +331,99 @@ fn render(f: &mut Frame, state: &DashboardState) {
                 .add_modifier(Modifier::BOLD),
         ),
         Span::raw(format!(
-            "  {} spans tracked  [q] quit",
-            state.recent_span_count
+            "  {} spans  │  model: {}{}",
+            state.recent_span_count, state.api_health.model, refresh_text
         )),
     ]))
     .block(Block::default().borders(Borders::BOTTOM));
     f.render_widget(title, chunks[0]);
 
-    // Main content: suites table + agent stats side-by-side
-    let main_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
-        .split(chunks[1]);
+    if has_active_jobs {
+        render_active_jobs(f, chunks[1], state);
+        let main_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+            .split(chunks[2]);
+        render_suites(f, main_chunks[0], state);
+        render_agents(f, main_chunks[1], state);
+        render_api_health(f, chunks[3], state);
+    } else {
+        let main_idx = 1;
+        let main_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+            .split(chunks[main_idx]);
+        render_suites(f, main_chunks[0], state);
+        render_agents(f, main_chunks[1], state);
+        render_api_health(f, chunks[2], state);
+    }
+}
 
-    render_suites(f, main_chunks[0], state);
-    render_agents(f, main_chunks[1], state);
+fn render_active_jobs(f: &mut Frame, area: Rect, state: &DashboardState) {
+    let header = Row::new(vec![
+        "Suite", "Progress", "Concurrency", "Avg/case", "ETA",
+    ])
+    .style(
+        Style::default()
+            .fg(Color::Magenta)
+            .add_modifier(Modifier::BOLD),
+    );
 
-    // API health bar
-    render_api_health(f, chunks[2], state);
+    let rows: Vec<Row> = state
+        .active_jobs
+        .iter()
+        .map(|j| {
+            let pct = if j.total > 0 {
+                j.completed as f64 / j.total as f64 * 100.0
+            } else {
+                0.0
+            };
+            let progress_bar = format!(
+                "{}/{} ({:.0}%)",
+                j.completed, j.total, pct
+            );
+            let avg_case = if j.avg_case_ms > 0.0 {
+                format_duration_ms(j.avg_case_ms)
+            } else {
+                "—".to_string()
+            };
+            let eta = match j.eta_secs {
+                Some(s) => format_duration_secs(s),
+                None => "calculating…".to_string(),
+            };
+            let eta_color = match j.eta_secs {
+                Some(s) if s < 300 => Color::Green,
+                Some(s) if s < 3600 => Color::Yellow,
+                _ => Color::White,
+            };
+            Row::new(vec![
+                Cell::from(j.suite.clone()).style(Style::default().fg(Color::Cyan)),
+                Cell::from(progress_bar),
+                Cell::from(format!("j{}", j.concurrency)),
+                Cell::from(avg_case),
+                Cell::from(eta).style(Style::default().fg(eta_color)),
+            ])
+        })
+        .collect();
+
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Length(14),
+            Constraint::Length(18),
+            Constraint::Length(13),
+            Constraint::Length(12),
+            Constraint::Length(14),
+        ],
+    )
+    .header(header)
+    .block(
+        Block::default()
+            .title(" ▶ Active Jobs ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Green)),
+    );
+    f.render_widget(table, area);
 }
 
 fn render_suites(f: &mut Frame, area: Rect, state: &DashboardState) {
@@ -384,6 +574,25 @@ fn sparkline_ascii(values: &[f64], width: usize) -> String {
         .collect()
 }
 
+fn format_duration_ms(ms: f64) -> String {
+    let secs = ms / 1000.0;
+    if secs < 60.0 {
+        format!("{:.0}s", secs)
+    } else {
+        format!("{}m{:02}s", secs as u64 / 60, secs as u64 % 60)
+    }
+}
+
+fn format_duration_secs(s: u64) -> String {
+    if s < 60 {
+        format!("{s}s")
+    } else if s < 3600 {
+        format!("{}m{:02}s", s / 60, s % 60)
+    } else {
+        format!("{}h{:02}m", s / 3600, (s % 3600) / 60)
+    }
+}
+
 // ── Static (non-TUI) output ────────────────────────────────────────
 
 fn print_static(state: &DashboardState) {
@@ -394,6 +603,37 @@ fn print_static(state: &DashboardState) {
     if state.suites.is_empty() {
         println!("  No benchmark runs found. Run `skwaq gym run <suite>` first.\n");
         return;
+    }
+
+    // Active jobs
+    if !state.active_jobs.is_empty() {
+        println!(
+            "  {:<14} {:>18} {:>13} {:>12} {:>14}",
+            "ACTIVE JOBS", "PROGRESS", "CONCURRENCY", "AVG/CASE", "ETA"
+        );
+        println!("  {}", "─".repeat(75));
+        for j in &state.active_jobs {
+            let pct = if j.total > 0 {
+                j.completed as f64 / j.total as f64 * 100.0
+            } else {
+                0.0
+            };
+            let avg = if j.avg_case_ms > 0.0 {
+                format_duration_ms(j.avg_case_ms)
+            } else {
+                "—".to_string()
+            };
+            let eta = match j.eta_secs {
+                Some(s) => format_duration_secs(s),
+                None => "calculating…".to_string(),
+            };
+            println!(
+                "  {:<14} {:>3}/{:<3} ({:>4.0}%) {:>13} {:>12} {:>14}",
+                j.suite, j.completed, j.total, pct,
+                format!("j{}", j.concurrency), avg, eta
+            );
+        }
+        println!();
     }
 
     println!(
@@ -434,8 +674,8 @@ fn print_static(state: &DashboardState) {
 
     let h = &state.api_health;
     println!(
-        "\n  API: {} requests | {} rate-limit retries | {} errors\n",
-        h.total_requests, h.rate_limit_retries, h.errors
+        "\n  Model: {}  │  API: {} requests | {} rate-limit retries | {} errors\n",
+        h.model, h.total_requests, h.rate_limit_retries, h.errors
     );
 }
 
@@ -460,5 +700,20 @@ mod tests {
     fn test_sparkline_ascii_single() {
         let s = sparkline_ascii(&[90.0], 5);
         assert_eq!(s.chars().count(), 1);
+    }
+
+    #[test]
+    fn test_format_duration_ms() {
+        assert_eq!(format_duration_ms(5000.0), "5s");
+        assert_eq!(format_duration_ms(90000.0), "1m30s");
+        assert_eq!(format_duration_ms(500.0), "0s");
+        assert_eq!(format_duration_ms(1500.0), "2s");
+    }
+
+    #[test]
+    fn test_format_duration_secs() {
+        assert_eq!(format_duration_secs(45), "45s");
+        assert_eq!(format_duration_secs(90), "1m30s");
+        assert_eq!(format_duration_secs(3661), "1h01m");
     }
 }
