@@ -100,6 +100,8 @@ These classes cannot be found by matching a single API call. You MUST use graph 
 
 4. **Uninitialized variables (CWE-457)**: Look for local variable declarations without initializers that are used before any assignment. Use `read_function()` and trace variable definitions to first use.
 
+5. **Undefined behavior (CWE-758)**: Look for code that relies on behavior not defined by the C/C++ standard: signed integer overflow used in security decisions, pointer arithmetic past allocation bounds, accessing union members through the wrong type, modifying a variable twice between sequence points, shifting by more than the bit-width, dereferencing a pointer after `realloc` (the old pointer is invalidated). Use `read_function()` to check arithmetic operations on signed integers from external input, and `get_taint_paths()` to trace if the undefined result affects control flow or memory operations.
+
 5. **Format string via wrapper (CWE-134)**: The dangerous call may not be `printf` directly — trace through wrapper functions. Use `get_taint_paths("<format_arg>")` to find if external data reaches ANY format parameter position.
 
 6. **Command injection via spawn (CWE-78)**: Not just `system()`/`popen()` — check `_spawnl`, `_spawnv`, `execlp`, `posix_spawn`, `CreateProcess`. The injected argument may be in an argv array element, not the command string itself. Use `get_data_sources()` then trace each source into argument positions.
@@ -114,6 +116,10 @@ These classes cannot be found by matching a single API call. You MUST use graph 
 - Safe wrappers used correctly (strncpy with proper bounds, snprintf with correct size)
 - Multiple findings for the same root cause (consolidate into one finding)
 - Issues in third-party library code (not the code being analyzed)
+- Web-application CWEs (XSS CWE-79, SQL injection CWE-89, LDAP injection CWE-90) in C/C++ code that has no web framework, database driver, or LDAP library. Report memory-safety CWEs instead.
+
+**CWE precision for C/C++ code:**
+When analyzing C programs, stick to memory-safety and low-level CWEs: buffer overflow (CWE-119/120/121/122/125/787/788), format string (CWE-134), use-after-free (CWE-416), null dereference (CWE-476), integer overflow (CWE-190/191), race condition (CWE-362), uninitialized variable (CWE-457), resource leak (CWE-401), undefined behavior (CWE-758), and command injection (CWE-78) ONLY when `system()`/`popen()`/`exec*()` is actually called with user data. Do not assign injection or web CWEs to C code without corresponding frameworks.
 
 **Finding quality checklist** (verify BEFORE calling create_finding):
 - [ ] I identified a dangerous operation (buffer write, command exec, etc.)

@@ -186,6 +186,49 @@ pub fn query_spans(
     attr_filter: Option<(&str, &str)>,
     limit: usize,
 ) -> anyhow::Result<Vec<SpanRecord>> {
+    query_spans_impl(telemetry_dir, name_filter, attr_filter, limit, false, None)
+}
+
+/// Like `query_spans` but returns the *most recent* `limit` matching spans
+/// instead of the first `limit`. This is important for dashboards that need
+/// current data from long-running eval jobs where the spans.jsonl file grows
+/// well beyond the limit.
+pub fn query_spans_recent(
+    telemetry_dir: &str,
+    name_filter: Option<&str>,
+    attr_filter: Option<(&str, &str)>,
+    limit: usize,
+) -> anyhow::Result<Vec<SpanRecord>> {
+    query_spans_impl(telemetry_dir, name_filter, attr_filter, limit, true, None)
+}
+
+/// Like `query_spans_recent`, but only returns spans with `start_time >= since`.
+/// `since` must be an RFC3339 timestamp string (lexicographic comparison).
+pub fn query_spans_since(
+    telemetry_dir: &str,
+    name_filter: Option<&str>,
+    attr_filter: Option<(&str, &str)>,
+    limit: usize,
+    since: &str,
+) -> anyhow::Result<Vec<SpanRecord>> {
+    query_spans_impl(
+        telemetry_dir,
+        name_filter,
+        attr_filter,
+        limit,
+        true,
+        Some(since),
+    )
+}
+
+fn query_spans_impl(
+    telemetry_dir: &str,
+    name_filter: Option<&str>,
+    attr_filter: Option<(&str, &str)>,
+    limit: usize,
+    recent: bool,
+    since: Option<&str>,
+) -> anyhow::Result<Vec<SpanRecord>> {
     let dir = resolve_telemetry_dir(telemetry_dir);
     let path = dir.join("spans.jsonl");
     if !path.exists() {
@@ -219,10 +262,23 @@ pub fn query_spans(
             }
         }
 
+        // Time-bound filter: skip spans older than `since` (RFC3339 lexicographic comparison)
+        if let Some(since_ts) = since {
+            if record.start_time.as_str() < since_ts {
+                continue;
+            }
+        }
+
         results.push(record);
-        if results.len() >= limit {
+
+        if !recent && results.len() >= limit {
             break;
         }
+    }
+
+    // For recent mode, keep only the last `limit` entries
+    if recent && results.len() > limit {
+        results = results.split_off(results.len() - limit);
     }
 
     Ok(results)

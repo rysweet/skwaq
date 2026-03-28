@@ -5,7 +5,7 @@
 //! or `skwaq gym dashboard` for a static snapshot of the last run.
 
 use crate::history::HistoryDb;
-use crate::telemetry::{query_spans, read_active_runs};
+use crate::telemetry::{query_spans_since, read_active_runs};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -140,9 +140,24 @@ impl DashboardState {
             });
         }
 
-        // Agent stats from recent telemetry spans
+        // Active jobs from sidecar file (written at run start, removed on finish)
+        let active_runs = read_active_runs(telemetry_dir);
+
+        // Compute time bound: earliest active run start, or fall back to 24h ago
+        let fallback_since = {
+            let day_ago = chrono::Utc::now() - chrono::Duration::hours(24);
+            day_ago.to_rfc3339()
+        };
+        let since = active_runs
+            .iter()
+            .map(|r| r.started_at.as_str())
+            .min()
+            .unwrap_or(fallback_since.as_str());
+
+        // Agent stats from recent telemetry spans (time-bounded)
         let agent_spans =
-            query_spans(telemetry_dir, Some("gym.agent"), None, 10000).unwrap_or_default();
+            query_spans_since(telemetry_dir, Some("gym.agent"), None, 100000, since)
+                .unwrap_or_default();
         let mut agent_map: std::collections::HashMap<String, (u64, f64, f64)> =
             std::collections::HashMap::new();
         for span in &agent_spans {
@@ -182,10 +197,9 @@ impl DashboardState {
             .collect();
         agents.sort_by(|a, b| b.call_count.cmp(&a.call_count));
 
-        // Active jobs from sidecar file (written at run start, removed on finish)
-        let active_runs = read_active_runs(telemetry_dir);
         let case_spans =
-            query_spans(telemetry_dir, Some("gym.case"), None, 50000).unwrap_or_default();
+            query_spans_since(telemetry_dir, Some("gym.case"), None, 500000, since)
+                .unwrap_or_default();
 
         // Count completed cases per suite and compute avg duration
         let mut case_counts: std::collections::HashMap<String, (u64, f64)> =
@@ -232,9 +246,10 @@ impl DashboardState {
             });
         }
 
-        // API health from LLM request spans
+        // API health from LLM request spans (time-bounded)
         let llm_spans =
-            query_spans(telemetry_dir, Some("llm.request"), None, 10000).unwrap_or_default();
+            query_spans_since(telemetry_dir, Some("llm.request"), None, 100000, since)
+                .unwrap_or_default();
         let total_requests = llm_spans.len() as u64;
         let rate_limit_retries = llm_spans
             .iter()

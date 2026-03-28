@@ -808,6 +808,11 @@ impl Gym {
     pub fn get_adapters(&self) -> &[Box<dyn BenchmarkAdapter>] {
         &self.adapters
     }
+
+    /// Get a reference to the default benchmark config.
+    pub fn get_config(&self) -> &BenchmarkConfig {
+        &self.config
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
