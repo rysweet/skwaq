@@ -216,9 +216,7 @@ impl DashboardState {
             let remaining = run.total_cases.saturating_sub(completed);
             let eta_secs = if completed > 0 && remaining > 0 {
                 let effective_concurrency = run.concurrency.max(1) as f64;
-                Some(
-                    ((remaining as f64 * avg_case_ms) / (effective_concurrency * 1000.0)) as u64,
-                )
+                Some(((remaining as f64 * avg_case_ms) / (effective_concurrency * 1000.0)) as u64)
             } else {
                 None
             };
@@ -275,14 +273,14 @@ fn render(f: &mut Frame, state: &DashboardState, refresh_countdown: Option<u64>)
 
     let constraints = if has_active_jobs {
         vec![
-            Constraint::Length(3),  // Title
+            Constraint::Length(3),                                      // Title
             Constraint::Length(2 + state.active_jobs.len() as u16 + 1), // Active jobs
-            Constraint::Min(8),    // Main content
-            Constraint::Length(4), // API Health
+            Constraint::Min(8),                                         // Main content
+            Constraint::Length(4),                                      // API Health
         ]
     } else {
         vec![
-            Constraint::Length(3),  // Title
+            Constraint::Length(3), // Title
             Constraint::Min(10),   // Main content
             Constraint::Length(4), // API Health
         ]
@@ -336,10 +334,7 @@ fn render(f: &mut Frame, state: &DashboardState, refresh_countdown: Option<u64>)
 }
 
 fn render_active_jobs(f: &mut Frame, area: Rect, state: &DashboardState) {
-    let header = Row::new(vec![
-        "Suite", "Progress", "Concurrency", "Avg/case", "ETA",
-    ])
-    .style(
+    let header = Row::new(vec!["Suite", "Progress", "Concurrency", "Avg/case", "ETA"]).style(
         Style::default()
             .fg(Color::Magenta)
             .add_modifier(Modifier::BOLD),
@@ -354,10 +349,7 @@ fn render_active_jobs(f: &mut Frame, area: Rect, state: &DashboardState) {
             } else {
                 0.0
             };
-            let progress_bar = format!(
-                "{}/{} ({:.0}%)",
-                j.completed, j.total, pct
-            );
+            let progress_bar = format!("{}/{} ({:.0}%)", j.completed, j.total, pct);
             let avg_case = if j.avg_case_ms > 0.0 {
                 format_duration_ms(j.avg_case_ms)
             } else {
@@ -605,8 +597,13 @@ fn print_static(state: &DashboardState) {
             };
             println!(
                 "  {:<14} {:>3}/{:<3} ({:>4.0}%) {:>13} {:>12} {:>14}",
-                j.suite, j.completed, j.total, pct,
-                format!("j{}", j.concurrency), avg, eta
+                j.suite,
+                j.completed,
+                j.total,
+                pct,
+                format!("j{}", j.concurrency),
+                avg,
+                eta
             );
         }
         println!();

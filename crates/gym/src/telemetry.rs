@@ -337,7 +337,10 @@ impl Drop for ActiveRunGuard {
                 !(run.suite == self.suite && run.pid == self.pid)
             })
             .collect();
-        let _ = fs::write(&path, remaining.join("\n") + if remaining.is_empty() { "" } else { "\n" });
+        let _ = fs::write(
+            &path,
+            remaining.join("\n") + if remaining.is_empty() { "" } else { "\n" },
+        );
     }
 }
 
