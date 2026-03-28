@@ -288,6 +288,7 @@ pub fn category_to_cwes(category: &str) -> Vec<u32> {
         "access_control" => vec![272, 273, 284],
         "information_exposure" => vec![226, 534, 535, 526],
         "error_handling" => vec![666, 390, 391, 667],
+        "undefined_behavior" | "poor_code_quality" => vec![758, 398],
         _ => vec![],
     }
 }

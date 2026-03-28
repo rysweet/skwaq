@@ -474,6 +474,119 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                     );
                 }
             }
+
+            // ── Pre-flight: warn if binary may be stale ──────────────
+            if eval_metadata.git_dirty {
+                eprintln!(
+                    "WARNING: working tree is dirty — the binary may not reflect the latest code.\n\
+                     Consider running `cargo build --release -p skwaq` before eval.\n"
+                );
+            }
+            // Check binary mtime vs latest git commit timestamp
+            if let Ok(binary_meta) = std::fs::metadata(&exe) {
+                if let Ok(binary_mtime) = binary_meta.modified() {
+                    let git_time = std::process::Command::new("git")
+                        .args(["log", "-1", "--format=%ct"])
+                        .current_dir(&skwaq_root)
+                        .output();
+                    if let Ok(output) = git_time {
+                        if let Ok(ts_str) = std::str::from_utf8(&output.stdout) {
+                            if let Ok(epoch) = ts_str.trim().parse::<u64>() {
+                                let commit_time = std::time::UNIX_EPOCH
+                                    + std::time::Duration::from_secs(epoch);
+                                if binary_mtime < commit_time {
+                                    eprintln!(
+                                        "WARNING: binary appears older than the latest git commit.\n\
+                                         Consider running `cargo build --release -p skwaq` before eval.\n"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Pre-flight: validate suite data directories ──────────
+            let gym_config = gym.get_config();
+            let adapters = gym.get_adapters();
+            let mut skipped_suites: Vec<String> = Vec::new();
+            let mut ready_suite_list: Vec<&str> = Vec::new();
+            for s in &suite_list {
+                let adapter = adapters.iter().find(|a| a.name() == *s);
+                let ready = adapter.map_or(false, |a| a.is_ready(gym_config));
+
+                // Deep validation: check that cache dir exists, symlinks resolve, and dir is non-empty
+                let cache_path = gym_config.cache_dir.join(s);
+                let deep_ready = if ready {
+                    if cache_path.is_symlink() {
+                        match std::fs::read_link(&cache_path) {
+                            Ok(target) => {
+                                if !target.exists() {
+                                    eprintln!(
+                                        "WARNING: Suite '{}' symlink is broken: {} -> {}",
+                                        s,
+                                        cache_path.display(),
+                                        target.display()
+                                    );
+                                    false
+                                } else {
+                                    true
+                                }
+                            }
+                            Err(_) => true, // can't read link, trust is_ready()
+                        }
+                    } else if cache_path.is_dir() {
+                        // Verify dir is non-empty (has more than just .ready sentinel)
+                        let entry_count = std::fs::read_dir(&cache_path)
+                            .map(|rd| rd.count())
+                            .unwrap_or(0);
+                        if entry_count <= 1 {
+                            eprintln!(
+                                "WARNING: Suite '{}' data directory appears empty: {}",
+                                s,
+                                cache_path.display()
+                            );
+                            false
+                        } else {
+                            true
+                        }
+                    } else {
+                        true
+                    }
+                } else {
+                    false
+                };
+
+                if !deep_ready {
+                    eprintln!(
+                        "WARNING: Suite '{}' data is not ready (expected at {}).",
+                        s,
+                        cache_path.display()
+                    );
+                    eprintln!(
+                        "  Run `skwaq gym setup` to download benchmark data, or remove '{}' from --suites.\n",
+                        s
+                    );
+                    skipped_suites.push(s.to_string());
+                } else {
+                    ready_suite_list.push(s);
+                }
+            }
+            if ready_suite_list.is_empty() {
+                anyhow::bail!(
+                    "No suites are ready. Run `skwaq gym setup` first.\nSkipped: {}",
+                    skipped_suites.join(", ")
+                );
+            }
+            if !skipped_suites.is_empty() {
+                eprintln!(
+                    "Continuing with ready suites only: {}\n",
+                    ready_suite_list.join(", ")
+                );
+            }
+            // Use only the validated suites from here on
+            let suite_list = ready_suite_list;
+
             let mut all_children: Vec<(String, Vec<std::process::Child>)> = Vec::new();
             let mut suite_shards: std::collections::HashMap<String, usize> =
                 std::collections::HashMap::new();
@@ -497,56 +610,129 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 let mut children = Vec::new();
                 for i in 0..n_procs {
                     let skip = i * cases_per;
-                    let log_path = suite_dir.join(format!("shard-{i}.log"));
-                    let log_file = std::fs::File::create(&log_path)?;
-
-                    let mut cmd = std::process::Command::new(&exe);
-                    cmd.args(["gym", "run", suite])
-                        .args(["--skip", &skip.to_string()])
-                        .args(["--max-cases", &cases_per.to_string()])
-                        .args(["--shard-total", &total.to_string()])
-                        .args(["-j", &concurrency.to_string()])
-                        .args([
-                            "--json",
-                            &suite_dir.join(format!("shard-{i}.json")).to_string_lossy(),
-                        ])
-                        .stdout(log_file.try_clone()?)
-                        .stderr(log_file);
-
-                    if *quick {
-                        cmd.arg("--quick");
-                    } else if *llm_only {
-                        cmd.arg("--llm-only");
-                    }
-                    if *adaptive {
-                        cmd.arg("--adaptive");
-                    }
-
-                    children.push(cmd.spawn()?);
+                    let child = spawn_shard(
+                        &exe,
+                        suite,
+                        skip,
+                        cases_per,
+                        total,
+                        *concurrency,
+                        &suite_dir,
+                        i,
+                        *quick,
+                        *llm_only,
+                        *adaptive,
+                    )?;
+                    children.push(child);
                 }
                 suite_shards.insert((*suite).to_string(), n_procs);
                 all_children.push((suite.to_string(), children));
             }
 
-            // Monitor loop
+            // Monitor loop — detect early shard deaths within first 30s, retry once
             println!();
             println!("=== Monitoring ===");
+            let monitor_start = std::time::Instant::now();
+            let mut early_death_checked = false;
+            let mut retried_shards: std::collections::HashSet<(String, usize)> =
+                std::collections::HashSet::new();
             loop {
                 std::thread::sleep(std::time::Duration::from_secs(30));
 
                 let mut all_done = true;
+                let mut any_early_death = false;
                 println!();
                 for (suite, children) in &mut all_children {
                     let mut running = 0;
-                    for child in children.iter_mut() {
-                        if let Ok(None) = child.try_wait() {
-                            running += 1;
-                            all_done = false;
+                    let mut failed_shards: Vec<(usize, Option<i32>)> = Vec::new();
+                    for (idx, child) in children.iter_mut().enumerate() {
+                        match child.try_wait() {
+                            Ok(None) => {
+                                running += 1;
+                                all_done = false;
+                            }
+                            Ok(Some(status)) => {
+                                if !status.success() {
+                                    failed_shards.push((idx, status.code()));
+                                }
+                            }
+                            Err(_) => {}
+                        }
+                    }
+
+                    // Report early deaths (within 60s of launch) and retry once
+                    let suite_dir = eval_dir.join(suite.as_str());
+                    if !early_death_checked && !failed_shards.is_empty() {
+                        any_early_death = true;
+                        for (idx, code) in &failed_shards {
+                            let stderr_path = suite_dir.join(format!("shard-{idx}.stderr.log"));
+                            let log_path = suite_dir.join(format!("shard-{idx}.log"));
+                            eprintln!(
+                                "ERROR: [{suite}] shard {idx} died early (exit code: {}).",
+                                code.map_or("signal".to_string(), |c| c.to_string())
+                            );
+                            // Print stderr content for context (prefer stderr.log, fall back to log)
+                            let stderr_content = std::fs::read_to_string(&stderr_path)
+                                .ok()
+                                .filter(|s| !s.trim().is_empty());
+                            let content_to_show = stderr_content
+                                .as_deref()
+                                .or_else(|| None)
+                                .unwrap_or("");
+                            let show_path = if !content_to_show.is_empty() {
+                                &stderr_path
+                            } else {
+                                &log_path
+                            };
+                            let content_to_show = if content_to_show.is_empty() {
+                                std::fs::read_to_string(&log_path).unwrap_or_default()
+                            } else {
+                                content_to_show.to_string()
+                            };
+                            let tail: Vec<&str> =
+                                content_to_show.lines().rev().take(10).collect::<Vec<_>>();
+                            if !tail.is_empty() {
+                                eprintln!("  Log tail ({}):", show_path.display());
+                                for line in tail.into_iter().rev() {
+                                    eprintln!("    {line}");
+                                }
+                            }
+
+                            // Retry once if not already retried
+                            let shard_key = (suite.clone(), *idx);
+                            if !retried_shards.contains(&shard_key) {
+                                retried_shards.insert(shard_key);
+                                let n_procs = *suite_shards.get(suite.as_str()).unwrap_or(&1);
+                                let total = suite_cases.get(suite.as_str()).copied().unwrap_or(0);
+                                let cases_per = total.div_ceil(n_procs);
+                                let skip = idx * cases_per;
+                                eprintln!("  Retrying [{suite}] shard {idx}...");
+                                match spawn_shard(
+                                    &exe,
+                                    suite,
+                                    skip,
+                                    cases_per,
+                                    total,
+                                    *concurrency,
+                                    &suite_dir,
+                                    *idx,
+                                    *quick,
+                                    *llm_only,
+                                    *adaptive,
+                                ) {
+                                    Ok(new_child) => {
+                                        children[*idx] = new_child;
+                                        all_done = false; // keep monitoring
+                                    }
+                                    Err(e) => {
+                                        eprintln!("  Retry spawn failed for [{suite}] shard {idx}: {e}");
+                                    }
+                                }
+                            }
                         }
                     }
 
                     // Count cases from logs
-                    let suite_dir = eval_dir.join(suite.as_str());
                     let mut total_cases = 0;
                     let mut total_retries = 0;
                     for i in 0..children.len() {
@@ -562,9 +748,28 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                     } else {
                         0
                     };
-                    println!(
-                        "  {suite}: ~{total_cases}/{target} ({pct}%) | {running} procs | {total_retries} retries"
-                    );
+                    let failed_count = failed_shards.len();
+                    if failed_count > 0 {
+                        println!(
+                            "  {suite}: ~{total_cases}/{target} ({pct}%) | {running} procs | {failed_count} FAILED | {total_retries} retries"
+                        );
+                    } else {
+                        println!(
+                            "  {suite}: ~{total_cases}/{target} ({pct}%) | {running} procs | {total_retries} retries"
+                        );
+                    }
+                }
+
+                if !early_death_checked && monitor_start.elapsed().as_secs() <= 60 {
+                    early_death_checked = true;
+                    if any_early_death {
+                        eprintln!(
+                            "\nWARNING: Some shards died during startup. Check the stderr log files for details."
+                        );
+                        eprintln!(
+                            "Common causes: missing benchmark data (run `skwaq gym setup`), config errors, or missing dependencies.\n"
+                        );
+                    }
                 }
 
                 if all_done {
@@ -1204,6 +1409,52 @@ fn ratio(numerator: u32, denominator: u32) -> f64 {
     } else {
         numerator as f64 / denominator as f64
     }
+}
+
+/// Spawn a single shard process with separate stdout and stderr log files.
+fn spawn_shard(
+    exe: &std::path::Path,
+    suite: &str,
+    skip: usize,
+    cases_per: usize,
+    total: usize,
+    concurrency: usize,
+    suite_dir: &std::path::Path,
+    shard_idx: usize,
+    quick: bool,
+    llm_only: bool,
+    adaptive: bool,
+) -> anyhow::Result<std::process::Child> {
+    let log_path = suite_dir.join(format!("shard-{shard_idx}.log"));
+    let stderr_path = suite_dir.join(format!("shard-{shard_idx}.stderr.log"));
+    let log_file = std::fs::File::create(&log_path)?;
+    let stderr_file = std::fs::File::create(&stderr_path)?;
+
+    let mut cmd = std::process::Command::new(exe);
+    cmd.args(["gym", "run", suite])
+        .args(["--skip", &skip.to_string()])
+        .args(["--max-cases", &cases_per.to_string()])
+        .args(["--shard-total", &total.to_string()])
+        .args(["-j", &concurrency.to_string()])
+        .args([
+            "--json",
+            &suite_dir
+                .join(format!("shard-{shard_idx}.json"))
+                .to_string_lossy(),
+        ])
+        .stdout(log_file)
+        .stderr(stderr_file);
+
+    if quick {
+        cmd.arg("--quick");
+    } else if llm_only {
+        cmd.arg("--llm-only");
+    }
+    if adaptive {
+        cmd.arg("--adaptive");
+    }
+
+    Ok(cmd.spawn()?)
 }
 
 fn git_commit_full(repo: &std::path::Path) -> anyhow::Result<String> {
