@@ -1,6 +1,6 @@
 # Code Property Graph Migration: SQLite → Kuzu
 
-> **Status:** Proposal
+> **Status:** Complete — tool execution layer fully migrated to Cypher (see [tool-translate-cypher-migration.md](tool-translate-cypher-migration.md))
 > **Issue:** #331
 > **Date:** 2025-07-17
 

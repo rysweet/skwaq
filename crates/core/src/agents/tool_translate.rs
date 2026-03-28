@@ -1,42 +1,88 @@
-//! Cypher-to-SQL translation and read-only query execution.
+//! Cypher query translation and execution for the graph database.
+//!
+//! Converts LLM query patterns into native Cypher queries for LadybugDB.
+//! All graph queries go through `cypher_query()`/`cypher_execute()` which
+//! safely scope the C++ FFI connection lifetime.
 
+use crate::graph::ladybug_db::LadybugGraphDb;
 use crate::graph::GraphDb;
 
-/// Translate common Cypher-like query patterns to parameterized SQL.
+/// Escape a string for embedding in a Cypher single-quoted literal.
 ///
-/// Returns `(sql, params)` where params contains the investigation_id
-/// for the `?1` placeholder. Only predefined patterns are supported;
-/// arbitrary SQL (including raw SELECT from the LLM) is rejected.
-pub fn translate_to_sql(
+/// Follows the same pattern as `MemoryStore::esc` in store.rs.
+pub(super) fn esc(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('\'', "\\'")
+}
+
+/// Validate that an investigation_id contains only safe characters.
+fn validate_investigation_id(id: &str) -> Result<(), String> {
+    if id.is_empty() {
+        return Err("Empty investigation_id".into());
+    }
+    if !id
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err(
+            "Invalid investigation_id: only alphanumeric, underscore, and hyphen allowed".into(),
+        );
+    }
+    Ok(())
+}
+
+/// Build a schema summary Cypher query for the given investigation.
+fn schema_summary(inv: &str) -> (String, Vec<String>) {
+    (
+        format!(
+            "MATCH (f:Function) WHERE f.investigation_id = '{inv}' \
+             RETURN 'Function' AS table_name, count(f) AS count \
+             UNION ALL \
+             MATCH (s:DataSource) WHERE s.investigation_id = '{inv}' \
+             RETURN 'DataSource' AS table_name, count(s) AS count \
+             UNION ALL \
+             MATCH (k:DataSink) WHERE k.investigation_id = '{inv}' \
+             RETURN 'DataSink' AS table_name, count(k) AS count \
+             UNION ALL \
+             MATCH (fd:Finding) WHERE fd.investigation_id = '{inv}' \
+             RETURN 'Finding' AS table_name, count(fd) AS count"
+        ),
+        vec!["table_name".into(), "count".into()],
+    )
+}
+
+/// Translate common Cypher-like query patterns into native Cypher.
+///
+/// Returns `(cypher, column_names)` on success. Only predefined patterns
+/// are supported; arbitrary input is rejected.
+pub fn translate_to_cypher(
     query: &str,
     investigation_id: &str,
 ) -> Result<(String, Vec<String>), String> {
+    validate_investigation_id(investigation_id)?;
     let q = query.trim();
     let upper = q.to_uppercase();
+    let inv = esc(investigation_id);
 
-    // --- Schema discovery: what tables/node types exist ---
-    if upper.contains("LABELS") || upper.contains("DISTINCT") && upper.contains("COUNT") {
-        return Ok((
-            "SELECT 'functions' AS table_name, count(*) AS count FROM functions WHERE investigation_id = ?1 \
-             UNION ALL SELECT 'data_sources', count(*) FROM data_sources WHERE investigation_id = ?1 \
-             UNION ALL SELECT 'data_sinks', count(*) FROM data_sinks WHERE investigation_id = ?1 \
-             UNION ALL SELECT 'findings', count(*) FROM findings WHERE investigation_id = ?1 \
-             UNION ALL SELECT 'taint_flows', count(*) FROM taint_flows tf JOIN data_sources s ON tf.source_id = s.id WHERE s.investigation_id = ?1 \
-             UNION ALL SELECT 'calls', count(*) FROM calls c JOIN functions f ON c.caller_id = f.id WHERE f.investigation_id = ?1"
-                .to_string(),
-            vec![investigation_id.to_string()],
-        ));
+    // --- Schema discovery: what node types exist ---
+    if upper.contains("LABELS") || (upper.contains("DISTINCT") && upper.contains("COUNT")) {
+        return Ok(schema_summary(&inv));
     }
 
     // --- Look up function by name ---
     if let Some(name) = extract_name_filter(q) {
         return Ok((
             format!(
-                "SELECT name, address, decompiled, language FROM functions \
-                 WHERE investigation_id = ?1 AND name LIKE '%{}%' LIMIT 20",
-                sanitize_like_param(&name)
+                "MATCH (f:Function) WHERE f.investigation_id = '{inv}' \
+                 AND f.name CONTAINS '{name}' \
+                 RETURN f.name, f.address, f.decompiled, f.language LIMIT 20",
+                name = esc(&name)
             ),
-            vec![investigation_id.to_string()],
+            vec![
+                "name".into(),
+                "address".into(),
+                "decompiled".into(),
+                "language".into(),
+            ],
         ));
     }
 
@@ -44,174 +90,136 @@ pub fn translate_to_sql(
     if let Some(file_pattern) = extract_file_filter(q) {
         return Ok((
             format!(
-                "SELECT name, address, decompiled FROM functions \
-                 WHERE investigation_id = ?1 AND address LIKE '%{}%' LIMIT 30",
-                sanitize_like_param(&file_pattern)
+                "MATCH (f:Function) WHERE f.investigation_id = '{inv}' \
+                 AND f.address CONTAINS '{pat}' \
+                 RETURN f.name, f.address, f.decompiled LIMIT 30",
+                pat = esc(&file_pattern)
             ),
-            vec![investigation_id.to_string()],
+            vec!["name".into(), "address".into(), "decompiled".into()],
         ));
     }
 
     // --- Query findings/vulnerabilities ---
     if upper.contains("VULNERAB") || upper.contains("FINDING") {
         return Ok((
-            "SELECT id, title, severity, category, status, evidence FROM findings \
-             WHERE investigation_id = ?1 ORDER BY \
-             CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 \
-             WHEN 'medium' THEN 2 ELSE 3 END LIMIT 50"
-                .to_string(),
-            vec![investigation_id.to_string()],
+            format!(
+                "MATCH (f:Finding) WHERE f.investigation_id = '{inv}' \
+                 RETURN f.id, f.title, f.severity, f.category, f.status, f.evidence \
+                 ORDER BY CASE f.severity \
+                 WHEN 'critical' THEN 0 WHEN 'high' THEN 1 \
+                 WHEN 'medium' THEN 2 ELSE 3 END LIMIT 50"
+            ),
+            vec![
+                "id".into(),
+                "title".into(),
+                "severity".into(),
+                "category".into(),
+                "status".into(),
+                "evidence".into(),
+            ],
         ));
     }
 
-    // --- Query sources and sinks ---
+    // --- Query sources ---
     if upper.contains("SOURCE") && !upper.contains("TAINT") {
         return Ok((
-            "SELECT id, name, source_type, location FROM data_sources \
-             WHERE investigation_id = ?1 LIMIT 50"
-                .to_string(),
-            vec![investigation_id.to_string()],
+            format!(
+                "MATCH (s:DataSource) WHERE s.investigation_id = '{inv}' \
+                 RETURN s.id, s.name, s.source_type, s.location LIMIT 50"
+            ),
+            vec![
+                "id".into(),
+                "name".into(),
+                "source_type".into(),
+                "location".into(),
+            ],
         ));
     }
 
+    // --- Query sinks ---
     if upper.contains("SINK") && !upper.contains("TAINT") {
         return Ok((
-            "SELECT id, name, sink_type, danger_level, location FROM data_sinks \
-             WHERE investigation_id = ?1 LIMIT 50"
-                .to_string(),
-            vec![investigation_id.to_string()],
+            format!(
+                "MATCH (k:DataSink) WHERE k.investigation_id = '{inv}' \
+                 RETURN k.id, k.name, k.sink_type, k.danger_level, k.location LIMIT 50"
+            ),
+            vec![
+                "id".into(),
+                "name".into(),
+                "sink_type".into(),
+                "danger_level".into(),
+                "location".into(),
+            ],
         ));
     }
 
     // --- Functions with source code ---
     if upper.contains("CODE") || upper.contains("DECOMPILE") {
         return Ok((
-            "SELECT name, address, decompiled FROM functions \
-             WHERE investigation_id = ?1 AND decompiled IS NOT NULL AND decompiled != '' LIMIT 30"
-                .to_string(),
-            vec![investigation_id.to_string()],
+            format!(
+                "MATCH (f:Function) WHERE f.investigation_id = '{inv}' \
+                 AND f.decompiled <> '' \
+                 RETURN f.name, f.address, f.decompiled LIMIT 30"
+            ),
+            vec!["name".into(), "address".into(), "decompiled".into()],
         ));
     }
 
     // --- List all functions (general FUNCTION query) ---
     if upper.contains("FUNCTION") && upper.contains("RETURN") {
         return Ok((
-            "SELECT name, address, decompiled FROM functions WHERE investigation_id = ?1 LIMIT 50"
-                .to_string(),
-            vec![investigation_id.to_string()],
+            format!(
+                "MATCH (f:Function) WHERE f.investigation_id = '{inv}' \
+                 RETURN f.name, f.address, f.decompiled LIMIT 50"
+            ),
+            vec!["name".into(), "address".into(), "decompiled".into()],
         ));
     }
 
     // --- Call graph ---
     if upper.contains("CALL") {
         return Ok((
-            "SELECT f1.name as caller, f2.name as callee FROM calls c \
-             JOIN functions f1 ON c.caller_id = f1.id \
-             JOIN functions f2 ON c.callee_id = f2.id \
-             WHERE f1.investigation_id = ?1 LIMIT 50"
-                .to_string(),
-            vec![investigation_id.to_string()],
+            format!(
+                "MATCH (f1:Function)-[:CALLS]->(f2:Function) \
+                 WHERE f1.investigation_id = '{inv}' \
+                 RETURN f1.name AS caller, f2.name AS callee LIMIT 50"
+            ),
+            vec!["caller".into(), "callee".into()],
         ));
     }
 
     // --- Taint flows ---
     if upper.contains("TAINT") || upper.contains("FLOW") {
         return Ok((
-            "SELECT s.name, k.name, tf.path, tf.sanitized FROM taint_flows tf \
-             JOIN data_sources s ON tf.source_id = s.id \
-             JOIN data_sinks k ON tf.sink_id = k.id \
-             WHERE s.investigation_id = ?1 LIMIT 50"
-                .to_string(),
-            vec![investigation_id.to_string()],
+            format!(
+                "MATCH (s:DataSource)-[t:TAINT_FLOW]->(k:DataSink) \
+                 WHERE s.investigation_id = '{inv}' \
+                 RETURN s.name, k.name, t.path, t.sanitized LIMIT 50"
+            ),
+            vec![
+                "source_name".into(),
+                "sink_name".into(),
+                "path".into(),
+                "sanitized".into(),
+            ],
         ));
     }
 
     // --- Relationships (general graph traversal) ---
     if upper.contains("MATCH") && (upper.contains("->") || upper.contains("REL")) {
         return Ok((
-            "SELECT 'calls' AS rel_type, f1.name AS from_name, f2.name AS to_name \
-             FROM calls c JOIN functions f1 ON c.caller_id = f1.id \
-             JOIN functions f2 ON c.callee_id = f2.id \
-             WHERE f1.investigation_id = ?1 LIMIT 50"
-                .to_string(),
-            vec![investigation_id.to_string()],
+            format!(
+                "MATCH (f1:Function)-[:CALLS]->(f2:Function) \
+                 WHERE f1.investigation_id = '{inv}' \
+                 RETURN 'CALLS' AS rel_type, f1.name AS from_name, f2.name AS to_name LIMIT 50"
+            ),
+            vec!["rel_type".into(), "from_name".into(), "to_name".into()],
         ));
     }
 
-    // --- Fallback: if it's a MATCH query, return the schema summary ---
+    // --- Fallback for MATCH queries: schema summary ---
     if upper.starts_with("MATCH") {
-        return Ok((
-            "SELECT 'functions' AS table_name, count(*) AS count FROM functions WHERE investigation_id = ?1 \
-             UNION ALL SELECT 'findings', count(*) FROM findings WHERE investigation_id = ?1 \
-             UNION ALL SELECT 'data_sources', count(*) FROM data_sources WHERE investigation_id = ?1 \
-             UNION ALL SELECT 'data_sinks', count(*) FROM data_sinks WHERE investigation_id = ?1"
-                .to_string(),
-            vec![investigation_id.to_string()],
-        ));
-    }
-
-    // --- SQL passthrough: validate and execute safe SELECT queries directly ---
-    if upper.starts_with("SELECT") {
-        // Security: reject dangerous constructs
-        if q.contains(';') {
-            return Err("SQL passthrough rejected: semicolons not allowed".into());
-        }
-        if q.contains("--") || q.contains("/*") {
-            return Err("SQL passthrough rejected: SQL comments not allowed".into());
-        }
-        if upper.contains("LOAD_EXTENSION") {
-            return Err("SQL passthrough rejected: LOAD_EXTENSION not allowed".into());
-        }
-
-        // Whitelist of allowed tables
-        let whitelisted: &[&str] = &[
-            "functions",
-            "basic_blocks",
-            "data_sources",
-            "data_sinks",
-            "vulnerabilities",
-            "findings",
-            "cwes",
-            "investigations",
-            "annotations",
-            "hypotheses",
-            "agent_actions",
-            "symbols",
-            "string_literals",
-            "calls",
-            "contains_block",
-            "flows_to",
-            "taint_flows",
-            "func_references_string",
-        ];
-
-        // Extract table references after FROM/JOIN keywords and validate them
-        let words: Vec<&str> = q.split_whitespace().collect();
-        let mut all_tables_ok = true;
-        for (i, word) in words.iter().enumerate() {
-            let upper_word = word.to_uppercase();
-            if upper_word == "FROM" || upper_word == "JOIN" {
-                if let Some(table_word) = words.get(i + 1) {
-                    let table = table_word
-                        .trim_matches(|c: char| !c.is_alphanumeric() && c != '_')
-                        .to_lowercase();
-                    if !whitelisted.contains(&table.as_str()) {
-                        all_tables_ok = false;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if all_tables_ok {
-            return Ok((q.to_string(), vec![investigation_id.to_string()]));
-        } else {
-            return Err(format!(
-                "SQL passthrough rejected: query references non-whitelisted table. \
-                 Allowed tables: {:?}",
-                whitelisted
-            ));
-        }
+        return Ok(schema_summary(&inv));
     }
 
     let q_preview: String = q.chars().take(80).collect();
@@ -225,7 +233,7 @@ pub fn translate_to_sql(
 /// Extract a function name filter from WHERE clauses like `n.name = 'strcpy'`
 /// or `n.name IN ['strcpy', 'system']` or `n.name CONTAINS 'strcpy'`.
 /// Only matches Cypher-like patterns (requires MATCH or WHERE prefix).
-fn extract_name_filter(query: &str) -> Option<String> {
+pub(super) fn extract_name_filter(query: &str) -> Option<String> {
     let lower = query.to_lowercase();
 
     // Only match in Cypher-like queries (must start with MATCH or contain WHERE)
@@ -236,7 +244,7 @@ fn extract_name_filter(query: &str) -> Option<String> {
     // Match: n.name = 'foo' or n.name = "foo"
     if let Some(pos) = lower.find(".name") {
         let rest = &query[pos + 1..]; // skip the dot
-                                      // Look for quoted string after = or CONTAINS
+        // Look for quoted string after = or CONTAINS
         for delim in ["= '", "= \"", "contains '", "contains \""] {
             if let Some(start) = rest.to_lowercase().find(delim) {
                 let quote_char = if delim.ends_with('\'') { '\'' } else { '"' };
@@ -274,7 +282,7 @@ fn extract_name_filter(query: &str) -> Option<String> {
 }
 
 /// Extract a file filter from WHERE clauses like `n.file CONTAINS 'format_string'`.
-fn extract_file_filter(query: &str) -> Option<String> {
+pub(super) fn extract_file_filter(query: &str) -> Option<String> {
     let lower = query.to_lowercase();
     if !lower.contains("file") {
         return None;
@@ -306,83 +314,42 @@ fn extract_file_filter(query: &str) -> Option<String> {
     None
 }
 
-/// Sanitize a string for use in a SQL LIKE pattern.
-/// Escapes SQL wildcards to prevent injection via LIKE patterns.
-fn sanitize_like_param(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_")
-        .replace('\'', "''")
-}
-
-/// Execute a read-only parameterized SQL query and return results as a Vec of JSON objects.
-pub fn execute_read_query(
+/// Execute a Cypher read query and return results as JSON objects.
+///
+/// Uses `db.cypher_query()` which safely scopes the C++ FFI connection.
+/// Results are fully materialized (collected into Vec) before the
+/// connection is dropped — critical for memory safety with the lbug crate.
+pub fn execute_cypher_read_query(
     db: &GraphDb,
-    sql: &str,
-    params: &[String],
+    cypher: &str,
+    columns: &[String],
 ) -> anyhow::Result<Vec<serde_json::Value>> {
-    let stmt = db.conn().prepare(sql)?;
-    if !stmt.readonly() {
-        return Ok(vec![
-            serde_json::json!({"error": "Only read-only queries are allowed. Write operations are not permitted."}),
-        ]);
-    }
-    let mut stmt = stmt;
-    let column_count = stmt.column_count();
-    let column_names: Vec<String> = (0..column_count)
-        .map(|i| stmt.column_name(i).unwrap_or("?").to_string())
-        .collect();
-
-    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params
-        .iter()
-        .map(|s| s as &dyn rusqlite::types::ToSql)
-        .collect();
-
-    let rows = stmt.query_map(param_refs.as_slice(), |row| {
-        let mut obj = serde_json::Map::new();
-        for (i, col_name) in column_names.iter().enumerate() {
-            let val: rusqlite::Result<String> = row.get(i);
-            match val {
-                Ok(s) => {
-                    obj.insert(col_name.clone(), serde_json::Value::String(s));
-                }
-                Err(_) => {
-                    let fval: rusqlite::Result<f64> = row.get(i);
-                    match fval {
-                        Ok(f) => {
-                            obj.insert(col_name.clone(), serde_json::json!(f));
-                        }
-                        Err(_) => {
-                            let ival: rusqlite::Result<i64> = row.get(i);
-                            match ival {
-                                Ok(n) => {
-                                    obj.insert(col_name.clone(), serde_json::json!(n));
-                                }
-                                Err(_) => {
-                                    obj.insert(col_name.clone(), serde_json::Value::Null);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        Ok(serde_json::Value::Object(obj))
-    })?;
-
+    let rows = db.cypher_query(cypher)?;
     let results: Vec<serde_json::Value> = rows
-        .filter_map(|r| match r {
-            Ok(v) => Some(v),
-            Err(e) => {
-                tracing::warn!("Error reading query result row: {e}");
-                None
+        .iter()
+        .map(|row| {
+            let mut obj = serde_json::Map::new();
+            for (i, col) in columns.iter().enumerate() {
+                if i < row.len() {
+                    let val = if let Some(s) = LadybugGraphDb::as_str(&row[i]) {
+                        serde_json::Value::String(s.to_string())
+                    } else if let Some(n) = LadybugGraphDb::as_i64(&row[i]) {
+                        serde_json::json!(n)
+                    } else if let Some(d) = LadybugGraphDb::as_f64(&row[i]) {
+                        serde_json::json!(d)
+                    } else {
+                        serde_json::Value::Null
+                    };
+                    obj.insert(col.clone(), val);
+                }
             }
+            serde_json::Value::Object(obj)
         })
         .collect();
     Ok(results)
 }
 
-/// Create a finding in the database.
+/// Create a finding in the graph database via Cypher.
 pub(super) fn execute_create_finding(
     db: &GraphDb,
     investigation_id: &str,
@@ -411,21 +378,19 @@ pub(super) fn execute_create_finding(
         "description": description, "function": function, "cwe_id": cwe_id,
     });
 
-    db.execute(
-        "INSERT INTO findings (id, title, evidence, agent, timestamp, investigation_id, \
-         status, severity, category) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-        &[
-            &finding_id as &dyn rusqlite::types::ToSql,
-            &title,
-            &evidence.to_string(),
-            &"vuln_hunter",
-            &timestamp,
-            &investigation_id,
-            &"new",
-            &severity,
-            &cwe_id,
-        ],
-    )?;
+    let cypher = format!(
+        "CREATE (f:Finding {{id: '{id}', title: '{title}', evidence: '{ev}', \
+         agent: 'vuln_hunter', timestamp: '{ts}', investigation_id: '{inv}', \
+         status: 'new', severity: '{sev}', category: '{cat}'}})",
+        id = esc(&finding_id),
+        title = esc(title),
+        ev = esc(&evidence.to_string()),
+        ts = esc(&timestamp),
+        inv = esc(investigation_id),
+        sev = esc(severity),
+        cat = esc(cwe_id),
+    );
+    db.cypher_execute(&cypher)?;
 
     Ok(serde_json::json!({
         "status": "ok", "finding_id": finding_id,
@@ -434,7 +399,7 @@ pub(super) fn execute_create_finding(
     }))
 }
 
-/// Search for functions with similar names or patterns.
+/// Search for functions with similar names or patterns via Cypher.
 pub(super) fn execute_search_similar(
     db: &GraphDb,
     investigation_id: &str,
@@ -445,35 +410,35 @@ pub(super) fn execute_search_similar(
     let code_preview: String = code.chars().take(40).collect();
     tracing::info!("Tool search_similar: {code_preview}...");
 
-    let search_pattern = format!("%{}%", code.replace('%', ""));
-    let mut stmt = db.conn().prepare(
-        "SELECT name, address, decompiled FROM functions \
-         WHERE investigation_id = ?1 AND (decompiled LIKE ?2 OR name LIKE ?2) LIMIT ?3",
-    )?;
+    let search_term = esc(code);
+    let inv = esc(investigation_id);
 
-    let rows = stmt.query_map(
-        rusqlite::params![investigation_id, search_pattern, limit as i64],
-        |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-            ))
-        },
-    )?;
+    let cypher = format!(
+        "MATCH (f:Function) WHERE f.investigation_id = '{inv}' \
+         AND (f.decompiled CONTAINS '{search}' OR f.name CONTAINS '{search}') \
+         RETURN f.name, f.address, f.decompiled LIMIT {limit}",
+        search = search_term,
+    );
 
+    let rows = db.cypher_query(&cypher)?;
     let results: Vec<serde_json::Value> = rows
-        .filter_map(|r| r.ok())
-        .map(|(name, addr, decompiled)| {
+        .iter()
+        .filter_map(|row| {
+            if row.len() < 3 {
+                return None;
+            }
+            let name = LadybugGraphDb::as_str(&row[0])?.to_string();
+            let addr = LadybugGraphDb::as_str(&row[1]).unwrap_or("").to_string();
+            let decompiled = LadybugGraphDb::as_str(&row[2]).unwrap_or("").to_string();
             let preview_raw = if decompiled.chars().count() > 200 {
                 format!("{}...", decompiled.chars().take(200).collect::<String>())
             } else {
                 decompiled
             };
-            serde_json::json!({
+            Some(serde_json::json!({
                 "name": name, "address": addr,
                 "preview": format!("<code_data>\n{}\n</code_data>", preview_raw)
-            })
+            }))
         })
         .collect();
 
@@ -485,238 +450,779 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_readonly_enforcement_in_execute_read_query() {
-        let db = GraphDb::in_memory().unwrap();
-
-        // Directly test execute_read_query with a write statement
-        let result = execute_read_query(
-            &db,
-            "INSERT INTO functions (id, name) VALUES ('evil', 'injected')",
-            &[],
-        )
-        .unwrap();
-
-        // Should return an error entry instead of executing
-        assert_eq!(result.len(), 1);
-        assert!(
-            result[0].get("error").is_some(),
-            "Write query should be rejected by readonly check"
-        );
-
-        // Verify nothing was inserted
-        let count: i64 = db
-            .conn()
-            .query_row(
-                "SELECT count(*) FROM functions WHERE name = 'injected'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(count, 0);
-    }
-
-    #[test]
-    fn test_translate_to_sql_blocks_unrecognised_patterns() {
+    fn test_translate_to_cypher_blocks_unrecognized_patterns() {
         // INSERT should be rejected
-        let result = translate_to_sql("INSERT INTO functions VALUES ('x', 'y')", "inv1");
+        let result = translate_to_cypher("INSERT INTO functions VALUES ('x', 'y')", "inv1");
         assert!(result.is_err());
 
         // UPDATE should be rejected
-        let result = translate_to_sql("UPDATE functions SET name = 'hacked'", "inv1");
+        let result = translate_to_cypher("UPDATE functions SET name = 'hacked'", "inv1");
         assert!(result.is_err());
 
-        // Raw SELECT on whitelisted tables now passes through SQL passthrough
-        let result = translate_to_sql("SELECT * FROM functions", "inv1");
+        // SELECT should be rejected (no SQL passthrough in Cypher mode)
+        let result = translate_to_cypher("SELECT * FROM functions", "inv1");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_translate_to_cypher_recognized_patterns() {
+        // Cypher-like MATCH with FUNCTION keyword
+        let result = translate_to_cypher("MATCH (f:Function) RETURN f", "inv1");
         assert!(result.is_ok());
+        let (cypher, cols) = result.unwrap();
+        assert!(cypher.contains("Function"));
+        assert!(cypher.contains("inv1"));
+        assert_eq!(cols, vec!["name", "address", "decompiled"]);
 
-        // Recognised Cypher-like patterns should work and use parameterized queries
-        let result = translate_to_sql("MATCH (f:Function) RETURN f", "inv1");
+        // Call graph
+        let result = translate_to_cypher("MATCH (c:Call) RETURN c", "inv1");
         assert!(result.is_ok());
-        let (sql, params) = result.unwrap();
-        assert!(sql.contains("?1"));
-        assert_eq!(params, vec!["inv1"]);
+        let (cypher, cols) = result.unwrap();
+        assert!(cypher.contains("CALLS"));
+        assert_eq!(cols, vec!["caller", "callee"]);
+    }
 
-        let result = translate_to_sql("MATCH (c:Call) RETURN c", "inv1");
+    #[test]
+    fn test_translate_to_cypher_findings_pattern() {
+        let result = translate_to_cypher("Show me all findings", "inv1");
         assert!(result.is_ok());
-        let (sql, params) = result.unwrap();
-        assert!(sql.contains("?1"));
-        assert_eq!(params, vec!["inv1"]);
-    }
-
-    // ===== Task 3: FIX-QUERY-GRAPH TDD tests =====
-    // These tests define the contract for SQL passthrough in translate_to_sql.
-    // They will FAIL until the SQL passthrough logic is implemented.
-
-    #[test]
-    fn sql_passthrough_accepts_valid_select() {
-        // A plain SQL SELECT on whitelisted tables should pass through
-        let result = translate_to_sql(
-            "SELECT name, source_type FROM data_sources WHERE investigation_id = ?1",
-            "inv1",
-        );
-        assert!(
-            result.is_ok(),
-            "Valid SQL SELECT on whitelisted table should be accepted"
-        );
-        let (sql, params) = result.unwrap();
-        assert!(
-            sql.contains("data_sources"),
-            "SQL should be passed through (not re-translated)"
-        );
-        assert_eq!(params, vec!["inv1"]);
+        let (cypher, cols) = result.unwrap();
+        assert!(cypher.contains("Finding"));
+        assert!(cypher.contains("severity"));
+        assert!(cols.contains(&"id".to_string()));
+        assert!(cols.contains(&"title".to_string()));
     }
 
     #[test]
-    fn sql_passthrough_accepts_join_on_whitelisted_tables() {
-        let result = translate_to_sql(
-            "SELECT f.name, s.value FROM functions f \
-             JOIN func_references_string frs ON frs.function_id = f.id \
-             JOIN string_literals s ON frs.string_id = s.id \
-             WHERE f.investigation_id = ?1",
-            "inv1",
-        );
-        assert!(
-            result.is_ok(),
-            "JOIN on whitelisted tables should be accepted"
-        );
+    fn test_translate_to_cypher_name_filter() {
+        let result =
+            translate_to_cypher("MATCH (n:Function) WHERE n.name = 'strcpy' RETURN n", "inv1");
+        assert!(result.is_ok());
+        let (cypher, _cols) = result.unwrap();
+        assert!(cypher.contains("CONTAINS 'strcpy'"));
     }
 
     #[test]
-    fn sql_passthrough_blocks_insert() {
-        let result = translate_to_sql("INSERT INTO functions (id, name) VALUES ('x', 'y')", "inv1");
-        assert!(result.is_err(), "INSERT must be blocked by SQL passthrough");
+    fn test_translate_to_cypher_taint_pattern() {
+        let result = translate_to_cypher("Show me taint flows", "inv1");
+        assert!(result.is_ok());
+        let (cypher, cols) = result.unwrap();
+        assert!(cypher.contains("TAINT_FLOW"));
+        assert!(cols.contains(&"source_name".to_string()));
+        assert!(cols.contains(&"sink_name".to_string()));
     }
 
     #[test]
-    fn sql_passthrough_blocks_update() {
-        let result = translate_to_sql(
-            "UPDATE functions SET name = 'hacked' WHERE id = 'f1'",
-            "inv1",
-        );
-        assert!(result.is_err(), "UPDATE must be blocked by SQL passthrough");
+    fn test_validate_investigation_id() {
+        assert!(validate_investigation_id("abc-123_def").is_ok());
+        assert!(validate_investigation_id("").is_err());
+        assert!(validate_investigation_id("abc;DROP").is_err());
+        assert!(validate_investigation_id("abc'OR'1'='1").is_err());
     }
 
     #[test]
-    fn sql_passthrough_blocks_delete() {
-        let result = translate_to_sql("DELETE FROM functions WHERE id = 'f1'", "inv1");
-        assert!(result.is_err(), "DELETE must be blocked by SQL passthrough");
+    fn test_esc_function() {
+        assert_eq!(esc("hello"), "hello");
+        assert_eq!(esc("it's"), "it\\'s");
+        assert_eq!(esc("back\\slash"), "back\\\\slash");
+        assert_eq!(esc("both'and\\"), "both\\'and\\\\");
     }
 
     #[test]
-    fn sql_passthrough_blocks_drop() {
-        let result = translate_to_sql("DROP TABLE functions", "inv1");
-        assert!(result.is_err(), "DROP must be blocked by SQL passthrough");
+    fn test_translate_to_cypher_schema_discovery() {
+        let result = translate_to_cypher("MATCH (n) RETURN DISTINCT LABELS(n), COUNT(n)", "inv1");
+        assert!(result.is_ok());
+        let (cypher, cols) = result.unwrap();
+        assert!(cypher.contains("Function"));
+        assert!(cypher.contains("DataSource"));
+        assert!(cypher.contains("DataSink"));
+        assert!(cypher.contains("Finding"));
+        assert_eq!(cols, vec!["table_name", "count"]);
     }
 
     #[test]
-    fn sql_passthrough_blocks_non_whitelisted_table() {
-        let result = translate_to_sql("SELECT * FROM sqlite_master", "inv1");
-        assert!(
-            result.is_err(),
-            "SELECT on non-whitelisted table must be blocked"
-        );
-    }
-
-    #[test]
-    fn sql_passthrough_blocks_semicolons() {
-        let result = translate_to_sql(
-            "SELECT name FROM functions WHERE investigation_id = ?1; DROP TABLE functions",
-            "inv1",
-        );
-        assert!(
-            result.is_err(),
-            "Semicolons must be rejected to prevent statement chaining"
-        );
-    }
-
-    #[test]
-    fn sql_passthrough_blocks_sql_comments() {
-        let result = translate_to_sql(
-            "SELECT name FROM functions -- WHERE investigation_id = ?1",
-            "inv1",
-        );
-        assert!(result.is_err(), "SQL comments (--) must be blocked");
-
-        let result = translate_to_sql(
-            "SELECT name FROM functions /* hidden */ WHERE investigation_id = ?1",
-            "inv1",
-        );
-        assert!(result.is_err(), "Block comments (/* */) must be blocked");
-    }
-
-    #[test]
-    fn sql_passthrough_blocks_load_extension() {
-        let result = translate_to_sql("SELECT load_extension('/tmp/evil.so')", "inv1");
-        assert!(result.is_err(), "LOAD_EXTENSION must be blocked");
-    }
-
-    #[test]
-    fn sql_passthrough_cypher_still_works_as_fallback() {
-        // Cypher-like queries should still translate correctly
-        let result = translate_to_sql("MATCH (f:Function) RETURN f", "inv1");
-        assert!(result.is_ok(), "Cypher patterns must still work");
-    }
-
-    #[test]
-    fn sql_passthrough_execute_returns_rows() {
-        // Integration test: valid SQL passthrough should execute and return data
+    fn test_execute_cypher_read_query_with_data() {
         let db = GraphDb::in_memory().unwrap();
         let inv_id = "test-inv";
 
-        db.execute(
-            "INSERT INTO symbols (id, name, symbol_type, investigation_id) VALUES (?1, ?2, ?3, ?4)",
-            &[
-                &"s1" as &dyn rusqlite::types::ToSql,
-                &"printf",
-                &"import",
-                &inv_id,
-            ],
-        )
+        // Insert test data into LadybugDB
+        db.cypher_execute(&format!(
+            "CREATE (f:Function {{id: 'f1', name: 'main', address: '0x1000', \
+             decompiled: 'void main() {{}}', investigation_id: '{}'}})",
+            inv_id
+        ))
         .unwrap();
 
-        let (sql, params) = translate_to_sql(
-            "SELECT name, symbol_type FROM symbols WHERE investigation_id = ?1",
-            inv_id,
-        )
-        .unwrap();
+        let columns = vec![
+            "name".to_string(),
+            "address".to_string(),
+            "decompiled".to_string(),
+        ];
+        let cypher = format!(
+            "MATCH (f:Function) WHERE f.investigation_id = '{}' \
+             RETURN f.name, f.address, f.decompiled LIMIT 10",
+            inv_id
+        );
 
-        let rows = execute_read_query(&db, &sql, &params).unwrap();
+        let rows = execute_cypher_read_query(&db, &cypher, &columns).unwrap();
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0]["name"], "printf");
+        assert_eq!(rows[0]["name"], "main");
+        assert_eq!(rows[0]["address"], "0x1000");
     }
 
     #[test]
-    fn sql_passthrough_all_18_tables_accepted() {
-        // Verify all 18 whitelisted tables are accepted in SQL passthrough
-        let whitelisted = [
-            "functions",
-            "basic_blocks",
-            "data_sources",
-            "data_sinks",
-            "vulnerabilities",
-            "findings",
-            "cwes",
-            "investigations",
-            "annotations",
-            "hypotheses",
-            "agent_actions",
-            "symbols",
-            "string_literals",
-            "calls",
-            "contains_block",
-            "flows_to",
-            "taint_flows",
-            "func_references_string",
-        ];
+    fn test_execute_create_finding_via_cypher() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv";
 
-        for table in &whitelisted {
-            let query = format!("SELECT * FROM {} WHERE 1=0", table);
-            let result = translate_to_sql(&query, "inv1");
+        let args = serde_json::json!({
+            "title": "Buffer Overflow",
+            "severity": "critical",
+            "description": "Stack buffer overflow in strcpy",
+            "function": "vulnerable_func",
+            "cwe_id": "CWE-120"
+        });
+
+        let result = execute_create_finding(&db, inv_id, &args).unwrap();
+        assert_eq!(result["status"], "ok");
+        assert_eq!(result["title"], "Buffer Overflow");
+        assert_eq!(result["severity"], "critical");
+
+        // Verify finding exists in LadybugDB
+        let finding_id = result["finding_id"].as_str().unwrap();
+        let rows = db
+            .cypher_query(&format!(
+                "MATCH (f:Finding {{id: '{}'}}) RETURN f.title, f.severity",
+                finding_id
+            ))
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(LadybugGraphDb::as_str(&rows[0][0]), Some("Buffer Overflow"));
+        assert_eq!(LadybugGraphDb::as_str(&rows[0][1]), Some("critical"));
+    }
+
+    #[test]
+    fn test_execute_search_similar_via_cypher() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv";
+
+        // Insert test functions into LadybugDB
+        db.cypher_execute(&format!(
+            "CREATE (f:Function {{id: 'f1', name: 'strcpy_wrapper', address: '0x1000', \
+             decompiled: 'void strcpy_wrapper(char *d, char *s) {{ strcpy(d, s); }}', \
+             investigation_id: '{}'}})",
+            inv_id
+        ))
+        .unwrap();
+
+        let args = serde_json::json!({"code": "strcpy", "limit": 10});
+        let result = execute_search_similar(&db, inv_id, &args).unwrap();
+        assert_eq!(result["status"], "ok");
+        let count = result["count"].as_u64().unwrap();
+        assert!(count >= 1, "Should find at least one matching function");
+    }
+
+    #[test]
+    fn test_translate_to_cypher_source_pattern() {
+        let result = translate_to_cypher("Show me data sources", "inv1");
+        assert!(result.is_ok());
+        let (cypher, cols) = result.unwrap();
+        assert!(cypher.contains("DataSource"));
+        assert!(cols.contains(&"source_type".to_string()));
+    }
+
+    #[test]
+    fn test_translate_to_cypher_sink_pattern() {
+        let result = translate_to_cypher("Show me data sinks", "inv1");
+        assert!(result.is_ok());
+        let (cypher, cols) = result.unwrap();
+        assert!(cypher.contains("DataSink"));
+        assert!(cols.contains(&"danger_level".to_string()));
+    }
+
+    #[test]
+    fn test_translate_to_cypher_code_pattern() {
+        let result = translate_to_cypher("Show me functions with decompiled code", "inv1");
+        assert!(result.is_ok());
+        let (cypher, _cols) = result.unwrap();
+        assert!(cypher.contains("decompiled <> ''"));
+    }
+
+    #[test]
+    fn test_translate_to_cypher_match_fallback() {
+        let result = translate_to_cypher("MATCH (x:SomeUnknown) RETURN x", "inv1");
+        assert!(result.is_ok());
+        let (cypher, cols) = result.unwrap();
+        // Should return schema summary
+        assert!(cypher.contains("count"));
+        assert_eq!(cols, vec!["table_name", "count"]);
+    }
+
+    // ===== TDD: extract_name_filter edge cases =====
+
+    #[test]
+    fn test_extract_name_filter_equals_single_quote() {
+        let q = "MATCH (n:Function) WHERE n.name = 'system' RETURN n";
+        assert_eq!(extract_name_filter(q), Some("system".to_string()));
+    }
+
+    #[test]
+    fn test_extract_name_filter_equals_double_quote() {
+        let q = r#"MATCH (n:Function) WHERE n.name = "gets" RETURN n"#;
+        assert_eq!(extract_name_filter(q), Some("gets".to_string()));
+    }
+
+    #[test]
+    fn test_extract_name_filter_contains() {
+        let q = "MATCH (n:Function) WHERE n.name CONTAINS 'recv' RETURN n";
+        assert_eq!(extract_name_filter(q), Some("recv".to_string()));
+    }
+
+    #[test]
+    fn test_extract_name_filter_in_list() {
+        let q = "MATCH (n:Function) WHERE n.name IN ['strcpy', 'strcat'] RETURN n";
+        // Should extract the first item
+        assert_eq!(extract_name_filter(q), Some("strcpy".to_string()));
+    }
+
+    #[test]
+    fn test_extract_name_filter_no_match_keyword() {
+        // No MATCH or WHERE — should return None
+        let q = "SELECT name FROM functions";
+        assert_eq!(extract_name_filter(q), None);
+    }
+
+    #[test]
+    fn test_extract_name_filter_empty_name() {
+        let q = "MATCH (n:Function) WHERE n.name = '' RETURN n";
+        assert_eq!(extract_name_filter(q), None);
+    }
+
+    #[test]
+    fn test_extract_name_filter_very_long_name_rejected() {
+        let long = "a".repeat(150);
+        let q = format!("MATCH (n:Function) WHERE n.name = '{}' RETURN n", long);
+        assert_eq!(extract_name_filter(&q), None, "Names >= 100 chars should be rejected");
+    }
+
+    // ===== TDD: extract_file_filter edge cases =====
+
+    #[test]
+    fn test_extract_file_filter_contains() {
+        let q = "MATCH (n) WHERE n.file CONTAINS 'format_string' RETURN n";
+        assert_eq!(extract_file_filter(q), Some("format_string".to_string()));
+    }
+
+    #[test]
+    fn test_extract_file_filter_equals() {
+        let q = "MATCH (n) WHERE n.file = 'main.c' RETURN n";
+        assert_eq!(extract_file_filter(q), Some("main.c".to_string()));
+    }
+
+    #[test]
+    fn test_extract_file_filter_like() {
+        let q = "MATCH (n) WHERE n.file LIKE '%.c' RETURN n";
+        assert_eq!(extract_file_filter(q), Some("%.c".to_string()));
+    }
+
+    #[test]
+    fn test_extract_file_filter_no_file_keyword() {
+        let q = "MATCH (n) WHERE n.name = 'main' RETURN n";
+        assert_eq!(extract_file_filter(q), None);
+    }
+
+    #[test]
+    fn test_extract_file_filter_empty_pattern() {
+        let q = "MATCH (n) WHERE n.file = '' RETURN n";
+        assert_eq!(extract_file_filter(q), None);
+    }
+
+    #[test]
+    fn test_extract_file_filter_very_long_pattern_rejected() {
+        let long = "x".repeat(250);
+        let q = format!("MATCH (n) WHERE n.file = '{}' RETURN n", long);
+        assert_eq!(extract_file_filter(&q), None, "Patterns >= 200 chars should be rejected");
+    }
+
+    // ===== TDD: esc() adversarial inputs =====
+
+    #[test]
+    fn test_esc_null_bytes() {
+        // Null bytes should pass through (lbug handles them)
+        let result = esc("hello\0world");
+        assert!(result.contains('\0'));
+    }
+
+    #[test]
+    fn test_esc_nested_escapes() {
+        // Already-escaped input should get double-escaped
+        assert_eq!(esc("it\\'s"), "it\\\\\\'s");
+    }
+
+    #[test]
+    fn test_esc_unicode() {
+        assert_eq!(esc("héllo wörld"), "héllo wörld");
+        assert_eq!(esc("日本語"), "日本語");
+    }
+
+    #[test]
+    fn test_esc_empty_string() {
+        assert_eq!(esc(""), "");
+    }
+
+    #[test]
+    fn test_esc_only_special_chars() {
+        assert_eq!(esc("'''"), "\\'\\'\\'");
+        assert_eq!(esc("\\\\"), "\\\\\\\\");
+    }
+
+    // ===== TDD: validate_investigation_id edge cases =====
+
+    #[test]
+    fn test_validate_investigation_id_with_spaces() {
+        assert!(validate_investigation_id("has space").is_err());
+    }
+
+    #[test]
+    fn test_validate_investigation_id_with_dots() {
+        assert!(validate_investigation_id("inv.123").is_err());
+    }
+
+    #[test]
+    fn test_validate_investigation_id_with_slashes() {
+        assert!(validate_investigation_id("../../etc/passwd").is_err());
+    }
+
+    #[test]
+    fn test_validate_investigation_id_cypher_injection() {
+        assert!(validate_investigation_id("inv' OR '1'='1").is_err());
+        assert!(validate_investigation_id("inv}) RETURN n//").is_err());
+    }
+
+    #[test]
+    fn test_validate_investigation_id_valid_formats() {
+        assert!(validate_investigation_id("inv-1").is_ok());
+        assert!(validate_investigation_id("inv_2").is_ok());
+        assert!(validate_investigation_id("abc123").is_ok());
+        assert!(validate_investigation_id("A").is_ok());
+    }
+
+    // ===== TDD: translate_to_cypher — investigation_id always in output =====
+
+    #[test]
+    fn test_all_cypher_patterns_include_investigation_id() {
+        let patterns = [
+            "MATCH (n) RETURN DISTINCT LABELS(n), COUNT(n)",
+            "MATCH (n:Function) WHERE n.name = 'main' RETURN n",
+            "MATCH (n) WHERE n.file CONTAINS 'test.c' RETURN n",
+            "Show me findings",
+            "Show me data sources",
+            "Show me sinks",
+            "Show me decompiled code",
+            "MATCH (f:Function) RETURN f",
+            "Show me call graph",
+            "Show me taint flows",
+            "MATCH (a)-[r]->(b) RETURN a, r, b",
+            "MATCH (x:Unknown) RETURN x",
+        ];
+        for pat in &patterns {
+            let result = translate_to_cypher(pat, "test-inv-42");
+            match result {
+                Ok((cypher, _)) => {
+                    assert!(
+                        cypher.contains("test-inv-42"),
+                        "Pattern '{}' generated Cypher without investigation_id: {}",
+                        pat,
+                        cypher
+                    );
+                }
+                Err(_) => {
+                    // Unrecognized patterns are fine — they return Err
+                }
+            }
+        }
+    }
+
+    // ===== TDD: translate_to_cypher — all patterns have LIMIT =====
+
+    #[test]
+    fn test_non_schema_patterns_have_limit() {
+        let patterns_with_limit = [
+            "MATCH (n:Function) WHERE n.name = 'main' RETURN n",
+            "MATCH (n) WHERE n.file CONTAINS 'test.c' RETURN n",
+            "Show me findings",
+            "Show me data sources",
+            "Show me sinks",
+            "Show me decompiled code",
+            "MATCH (f:Function) RETURN f",
+            "Show me call graph",
+            "Show me taint flows",
+            "MATCH (a)-[r]->(b) RETURN a, r, b",
+        ];
+        for pat in &patterns_with_limit {
+            if let Ok((cypher, _)) = translate_to_cypher(pat, "inv1") {
+                assert!(
+                    cypher.contains("LIMIT"),
+                    "Pattern '{}' generated Cypher without LIMIT: {}",
+                    pat,
+                    cypher
+                );
+            }
+        }
+    }
+
+    // ===== TDD: execute_cypher_read_query edge cases =====
+
+    #[test]
+    fn test_execute_cypher_read_query_empty_results() {
+        let db = GraphDb::in_memory().unwrap();
+        let columns = vec!["name".to_string()];
+        let cypher = "MATCH (f:Function) WHERE f.investigation_id = 'nonexistent' RETURN f.name";
+        let rows = execute_cypher_read_query(&db, cypher, &columns).unwrap();
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn test_execute_cypher_read_query_more_columns_than_data() {
+        let db = GraphDb::in_memory().unwrap();
+        db.cypher_execute(
+            "CREATE (f:Function {id: 'f1', name: 'test', investigation_id: 'inv1'})",
+        )
+        .unwrap();
+
+        // Request 5 columns but query only returns 1
+        let columns = vec![
+            "name".into(),
+            "extra1".into(),
+            "extra2".into(),
+            "extra3".into(),
+            "extra4".into(),
+        ];
+        let cypher = "MATCH (f:Function) WHERE f.investigation_id = 'inv1' RETURN f.name";
+        let rows = execute_cypher_read_query(&db, cypher, &columns).unwrap();
+        assert_eq!(rows.len(), 1);
+        // First column should be present; extras should be absent (not panicking)
+        assert_eq!(rows[0]["name"], "test");
+    }
+
+    // ===== TDD: execute_create_finding with defaults =====
+
+    #[test]
+    fn test_execute_create_finding_minimal_args() {
+        let db = GraphDb::in_memory().unwrap();
+        // Only required field missing — should use defaults
+        let args = serde_json::json!({});
+        let result = execute_create_finding(&db, "inv1", &args).unwrap();
+        assert_eq!(result["status"], "ok");
+        assert_eq!(result["title"], "Untitled");
+        assert_eq!(result["severity"], "medium");
+    }
+
+    #[test]
+    fn test_execute_create_finding_special_chars_in_title() {
+        let db = GraphDb::in_memory().unwrap();
+        let args = serde_json::json!({
+            "title": "Buffer overflow in func('user_input')",
+            "severity": "high"
+        });
+        let result = execute_create_finding(&db, "inv1", &args).unwrap();
+        assert_eq!(result["status"], "ok");
+        // Verify the finding can be retrieved (escaping worked)
+        let finding_id = result["finding_id"].as_str().unwrap();
+        let rows = db
+            .cypher_query(&format!(
+                "MATCH (f:Finding {{id: '{}'}}) RETURN f.title",
+                finding_id
+            ))
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+    }
+
+    // ===== TDD: execute_search_similar edge cases =====
+
+    #[test]
+    fn test_execute_search_similar_empty_code() {
+        let db = GraphDb::in_memory().unwrap();
+        let args = serde_json::json!({"code": "", "limit": 5});
+        let result = execute_search_similar(&db, "inv1", &args).unwrap();
+        assert_eq!(result["status"], "ok");
+        // Empty search should still return ok (just possibly empty results)
+    }
+
+    #[test]
+    fn test_execute_search_similar_respects_limit() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "inv1";
+
+        // Insert multiple functions
+        for i in 0..5 {
+            db.cypher_execute(&format!(
+                "CREATE (f:Function {{id: 'f{i}', name: 'func_{i}', address: '0x{i}000', \
+                 decompiled: 'void func_{i}() {{ target(); }}', investigation_id: '{inv_id}'}})",
+            ))
+            .unwrap();
+        }
+
+        let args = serde_json::json!({"code": "target", "limit": 2});
+        let result = execute_search_similar(&db, inv_id, &args).unwrap();
+        assert_eq!(result["status"], "ok");
+        let count = result["count"].as_u64().unwrap();
+        assert!(count <= 2, "Should respect limit=2, got {}", count);
+    }
+
+    #[test]
+    fn test_execute_search_similar_decompiled_preview_truncated() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "inv1";
+        let long_code = "x".repeat(500);
+        db.cypher_execute(&format!(
+            "CREATE (f:Function {{id: 'f1', name: 'long_func', address: '0x1000', \
+             decompiled: '{code}', investigation_id: '{inv_id}'}})",
+            code = esc(&long_code),
+        ))
+        .unwrap();
+
+        let args = serde_json::json!({"code": "xxx", "limit": 10});
+        let result = execute_search_similar(&db, inv_id, &args).unwrap();
+        if let Some(results) = result["results"].as_array() {
+            if !results.is_empty() {
+                let preview = results[0]["preview"].as_str().unwrap();
+                // Preview should be truncated (200 chars + "..." + wrapper)
+                assert!(
+                    preview.len() < long_code.len(),
+                    "Preview should be truncated for long decompiled code"
+                );
+            }
+        }
+    }
+
+    // ===== TDD: no SQL strings in production code =====
+
+    #[test]
+    fn test_no_sql_in_production_code() {
+        // Static analysis: verify this module contains zero SQL keywords in
+        // non-test, non-comment code. We test this by checking the translate
+        // function never generates SQL.
+        let sql_patterns = [
+            "SELECT ", "INSERT ", "UPDATE ", "DELETE ", "FROM ", "INTO ",
+        ];
+        let test_queries = [
+            "MATCH (n) RETURN DISTINCT LABELS(n), COUNT(n)",
+            "MATCH (n:Function) WHERE n.name = 'main' RETURN n",
+            "Show me findings",
+            "Show me data sources",
+            "Show me sinks",
+            "Show me code",
+            "MATCH (f:Function) RETURN f",
+            "Show me calls",
+            "Show me taint flows",
+            "MATCH (a)-[r]->(b) RETURN a, r, b",
+            "MATCH (x:Unknown) RETURN x",
+        ];
+        for query in &test_queries {
+            if let Ok((cypher, _)) = translate_to_cypher(query, "inv1") {
+                for sql in &sql_patterns {
+                    assert!(
+                        !cypher.to_uppercase().contains(&sql.to_uppercase()),
+                        "translate_to_cypher('{}') produced SQL keyword '{}' in output: {}",
+                        query,
+                        sql,
+                        cypher
+                    );
+                }
+            }
+        }
+    }
+
+    // ===== TDD: translate_to_cypher with whitespace/case variations =====
+
+    #[test]
+    fn test_translate_to_cypher_case_insensitive() {
+        // lowercase
+        let r1 = translate_to_cypher("show me findings", "inv1");
+        assert!(r1.is_ok());
+        // UPPERCASE
+        let r2 = translate_to_cypher("SHOW ME FINDINGS", "inv1");
+        assert!(r2.is_ok());
+        // Mixed
+        let r3 = translate_to_cypher("Show Me Findings", "inv1");
+        assert!(r3.is_ok());
+    }
+
+    #[test]
+    fn test_translate_to_cypher_leading_trailing_whitespace() {
+        let result = translate_to_cypher("   Show me findings   ", "inv1");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_translate_to_cypher_empty_query() {
+        let result = translate_to_cypher("", "inv1");
+        assert!(result.is_err(), "Empty query should be rejected");
+    }
+
+    #[test]
+    fn test_translate_to_cypher_whitespace_only_query() {
+        let result = translate_to_cypher("   ", "inv1");
+        assert!(result.is_err(), "Whitespace-only query should be rejected");
+    }
+
+    // ===== TDD: Cypher injection via query patterns =====
+
+    #[test]
+    fn test_translate_to_cypher_injection_in_name_filter() {
+        // Attempt injection through name value
+        let q = "MATCH (n:Function) WHERE n.name = 'x' RETURN n UNION MATCH (m) DELETE m//' RETURN n";
+        let result = translate_to_cypher(q, "inv1");
+        // Should succeed but the injected payload is escaped in the Cypher output
+        if let Ok((cypher, _)) = result {
+            // The output must NOT contain the raw DELETE — it should be inside a CONTAINS string
             assert!(
-                result.is_ok(),
-                "Whitelisted table '{}' should be accepted in SQL passthrough",
-                table
+                !cypher.contains("DELETE"),
+                "Injection payload must not appear as executable Cypher: {}",
+                cypher
             );
         }
+    }
+
+    #[test]
+    fn test_translate_to_cypher_injection_in_investigation_id() {
+        // Investigation ID validation should block this
+        let result = translate_to_cypher("MATCH (f:Function) RETURN f", "inv' OR '1'='1");
+        assert!(result.is_err(), "Injection in investigation_id must be rejected");
+    }
+
+    #[test]
+    fn test_translate_to_cypher_injection_in_file_filter() {
+        let q = "MATCH (n) WHERE n.file CONTAINS 'x' RETURN n UNION DELETE (m)//' RETURN n";
+        let result = translate_to_cypher(q, "inv1");
+        if let Ok((cypher, _)) = result {
+            assert!(
+                !cypher.contains("DELETE"),
+                "Injection via file filter must not produce executable DELETE: {}",
+                cypher
+            );
+        }
+    }
+
+    // ===== TDD: esc() with Cypher-specific dangerous patterns =====
+
+    #[test]
+    fn test_esc_cypher_comment() {
+        // Cypher comments use // — should pass through (only quotes/backslashes escaped)
+        let result = esc("value' // comment");
+        assert_eq!(result, "value\\' // comment");
+    }
+
+    #[test]
+    fn test_esc_cypher_curly_braces() {
+        // Curly braces are Cypher map syntax — esc() doesn't escape them
+        // (they're safe inside string literals)
+        let result = esc("value {key: 'nested'}");
+        assert_eq!(result, "value {key: \\'nested\\'}");
+    }
+
+    // ===== TDD: execute_cypher_read_query with null/missing values =====
+
+    #[test]
+    fn test_execute_cypher_read_query_null_property() {
+        let db = GraphDb::in_memory().unwrap();
+        // Create a function node missing the 'decompiled' property
+        db.cypher_execute(
+            "CREATE (f:Function {id: 'f1', name: 'minimal', investigation_id: 'inv1'})",
+        )
+        .unwrap();
+
+        let columns = vec!["name".to_string(), "decompiled".to_string()];
+        let cypher =
+            "MATCH (f:Function) WHERE f.investigation_id = 'inv1' RETURN f.name, f.decompiled";
+        let rows = execute_cypher_read_query(&db, cypher, &columns).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["name"], "minimal");
+        // Missing property should be null, not crash
+        assert!(
+            rows[0]["decompiled"].is_null() || rows[0]["decompiled"] == "",
+            "Missing property should be null or empty string, got: {:?}",
+            rows[0]["decompiled"]
+        );
+    }
+
+    // ===== TDD: execute_create_finding with special chars =====
+
+    #[test]
+    fn test_execute_create_finding_backslash_in_description() {
+        let db = GraphDb::in_memory().unwrap();
+        let args = serde_json::json!({
+            "title": "Path traversal",
+            "description": "File path: C:\\Windows\\System32\\cmd.exe",
+            "severity": "high"
+        });
+        let result = execute_create_finding(&db, "inv1", &args).unwrap();
+        assert_eq!(result["status"], "ok");
+
+        // Verify finding was stored (backslashes escaped correctly for Cypher)
+        let finding_id = result["finding_id"].as_str().unwrap();
+        let rows = db
+            .cypher_query(&format!(
+                "MATCH (f:Finding {{id: '{}'}}) RETURN f.title",
+                finding_id
+            ))
+            .unwrap();
+        assert_eq!(rows.len(), 1, "Finding must be retrievable after storage");
+    }
+
+    // ===== TDD: search_similar with Cypher injection =====
+
+    #[test]
+    fn test_execute_search_similar_injection_in_code() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "inv1";
+        create_function_for_translate_test(
+            &db,
+            "f1",
+            "safe_func",
+            "0x1000",
+            "void safe_func() {}",
+            inv_id,
+        );
+
+        // Attempt injection via the code search parameter
+        let args = serde_json::json!({
+            "code": "' RETURN n UNION MATCH (m) DELETE m//",
+            "limit": 10
+        });
+        let result = execute_search_similar(&db, inv_id, &args).unwrap();
+        assert_eq!(result["status"], "ok");
+
+        // Verify the function still exists (no deletion occurred)
+        let rows = db
+            .cypher_query(&format!(
+                "MATCH (f:Function) WHERE f.investigation_id = '{}' RETURN count(f)",
+                inv_id
+            ))
+            .unwrap();
+        let count = LadybugGraphDb::as_i64(&rows[0][0]).unwrap();
+        assert_eq!(count, 1, "Injection must not delete data");
+    }
+
+    /// Helper for tests in this module that need a Function node.
+    fn create_function_for_translate_test(
+        db: &GraphDb,
+        id: &str,
+        name: &str,
+        address: &str,
+        decompiled: &str,
+        investigation_id: &str,
+    ) {
+        db.cypher_execute(&format!(
+            "CREATE (f:Function {{id: '{}', name: '{}', address: '{}', decompiled: '{}', \
+             confidence: 0.9, investigation_id: '{}', language: 'unknown'}})",
+            esc(id),
+            esc(name),
+            esc(address),
+            esc(decompiled),
+            esc(investigation_id)
+        ))
+        .unwrap();
     }
 }
