@@ -186,9 +186,7 @@ fn execute_read_function(
 }
 
 /// Extract a function result from Cypher query rows.
-fn read_function_from_rows(
-    rows: Option<Vec<Vec<lbug::Value>>>,
-) -> Option<serde_json::Value> {
+fn read_function_from_rows(rows: Option<Vec<Vec<lbug::Value>>>) -> Option<serde_json::Value> {
     let rows = rows?;
     let row = rows.first()?;
     if row.len() < 5 {
@@ -580,13 +578,12 @@ fn execute_get_taint_paths(
         .ok()
         .and_then(|rows| {
             rows.first().and_then(|row| {
-                LadybugGraphDb::as_str(&row[0])
-                    .and_then(|addr| {
-                        addr.split(':')
-                            .next()
-                            .filter(|s| !s.is_empty())
-                            .map(|s| s.to_string())
-                    })
+                LadybugGraphDb::as_str(&row[0]).and_then(|addr| {
+                    addr.split(':')
+                        .next()
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string())
+                })
             })
         });
 
@@ -656,9 +653,8 @@ fn execute_get_cross_file_calls(
         .ok()
         .and_then(|rows| {
             rows.first().and_then(|row| {
-                LadybugGraphDb::as_str(&row[0]).map(|addr| {
-                    addr.split(':').next().unwrap_or("").to_string()
-                })
+                LadybugGraphDb::as_str(&row[0])
+                    .map(|addr| addr.split(':').next().unwrap_or("").to_string())
             })
         });
 
@@ -803,12 +799,24 @@ mod tests {
     use crate::knowledge::search::initialize_cwe_catalog_with_dir;
 
     /// Helper: create a Function node in LadybugDB.
-    fn create_function(db: &GraphDb, id: &str, name: &str, address: &str, decompiled: &str, investigation_id: &str) {
+    fn create_function(
+        db: &GraphDb,
+        id: &str,
+        name: &str,
+        address: &str,
+        decompiled: &str,
+        investigation_id: &str,
+    ) {
         db.cypher_execute(&format!(
             "CREATE (f:Function {{id: '{}', name: '{}', address: '{}', decompiled: '{}', \
              confidence: 0.9, investigation_id: '{}', language: 'unknown'}})",
-            esc(id), esc(name), esc(address), esc(decompiled), esc(investigation_id)
-        )).unwrap();
+            esc(id),
+            esc(name),
+            esc(address),
+            esc(decompiled),
+            esc(investigation_id)
+        ))
+        .unwrap();
     }
 
     /// Helper: create a CALLS relationship between two functions by id.
@@ -816,8 +824,10 @@ mod tests {
         db.cypher_execute(&format!(
             "MATCH (a:Function), (b:Function) WHERE a.id = '{}' AND b.id = '{}' \
              CREATE (a)-[:CALLS]->(b)",
-            esc(caller_id), esc(callee_id)
-        )).unwrap();
+            esc(caller_id),
+            esc(callee_id)
+        ))
+        .unwrap();
     }
 
     #[test]
@@ -826,7 +836,10 @@ mod tests {
         let inv_id = "test-inv";
 
         create_function(
-            &db, "f1", "vulnerable_func", "0x401000",
+            &db,
+            "f1",
+            "vulnerable_func",
+            "0x401000",
             "void vulnerable_func(char *input) { char buf[32]; strcpy(buf, input); }",
             inv_id,
         );
@@ -970,7 +983,10 @@ mod tests {
         let inv_id = "test-inv";
 
         create_function(
-            &db, "f1", "parse_input", "0x401000",
+            &db,
+            "f1",
+            "parse_input",
+            "0x401000",
             "void parse_input(char *buf) { strcpy(dest, buf); }",
             inv_id,
         );
@@ -1104,7 +1120,14 @@ mod tests {
     fn test_execute_tool_rename_function_empty_code() {
         let db = GraphDb::in_memory().unwrap();
         let inv_id = "test-inv";
-        create_function(&db, "f1", "target_func", "0x401000", "void target_func() {}", inv_id);
+        create_function(
+            &db,
+            "f1",
+            "target_func",
+            "0x401000",
+            "void target_func() {}",
+            inv_id,
+        );
 
         let args = serde_json::json!({"function": "target_func", "renamed_code": ""});
         let result = execute_tool(&db, inv_id, "rename_function", &args).unwrap();
@@ -1127,7 +1150,14 @@ mod tests {
     fn test_execute_tool_rename_function_by_address() {
         let db = GraphDb::in_memory().unwrap();
         let inv_id = "test-inv";
-        create_function(&db, "f1", "sub_401000", "0x401000", "void sub_401000() {}", inv_id);
+        create_function(
+            &db,
+            "f1",
+            "sub_401000",
+            "0x401000",
+            "void sub_401000() {}",
+            inv_id,
+        );
 
         let args = serde_json::json!({
             "function": "0x401000",
@@ -1154,7 +1184,14 @@ mod tests {
     fn test_execute_tool_read_function_by_address() {
         let db = GraphDb::in_memory().unwrap();
         let inv_id = "test-inv";
-        create_function(&db, "f1", "sub_401000", "0x401000", "void sub_401000() {}", inv_id);
+        create_function(
+            &db,
+            "f1",
+            "sub_401000",
+            "0x401000",
+            "void sub_401000() {}",
+            inv_id,
+        );
 
         // Look up by address instead of name
         let args = serde_json::json!({"name": "0x401000"});
@@ -1290,7 +1327,10 @@ mod tests {
             ))
             .unwrap();
         let count = LadybugGraphDb::as_i64(&rows[0][0]).unwrap();
-        assert_eq!(count, 1, "Function must still exist after injection attempt");
+        assert_eq!(
+            count, 1,
+            "Function must still exist after injection attempt"
+        );
     }
 
     // ===== TDD: cross-file calls with nonexistent function =====

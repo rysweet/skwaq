@@ -5,7 +5,7 @@
 //! or `skwaq gym dashboard` for a static snapshot of the last run.
 
 use crate::history::HistoryDb;
-use crate::telemetry::query_spans;
+use crate::telemetry::{query_spans, read_active_runs};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -181,10 +181,8 @@ impl DashboardState {
             })
             .collect();
 
-        // Active jobs from gym.run spans (unfinished = still running)
-        // and gym.case spans for progress tracking
-        let run_spans =
-            query_spans(telemetry_dir, Some("gym.run"), None, 100).unwrap_or_default();
+        // Active jobs from sidecar file (written at run start, removed on finish)
+        let active_runs = read_active_runs(telemetry_dir);
         let case_spans =
             query_spans(telemetry_dir, Some("gym.case"), None, 50000).unwrap_or_default();
 
@@ -206,55 +204,31 @@ impl DashboardState {
         }
 
         let mut active_jobs = Vec::new();
-        for span in &run_spans {
-            let suite = span
-                .attributes
-                .get("suite")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown")
-                .to_string();
-            let total: u64 = span
-                .attributes
-                .get("total_cases")
-                .and_then(|v| v.as_str())
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(0);
-            let concurrency: u64 = span
-                .attributes
-                .get("concurrency")
-                .and_then(|v| v.as_str())
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(1);
+        for run in &active_runs {
             let (completed, total_case_ms) =
-                case_counts.get(&suite).copied().unwrap_or((0, 0.0));
+                case_counts.get(&run.suite).copied().unwrap_or((0, 0.0));
 
             let avg_case_ms = if completed > 0 {
                 total_case_ms / completed as f64
             } else {
                 0.0
             };
-            let remaining = total.saturating_sub(completed);
+            let remaining = run.total_cases.saturating_sub(completed);
             let eta_secs = if completed > 0 && remaining > 0 {
-                // Account for concurrency in ETA
-                let effective_concurrency = concurrency.max(1) as f64;
-                Some(
-                    ((remaining as f64 * avg_case_ms) / (effective_concurrency * 1000.0)) as u64,
-                )
+                let effective_concurrency = run.concurrency.max(1) as f64;
+                Some(((remaining as f64 * avg_case_ms) / (effective_concurrency * 1000.0)) as u64)
             } else {
                 None
             };
 
-            // Only show as active if there are remaining cases
-            if remaining > 0 {
-                active_jobs.push(ActiveJob {
-                    suite,
-                    completed,
-                    total,
-                    concurrency,
-                    avg_case_ms,
-                    eta_secs,
-                });
-            }
+            active_jobs.push(ActiveJob {
+                suite: run.suite.clone(),
+                completed,
+                total: run.total_cases,
+                concurrency: run.concurrency,
+                avg_case_ms,
+                eta_secs,
+            });
         }
 
         // API health from LLM request spans
@@ -299,14 +273,14 @@ fn render(f: &mut Frame, state: &DashboardState, refresh_countdown: Option<u64>)
 
     let constraints = if has_active_jobs {
         vec![
-            Constraint::Length(3),  // Title
+            Constraint::Length(3),                                      // Title
             Constraint::Length(2 + state.active_jobs.len() as u16 + 1), // Active jobs
-            Constraint::Min(8),    // Main content
-            Constraint::Length(4), // API Health
+            Constraint::Min(8),                                         // Main content
+            Constraint::Length(4),                                      // API Health
         ]
     } else {
         vec![
-            Constraint::Length(3),  // Title
+            Constraint::Length(3), // Title
             Constraint::Min(10),   // Main content
             Constraint::Length(4), // API Health
         ]
@@ -360,10 +334,7 @@ fn render(f: &mut Frame, state: &DashboardState, refresh_countdown: Option<u64>)
 }
 
 fn render_active_jobs(f: &mut Frame, area: Rect, state: &DashboardState) {
-    let header = Row::new(vec![
-        "Suite", "Progress", "Concurrency", "Avg/case", "ETA",
-    ])
-    .style(
+    let header = Row::new(vec!["Suite", "Progress", "Concurrency", "Avg/case", "ETA"]).style(
         Style::default()
             .fg(Color::Magenta)
             .add_modifier(Modifier::BOLD),
@@ -378,10 +349,7 @@ fn render_active_jobs(f: &mut Frame, area: Rect, state: &DashboardState) {
             } else {
                 0.0
             };
-            let progress_bar = format!(
-                "{}/{} ({:.0}%)",
-                j.completed, j.total, pct
-            );
+            let progress_bar = format!("{}/{} ({:.0}%)", j.completed, j.total, pct);
             let avg_case = if j.avg_case_ms > 0.0 {
                 format_duration_ms(j.avg_case_ms)
             } else {
@@ -629,8 +597,13 @@ fn print_static(state: &DashboardState) {
             };
             println!(
                 "  {:<14} {:>3}/{:<3} ({:>4.0}%) {:>13} {:>12} {:>14}",
-                j.suite, j.completed, j.total, pct,
-                format!("j{}", j.concurrency), avg, eta
+                j.suite,
+                j.completed,
+                j.total,
+                pct,
+                format!("j{}", j.concurrency),
+                avg,
+                eta
             );
         }
         println!();

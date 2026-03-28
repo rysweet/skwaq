@@ -244,7 +244,7 @@ pub(super) fn extract_name_filter(query: &str) -> Option<String> {
     // Match: n.name = 'foo' or n.name = "foo"
     if let Some(pos) = lower.find(".name") {
         let rest = &query[pos + 1..]; // skip the dot
-        // Look for quoted string after = or CONTAINS
+                                      // Look for quoted string after = or CONTAINS
         for delim in ["= '", "= \"", "contains '", "contains \""] {
             if let Some(start) = rest.to_lowercase().find(delim) {
                 let quote_char = if delim.ends_with('\'') { '\'' } else { '"' };
@@ -495,8 +495,10 @@ mod tests {
 
     #[test]
     fn test_translate_to_cypher_name_filter() {
-        let result =
-            translate_to_cypher("MATCH (n:Function) WHERE n.name = 'strcpy' RETURN n", "inv1");
+        let result = translate_to_cypher(
+            "MATCH (n:Function) WHERE n.name = 'strcpy' RETURN n",
+            "inv1",
+        );
         assert!(result.is_ok());
         let (cypher, _cols) = result.unwrap();
         assert!(cypher.contains("CONTAINS 'strcpy'"));
@@ -702,7 +704,11 @@ mod tests {
     fn test_extract_name_filter_very_long_name_rejected() {
         let long = "a".repeat(150);
         let q = format!("MATCH (n:Function) WHERE n.name = '{}' RETURN n", long);
-        assert_eq!(extract_name_filter(&q), None, "Names >= 100 chars should be rejected");
+        assert_eq!(
+            extract_name_filter(&q),
+            None,
+            "Names >= 100 chars should be rejected"
+        );
     }
 
     // ===== TDD: extract_file_filter edge cases =====
@@ -741,7 +747,11 @@ mod tests {
     fn test_extract_file_filter_very_long_pattern_rejected() {
         let long = "x".repeat(250);
         let q = format!("MATCH (n) WHERE n.file = '{}' RETURN n", long);
-        assert_eq!(extract_file_filter(&q), None, "Patterns >= 200 chars should be rejected");
+        assert_eq!(
+            extract_file_filter(&q),
+            None,
+            "Patterns >= 200 chars should be rejected"
+        );
     }
 
     // ===== TDD: esc() adversarial inputs =====
@@ -885,10 +895,8 @@ mod tests {
     #[test]
     fn test_execute_cypher_read_query_more_columns_than_data() {
         let db = GraphDb::in_memory().unwrap();
-        db.cypher_execute(
-            "CREATE (f:Function {id: 'f1', name: 'test', investigation_id: 'inv1'})",
-        )
-        .unwrap();
+        db.cypher_execute("CREATE (f:Function {id: 'f1', name: 'test', investigation_id: 'inv1'})")
+            .unwrap();
 
         // Request 5 columns but query only returns 1
         let columns = vec![
@@ -1003,9 +1011,7 @@ mod tests {
         // Static analysis: verify this module contains zero SQL keywords in
         // non-test, non-comment code. We test this by checking the translate
         // function never generates SQL.
-        let sql_patterns = [
-            "SELECT ", "INSERT ", "UPDATE ", "DELETE ", "FROM ", "INTO ",
-        ];
+        let sql_patterns = ["SELECT ", "INSERT ", "UPDATE ", "DELETE ", "FROM ", "INTO "];
         let test_queries = [
             "MATCH (n) RETURN DISTINCT LABELS(n), COUNT(n)",
             "MATCH (n:Function) WHERE n.name = 'main' RETURN n",
@@ -1072,7 +1078,8 @@ mod tests {
     #[test]
     fn test_translate_to_cypher_injection_in_name_filter() {
         // Attempt injection through name value
-        let q = "MATCH (n:Function) WHERE n.name = 'x' RETURN n UNION MATCH (m) DELETE m//' RETURN n";
+        let q =
+            "MATCH (n:Function) WHERE n.name = 'x' RETURN n UNION MATCH (m) DELETE m//' RETURN n";
         let result = translate_to_cypher(q, "inv1");
         // Should succeed but the injected payload is escaped in the Cypher output
         if let Ok((cypher, _)) = result {
@@ -1089,7 +1096,10 @@ mod tests {
     fn test_translate_to_cypher_injection_in_investigation_id() {
         // Investigation ID validation should block this
         let result = translate_to_cypher("MATCH (f:Function) RETURN f", "inv' OR '1'='1");
-        assert!(result.is_err(), "Injection in investigation_id must be rejected");
+        assert!(
+            result.is_err(),
+            "Injection in investigation_id must be rejected"
+        );
     }
 
     #[test]

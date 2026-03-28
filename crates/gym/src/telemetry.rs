@@ -272,6 +272,98 @@ fn truncate(s: &str, max: usize) -> String {
     }
 }
 
+// ── Active run tracking ───────────────────────────────────────────
+
+/// An active gym run (written to `active_runs.jsonl` on start, removed on finish).
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ActiveRun {
+    pub suite: String,
+    pub total_cases: u64,
+    pub concurrency: u64,
+    pub started_at: String,
+    pub pid: u32,
+}
+
+/// Register an active run. Returns a guard that removes it on drop.
+pub fn register_active_run(
+    telemetry_dir: &str,
+    suite: &str,
+    total_cases: usize,
+    concurrency: usize,
+) -> ActiveRunGuard {
+    let dir = resolve_telemetry_dir(telemetry_dir);
+    let _ = ensure_dir(&dir);
+    let run = ActiveRun {
+        suite: suite.to_string(),
+        total_cases: total_cases as u64,
+        concurrency: concurrency as u64,
+        started_at: chrono::Utc::now().to_rfc3339(),
+        pid: std::process::id(),
+    };
+    let path = dir.join("active_runs.jsonl");
+    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&path) {
+        let _ = writeln!(f, "{}", serde_json::to_string(&run).unwrap_or_default());
+    }
+    ActiveRunGuard {
+        dir,
+        suite: suite.to_string(),
+        pid: std::process::id(),
+    }
+}
+
+/// Guard that removes the active run entry when dropped (suite finishes).
+pub struct ActiveRunGuard {
+    dir: PathBuf,
+    suite: String,
+    pid: u32,
+}
+
+impl Drop for ActiveRunGuard {
+    fn drop(&mut self) {
+        let path = self.dir.join("active_runs.jsonl");
+        if !path.exists() {
+            return;
+        }
+        // Rewrite the file without this run
+        let Ok(content) = fs::read_to_string(&path) else {
+            return;
+        };
+        let remaining: Vec<&str> = content
+            .lines()
+            .filter(|line| {
+                let Ok(run) = serde_json::from_str::<ActiveRun>(line) else {
+                    return false;
+                };
+                !(run.suite == self.suite && run.pid == self.pid)
+            })
+            .collect();
+        let _ = fs::write(
+            &path,
+            remaining.join("\n") + if remaining.is_empty() { "" } else { "\n" },
+        );
+    }
+}
+
+/// Read currently active runs from the sidecar file.
+pub fn read_active_runs(telemetry_dir: &str) -> Vec<ActiveRun> {
+    let dir = resolve_telemetry_dir(telemetry_dir);
+    let path = dir.join("active_runs.jsonl");
+    if !path.exists() {
+        return Vec::new();
+    }
+    let Ok(content) = fs::read_to_string(&path) else {
+        return Vec::new();
+    };
+    content
+        .lines()
+        .filter_map(|line| serde_json::from_str::<ActiveRun>(line).ok())
+        .filter(|run| {
+            // Only include runs whose process is still alive
+            Path::new(&format!("/proc/{}", run.pid)).exists()
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
