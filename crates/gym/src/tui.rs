@@ -163,7 +163,7 @@ impl DashboardState {
             entry.1 += tokens;
             entry.2 += span.duration_ms;
         }
-        let agents: Vec<AgentStats> = agent_map
+        let mut agents: Vec<AgentStats> = agent_map
             .into_iter()
             .map(|(name, (count, total_tokens, total_ms))| AgentStats {
                 name,
@@ -180,6 +180,7 @@ impl DashboardState {
                 },
             })
             .collect();
+        agents.sort_by(|a, b| b.call_count.cmp(&a.call_count));
 
         // Active jobs from sidecar file (written at run start, removed on finish)
         let active_runs = read_active_runs(telemetry_dir);
