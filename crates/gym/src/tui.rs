@@ -75,6 +75,7 @@ struct SuiteStats {
     tp: u32,
     fp: u32,
     r#fn: u32,
+    cost_usd: f64,
 }
 
 struct AgentStats {
@@ -98,6 +99,7 @@ struct ApiHealth {
     rate_limit_retries: u64,
     errors: u64,
     model: String,
+    total_cost_usd: f64,
 }
 
 struct DashboardState {
@@ -146,6 +148,7 @@ impl DashboardState {
                 tp: latest.true_positives,
                 fp: latest.false_positives,
                 r#fn: latest.false_negatives,
+                cost_usd: latest.metadata.estimated_cost_usd,
             });
         }
 
@@ -276,6 +279,8 @@ impl DashboardState {
             .unwrap_or("unknown")
             .to_string();
 
+        let total_cost_usd: f64 = suites.iter().map(|s| s.cost_usd).sum();
+
         Ok(DashboardState {
             suites,
             agents,
@@ -285,6 +290,7 @@ impl DashboardState {
                 rate_limit_retries,
                 errors,
                 model,
+                total_cost_usd,
             },
             recent_span_count: agent_spans.len() + llm_spans.len(),
         })
@@ -330,8 +336,11 @@ fn render(f: &mut Frame, state: &DashboardState, refresh_countdown: Option<u64>)
                 .add_modifier(Modifier::BOLD),
         ),
         Span::raw(format!(
-            "  {} spans  │  model: {}{}",
-            state.recent_span_count, state.api_health.model, refresh_text
+            "  {} spans  │  model: {}  │  cost: {}{}",
+            state.recent_span_count,
+            state.api_health.model,
+            crate::cost::format_cost(state.api_health.total_cost_usd),
+            refresh_text
         )),
     ]))
     .block(Block::default().borders(Borders::BOTTOM));
@@ -421,7 +430,7 @@ fn render_active_jobs(f: &mut Frame, area: Rect, state: &DashboardState) {
 
 fn render_suites(f: &mut Frame, area: Rect, state: &DashboardState) {
     let header = Row::new(vec![
-        "Suite", "Model", "Cases", "F1%", "Prec%", "Rec%", "TP", "FP", "FN", "Trend",
+        "Suite", "Model", "Cases", "F1%", "Prec%", "Rec%", "TP", "FP", "FN", "Cost", "Trend",
     ])
     .style(
         Style::default()
@@ -443,6 +452,7 @@ fn render_suites(f: &mut Frame, area: Rect, state: &DashboardState) {
             let trend = sparkline_ascii(&s.f1_history, 8);
             // Shorten model name for display
             let model_short = shorten_model(&s.model);
+            let cost_str = crate::cost::format_cost(s.cost_usd);
             Row::new(vec![
                 Cell::from(s.name.clone()),
                 Cell::from(model_short).style(Style::default().fg(Color::Cyan)),
@@ -453,6 +463,7 @@ fn render_suites(f: &mut Frame, area: Rect, state: &DashboardState) {
                 Cell::from(format!("{}", s.tp)),
                 Cell::from(format!("{}", s.fp)),
                 Cell::from(format!("{}", s.r#fn)),
+                Cell::from(cost_str).style(Style::default().fg(Color::Yellow)),
                 Cell::from(trend),
             ])
         })
@@ -470,6 +481,7 @@ fn render_suites(f: &mut Frame, area: Rect, state: &DashboardState) {
             Constraint::Length(5),
             Constraint::Length(5),
             Constraint::Length(5),
+            Constraint::Length(8),
             Constraint::Length(10),
         ],
     )
@@ -542,6 +554,11 @@ fn render_api_health(f: &mut Frame, area: Rect, state: &DashboardState) {
             } else {
                 Color::Green
             }),
+        ),
+        Span::raw("  │  "),
+        Span::styled(
+            format!("cost: {}", crate::cost::format_cost(h.total_cost_usd)),
+            Style::default().fg(Color::Yellow),
         ),
     ]);
     let widget =
@@ -657,15 +674,15 @@ fn print_static(state: &DashboardState) {
     }
 
     println!(
-        "  {:<12} {:<10} {:>6} {:>7} {:>7} {:>7} {:>5} {:>5} {:>5}  TREND",
-        "SUITE", "MODEL", "CASES", "F1%", "PREC%", "REC%", "TP", "FP", "FN"
+        "  {:<12} {:<10} {:>6} {:>7} {:>7} {:>7} {:>5} {:>5} {:>5} {:>8}  TREND",
+        "SUITE", "MODEL", "CASES", "F1%", "PREC%", "REC%", "TP", "FP", "FN", "COST"
     );
-    println!("  {}", "─".repeat(85));
+    println!("  {}", "─".repeat(95));
 
     for s in &state.suites {
         let trend = sparkline_ascii(&s.f1_history, 8);
         println!(
-            "  {:<12} {:<10} {:>6} {:>6.1} {:>6.1} {:>6.1} {:>5} {:>5} {:>5}  {}",
+            "  {:<12} {:<10} {:>6} {:>6.1} {:>6.1} {:>6.1} {:>5} {:>5} {:>5} {:>8}  {}",
             s.name,
             shorten_model(&s.model),
             s.cases,
@@ -675,6 +692,7 @@ fn print_static(state: &DashboardState) {
             s.tp,
             s.fp,
             s.r#fn,
+            crate::cost::format_cost(s.cost_usd),
             trend
         );
     }
@@ -695,8 +713,9 @@ fn print_static(state: &DashboardState) {
 
     let h = &state.api_health;
     println!(
-        "\n  Model: {}  │  API: {} requests | {} rate-limit retries | {} errors\n",
-        h.model, h.total_requests, h.rate_limit_retries, h.errors
+        "\n  Model: {}  │  API: {} requests | {} rate-limit retries | {} errors | cost: {}\n",
+        h.model, h.total_requests, h.rate_limit_retries, h.errors,
+        crate::cost::format_cost(h.total_cost_usd)
     );
 }
 

@@ -583,6 +583,7 @@ mod run_metadata_profile {
             concurrency: 4,
             skip: 0,
             max_cases: Some(10),
+            ..Default::default()
         };
 
         let json = serde_json::to_string(&original).unwrap();
