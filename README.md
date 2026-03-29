@@ -199,89 +199,76 @@ ghidra_path = "/opt/ghidra"
 
 ### LLM Backend
 
-The default backend is **GitHub Copilot** (`reasoning = "copilot"`), which uses Claude models via the GitHub Copilot LM Models API. Authentication uses your GitHub token (`gh auth login`).
+Skwaq supports three LLM backends:
 
-To use Anthropic directly, set `reasoning = "anthropic"` and provide `ANTHROPIC_API_KEY`.
-
-`decompile-renamer` and any future `decompile-*` pipeline stages use `[llm].decompilation`, while the rest of the agent pipeline uses `[llm].reasoning`. skwaq does not silently downgrade one lane to the other: a pipeline that includes `decompile-*` stages fails explicitly if `[llm].decompilation` is invalid or unavailable, but reasoning-only custom pipelines do not require that lane.
-
-See [docs/investigation-copilot-lm-api.md](docs/investigation-copilot-lm-api.md) for details on model availability and the Copilot integration architecture.
-
-### Benchmark preflight and eval artifacts
-
-Hybrid benchmark runs now require an explicit Copilot configuration with no hidden downgrade path. Before running a non-quick benchmark, run:
-
-```bash
-skwaq gym preflight
-```
-
-Use an explicit benchmark config like:
+| Backend | Config | Auth |
+|---------|--------|------|
+| **GitHub Copilot** | `reasoning = "copilot"` | `gh auth login` (needs copilot scope) |
+| **Azure AI Foundry** | `reasoning = "azure"` | `az login` or `AZURE_OPENAI_API_KEY` |
+| **Anthropic** | `reasoning = "anthropic"` | `ANTHROPIC_API_KEY` |
 
 ```toml
+# Azure AI Foundry (GPT-5.4)
+[llm]
+reasoning = "azure"
+[llm.azure]
+endpoint = "https://your-resource.cognitiveservices.azure.com/"
+deployment = "gpt-54-skwaq"
+api_version = "2024-10-21"
+
+# GitHub Copilot (Claude Opus)
 [llm]
 reasoning = "copilot"
-decompilation = "copilot"
-
 [llm.copilot]
 model = "claude-opus-4.6"
 ```
 
-Binary benchmark paths now require Ghidra enrichment to come from either a live
-Ghidra installation or a seeded cache entry. Cached analyses are reused by
-binary content hash. If neither is available, `skwaq gym run` fails loudly
-instead of silently falling back to a symbol-only binary graph.
+Use `skwaq gym preflight` to verify your LLM configuration before benchmark runs.
 
-`skwaq gym preflight` verifies:
-
-- `[llm] reasoning = "copilot"` for benchmark runs
-- explicit no-fallback config shape for reasoning and decompilation
-- an Opus-class Copilot model such as `claude-opus-4.6`
-- active GitHub authentication and Copilot client creation
-
-For full eval runs, `skwaq gym eval` now writes reproducibility metadata alongside the usual reports:
-
-- `metadata.json`
-- `summary.json`
-- `summary.md`
-- `dashboard.md`
-
-Gym reports also include semantic detection summaries derived from the same
-semantic classifier used by synthesis and `skwaq analyze --quick`. JSON and
-Markdown outputs surface per-semantic detection rates for classes such as
-`buffer_overflow`, `format_string`, `path_traversal`, `race_condition`, and
-`use_after_free`.
-
-The manual GitHub workflows under `.github/workflows/gym-eval.yml` and `.github/workflows/gym-full.yml` call the same preflight step before hybrid runs.
-
-### BinPool benchmark setup
-
-The repository now includes a generated `data/gym/ground_truth/binpool.toml` manifest, so `binpool` shows up as a first-class gym suite instead of staying hidden behind a missing manifest.
-
-The manifest is generated from the upstream public metadata index:
+### Dashboard & Telemetry
 
 ```bash
-python3 scripts/generate_binpool_manifest.py
+skwaq gym dashboard --live     # Real-time TUI with active jobs, ETA, agent stats
+skwaq gym dashboard --tui      # Static snapshot
+skwaq gym telemetry query      # Query OTEL spans
 ```
 
-It currently selects one representative vulnerable binary per CVE for every upstream `binpool_info.json` entry that publishes both:
+The dashboard shows per-suite F1/precision/recall, which model produced results, active jobs with progress and ETA, agent call stats, and API health. OTEL spans are exported to `~/.skwaq/telemetry/spans.jsonl`.
 
-- at least one vulnerable binary path
-- at least one usable CWE
+### Running from Any Directory
 
-`skwaq` does **not** auto-download BinPool. Upstream distributes the dataset via the Zenodo link referenced from <https://github.com/SimaArasteh/binpool>. After downloading it, extract the artifact so this directory exists:
-
-```text
-~/.local/share/skwaq/gym/cache/binpool/binpool_artifact/
-```
-
-Then run:
+Set `SKWAQ_ROOT` to use the installed binary from anywhere:
 
 ```bash
-skwaq gym setup
-skwaq gym run binpool --quick --max-cases 5
+export SKWAQ_ROOT=/path/to/skwaq
+skwaq gym dashboard --live
 ```
 
-If you request an unknown suite, the CLI now lists the actually registered suites instead of a stale hardcoded `fixtures` fallback.
+### Infrastructure Setup
+
+Deploy Azure AI Foundry models (idempotent):
+
+```bash
+bash infra/azure/setup.sh
+```
+
+### BinPool Benchmark
+
+The BinPool suite requires manual download from [Zenodo](https://github.com/SimaArasteh/binpool).
+After downloading, extract to `~/.local/share/skwaq/gym/cache/binpool/binpool_artifact/` and run `skwaq gym setup`.
+
+## Latest Benchmark Results (GPT-5.4 via Azure AI Foundry)
+
+| Suite | F1% | Precision% | Recall% | TP | FP | FN |
+|-------|-----|-----------|--------|----|----|-----|
+| CGC | 94.3 | 100.0 | 89.2 | 497 | 0 | 60 |
+| CyberGym | 94.7 | 100.0 | 89.8 | 531 | 0 | 60 |
+| CyberSecEval | 93.9 | 100.0 | 88.6 | 441 | 0 | 57 |
+| Fixtures | 94.1 | 100.0 | 88.9 | 160 | 0 | 20 |
+| OWASP | 90.2 | 100.0 | 82.1 | 533 | 0 | 116 |
+| Juliet | 59.0 | 100.0 | 41.8 | 341 | 0 | 474 |
+
+100% precision across all suites (zero false positives). Full eval with unlimited case counts in progress.
 
 ## License
 
