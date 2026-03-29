@@ -22,7 +22,7 @@ pub struct BenchmarkRun {
     pub true_negatives: u32,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct RunMetadata {
     #[serde(default)]
     pub llm_backend: String,
@@ -42,6 +42,12 @@ pub struct RunMetadata {
     pub max_cases: Option<usize>,
     #[serde(default)]
     pub profile: Option<String>,
+    #[serde(default)]
+    pub total_prompt_tokens: u64,
+    #[serde(default)]
+    pub total_completion_tokens: u64,
+    #[serde(default)]
+    pub estimated_cost_usd: f64,
 }
 
 /// Per-CWE result within a run.
@@ -800,6 +806,9 @@ mod tests {
             skip: 0,
             max_cases: Some(5),
             profile: None,
+            total_prompt_tokens: 1000,
+            total_completion_tokens: 500,
+            estimated_cost_usd: 0.0525,
         };
 
         // Start a run.

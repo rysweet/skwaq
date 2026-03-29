@@ -890,6 +890,9 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                     skip: 0,
                     max_cases: Some(summary.target_cases as usize),
                     profile: profile.clone(),
+                    total_prompt_tokens: 0,
+                    total_completion_tokens: 0,
+                    estimated_cost_usd: 0.0,
                 };
                 let run_id = gym.history_db.start_run(
                     &summary.suite,

@@ -5,6 +5,7 @@
 
 pub mod adapters;
 pub mod agentic;
+pub mod cost;
 pub mod dashboard;
 pub mod download;
 pub mod ground_truth;
@@ -420,8 +421,12 @@ impl Gym {
                 total_cases = total,
                 concurrency = concurrency,
                 cases_completed = tracing::field::Empty,
+                tokens_total = tracing::field::Empty,
+                cost_usd = tracing::field::Empty,
             )
             .entered();
+
+            let run_started_at = chrono::Utc::now().to_rfc3339();
 
             // Register active run for dashboard visibility (removed on drop)
             let _active_run_guard = crate::telemetry::register_active_run(
@@ -793,13 +798,51 @@ impl Gym {
                 }
             }
 
+            // Aggregate token usage from LLM request spans for this run
+            let telemetry_dir = telemetry::default_telemetry_dir();
+            let llm_spans = telemetry::query_spans_since(
+                &telemetry_dir,
+                Some("llm.request"),
+                None,
+                500000,
+                &run_started_at,
+            )
+            .unwrap_or_default();
+            let mut total_prompt_tokens: u64 = 0;
+            let mut total_completion_tokens: u64 = 0;
+            for span in &llm_spans {
+                if let Some(v) = span.attributes.get("tokens_in").and_then(|v| v.as_str()) {
+                    total_prompt_tokens += v.parse::<u64>().unwrap_or(0);
+                }
+                if let Some(v) = span.attributes.get("tokens_out").and_then(|v| v.as_str()) {
+                    total_completion_tokens += v.parse::<u64>().unwrap_or(0);
+                }
+            }
+            let estimated_cost = cost::estimate_cost(
+                &run_metadata.llm_model,
+                total_prompt_tokens,
+                total_completion_tokens,
+            );
+
+            // Record on the span
+            tracing::Span::current().record(
+                "tokens_total",
+                total_prompt_tokens + total_completion_tokens,
+            );
+            tracing::Span::current().record("cost_usd", format!("{:.4}", estimated_cost).as_str());
+
+            let mut final_metadata = run_metadata.clone();
+            final_metadata.total_prompt_tokens = total_prompt_tokens;
+            final_metadata.total_completion_tokens = total_completion_tokens;
+            final_metadata.estimated_cost_usd = estimated_cost;
+
             let run = history::BenchmarkRun {
                 id: run_id.clone(),
                 started_at: chrono::Utc::now(),
                 finished_at: Some(chrono::Utc::now()),
                 suite: suite_name.clone(),
                 skwaq_commit: commit.clone(),
-                metadata: run_metadata.clone(),
+                metadata: final_metadata,
                 precision: score.precision,
                 recall: score.recall,
                 f1: score.f1,
@@ -970,6 +1013,9 @@ fn build_run_metadata(
         skip: config.skip,
         max_cases: config.max_cases,
         profile: profile_name.map(String::from),
+        total_prompt_tokens: 0,
+        total_completion_tokens: 0,
+        estimated_cost_usd: 0.0,
     }
 }
 
