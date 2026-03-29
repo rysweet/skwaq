@@ -513,6 +513,156 @@ The synthesis layer routes findings through one of six paths, tracked by
 
 ---
 
+## Profiles (`profiles.rs`)
+
+### `ProfileName`
+
+```rust
+pub struct ProfileName(String);
+
+impl ProfileName {
+    pub fn new(name: &str) -> Result<Self>;
+    pub fn as_str(&self) -> &str;
+}
+```
+
+Validated profile name. Must match `^[a-zA-Z0-9][a-zA-Z0-9_-]*$` with a
+maximum length of 64 characters. Construction via `ProfileName::new()` rejects
+invalid names with an explanatory error.
+
+### `ProfilePaths`
+
+```rust
+pub struct ProfilePaths {
+    pub root: PathBuf,
+    pub config_toml: PathBuf,
+    pub results_db: PathBuf,
+    pub memory_graph: PathBuf,
+    pub telemetry: PathBuf,
+    pub active_runs: PathBuf,
+}
+
+impl ProfilePaths {
+    pub fn resolve(name: &ProfileName) -> Self;
+    pub fn ensure(&self) -> Result<()>;
+    pub fn load_merged_config(&self) -> Result<Config>;
+}
+```
+
+Resolves all profile paths under `~/.skwaq/profiles/<name>/`. `ensure()`
+creates the directory tree with `0o700` permissions if it does not exist.
+`load_merged_config()` loads the base `skwaq.toml`, then replaces the `[llm]`
+section with the profile's `config.toml` overlay.
+
+**Security:** `resolve()` rejects symlinks via `symlink_metadata()` before
+constructing paths. Profile names are validated through `ProfileName::new()`
+before any filesystem access.
+
+### `list_profiles`
+
+```rust
+pub fn list_profiles() -> Result<Vec<ProfileSummary>>
+```
+
+Lists all profiles under `~/.skwaq/profiles/`, returning name, backend, model,
+and run count for each.
+
+```rust
+pub struct ProfileSummary {
+    pub name: ProfileName,
+    pub backend: String,
+    pub model: Option<String>,
+    pub run_count: usize,
+}
+```
+
+### `create_profile`
+
+```rust
+pub fn create_profile(
+    name: &ProfileName,
+    backend: &str,
+    model: Option<&str>,
+    endpoint: Option<&str>,
+    deployment: Option<&str>,
+) -> Result<ProfilePaths>
+```
+
+Creates a new profile directory and writes the `config.toml`. Returns the
+resolved paths.
+
+### `default_templates`
+
+```rust
+pub fn default_templates() -> Vec<(&'static str, &'static str)>
+```
+
+Returns `(name, toml_content)` pairs for the built-in profile templates
+(`opus` and `gpt54`).
+
+---
+
+### `LlmConfig::merge_overlay` (`config.rs`)
+
+```rust
+impl LlmConfig {
+    pub fn merge_overlay(&mut self, overlay: LlmConfig);
+}
+```
+
+Replaces `self` entirely with `overlay`. Called during profile config loading
+to swap the base LLM configuration with the profile's override. Infallible.
+
+---
+
+### `Gym` Profile Support (`lib.rs`)
+
+```rust
+impl Gym {
+    pub fn with_profile(
+        root: PathBuf,
+        profile: &str,
+    ) -> Result<Self>;
+}
+```
+
+Constructs a `Gym` instance with profile-specific paths for `results_db`,
+`memory_graph`, and `telemetry`. Calls `ProfilePaths::ensure()` to create
+the directory if needed. The merged LLM config is stored in the `Gym` struct
+and threaded through to `run_llm_pipeline()` and improvement functions.
+
+Additional fields on `Gym`:
+
+```rust
+pub struct Gym {
+    // ... existing fields ...
+    pub profile_name: Option<String>,
+    pub memory_store_path: Option<PathBuf>,
+    pub telemetry_dir: Option<PathBuf>,
+    pub llm_config: Option<Config>,
+}
+```
+
+When `profile_name` is `None`, all paths resolve to their defaults (backward
+compatible).
+
+---
+
+### `RunMetadata` Profile Field (`history.rs`)
+
+```rust
+pub struct RunMetadata {
+    // ... existing fields ...
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+```
+
+The `profile` field is added with `#[serde(default)]` for backward
+compatibility — existing history entries deserialize with `profile: None`.
+
+---
+
 ## Report Formats
 
 ### JSON Report

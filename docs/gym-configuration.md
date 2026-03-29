@@ -206,3 +206,26 @@ Benchmark run history is stored in a SQLite database at
 - Per-case outcomes (for `case-diff` and `compare`)
 
 The database uses parameterized queries exclusively — no string interpolation.
+
+When using `--profile`, the history database is located at
+`~/.skwaq/profiles/<name>/results.db` instead. See [Gym Model
+Profiles](gym-profiles.md) for details.
+
+## Model Profiles
+
+Profiles provide isolated environments for comparing different LLM backends
+and models. Each profile gets its own `results.db`, `memory_graph/`, and
+`telemetry/` directories while sharing the binary, agent prompts, ground
+truth, and benchmark cache.
+
+```bash
+# Create and use a profile
+skwaq gym profile create opus --backend copilot --model claude-opus-4.6
+skwaq gym eval --suites fixtures --profile opus
+```
+
+A profile's `config.toml` contains only `[llm]` section overrides. During
+loading, the profile's LLM config replaces the base `skwaq.toml` LLM config
+entirely.
+
+For the full reference, see [Gym Model Profiles](gym-profiles.md).
