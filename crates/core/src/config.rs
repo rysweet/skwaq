@@ -182,6 +182,16 @@ impl Default for GeneralConfig {
     }
 }
 
+impl LlmConfig {
+    /// Replace this LLM config with the overlay's values.
+    ///
+    /// Used by the profile system to apply a profile's [llm] section
+    /// over the base config. All fields are replaced wholesale.
+    pub fn merge_overlay(&mut self, overlay: LlmConfig) {
+        *self = overlay;
+    }
+}
+
 impl Default for LlmConfig {
     fn default() -> Self {
         Self {

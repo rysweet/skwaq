@@ -40,6 +40,8 @@ pub struct RunMetadata {
     pub skip: usize,
     #[serde(default)]
     pub max_cases: Option<usize>,
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Per-CWE result within a run.
@@ -797,6 +799,7 @@ mod tests {
             concurrency: 2,
             skip: 0,
             max_cases: Some(5),
+            profile: None,
         };
 
         // Start a run.

@@ -26,3 +26,4 @@ tempfile = { workspace = true }
 opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 tracing-opentelemetry = { workspace = true }
+toml = { workspace = true }

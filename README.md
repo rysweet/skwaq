@@ -148,6 +148,18 @@ LLM reviewer agent, and applies accepted patches. See
 See [docs/detection-coverage.md](docs/detection-coverage.md) for how semantic
 classification, CWE family mapping, and scoring interact.
 
+### Model Comparison with Profiles
+```bash
+skwaq gym profile create opus --backend copilot --model claude-opus-4.6
+skwaq gym run fixtures --quick --profile opus
+skwaq gym dashboard --tui --profile opus
+skwaq gym profiles                       # List all profiles
+```
+
+Profiles provide isolated state (results DB, memory graph, telemetry) for
+reproducible multi-model evaluation. See
+[docs/gym-profiles.md](docs/gym-profiles.md) for the full reference.
+
 ## Architecture
 
 Three Rust crates:

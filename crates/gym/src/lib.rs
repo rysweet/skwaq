@@ -10,6 +10,7 @@ pub mod download;
 pub mod ground_truth;
 pub mod history;
 pub mod improve;
+pub mod profiles;
 pub mod reporting;
 pub mod scoring;
 pub mod shared_throttle;
@@ -31,6 +32,7 @@ pub struct Gym {
     adapters: Vec<Box<dyn BenchmarkAdapter>>,
     config: BenchmarkConfig,
     skwaq_root: PathBuf,
+    profile_name: Option<String>,
 }
 
 impl Gym {
@@ -133,6 +135,114 @@ impl Gym {
             adapters,
             config,
             skwaq_root,
+            profile_name: None,
+        })
+    }
+
+    /// Create a Gym with a profile, using the profile's isolated history DB.
+    ///
+    /// The profile directory must already exist (call `ProfilePaths::ensure()` first).
+    /// Uses the profile's results.db instead of the global one.
+    pub fn with_profile(
+        skwaq_root: PathBuf,
+        profile_paths: &profiles::ProfilePaths,
+        profile_name: &str,
+    ) -> anyhow::Result<Self> {
+        let history_db = HistoryDb::open(&profile_paths.results_db_path())?;
+
+        let gym_dir = dirs::data_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("skwaq")
+            .join("gym");
+        let cache_dir = gym_dir.join("cache");
+
+        let gt_dir = skwaq_root.join("data/gym/ground_truth");
+
+        let mut adapter_list: Vec<Box<dyn BenchmarkAdapter>> =
+            vec![Box::new(adapters::fixtures::FixturesAdapter::new(
+                gt_dir.join("fixtures.toml"),
+                skwaq_root.join("tests/fixtures"),
+            ))];
+
+        let realworld_manifest = gt_dir.join("realworld.toml");
+        if realworld_manifest.exists() {
+            adapter_list.push(Box::new(adapters::realworld::RealWorldAdapter::new(
+                realworld_manifest,
+                skwaq_root.join("data/gym/realworld"),
+            )));
+        }
+
+        for (name, constructor) in [
+            (
+                "juliet",
+                Box::new(|p: PathBuf| -> Box<dyn BenchmarkAdapter> {
+                    Box::new(adapters::juliet::JulietAdapter::new(p))
+                }) as Box<dyn Fn(PathBuf) -> Box<dyn BenchmarkAdapter>>,
+            ),
+            (
+                "cgc",
+                Box::new(|p: PathBuf| -> Box<dyn BenchmarkAdapter> {
+                    Box::new(adapters::cgc::CgcAdapter::new(p))
+                }) as Box<dyn Fn(PathBuf) -> Box<dyn BenchmarkAdapter>>,
+            ),
+            (
+                "cyberseceval",
+                Box::new(|p: PathBuf| -> Box<dyn BenchmarkAdapter> {
+                    Box::new(adapters::cyberseceval::CyberSecEvalAdapter::new(p))
+                }) as Box<dyn Fn(PathBuf) -> Box<dyn BenchmarkAdapter>>,
+            ),
+            (
+                "owasp",
+                Box::new(|p: PathBuf| -> Box<dyn BenchmarkAdapter> {
+                    Box::new(adapters::owasp::OwaspBenchmarkAdapter::new(p))
+                }) as Box<dyn Fn(PathBuf) -> Box<dyn BenchmarkAdapter>>,
+            ),
+            (
+                "binpool",
+                Box::new(|p: PathBuf| -> Box<dyn BenchmarkAdapter> {
+                    Box::new(adapters::binpool::BinPoolAdapter::new(p))
+                }) as Box<dyn Fn(PathBuf) -> Box<dyn BenchmarkAdapter>>,
+            ),
+            (
+                "binmetric",
+                Box::new(|p: PathBuf| -> Box<dyn BenchmarkAdapter> {
+                    Box::new(adapters::binmetric::BinMetricAdapter::new(p))
+                }) as Box<dyn Fn(PathBuf) -> Box<dyn BenchmarkAdapter>>,
+            ),
+            (
+                "cybergym",
+                Box::new(|p: PathBuf| -> Box<dyn BenchmarkAdapter> {
+                    Box::new(adapters::cybergym::CyberGymAdapter::new(p))
+                }) as Box<dyn Fn(PathBuf) -> Box<dyn BenchmarkAdapter>>,
+            ),
+        ] {
+            let manifest = gt_dir.join(format!("{}.toml", name));
+            if manifest.exists() {
+                adapter_list.push(constructor(manifest));
+            }
+        }
+
+        let config = BenchmarkConfig {
+            cache_dir,
+            cwe_filter: None,
+            max_cases: None,
+            quick_mode: false,
+            llm_only: false,
+            binary_mode: true,
+            parallelism: 4,
+            skip: 0,
+            concurrency: 1,
+            timeout_secs: 7200,
+            holdout_fraction: 0.2,
+            max_improvements_per_cycle: 5,
+        };
+
+        Ok(Self {
+            history_db,
+            adapters: adapter_list,
+            config,
+            skwaq_root,
+            profile_name: Some(profile_name.to_string()),
         })
     }
 
@@ -219,7 +329,7 @@ impl Gym {
             let suite_name = adapter.name().to_string();
             tracing::info!("Running {} benchmark...", suite_name);
 
-            let run_metadata = build_run_metadata(&self.skwaq_root, &config);
+            let run_metadata = build_run_metadata(&self.skwaq_root, &config, self.profile_name.as_deref());
             adapter.validate_config(&config)?;
             let gt = adapter.ground_truth()?;
             let data_dir = adapter.setup(&config).await?;
@@ -838,7 +948,11 @@ fn get_git_dirty(repo: &std::path::Path) -> anyhow::Result<bool> {
     Ok(!output.stdout.is_empty())
 }
 
-fn build_run_metadata(repo: &std::path::Path, config: &BenchmarkConfig) -> history::RunMetadata {
+fn build_run_metadata(
+    repo: &std::path::Path,
+    config: &BenchmarkConfig,
+    profile_name: Option<&str>,
+) -> history::RunMetadata {
     let llm = skwaq_core::config::Config::load().unwrap_or_default().llm;
     history::RunMetadata {
         llm_backend: llm.reasoning.trim().to_string(),
@@ -855,6 +969,7 @@ fn build_run_metadata(repo: &std::path::Path, config: &BenchmarkConfig) -> histo
         concurrency: config.concurrency,
         skip: config.skip,
         max_cases: config.max_cases,
+        profile: profile_name.map(String::from),
     }
 }
 

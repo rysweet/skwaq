@@ -61,6 +61,10 @@ pub enum GymSub {
         /// Output Markdown report to file
         #[arg(long)]
         markdown: Option<PathBuf>,
+
+        /// Use a named model profile for isolated results and config
+        #[arg(long)]
+        profile: Option<String>,
     },
 
     /// Show latest benchmark results
@@ -119,6 +123,10 @@ pub enum GymSub {
         /// Tag format: eval-YYYY-MM-DD[-vN] (auto-increments if date already exists).
         #[arg(long)]
         tag: bool,
+
+        /// Use a named model profile for isolated results and config
+        #[arg(long)]
+        profile: Option<String>,
     },
 
     /// Run self-improvement loop: analyze failures and propose fixes
@@ -145,6 +153,10 @@ pub enum GymSub {
         /// Timeout in seconds per case analysis (5-600, default 30)
         #[arg(long, default_value = "30")]
         timeout: u64,
+
+        /// Use a named model profile for isolated results and config
+        #[arg(long)]
+        profile: Option<String>,
     },
 
     /// Compare per-case outcomes between the latest two finished runs for a suite
@@ -164,12 +176,25 @@ pub enum GymSub {
         /// Show static TUI snapshot of latest run (ratatui)
         #[arg(long, conflicts_with = "live")]
         tui: bool,
+
+        /// Use a named model profile's history DB
+        #[arg(long)]
+        profile: Option<String>,
     },
 
     /// Query and manage OpenTelemetry span telemetry
     Telemetry {
         #[command(subcommand)]
         action: TelemetrySub,
+    },
+
+    /// List available model profiles
+    Profiles,
+
+    /// Create or manage a model profile
+    Profile {
+        #[command(subcommand)]
+        action: ProfileAction,
     },
 
     /// Preflight check: verify Copilot backend, auth, model, and no-fallback readiness.
@@ -202,6 +227,31 @@ pub enum TelemetrySub {
     },
 }
 
+#[derive(Subcommand)]
+pub enum ProfileAction {
+    /// Create a new model profile
+    Create {
+        /// Profile name (alphanumeric, hyphens, underscores; max 64 chars)
+        name: String,
+
+        /// LLM backend (copilot, azure)
+        #[arg(long)]
+        backend: Option<String>,
+
+        /// Model name (e.g. claude-opus-4.6, gpt-5.4)
+        #[arg(long)]
+        model: Option<String>,
+
+        /// Azure endpoint URL
+        #[arg(long)]
+        endpoint: Option<String>,
+
+        /// Azure deployment name
+        #[arg(long)]
+        deployment: Option<String>,
+    },
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq)]
 struct EvalSuiteSummary {
     suite: String,
@@ -230,6 +280,8 @@ struct EvalRunMetadata {
     llm_model: String,
     binary_mode: bool,
     skwaq_version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    profile: Option<String>,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -248,12 +300,31 @@ struct AggregatedCwe {
     false_negatives: u32,
 }
 
+/// Resolve an optional --profile flag into a Gym instance.
+/// If a profile is specified, creates/ensures the profile and constructs a profile-scoped Gym.
+/// Otherwise, returns a default Gym.
+fn resolve_gym(
+    skwaq_root: &std::path::Path,
+    profile: Option<&str>,
+) -> anyhow::Result<skwaq_gym::Gym> {
+    match profile {
+        Some(name) => {
+            let pn = skwaq_gym::profiles::ProfileName::new(name)?;
+            let base = skwaq_gym::profiles::default_profiles_base()?;
+            let paths = skwaq_gym::profiles::ProfilePaths::new(&pn, &base);
+            paths.ensure()?;
+            skwaq_gym::Gym::with_profile(skwaq_root.to_path_buf(), &paths, name)
+        }
+        None => skwaq_gym::Gym::new(skwaq_root.to_path_buf()),
+    }
+}
+
 pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
     let skwaq_root = find_skwaq_root()?;
-    let mut gym = skwaq_gym::Gym::new(skwaq_root.clone())?;
 
     match sub {
         GymSub::Setup => {
+            let gym = skwaq_gym::Gym::new(skwaq_root.clone())?;
             gym.setup().await?;
             println!("All benchmarks set up.");
         }
@@ -270,7 +341,9 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             adaptive,
             json,
             markdown,
+            profile,
         } => {
+            let mut gym = resolve_gym(&skwaq_root, profile.as_deref())?;
             let cwe_filter = cwe
                 .as_ref()
                 .map(|c| parse_cwe_number(c).map(|n| vec![n]))
@@ -305,6 +378,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             }
         }
         GymSub::Report { format } => {
+            let gym = skwaq_gym::Gym::new(skwaq_root.clone())?;
             let fmt = match format.as_str() {
                 "json" => skwaq_gym::ReportFormat::Json,
                 "markdown" | "md" => skwaq_gym::ReportFormat::Markdown,
@@ -316,12 +390,15 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             }
         }
         GymSub::Compare => {
+            let gym = skwaq_gym::Gym::new(skwaq_root.clone())?;
             gym.compare()?;
         }
         GymSub::History { limit } => {
+            let gym = skwaq_gym::Gym::new(skwaq_root.clone())?;
             gym.history(*limit)?;
         }
         GymSub::CaseDiff { suite } => {
+            let gym = skwaq_gym::Gym::new(skwaq_root.clone())?;
             let suite = if let Some(suite) = suite {
                 suite.clone()
             } else {
@@ -405,7 +482,9 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             adaptive,
             output,
             tag,
+            profile,
         } => {
+            let gym = resolve_gym(&skwaq_root, profile.as_deref())?;
             let mode = if *quick {
                 "pattern-only"
             } else if *llm_only {
@@ -436,6 +515,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 llm_model: config.llm.copilot.model.clone(),
                 binary_mode: true,
                 skwaq_version: env!("CARGO_PKG_VERSION").to_string(),
+                profile: profile.clone(),
             };
             std::fs::write(
                 eval_dir.join("metadata.json"),
@@ -809,6 +889,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                     concurrency: *concurrency,
                     skip: 0,
                     max_cases: Some(summary.target_cases as usize),
+                    profile: profile.clone(),
                 };
                 let run_id = gym.history_db.start_run(
                     &summary.suite,
@@ -980,7 +1061,9 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             holdout_fraction,
             max_improvements,
             timeout,
+            profile,
         } => {
+            let gym = resolve_gym(&skwaq_root, profile.as_deref())?;
             // Validate CLI arg ranges
             anyhow::ensure!(
                 *holdout_fraction > 0.0 && *holdout_fraction <= 0.5,
@@ -1050,7 +1133,22 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
 
             skwaq_gym::improve::print_proposals(&cycle);
         }
-        GymSub::Dashboard { live, tui } => {
+        GymSub::Dashboard { live, tui, profile } => {
+            let gym = if let Some(name) = profile {
+                let pn = skwaq_gym::profiles::ProfileName::new(name)?;
+                let base = skwaq_gym::profiles::default_profiles_base()?;
+                let paths = skwaq_gym::profiles::ProfilePaths::new(&pn, &base);
+                if !paths.profile_dir().exists() {
+                    anyhow::bail!(
+                        "Profile '{}' does not exist. Run `skwaq gym profiles` to see available profiles, \
+                         or `skwaq gym profile create {}` to create it.",
+                        name, name
+                    );
+                }
+                skwaq_gym::Gym::with_profile(skwaq_root.clone(), &paths, name)?
+            } else {
+                skwaq_gym::Gym::new(skwaq_root.clone())?
+            };
             if *live {
                 let telemetry_dir = default_telemetry_dir();
                 skwaq_gym::tui::run_live(&gym.history_db, &telemetry_dir)?;
@@ -1066,6 +1164,76 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                     "{}",
                     skwaq_gym::dashboard::generate_scores_table(&gym.history_db)?
                 );
+            }
+        }
+        GymSub::Profiles => {
+            let base = skwaq_gym::profiles::default_profiles_base()?;
+            let profiles = skwaq_gym::profiles::list_profiles(&base)?;
+            if profiles.is_empty() {
+                println!("No profiles configured.");
+                println!("Create one with: skwaq gym profile create <name> --backend <copilot|azure>");
+            } else {
+                println!("Available profiles:");
+                for name in &profiles {
+                    let pn = skwaq_gym::profiles::ProfileName::new(name)?;
+                    let paths = skwaq_gym::profiles::ProfilePaths::new(&pn, &base);
+                    let summary = if paths.config_path().exists() {
+                        match std::fs::read_to_string(paths.config_path()) {
+                            Ok(content) => {
+                                if let Ok(cfg) = toml::from_str::<skwaq_core::config::Config>(&content) {
+                                    format!("backend={}, model={}", cfg.llm.reasoning, cfg.llm.copilot.model)
+                                } else {
+                                    "config parse error".to_string()
+                                }
+                            }
+                            Err(_) => "config unreadable".to_string(),
+                        }
+                    } else {
+                        "no config.toml".to_string()
+                    };
+                    println!("  {name}  ({summary})");
+                }
+            }
+        }
+        GymSub::Profile { action } => {
+            match action {
+                ProfileAction::Create {
+                    name,
+                    backend,
+                    model,
+                    endpoint,
+                    deployment,
+                } => {
+                    let pn = skwaq_gym::profiles::ProfileName::new(name)?;
+                    let base = skwaq_gym::profiles::default_profiles_base()?;
+                    let paths = skwaq_gym::profiles::ProfilePaths::new(&pn, &base);
+                    paths.ensure()?;
+
+                    // Build config.toml content from CLI args
+                    let backend_str = backend.as_deref().unwrap_or("copilot");
+                    let model_str = model.as_deref().unwrap_or("claude-opus-4.6");
+
+                    let config_content = match backend_str {
+                        "azure" => {
+                            let ep = endpoint.as_deref().unwrap_or("");
+                            let dep = deployment.as_deref().unwrap_or("");
+                            format!(
+                                "[llm]\nreasoning = \"azure\"\ndecompilation = \"azure\"\n\n\
+                                 [llm.azure]\nendpoint = \"{ep}\"\ndeployment = \"{dep}\"\n"
+                            )
+                        }
+                        _ => {
+                            format!(
+                                "[llm]\nreasoning = \"{backend_str}\"\ndecompilation = \"{backend_str}\"\n\n\
+                                 [llm.copilot]\nmodel = \"{model_str}\"\n"
+                            )
+                        }
+                    };
+
+                    std::fs::write(paths.config_path(), &config_content)?;
+                    println!("Profile '{}' created at {}", name, paths.profile_dir().display());
+                    println!("Config:\n{config_content}");
+                }
             }
         }
         GymSub::Telemetry { action } => {
@@ -1099,7 +1267,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
         GymSub::Preflight => {
             run_preflight().await?;
         }
-    }
+    };
 
     Ok(())
 }
@@ -1677,6 +1845,7 @@ mod tests {
                 llm_model: "claude-opus-4.6".to_string(),
                 binary_mode: true,
                 skwaq_version: "0.1.0".to_string(),
+                profile: None,
             },
             &[EvalSuiteSummary {
                 suite: "fixtures".to_string(),

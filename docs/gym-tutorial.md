@@ -324,8 +324,35 @@ language = "c"
 
 Path values must be relative with no `..` segments.
 
+## Advanced: Model Comparison with Profiles
+
+Compare how different models perform on the same benchmark using profiles:
+
+```bash
+# Create profiles for two models
+skwaq gym profile create opus --backend copilot --model claude-opus-4.6
+skwaq gym profile create sonnet --backend copilot --model claude-sonnet-4.6
+
+# Run identical evaluations
+skwaq gym eval --suites fixtures --profile opus
+skwaq gym eval --suites fixtures --profile sonnet
+
+# View results independently
+skwaq gym report --profile opus
+skwaq gym report --profile sonnet
+
+# Run improvement cycles per model
+skwaq gym improve fixtures --max-cases 20 --profile opus
+skwaq gym improve fixtures --max-cases 20 --profile sonnet
+```
+
+Each profile has its own results database, memory graph, and telemetry — no
+cross-contamination between model evaluations. See [Gym Model
+Profiles](gym-profiles.md) for the full reference.
+
 ## Next Steps
 
+- [Gym Model Profiles](gym-profiles.md) — Side-by-side model comparisons
 - [Graph-Agent Gym Cycle](graph-agent-gym-cycle.md) — Running cycles that
   generate AgentPrompt and TaintRule proposals (not just regex patterns)
 - [Gym Configuration](gym-configuration.md) — Full configuration reference
