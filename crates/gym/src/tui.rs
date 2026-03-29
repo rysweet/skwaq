@@ -66,6 +66,7 @@ pub fn run_static(history_db: &HistoryDb, telemetry_dir: &str) -> anyhow::Result
 
 struct SuiteStats {
     name: String,
+    model: String,
     f1_history: Vec<f64>,
     latest_f1: f64,
     latest_precision: f64,
@@ -123,9 +124,17 @@ impl DashboardState {
                 continue;
             }
             let latest = &runs[0];
+            let model = if !latest.metadata.llm_model.is_empty() {
+                latest.metadata.llm_model.clone()
+            } else if !latest.metadata.llm_backend.is_empty() {
+                latest.metadata.llm_backend.clone()
+            } else {
+                "unknown".to_string()
+            };
             let f1_history: Vec<f64> = runs.iter().rev().map(|r| r.f1 * 100.0).collect();
             suites.push(SuiteStats {
                 name: suite_name.to_string(),
+                model,
                 f1_history,
                 latest_f1: latest.f1 * 100.0,
                 latest_precision: latest.precision * 100.0,
@@ -412,7 +421,7 @@ fn render_active_jobs(f: &mut Frame, area: Rect, state: &DashboardState) {
 
 fn render_suites(f: &mut Frame, area: Rect, state: &DashboardState) {
     let header = Row::new(vec![
-        "Suite", "Cases", "F1%", "Prec%", "Rec%", "TP", "FP", "FN", "Trend",
+        "Suite", "Model", "Cases", "F1%", "Prec%", "Rec%", "TP", "FP", "FN", "Trend",
     ])
     .style(
         Style::default()
@@ -432,8 +441,11 @@ fn render_suites(f: &mut Frame, area: Rect, state: &DashboardState) {
                 Color::Red
             };
             let trend = sparkline_ascii(&s.f1_history, 8);
+            // Shorten model name for display
+            let model_short = shorten_model(&s.model);
             Row::new(vec![
                 Cell::from(s.name.clone()),
+                Cell::from(model_short).style(Style::default().fg(Color::Cyan)),
                 Cell::from(format!("{}", s.cases)),
                 Cell::from(format!("{:.1}", s.latest_f1)).style(Style::default().fg(f1_color)),
                 Cell::from(format!("{:.1}", s.latest_precision)),
@@ -450,6 +462,7 @@ fn render_suites(f: &mut Frame, area: Rect, state: &DashboardState) {
         rows,
         [
             Constraint::Length(12),
+            Constraint::Length(10),
             Constraint::Length(6),
             Constraint::Length(6),
             Constraint::Length(6),
@@ -577,6 +590,24 @@ fn format_duration_secs(s: u64) -> String {
     }
 }
 
+fn shorten_model(model: &str) -> String {
+    match model {
+        m if m.contains("opus") => "opus".to_string(),
+        m if m.contains("sonnet") => "sonnet".to_string(),
+        m if m.contains("gpt-5.4") || m.contains("gpt-54") => "gpt-5.4".to_string(),
+        m if m.contains("gpt-5.1") || m.contains("gpt-51") => "gpt-5.1".to_string(),
+        "azure" => "azure".to_string(),
+        "copilot" => "copilot".to_string(),
+        other => {
+            if other.len() > 10 {
+                format!("{}…", &other[..9])
+            } else {
+                other.to_string()
+            }
+        }
+    }
+}
+
 // ── Static (non-TUI) output ────────────────────────────────────────
 
 fn print_static(state: &DashboardState) {
@@ -626,16 +657,17 @@ fn print_static(state: &DashboardState) {
     }
 
     println!(
-        "  {:<12} {:>6} {:>7} {:>7} {:>7} {:>5} {:>5} {:>5}  TREND",
-        "SUITE", "CASES", "F1%", "PREC%", "REC%", "TP", "FP", "FN"
+        "  {:<12} {:<10} {:>6} {:>7} {:>7} {:>7} {:>5} {:>5} {:>5}  TREND",
+        "SUITE", "MODEL", "CASES", "F1%", "PREC%", "REC%", "TP", "FP", "FN"
     );
-    println!("  {}", "─".repeat(75));
+    println!("  {}", "─".repeat(85));
 
     for s in &state.suites {
         let trend = sparkline_ascii(&s.f1_history, 8);
         println!(
-            "  {:<12} {:>6} {:>6.1} {:>6.1} {:>6.1} {:>5} {:>5} {:>5}  {}",
+            "  {:<12} {:<10} {:>6} {:>6.1} {:>6.1} {:>6.1} {:>5} {:>5} {:>5}  {}",
             s.name,
+            shorten_model(&s.model),
             s.cases,
             s.latest_f1,
             s.latest_precision,
