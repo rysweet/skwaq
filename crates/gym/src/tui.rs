@@ -167,9 +167,8 @@ impl DashboardState {
             .unwrap_or(fallback_since.as_str());
 
         // Agent stats from recent telemetry spans (time-bounded)
-        let agent_spans =
-            query_spans_since(telemetry_dir, Some("gym.agent"), None, 100000, since)
-                .unwrap_or_default();
+        let agent_spans = query_spans_since(telemetry_dir, Some("gym.agent"), None, 100000, since)
+            .unwrap_or_default();
         let mut agent_map: std::collections::HashMap<String, (u64, f64, f64)> =
             std::collections::HashMap::new();
         for span in &agent_spans {
@@ -209,9 +208,8 @@ impl DashboardState {
             .collect();
         agents.sort_by(|a, b| b.call_count.cmp(&a.call_count));
 
-        let case_spans =
-            query_spans_since(telemetry_dir, Some("gym.case"), None, 500000, since)
-                .unwrap_or_default();
+        let case_spans = query_spans_since(telemetry_dir, Some("gym.case"), None, 500000, since)
+            .unwrap_or_default();
 
         // Count completed cases per suite and compute avg duration
         let mut case_counts: std::collections::HashMap<String, (u64, f64)> =
@@ -259,9 +257,8 @@ impl DashboardState {
         }
 
         // API health from LLM request spans (time-bounded)
-        let llm_spans =
-            query_spans_since(telemetry_dir, Some("llm.request"), None, 100000, since)
-                .unwrap_or_default();
+        let llm_spans = query_spans_since(telemetry_dir, Some("llm.request"), None, 100000, since)
+            .unwrap_or_default();
         let total_requests = llm_spans.len() as u64;
         let rate_limit_retries = llm_spans
             .iter()
@@ -714,7 +711,10 @@ fn print_static(state: &DashboardState) {
     let h = &state.api_health;
     println!(
         "\n  Model: {}  │  API: {} requests | {} rate-limit retries | {} errors | cost: {}\n",
-        h.model, h.total_requests, h.rate_limit_retries, h.errors,
+        h.model,
+        h.total_requests,
+        h.rate_limit_retries,
+        h.errors,
         crate::cost::format_cost(h.total_cost_usd)
     );
 }

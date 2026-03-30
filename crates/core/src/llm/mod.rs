@@ -117,6 +117,9 @@ async fn create_client_for_backend_name(
 ) -> anyhow::Result<Client> {
     match backend {
         "copilot" => {
+            if let Some(ref endpoint) = config.copilot.endpoint {
+                std::env::set_var("GITHUB_COPILOT_ENDPOINT", endpoint);
+            }
             let client = Client::new_copilot().await.map_err(|e| {
                 anyhow::anyhow!("Failed to create Copilot client for {field_name}: {e}")
             })?;

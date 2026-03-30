@@ -330,7 +330,8 @@ impl Gym {
             let suite_name = adapter.name().to_string();
             tracing::info!("Running {} benchmark...", suite_name);
 
-            let run_metadata = build_run_metadata(&self.skwaq_root, &config, self.profile_name.as_deref());
+            let run_metadata =
+                build_run_metadata(&self.skwaq_root, &config, self.profile_name.as_deref());
             adapter.validate_config(&config)?;
             let gt = adapter.ground_truth()?;
             let data_dir = adapter.setup(&config).await?;

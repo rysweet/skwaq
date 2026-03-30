@@ -117,7 +117,10 @@ description = "Test buffer overflow"
 
         // profile-b should be empty
         let runs_b = db_b.recent_runs(10).unwrap();
-        assert!(runs_b.is_empty(), "profile-b DB should be isolated from profile-a");
+        assert!(
+            runs_b.is_empty(),
+            "profile-b DB should be isolated from profile-a"
+        );
 
         // profile-a should have the run
         let runs_a = db_a.recent_runs(10).unwrap();

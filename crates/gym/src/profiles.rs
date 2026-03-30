@@ -134,10 +134,7 @@ impl ProfilePaths {
         if !config_path.exists() {
             let default_config = "[llm]\n# Profile LLM configuration overlay.\n# Only the [llm] section is used; all other sections are ignored.\n";
             std::fs::write(&config_path, default_config).with_context(|| {
-                format!(
-                    "Failed to write default config: {}",
-                    config_path.display()
-                )
+                format!("Failed to write default config: {}", config_path.display())
             })?;
         }
 
@@ -162,12 +159,9 @@ impl ProfilePaths {
         let content = std::fs::read_to_string(&config_path)
             .with_context(|| format!("Failed to read profile config: {}", config_path.display()))?;
 
-        let profile_config: skwaq_core::config::Config = toml::from_str(&content)
-            .with_context(|| {
-                format!(
-                    "Failed to parse profile config: {}",
-                    config_path.display()
-                )
+        let profile_config: skwaq_core::config::Config =
+            toml::from_str(&content).with_context(|| {
+                format!("Failed to parse profile config: {}", config_path.display())
             })?;
 
         let mut merged = base.clone();
@@ -237,6 +231,7 @@ deployment = ""
 
 /// Return the default base directory for profiles: `~/.skwaq/profiles/`.
 pub fn default_profiles_base() -> anyhow::Result<PathBuf> {
-    let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
+    let home =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
     Ok(home.join(".skwaq").join("profiles"))
 }

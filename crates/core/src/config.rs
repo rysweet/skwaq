@@ -47,12 +47,15 @@ pub struct LlmConfig {
 pub struct CopilotConfig {
     #[serde(default = "default_model")]
     pub model: String,
+    #[serde(default)]
+    pub endpoint: Option<String>,
 }
 
 impl Default for CopilotConfig {
     fn default() -> Self {
         Self {
             model: default_model(),
+            endpoint: None,
         }
     }
 }

@@ -236,7 +236,10 @@ mod profile_crud {
         paths.ensure().unwrap();
 
         assert!(paths.profile_dir().is_dir());
-        assert!(paths.config_path().exists(), "config.toml should be created");
+        assert!(
+            paths.config_path().exists(),
+            "config.toml should be created"
+        );
     }
 
     #[test]
@@ -248,11 +251,7 @@ mod profile_crud {
 
         paths.ensure().unwrap();
         // Write custom content to config.toml
-        std::fs::write(
-            paths.config_path(),
-            "[llm]\nreasoning = \"azure\"\n",
-        )
-        .unwrap();
+        std::fs::write(paths.config_path(), "[llm]\nreasoning = \"azure\"\n").unwrap();
 
         // Second ensure should NOT overwrite existing config
         paths.ensure().unwrap();
@@ -305,9 +304,9 @@ mod profile_crud {
 
     #[test]
     fn list_profiles_nonexistent_base_returns_empty() {
-        let result = skwaq_gym::profiles::list_profiles(
-            std::path::Path::new("/tmp/nonexistent-skwaq-test-dir-xyz"),
-        )
+        let result = skwaq_gym::profiles::list_profiles(std::path::Path::new(
+            "/tmp/nonexistent-skwaq-test-dir-xyz",
+        ))
         .unwrap();
         assert!(result.is_empty());
     }
@@ -480,7 +479,10 @@ mod default_templates {
         let templates = default_templates();
         let opus = templates.iter().find(|(name, _)| name == "opus").unwrap();
         let config_toml = &opus.1;
-        assert!(config_toml.contains("copilot"), "opus should use copilot backend");
+        assert!(
+            config_toml.contains("copilot"),
+            "opus should use copilot backend"
+        );
     }
 
     #[test]
@@ -499,7 +501,10 @@ mod default_templates {
         let templates = default_templates();
         let gpt54 = templates.iter().find(|(name, _)| name == "gpt54").unwrap();
         let config_toml = &gpt54.1;
-        assert!(config_toml.contains("azure"), "gpt54 should use azure backend");
+        assert!(
+            config_toml.contains("azure"),
+            "gpt54 should use azure backend"
+        );
     }
 
     #[test]
@@ -729,6 +734,9 @@ mod edge_cases {
         let paths = ProfilePaths::new(&name, &base);
         paths.ensure().unwrap();
 
-        assert!(!paths.results_db_path().exists(), "results.db should not be pre-created by ensure()");
+        assert!(
+            !paths.results_db_path().exists(),
+            "results.db should not be pre-created by ensure()"
+        );
     }
 }
