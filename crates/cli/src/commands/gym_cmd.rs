@@ -572,8 +572,8 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                     if let Ok(output) = git_time {
                         if let Ok(ts_str) = std::str::from_utf8(&output.stdout) {
                             if let Ok(epoch) = ts_str.trim().parse::<u64>() {
-                                let commit_time = std::time::UNIX_EPOCH
-                                    + std::time::Duration::from_secs(epoch);
+                                let commit_time =
+                                    std::time::UNIX_EPOCH + std::time::Duration::from_secs(epoch);
                                 if binary_mtime < commit_time {
                                     eprintln!(
                                         "WARNING: binary appears older than the latest git commit.\n\
@@ -755,10 +755,8 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                             let stderr_content = std::fs::read_to_string(&stderr_path)
                                 .ok()
                                 .filter(|s| !s.trim().is_empty());
-                            let content_to_show = stderr_content
-                                .as_deref()
-                                .or_else(|| None)
-                                .unwrap_or("");
+                            let content_to_show =
+                                stderr_content.as_deref().or_else(|| None).unwrap_or("");
                             let show_path = if !content_to_show.is_empty() {
                                 &stderr_path
                             } else {
@@ -805,7 +803,9 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                                         all_done = false; // keep monitoring
                                     }
                                     Err(e) => {
-                                        eprintln!("  Retry spawn failed for [{suite}] shard {idx}: {e}");
+                                        eprintln!(
+                                            "  Retry spawn failed for [{suite}] shard {idx}: {e}"
+                                        );
                                     }
                                 }
                             }
@@ -1174,7 +1174,9 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             let profiles = skwaq_gym::profiles::list_profiles(&base)?;
             if profiles.is_empty() {
                 println!("No profiles configured.");
-                println!("Create one with: skwaq gym profile create <name> --backend <copilot|azure>");
+                println!(
+                    "Create one with: skwaq gym profile create <name> --backend <copilot|azure>"
+                );
             } else {
                 println!("Available profiles:");
                 for name in &profiles {
@@ -1183,8 +1185,13 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                     let summary = if paths.config_path().exists() {
                         match std::fs::read_to_string(paths.config_path()) {
                             Ok(content) => {
-                                if let Ok(cfg) = toml::from_str::<skwaq_core::config::Config>(&content) {
-                                    format!("backend={}, model={}", cfg.llm.reasoning, cfg.llm.copilot.model)
+                                if let Ok(cfg) =
+                                    toml::from_str::<skwaq_core::config::Config>(&content)
+                                {
+                                    format!(
+                                        "backend={}, model={}",
+                                        cfg.llm.reasoning, cfg.llm.copilot.model
+                                    )
                                 } else {
                                     "config parse error".to_string()
                                 }
@@ -1234,7 +1241,11 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                     };
 
                     std::fs::write(paths.config_path(), &config_content)?;
-                    println!("Profile '{}' created at {}", name, paths.profile_dir().display());
+                    println!(
+                        "Profile '{}' created at {}",
+                        name,
+                        paths.profile_dir().display()
+                    );
                     println!("Config:\n{config_content}");
                 }
             }
