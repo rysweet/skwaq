@@ -139,6 +139,14 @@ impl BenchmarkAdapter for CyberGymAdapter {
         let source_files = patch_affected_files(&case_dir, data_dir, &case.id)
             .unwrap_or_else(|| collect_source_files_limited(&case_dir, 10));
 
+        // Filter out header-only files with no executable code (issue #394).
+        // Some benchmarks attribute project-level CVEs to all files including
+        // headers that only contain preprocessor directives.
+        let source_files: Vec<_> = source_files
+            .into_iter()
+            .filter(|f| !is_header_only(f))
+            .collect();
+
         if source_files.is_empty() {
             tracing::warn!("No C/C++ source files found in {}", case_dir.display());
             return Ok(vec![]);
@@ -343,6 +351,36 @@ fn patch_affected_files(case_dir: &Path, data_dir: &Path, case_id: &str) -> Opti
     } else {
         Some(affected)
     }
+}
+
+/// Returns true if a file is a header that contains only preprocessor directives
+/// and no executable code (functions, assignments, expressions).
+fn is_header_only(path: &Path) -> bool {
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    if ext != "h" && ext != "hpp" {
+        return false; // Only filter .h/.hpp files
+    }
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return false, // Can't read — don't filter
+    };
+    // A header has executable code if any non-preprocessor, non-comment,
+    // non-blank line exists that looks like a statement or declaration.
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty()
+            || trimmed.starts_with('#')
+            || trimmed.starts_with("//")
+            || trimmed.starts_with('*')
+            || trimmed.starts_with("/*")
+            || trimmed == "*/"
+        {
+            continue;
+        }
+        // Any other non-empty line suggests actual code
+        return false;
+    }
+    true
 }
 
 fn is_source_extension(path: &str) -> bool {
