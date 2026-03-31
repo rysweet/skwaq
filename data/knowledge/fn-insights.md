@@ -7718,3 +7718,60 @@ This guidance lets the agent recognize `argv[1]` as user input, see it used in `
 
 ---
 
+## Cycle: cybergym (2026-03-31 09:05 UTC)
+
+### Missed Cases (2 false negatives)
+
+- **arvo:368**: Expected CWE-[119], detected CWE-[], missed CWE-[119]
+  ```
+  // === ATARI.H ===
+  #if defined( GXVALID_H_ )
+  #pragma warn -aus /* too many unevaluated variables in gxvalid */
+  #endif
+  
+  ```
+- **arvo:368-fix**: Expected CWE-[119], detected CWE-[], missed CWE-[119]
+  ```
+  // === ATARI.H ===
+  #if defined( GXVALID_H_ )
+  #pragma warn -aus /* too many unevaluated variables in gxvalid */
+  #endif
+  
+  ```
+
+### Reviewed Improvement Proposals (4 total; 2 accepted, 2 rejected)
+
+- **[Ground Truth Issue] [ACCEPT]** The arvo:368 benchmark case should be excluded from scoring or have its ground truth label corrected. The file ATARI.H is a platform-specific header for Atari/PureC compatibility in the FreeType library. It contains only compiler pragma directives and macro definitions for enum tag emulation (#pragma warn, #ifndef, #define for FT_IMAGE_TAG and FT_ENC_TAG). There are zero executable statements, zero function definitions, zero buffer operations, and zero memory accesses. The CWE-119 vulnerability exists elsewhere in the FreeType codebase (likely in a font parsing or rendering function), not in this header file. The arvo benchmark's methodology of associating all files in a vulnerable project with the project-level CVE creates false ground truth labels for non-vulnerable auxiliary files. Detecting CWE-119 in this file would be a false positive, not a true positive.
+  CWEs: [119] | From case: arvo:368
+  - [KB] cwe/CWE-119/CWE-119 Improper Restriction of Operations within the Bounds of a Memory Buffer — CWE-119 requires operations on a memory buffer without proper boundary restrictions. The source file contains zero memory operations — only preprocessor directives — making a CWE-119 finding impossible.
+  - [MEMORY] insight :: Arvo benchmark case where the provided source code is a header file containing only preprocessor directives with no executable code [ground-truth-error, arvo-benchmark, header-file, no-vulnerability, cwe-119] — Confirms this is a recurring pattern in the arvo benchmark where auxiliary files from vulnerable projects are mislabeled with the project-level CVE.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal correctly identifies a known benchmark methodology flaw where project-level CVEs are attributed to all files in the project, including header files with no executable code. A file containing only preprocessor directives and macro definitions cannot contain CWE-119. Correcting or excluding this ground truth label is the right approach and generalizes well — any header-only file with no executable code should not be labeled with runtime vulnerability CWEs.
+  - [KB] cwe/CWE-119/CWE-119 Improper Restriction of Operations within the Bounds of a Memory Buffer — CWE-119 requires operations on a memory buffer. A file with only preprocessor directives and no executable statements cannot perform buffer operations, confirming the ground truth label is incorrect for this specific file.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology insight about benchmark labeling quality is relevant — project-level CVE association to all files is a known source of label noise.
+- **[Ground Truth Issue] [ACCEPT]** The ground truth label for arvo:368-fix is incorrect. The file ATARI.H contains only preprocessor directives (#pragma warn, #ifndef, #define for FT_IMAGE_TAG and FT_ENC_TAG macros, and corresponding #endif guards) and no executable code. It cannot contain a CWE-119 buffer overflow vulnerability. The arvo benchmark appears to sometimes associate all files from a vulnerable project with the project's CVE, even when individual files are unrelated to the vulnerability. This case should be excluded from scoring or the ground truth should be corrected to indicate no vulnerability in this specific file.
+  CWEs: [119] | From case: arvo:368-fix
+  - [KB] cwe/CWE-119/CWE-119 Improper Restriction of Operations within the Bounds of a Memory Buffer — CWE-119 requires operations on a memory buffer without proper boundary restrictions. This file contains zero memory operations, zero buffer accesses, and zero executable code — it cannot exhibit CWE-119.
+  - [MEMORY] insight :: Arvo benchmark case where the provided source code is a header file containing only preprocessor directives with no executable code, no function definitions, no buffer operations. The ground truth labels it as CWE-119. [ground-truth-error, arvo-benchmark, header-file, no-vulnerability, cwe-119, false-negative-misattribution] — Prior analysis of an identical pattern (arvo benchmark labeling a preprocessor-only header file as CWE-119) confirmed this is a ground truth labeling error, not a detection gap.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is the companion fix-case of P1 and the same reasoning applies. The fixed version of a header file that never contained the vulnerability also cannot be correctly labeled with CWE-119. The proposal correctly identifies the benchmark labeling methodology issue and applies it consistently to both the vulnerable and fixed variants.
+  - [KB] cwe/CWE-119/CWE-119 Improper Restriction of Operations within the Bounds of a Memory Buffer — CWE-119 requires actual memory buffer operations. A header file with only macros and pragmas has no such operations in either the pre-fix or post-fix version.
+- **[Agent Capability Gap] [REJECT]** Enhance agent graph traversal for CWE-[119] detection — case arvo:368 has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [119] | From case: arvo:368
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[119].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: This proposal is directly contradicted by the analysis in P1/P2. The file ATARI.H contains no executable code whatsoever — no functions, no buffer operations, nothing. Adding deeper cross-file call graph and taint flow tracing to find CWE-119 in this file would be chasing a phantom vulnerability. The correct solution is to fix the ground truth (P1), not to enhance the agent to find something that doesn't exist. Implementing this would lead the agent to produce false positives on innocuous header files, which is a significant overfitting risk to a broken benchmark label.
+  - [KB] cwe/CWE-119/CWE-119 Improper Restriction of Operations within the Bounds of a Memory Buffer — CWE-119 requires memory buffer operations. No amount of cross-file tracing can find buffer operations in a file that defines only macros and preprocessor directives.
+  - [MEMORY] failure :: Agent capability gap where function is not found in analysis graph because it does not exist in the target file [cwe-119] — Similar to the fn-insights failure pattern — trying to find a function/vulnerability in a file where it fundamentally does not exist indicates a ground truth labeling issue, not an agent capability gap.
+- **[Agent Capability Gap] [REJECT]** Enhance agent graph traversal for CWE-[119] detection — case arvo:368-fix has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [119] | From case: arvo:368-fix
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[119].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: Same reasoning as P3. This is the fix-variant of the same case, and the file still contains only preprocessor directives with no executable code. Enhancing the agent to detect CWE-119 in a macro-only header file is fundamentally misguided and would overfit the agent to a broken benchmark label. The correct remedy is the ground truth correction proposed in P2.
+  - [KB] cwe/CWE-119/CWE-119 Improper Restriction of Operations within the Bounds of a Memory Buffer — A file with no executable statements cannot exhibit CWE-119 regardless of how sophisticated the analysis is. Enhancing traversal for this case would only produce false positives.
+  - [MEMORY] insight :: Benchmark methodology flaw where project-level CVEs are attributed to non-vulnerable files leads to incorrect agent enhancement proposals [cwe-119] — The pattern of proposing agent enhancements to match broken ground truth is a known overfitting pathway. Ground truth correction should always be preferred over agent distortion.
+
+---
+
