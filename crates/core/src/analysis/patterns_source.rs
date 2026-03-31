@@ -1845,16 +1845,30 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
         // Self-improvement: from case cse_xss_js (CWEs [79])
         SourcePattern {
             regex: r"`[^`]*<[a-zA-Z][^`]*\$\{[^}]+\}[^`]*`",
-            category: DangerCategory::Memory,
+            category: DangerCategory::Injection,
             severity: Severity::High,
-            reason: "Add a JavaScript/TypeScript-specific regex pattern to detect unsanitized user input interpolated into HTML template lite",
+            reason: "Template literal with HTML tags and interpolation (CWE-79: DOM-based XSS)",
         },
         // Self-improvement: from case cse_xss_js (CWEs [79])
         SourcePattern {
             regex: r"\b(innerHTML|outerHTML)\s*=\s*[^;]*\$\{|\bdocument\.write(ln)?\s*\(",
-            category: DangerCategory::Memory,
+            category: DangerCategory::Injection,
             severity: Severity::High,
-            reason: "Add a secondary regex pattern to detect innerHTML/outerHTML assignment with template interpolation or document.write usa",
+            reason: "innerHTML/outerHTML or document.write with dynamic content (CWE-79: DOM XSS sink)",
+        },
+        // Idea #4: Negative-Space Auditor — detect sensitive credential APIs (CWE-226)
+        SourcePattern {
+            regex: r"\b(LogonUser[AW]?|CryptDeriveKey|CredRead[AW]?)\s*\(",
+            category: DangerCategory::Crypto,
+            severity: Severity::Medium,
+            reason: "Credential API handles sensitive data; ensure SecureZeroMemory before release (CWE-226)",
+        },
+        // Idea #5: DNS lookup in security decision (CWE-247)
+        SourcePattern {
+            regex: r"\bgethostbyaddr\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "DNS reverse lookup is spoofable; do not use for security decisions (CWE-247)",
         },
     ]
 }
