@@ -371,6 +371,41 @@ fn javascript_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "HTTP response with template literal interpolation; encode output to prevent XSS",
         },
+        // Command injection via child_process
+        SourcePattern {
+            regex: r"\bchild_process\b.*\bexec\s*\(|\brequire\s*\(\s*['\x22]child_process",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "child_process.exec runs shell commands; use execFile with args array",
+        },
+        // Deserialization
+        SourcePattern {
+            regex: r"\bJSON\.parse\s*\(",
+            category: DangerCategory::Deserialization,
+            severity: Severity::Low,
+            reason: "JSON.parse of untrusted input; validate schema and size",
+        },
+        // Weak crypto
+        SourcePattern {
+            regex: r"createHash\s*\(\s*['\x22](?:md5|sha1)['\x22]",
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "Weak hash algorithm (MD5/SHA1); use SHA-256 or SHA-3",
+        },
+        // Hardcoded credentials
+        SourcePattern {
+            regex: r#"(?i)(?:password|secret|token|api_key)\s*[:=]\s*['\x22][^'\x22]{8,}['\x22]"#,
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "Hardcoded credential in JavaScript source (CWE-798)",
+        },
+        // SSRF
+        SourcePattern {
+            regex: r"\b(?:fetch|axios\.get|axios\.post|request)\s*\([^)]*\+",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "HTTP request with concatenated URL; validate to prevent SSRF",
+        },
     ]
 }
 
