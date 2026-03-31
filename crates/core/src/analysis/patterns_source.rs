@@ -273,6 +273,40 @@ fn python_patterns() -> &'static [SourcePattern] {
             reason:
                 "urlopen with user-controlled URL enables SSRF; validate and allowlist target hosts",
         },
+        // SSRF via requests library
+        SourcePattern {
+            regex: r"\brequests\.(?:get|post|put|delete|patch)\s*\([^)]*\+",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "HTTP request with concatenated URL; validate to prevent SSRF (CWE-918)",
+        },
+        // XXE (XML External Entity)
+        SourcePattern {
+            regex: r"\bxml\.etree\.ElementTree\.parse\s*\(|\blxml\.etree\.parse\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "XML parsing without disabling external entities; use defusedxml (CWE-611)",
+        },
+        SourcePattern {
+            regex: r"\bxml\.sax\.parseString\s*\(|\bxml\.dom\.minidom\.parseString\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "XML parsing vulnerable to XXE; use defusedxml (CWE-611)",
+        },
+        // Weak TLS
+        SourcePattern {
+            regex: r"(?i)ssl\.PROTOCOL_TLSv1\b|ssl\.PROTOCOL_SSLv[23]\b|verify\s*=\s*False",
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "Weak TLS version or disabled certificate verification (CWE-295/326)",
+        },
+        // Tempfile race condition
+        SourcePattern {
+            regex: r"\btempfile\.mktemp\s*\(",
+            category: DangerCategory::TempFile,
+            severity: Severity::Medium,
+            reason: "mktemp has race condition; use mkstemp or NamedTemporaryFile (CWE-377)",
+        },
     ]
 }
 
