@@ -274,7 +274,7 @@ After downloading, extract to `~/.local/share/skwaq/gym/cache/binpool/binpool_ar
 
 | Suite | Cases | F1% | P% | R% |
 |-------|-------|-----|----|----|
-| Fixtures | 99 | 93.2 | 98.1 | 88.8 |
+| Fixtures | 99 | 93.7 | 98.1 | 89.3 |
 | OWASP | 500 | 92.7 | 100.0 | 86.4 |
 | CyberSecEval | 578 | 91.8 | 100.0 | 84.8 |
 | CGC | 226 | 89.8 | 100.0 | 81.5 |
