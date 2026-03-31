@@ -8,6 +8,13 @@ use crate::graph::GraphDb;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
+/// Known dangerous sink function names used for wrapper resolution.
+const DANGEROUS_SINK_NAMES: &[&str] = &[
+    "sprintf", "vsprintf", "scanf", "fscanf", "sscanf", "strcpy", "strcat", "gets", "memcpy",
+    "memmove", "system", "popen", "exec", "execl", "execle", "execlp", "execv", "execvp",
+    "execvpe", "wcscpy", "wcscat", "wmemcpy", "wmemmove", "swprintf", "mktemp", "tmpnam",
+];
+
 /// Performs taint analysis over the property graph.
 pub struct TaintAnalyzer<'a> {
     db: &'a GraphDb,
@@ -17,6 +24,33 @@ pub struct TaintAnalyzer<'a> {
 impl<'a> TaintAnalyzer<'a> {
     pub fn new(db: &'a GraphDb, max_depth: u32) -> Self {
         Self { db, max_depth }
+    }
+
+    /// If `func_name` wraps exactly one dangerous sink, return the sink name.
+    fn resolve_wrapper_sink(&self, func_name: &str) -> Option<String> {
+        let base = func_name.split('@').next().unwrap_or(func_name);
+        if DANGEROUS_SINK_NAMES.contains(&base) {
+            return None;
+        }
+        let sql = "SELECT f2.name FROM calls c \
+                   JOIN functions f1 ON c.caller_id = f1.id \
+                   JOIN functions f2 ON c.callee_id = f2.id \
+                   WHERE f1.name = ?1";
+        let mut stmt = self.db.conn().prepare(sql).ok()?;
+        let callees: Vec<String> = stmt
+            .query_map([func_name], |row| row.get::<_, String>(0))
+            .ok()?
+            .filter_map(|r| r.ok())
+            .collect();
+        if callees.len() != 1 {
+            return None;
+        }
+        let callee_base = callees[0].split('@').next().unwrap_or(&callees[0]);
+        if DANGEROUS_SINK_NAMES.contains(&callee_base) {
+            Some(callee_base.to_string())
+        } else {
+            None
+        }
     }
 
     /// Find data-flow paths from sources to sinks where no sanitiser
@@ -144,6 +178,13 @@ impl<'a> TaintAnalyzer<'a> {
                                 hops: vec![source.clone(), func_name.to_string()],
                                 sanitized: false,
                             });
+                        } else if let Some(resolved) = self.resolve_wrapper_sink(func_name) {
+                            results.push(TaintPath {
+                                source: source.clone(),
+                                sink: resolved.clone(),
+                                hops: vec![source.clone(), func_name.to_string(), resolved],
+                                sanitized: false,
+                            });
                         }
                     }
                 }
@@ -213,6 +254,16 @@ impl<'a> TaintAnalyzer<'a> {
                             source: source.clone(),
                             sink: func_name,
                             hops: path.split(" -> ").map(|s| s.trim().to_string()).collect(),
+                            sanitized: false,
+                        });
+                    } else if let Some(resolved) = self.resolve_wrapper_sink(&func_name) {
+                        let mut hops: Vec<String> =
+                            path.split(" -> ").map(|s| s.trim().to_string()).collect();
+                        hops.push(resolved.clone());
+                        results.push(TaintPath {
+                            source: source.clone(),
+                            sink: resolved,
+                            hops,
                             sanitized: false,
                         });
                     }
@@ -505,6 +556,94 @@ mod tests {
         let analyzer = TaintAnalyzer::new(&db, 10);
         let paths = analyzer.find_unsanitized_paths().unwrap();
         assert!(paths.is_empty());
+    }
+
+    #[test]
+    fn test_wrapper_sink_resolution() {
+        let db = GraphDb::in_memory().unwrap();
+        db.execute(
+            "INSERT INTO functions (id, name) VALUES ('f1', 'recv')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO functions (id, name) VALUES ('f2', 'my_sprintf')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO functions (id, name) VALUES ('f3', 'sprintf')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO calls (caller_id, callee_id) VALUES ('f1', 'f2')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO calls (caller_id, callee_id) VALUES ('f2', 'f3')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO data_sources (id, name, source_type) VALUES ('src1', 'recv', 'network')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO data_sinks (id, name, sink_type) VALUES ('sink1', 'sprintf', 'format')",
+            &[],
+        )
+        .unwrap();
+
+        let analyzer = TaintAnalyzer::new(&db, 10);
+        assert_eq!(
+            analyzer.resolve_wrapper_sink("my_sprintf"),
+            Some("sprintf".to_string())
+        );
+        assert_eq!(analyzer.resolve_wrapper_sink("sprintf"), None);
+        assert_eq!(analyzer.resolve_wrapper_sink("recv"), None);
+
+        let paths = analyzer.find_unsanitized_paths().unwrap();
+        assert!(!paths.is_empty(), "should find path through wrapper");
+        assert!(
+            paths.iter().any(|p| p.sink == "sprintf"),
+            "should resolve wrapper to sprintf"
+        );
+    }
+
+    #[test]
+    fn test_wrapper_multiple_callees_not_resolved() {
+        let db = GraphDb::in_memory().unwrap();
+        db.execute(
+            "INSERT INTO functions (id, name) VALUES ('f1', 'multi')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO functions (id, name) VALUES ('f2', 'sprintf')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO functions (id, name) VALUES ('f3', 'strlen')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO calls (caller_id, callee_id) VALUES ('f1', 'f2')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO calls (caller_id, callee_id) VALUES ('f1', 'f3')",
+            &[],
+        )
+        .unwrap();
+
+        let analyzer = TaintAnalyzer::new(&db, 10);
+        assert_eq!(analyzer.resolve_wrapper_sink("multi"), None);
     }
 
     #[test]
