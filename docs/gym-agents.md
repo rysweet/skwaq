@@ -226,6 +226,49 @@ Maps entry points and external interfaces using graph structure:
 Cross-checks findings from other agents. Challenges weak evidence and
 identifies logical gaps in vulnerability chains.
 
+## Specialized Agents
+
+### decompile-renamer
+
+Renames decompiler-generated variables (var_1, param_1) to meaningful names
+before vulnerability analysis. Runs as the first pipeline stage for binary
+analysis.
+
+### decompile-analyst
+
+Analyzes decompiled code quality, identifies compiler optimization artifacts,
+and provides context for vulnerability assessment in binary targets.
+
+### vuln-hunter-java
+
+Java-specialized vulnerability hunter. Understands servlet APIs, JNDI,
+deserialization, JDBC patterns. Used for OWASP Benchmark cases.
+
+### vuln-hunter-python
+
+Python-specialized vulnerability hunter. Handles pickle deserialization,
+eval/exec, subprocess, SQL injection via string formatting.
+
+### crash-analyst
+
+Analyzes crash dumps and fuzzer output to identify exploitable conditions.
+Used in CyberGym (OSS-Fuzz) and CGC (DARPA) benchmarks.
+
+### taint-tracer
+
+Traces data flow from untrusted sources to dangerous sinks across function
+boundaries. Uses get_taint_paths and get_cross_file_calls tools.
+
+### patch-diff-analyst
+
+Analyzes patch diffs to identify what was fixed and infer the vulnerability
+type. Used in CyberGym where patch.diff is available.
+
+### results-skeptic
+
+Post-analysis agent that challenges findings for false positive reduction.
+Questions whether each finding is truly exploitable.
+
 ## Adding a New Agent
 
 1. Create a Markdown file in `agents/` with YAML frontmatter
