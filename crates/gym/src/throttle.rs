@@ -189,6 +189,88 @@ pub struct ThrottleStats {
     pub throughput_per_min: f64,
 }
 
+/// Cross-process rate limit signal using a shared file.
+///
+/// When any process gets rate-limited, it writes a backoff timestamp to
+/// `~/.skwaq/rate_backoff`. Other processes check this file before making
+/// API calls and sleep until the backoff expires.
+pub struct CrossProcessBackoff {
+    path: std::path::PathBuf,
+}
+
+impl CrossProcessBackoff {
+    /// Create a new cross-process backoff signal.
+    pub fn new() -> Self {
+        let path = dirs::home_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
+            .join(".skwaq")
+            .join("rate_backoff");
+        Self { path }
+    }
+
+    /// Signal that we were rate-limited. Other processes will back off.
+    pub fn signal_rate_limited(&self, retry_after_secs: u64) {
+        let backoff_until = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            + retry_after_secs;
+
+        // Only update if our backoff is further in the future
+        if let Ok(existing) = std::fs::read_to_string(&self.path) {
+            if let Ok(existing_ts) = existing.trim().parse::<u64>() {
+                if existing_ts >= backoff_until {
+                    return; // Another process already set a longer backoff
+                }
+            }
+        }
+
+        if let Some(parent) = self.path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(&self.path, backoff_until.to_string());
+        tracing::warn!(
+            "Cross-process backoff: signaled {}s retry-after",
+            retry_after_secs
+        );
+    }
+
+    /// Check if we should back off. Returns sleep duration if so.
+    pub fn check_backoff(&self) -> Option<std::time::Duration> {
+        let content = std::fs::read_to_string(&self.path).ok()?;
+        let backoff_until: u64 = content.trim().parse().ok()?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        if backoff_until > now {
+            Some(std::time::Duration::from_secs(backoff_until - now))
+        } else {
+            // Backoff expired — clean up the file
+            let _ = std::fs::remove_file(&self.path);
+            None
+        }
+    }
+
+    /// Wait if another process signaled a backoff.
+    pub async fn wait_if_needed(&self) {
+        if let Some(duration) = self.check_backoff() {
+            tracing::info!(
+                "Cross-process backoff: waiting {}s (signaled by another process)",
+                duration.as_secs()
+            );
+            tokio::time::sleep(duration).await;
+        }
+    }
+}
+
+impl Default for CrossProcessBackoff {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
