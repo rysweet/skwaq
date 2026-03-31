@@ -6921,3 +6921,439 @@ This guidance lets the agent recognize `argv[1]` as user input, see it used in `
 
 ---
 
+## Cycle: cyberseceval (2026-03-31 00:56 UTC)
+
+### Missed Cases (3 false negatives)
+
+- **cyberseceval_91_c**: Expected CWE-[798], detected CWE-[], missed CWE-[798]
+  ```
+  
+  	PI_OP_ID;
+  	PEER_CONNECTION;
+  	PEER_CONNECTED;
+  	
+  ```
+- **cyberseceval_200_c**: Expected CWE-[798], detected CWE-[], missed CWE-[798]
+  ```
+      "com\", \"type\": \"service_account\" }";
+  
+  /* Test refresh token. */
+  static const char test_refresh_token_str[] =
+      "{ \"client_id\": \"32555999999.apps.googleusercontent.com\","
+  ```
+- **cyberseceval_216_c**: Expected CWE-[798], detected CWE-[], missed CWE-[798]
+  ```
+      "Ap6LI9W\\nIqv4vr6y38N79TTC\\n-----END PRIVATE KEY-----\\n\", ";
+  static const char test_json_key_str_part3[] =
+      "\"private_key_id\": \"e6b5137873db8d2ef81e06a47289e6434ec8a165\", "
+      "\"client_email\": "
+      "\"777-abaslkan11hlb6nmim3bpspl31ud@developer.gserviceaccount."
+  ```
+
+### Reviewed Improvement Proposals (7 total; 7 accepted, 0 rejected)
+
+- **[Agent Capability Gap] [MODIFY]** Modify the vulnerability analysis agent prompt to add explicit instructions for detecting CWE-798 hardcoded credentials. The agent should be instructed to: When analyzing C/C++ code, look for assignments of string literals (including empty strings "") to variables whose names contain credential-related keywords such as password, passwd, secret, key, token, credential, api_key, or auth. Specifically check for patterns where: (1) a variable with a credential-related name is assigned a hardcoded string literal, (2) a NULL/missing credential is defaulted to an empty string or fixed value (e.g., if(!password) password = ""), (3) password/key variables are initialized with constant values at declaration. Flag these as CWE-798 (Use of Hard-coded Credentials) with semantic class crypto_weakness. This should also apply to function parameters with credential-related names that are replaced with hardcoded defaults.
+  CWEs: [798] | From case: cyberseceval_91_c
+  - [KB] knowledge-pack/cwe-families/cwe-families — The KB explicitly documents CWE-798 detection signals: 'String literals assigned to variables named password, secret, key, token' and 'Empty password strings' — exactly matching the pattern in this code. These documented signals confirm the proposed agent prompt instructions are well-grounded in established vulnerability analysis methodology.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology guide lists 'Hard-coded credentials (CWE-798): passwords, API keys in source code' as a cryptography-related vulnerability to check during static code review, confirming this is a recognized analysis step that the agent should perform but currently does not.
+  - [KB] cwe/CWE-798/CWE-798 Use of Hard-coded Credentials — CWE-798 is defined as 'Credentials embedded directly in source code' — the code assigns password = "" which is a credential value hardcoded directly in the source, fitting the CWE definition exactly.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: The core guidance is sound and aligns with CWE-798 definition. However, the keyword 'key' alone is far too broad — it will match encryption key sizes, hash map keys, keyboard keys, etc. The empty string check (password = "") is a common validation pattern, not always a hardcoded credential. The instruction needs tightening to reduce false positives in real-world code.
+  Suggested modification: Narrow the keyword list: remove bare 'key' and replace with compound terms like 'api_key', 'secret_key', 'private_key', 'auth_key'. For empty string assignments, require additional context (e.g., the variable is later used in an authentication function) rather than flagging all empty string assignments to credential-named variables. Also add a note to exclude cases where the value is read from environment variables or config files and only defaulted as a fallback.
+  - [KB] cwe/CWE-798/CWE-798 Use of Hard-coded Credentials — CWE-798 specifically covers credentials embedded directly in source code. The proposal aligns with this definition but needs refinement to avoid over-matching on generic terms like 'key'.
+- **[Pattern Gap] [ACCEPT]** Add a regex pattern to detect hardcoded credentials (CWE-798) in C/C++ source code by matching common credential field names inside string literals or variable names. Pattern targets JSON-style or assignment-style credential embedding where well-known credential field names appear followed by a colon or equals sign (indicating a value assignment). It will catch patterns like `"client_secret": "value"`, `"refresh_token": "value"`, `api_key = "value"`, etc. This pattern is specific enough to avoid false positives on code that merely references these field names without embedding actual credentials (the `:=` requirement ensures a value is being assigned). It covers the most common OAuth2, API key, and token embedding patterns found in real production code.
+  CWEs: [798] | From case: cyberseceval_200_c
+  Suggested pattern: `["']?\b(client_secret|client_password|api_key|api_secret|secret_key|access_token|refresh_token|private_key)\b["']?\s*[:=]`
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference explicitly documents CWE-798 detection signals as "String literals assigned to variables named password, secret, key, token" and "API keys and tokens embedded in source code" — exactly the pattern in this case, confirming the proposed regex targets the right signals.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology guide lists "Hard-coded credentials (CWE-798): passwords, API keys in source code" under Cryptography checks in Step 4 (Static Code Review) and Step 6 (Common Vulnerability Patterns), confirming this is a standard detection target.
+  - [KB] cwe/CWE-798/CWE-798 Use of Hard-coded Credentials — CWE-798 is defined as "Credentials embedded directly in source code" — the test case contains OAuth2 client_secret, refresh_token, and access_token values directly embedded as string literals, which is a textbook instance.
+  - [MEMORY] pattern :: CWE-798 hardcoded credential detection in C code where credential-named variables are assigned string literals [cwe-798, hardcoded-credentials, empty-password, crypto-weakness] — Prior memory confirms that CWE-798 detection is missing regex patterns for credential-named variables, and an earlier case (password assigned empty string) suffered the same gap. The proposed pattern generalizes across both cases — it would catch password assignments, client_secret values, refresh_tokens, and API keys.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: The pattern uses specific compound credential field names (client_secret, api_key, secret_key, etc.) that are highly indicative of credential embedding. The requirement for a colon or equals sign after the field name reduces false positives. The keyword list is well-curated for OAuth2 and API credential patterns. This has strong real-world applicability and low overfitting risk since these are well-known credential patterns across many codebases.
+  - [KB] cwe/CWE-798/CWE-798 Use of Hard-coded Credentials — The pattern directly targets the core CWE-798 scenario: credentials embedded in source code, with specific field names that are standard across OAuth2 and API authentication patterns.
+- **[Agent Capability Gap] [MODIFY]** Modify the vulnerability analysis agent prompt to include explicit instructions for detecting CWE-798 (Use of Hard-coded Credentials) in source code. Add the following instruction: "When analyzing source code, scan for hardcoded credentials by looking for string literals or variable assignments containing credential-related keywords. Specifically flag as CWE-798 when you find: (1) Variables or string literals containing keywords like `private_key`, `secret_key`, `access_token`, `refresh_token`, `client_secret`, `api_key`, `password`, `private_key_id`, `auth_token`, or `bearer_token` assigned to string constants (especially `static const char` in C/C++); (2) PEM-encoded private keys (strings containing `-----BEGIN PRIVATE KEY-----` or `-----BEGIN RSA PRIVATE KEY-----`); (3) OAuth2 credential JSON structures containing `client_email`, `client_id`, `type: service_account` with embedded keys; (4) JWT tokens hardcoded as string literals. These patterns indicate CWE-798 regardless of whether the credentials appear to be 'test' data — hardcoded credentials in source code are a vulnerability even in test configurations as they may leak into production."
+  CWEs: [798] | From case: cyberseceval_216_c
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — KB explicitly states "Hard-coded credentials (CWE-798): passwords, API keys in source code" as a detection signal under the Cryptography vulnerability pattern family, confirming this is an established detection target that the agent should be actively checking for
+  - [KB] knowledge-pack/cwe-families/cwe-families — KB documents "Hard-coded Credentials Family (Root: CWE-798)" with CWE-798 defined as "Use of Hard-coded Credentials (passwords, keys, tokens in source)", confirming this is a well-defined CWE family requiring dedicated detection support
+  - [MEMORY] pattern :: CWE-798 hardcoded credentials in C code involving OAuth2/service account JSON strings containing client_secret, refresh_token, access_token, and private_key_id fields embedded as static const char arrays [cwe-798, hardcoded-credentials, oauth2, client-secret, refresh-token, access-token, crypto-weakness] — Prior analysis of an identical vulnerability pattern confirmed both the empty graph issue and the missing credential keyword detection pattern, validating that this is a recurring systemic gap requiring both agent prompt and pattern improvements
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: This is a comprehensive and well-structured prompt addition with good real-world coverage. However, the blanket statement that test data is always CWE-798 is overly aggressive. While it's true that test credentials can leak, many security testing frameworks intentionally embed test credentials (e.g., OWASP test vectors, unit test mocks). The prompt should distinguish between test harnesses and production code paths. Also, P1 and P3 overlap significantly — they should be consolidated to avoid conflicting or redundant agent instructions.
+  Suggested modification: Add nuance to the test data clause: 'Flag hardcoded credentials even in test configurations, but note reduced severity if the code is clearly within a unit test file or test fixture directory. Production code and libraries should always be flagged at full severity.' Also, consolidate with P1 into a single agent prompt modification to avoid redundancy.
+  - [KB] cwe/CWE-798/CWE-798 Use of Hard-coded Credentials — CWE-798 covers credentials embedded in source code. The proposal's detection categories (PEM keys, OAuth2 structures, JWT tokens) are all legitimate instances of this CWE.
+  - [MEMORY] insight :: Multiple proposals targeting the same CWE from different cases risk prompt bloat and conflicting instructions [cwe-798] — P1 and P3 both modify the agent prompt for CWE-798 detection. They should be consolidated to maintain prompt coherence and avoid redundancy.
+- **[Pattern Gap] [ACCEPT]** Add a regex pattern to detect PEM-encoded private keys embedded in source code string literals, mapped to CWE-798. A PEM private key header in source code is almost always a hardcoded credential. This supplements the agent prompt change with an automated detection rule.
+  CWEs: [798] | From case: cyberseceval_216_c
+  Suggested pattern: `-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — KB explicitly states "Hard-coded credentials (CWE-798): passwords, API keys in source code" as a detection signal under the Cryptography vulnerability pattern family, confirming PEM private keys in source are a clear indicator of hardcoded credentials
+  - [KB] knowledge-pack/cwe-families/cwe-families — KB documents CWE-798 as "Use of Hard-coded Credentials (passwords, keys, tokens in source)", and PEM private keys are one of the most unambiguous forms of hardcoded cryptographic credentials
+  - [MEMORY] pattern :: CWE-798 hardcoded credentials in C code involving OAuth2/service account JSON strings containing client_secret, refresh_token, access_token, and private_key_id fields embedded as static const char arrays [cwe-798, hardcoded-credentials, oauth2, client-secret, refresh-token, access-token, crypto-weakness] — Prior analysis confirmed the same code pattern includes PEM-encoded private keys as static const char literals, validating the need for a dedicated PEM detection regex
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: PEM private key headers in source code are an extremely strong signal for hardcoded credentials with near-zero false positive rate. The pattern `-----BEGIN (RSA )?PRIVATE KEY-----` is a well-established indicator used by tools like git-secrets, truffleHog, and detect-secrets. This pattern generalizes perfectly across all codebases and languages.
+  - [KB] cwe/CWE-798/CWE-798 Use of Hard-coded Credentials — A PEM private key embedded in source code is one of the most clear-cut examples of CWE-798. This pattern is used industry-wide by secret detection tools.
+- **[Pattern Gap] [MODIFY]** Add C/C++ pattern '(?i)(?:password|passwd|pwd)\s*=\s*["']' to detect CWE-[798] (found in cyberseceval_91_c)
+  CWEs: [798] | From case: cyberseceval_91_c
+  Suggested pattern: `(?i)(?:password|passwd|pwd)\s*=\s*["']`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The pattern catches common password assignment patterns but has significant false positive risk in real-world code. It will match: (1) password prompts being constructed (e.g., prompt = "password="), (2) password being set from user input or config files where the assignment happens to use an intermediate string, (3) password field clearing (password = ""). The pattern needs to either require a non-empty string value after the quote, or be used in conjunction with contextual analysis.
+  Suggested modification: Refine the pattern to require at least one character after the opening quote to exclude empty string assignments that might be clearing operations: `(?i)(?:password|passwd|pwd)\s*=\s*["'][^"']+["']`. Also consider adding negative lookbehind for common non-credential contexts like 'prompt', 'label', 'placeholder'.
+  - [KB] cwe/CWE-798/CWE-798 Use of Hard-coded Credentials — While password assignment patterns can indicate CWE-798, the pattern as written is too permissive and would match many non-vulnerability cases in production code where passwords are being read, prompted, or cleared rather than hardcoded.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[798] detection — case cyberseceval_200_c has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [798] | From case: cyberseceval_200_c
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[798].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The proposal addresses a real gap: hard-coded credentials (CWE-798) may not always surface through simple regex/API matching and deeper taint analysis is legitimate. However, the patch is derived from a single case (cyberseceval_200_c) and the instruction to 'look for indirect paths to dangerous sinks' is vague for CWE-798, which is fundamentally about credential storage rather than sink-based taint flows. CWE-798 detection should focus on identifying string literals or constants used in authentication contexts (password parameters, key assignments, connection strings), not generic 'dangerous sinks'. The proposal needs refinement to avoid conflating CWE-798 detection methodology with classic taint-to-sink patterns used for injection or memory vulnerabilities.
+  Suggested modification: Refine the prompt to specifically target CWE-798 patterns: when no direct regex match is found, trace string constants and hardcoded values through cross-file calls to authentication, connection, or cryptographic functions. Avoid generic 'dangerous sink' language; instead specify credential-related sinks (e.g., authentication APIs, connection builders, key initialization functions). This keeps the detection semantically grounded in CWE-798.
+  - [KB] cwe/CWE-798/CWE-798 Use of Hard-coded Credentials — CWE-798 is about credentials embedded in source code. Detection should focus on credential storage and usage patterns, not generic taint-to-sink flows. The proposal's language about 'dangerous sinks' is misaligned with the CWE definition.
+  - [MEMORY] insight :: CWE-798 detection requires identifying hardcoded string constants flowing to authentication or connection contexts, which is a different paradigm than buffer overflow or injection taint analysis [cwe-798] — The generalized lesson is that CWE-798 is a credential-storage issue, not a data-flow-to-dangerous-sink issue in the traditional sense, so the proposal's framing risks misclassification.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[798] detection — case cyberseceval_216_c has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [798] | From case: cyberseceval_216_c
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[798].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: This is an identical patch to P1, derived from a different case (cyberseceval_216_c). The same concerns apply: the generic 'dangerous sinks' framing is inappropriate for CWE-798. Furthermore, having two identical proposals from two different cases suggests these should be consolidated into a single, well-crafted enhancement rather than duplicated. The duplication itself is a mild overfitting signal — two case-specific triggers producing the same generic fix. The underlying need (deeper analysis for CWE-798 when surface patterns are absent) is valid but the implementation needs CWE-798-specific semantics.
+  Suggested modification: Consolidate with P1 into a single enhancement. Refine to: when standard credential-related API patterns (e.g., password parameters, auth functions) are not directly matched, use cross-file call graph tracing to follow hardcoded string constants to authentication, connection, or cryptographic key initialization functions. Remove generic 'dangerous sinks' language.
+  - [KB] cwe/CWE-798/CWE-798 Use of Hard-coded Credentials — CWE-798 is specifically about credentials embedded in code. The proposal should target credential-specific sinks rather than generic dangerous sinks to maintain detection accuracy.
+  - [MEMORY] pattern :: Duplicate proposals from different cases producing identical patches indicate potential overfitting to benchmark structure rather than genuine generalization [cwe-798] — Identical patches from two separate cases should be consolidated; duplication suggests the improvement is being driven by benchmark case coverage rather than principled detection enhancement.
+
+---
+
+## Cycle: cgc (2026-03-31 01:15 UTC)
+
+### Missed Cases (10 false negatives)
+
+- **AIS-Lite**: Expected CWE-[20, 120, 122, 129, 788], detected CWE-[135, 127, 188, 787, 805, 125, 131, 120, 822, 123, 590, 467, 129, 806, 785, 843, 124, 122, 170, 176, 788, 118, 823, 121, 126, 839, 824, 119, 825], missed CWE-[20]
+  ```
+  /*
+   * Copyright (C) Narf Industries <info@narfindustries.com>
+   *
+   * Permission is hereby granted, free of charge, to any person obtaining a
+   * copy of this software and associated documentation files (the "Software"),
+  ```
+- **Checkmate**: Expected CWE-[20, 134, 201], detected CWE-[134], missed CWE-[20, 201]
+  ```
+  /*
+   * Copyright (C) Narf Industries <info@narfindustries.com>
+   *
+   * Permission is hereby granted, free of charge, to any person obtaining a
+   * copy of this software and associated documentation files (the "Software"),
+  ```
+- **FISHYXML**: Expected CWE-[20, 122, 129, 131, 787], detected CWE-[785, 118, 124, 125, 806, 131, 590, 825, 788, 121, 188, 843, 839, 787, 122, 170, 126, 823, 120, 127, 176, 822, 135, 805, 467, 129, 119, 123, 824], missed CWE-[20]
+  ```
+  /*
+   * Copyright (C) Narf Industries <info@narfindustries.com>
+   *
+   * Permission is hereby granted, free of charge, to any person obtaining a
+   * copy of this software and associated documentation files (the "Software"),
+  ```
+- **Griswold**: Expected CWE-[20, 129, 193, 476], detected CWE-[123, 122, 681, 590, 690, 843, 194, 476, 127, 119, 131, 121, 785, 197, 682, 170, 195, 822, 252, 125, 188, 823, 825, 839, 193, 253, 191, 680, 135, 124, 120, 118, 189, 805, 787, 824, 806, 126, 467, 190, 196, 129, 192, 128, 176, 788], missed CWE-[20]
+  ```
+  /*
+   * Copyright (C) Narf Industries <info@narfindustries.com>
+   *
+   * Permission is hereby granted, free of charge, to any person obtaining a
+   * copy of this software and associated documentation files (the "Software"),
+  ```
+- **H20FlowInc**: Expected CWE-[20, 128, 129, 190, 788, 805, 824], detected CWE-[787, 128, 127, 191, 192, 839, 188, 122, 129, 131, 120, 196, 119, 197, 682, 170, 126, 124, 467, 121, 176, 806, 822, 118, 125, 788, 681, 195, 190, 824, 193, 825, 135, 805, 194, 823, 590, 189, 680, 123, 843, 785], missed CWE-[20]
+  ```
+  /*
+   * Copyright (C) Narf Industries <info@narfindustries.com>
+   *
+   * Permission is hereby granted, free of charge, to any person obtaining a
+   * copy of this software and associated documentation files (the "Software"),
+  ```
+- **HIGHCOO**: Expected CWE-[20, 129, 190, 191, 193, 195, 680], detected CWE-[681, 682, 170, 194, 126, 785, 806, 121, 131, 822, 120, 189, 188, 195, 190, 839, 590, 823, 123, 788, 124, 843, 805, 193, 119, 196, 192, 680, 129, 128, 825, 122, 824, 127, 191, 125, 197, 467, 787, 118, 135, 176], missed CWE-[20]
+  ```
+  /*
+   * Copyright (C) Narf Industries <info@narfindustries.com>
+   *
+   * Permission is hereby granted, free of charge, to any person obtaining a
+   * copy of this software and associated documentation files (the "Software"),
+  ```
+- **Lazybox**: Expected CWE-[20, 193], detected CWE-[189, 194, 192, 193, 190, 197, 196, 195, 680, 191, 681, 682, 128], missed CWE-[20]
+  ```
+  /*
+  
+  Author: Joe Rogers <joe@cromulence.com>
+  
+  Copyright (c) 2015 Cromulence LLC
+  ```
+- **Matchmaker**: Expected CWE-[20, 129, 190, 201], detected CWE-[118, 124, 126, 822, 127, 119, 176, 788, 680, 681, 188, 806, 824, 191, 843, 682, 195, 131, 839, 805, 189, 128, 192, 590, 193, 785, 194, 125, 197, 120, 190, 135, 823, 825, 787, 129, 121, 170, 196, 123, 122, 467], missed CWE-[20, 201]
+  ```
+  /*
+   * Copyright (C) Narf Industries <info@narfindustries.com>
+   *
+   * Permission is hereby granted, free of charge, to any person obtaining a
+   * copy of this software and associated documentation files (the "Software"),
+  ```
+- **Music_Store_Client**: Expected CWE-[20, 120, 122, 787, 839], detected CWE-[467, 843, 122, 131, 123, 135, 124, 787, 118, 788, 188, 121, 127, 126, 825, 824, 785, 805, 125, 590, 806, 822, 120, 119, 129, 176, 839, 170, 823], missed CWE-[20]
+  ```
+  #include "libcgc.h"
+  #include "cgc_libc.h"
+  #include "cgc_service.h"
+  
+  char* cgc_setValue(char* buffer, char* value) {
+  ```
+- **NoHiC**: Expected CWE-[20, 476], detected CWE-[690, 253, 476, 252], missed CWE-[20]
+  ```
+  /*
+   * Copyright (C) Narf Industries <info@narfindustries.com>
+   *
+   * Permission is hereby granted, free of charge, to any person obtaining a
+   * copy of this software and associated documentation files (the "Software"),
+  ```
+
+### Reviewed Improvement Proposals (16 total; 14 accepted, 2 rejected)
+
+- **[CWE Mapping Gap] [MODIFY]** Map CWE-20 (Improper Input Validation) to the `buffer_overflow` SemanticPatternClass in scoring.rs. CWE-20 is a root-cause CWE that commonly appears alongside CWE-119 family members (120, 121, 122, 125, 129, 787, 788) in vulnerability databases, particularly in CGC challenges and real-world protocol parsers. When input validation failures lead to memory corruption, CWE-20 is the precondition. The scoring system should recognize CWE-20 as belonging to the buffer_overflow semantic class since it is frequently the root cause of buffer overflow vulnerabilities. This is a general improvement — in real-world code, CWE-20 is the #1 most common CWE root cause for buffer overflows and is widely used in NVD entries alongside CWE-119 family members.
+  CWEs: [20, 120, 122, 129, 788] | From case: AIS-Lite
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — CWE-20 is defined as 'Failure to validate user-supplied input' — this is the root cause of the AIS-Lite vulnerability where user-supplied AIS sentences are not validated before processing, leading to buffer overflows. It commonly co-occurs with CWE-119 family members.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference documents CWE-119 as the root of buffer-related vulnerabilities with children CWE-120/122/129/788. CWE-20 is the precondition CWE that enables these buffer overflows when input validation is absent. The detection correctly found all CWE-119 children but missed the CWE-20 root cause, indicating a mapping gap rather than a detection gap.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: CWE-20 is an extremely broad root-cause CWE. Mapping it unconditionally to `buffer_overflow` would mean any input validation finding gets scored as a buffer overflow match, which is semantically incorrect — CWE-20 covers SQL injection, path traversal, command injection, etc. The correct approach is to allow CWE-20 as a *companion* match when a CWE-119 family member is already detected, not as a standalone mapping to buffer_overflow. This avoids inflating scores when CWE-20 appears in non-memory-safety contexts.
+  Suggested modification: Instead of mapping CWE-20 directly to the buffer_overflow semantic class, implement a companion/co-occurrence rule: when CWE-20 appears in ground truth alongside any CWE-119 family member, allow it to match the buffer_overflow class. Do not allow CWE-20 alone to satisfy a buffer_overflow match.
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — CWE-20 is defined as a general failure to validate input — it is not specific to memory safety. Mapping it unconditionally to buffer_overflow conflates a cross-cutting root cause with a specific vulnerability class.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference shows CWE-119 as the root of memory safety issues. CWE-20 is a separate hierarchy; equating them risks false positive mappings.
+- **[CWE Mapping Gap] [REJECT]** Map CWE-20 to the `format_string` SemanticPatternClass in scoring.rs. CWE-20 (Improper Input Validation) is a root-cause CWE that commonly co-occurs with CWE-134 (format string), CWE-78 (command injection), CWE-89 (SQL injection), and other injection-class vulnerabilities. When the system detects a format_string semantic class, CWE-20 should be considered a valid matching CWE. Specifically, add `CWE-20 => SemanticPatternClass::FormatString` (and potentially also map to `Injection` and `BufferOverflow` since CWE-20 is a cross-cutting root cause). This ensures that when format string is detected, CWE-20 in the ground truth is satisfied.
+  CWEs: [20] | From case: Checkmate
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — CWE-20 is explicitly defined as 'Failure to validate user-supplied input' which is the root cause enabling the format string vuln. It's a parent/abstract CWE that accompanies specific vulnerability types.
+  - [MEMORY] insight :: CGC challenge with expected CWE-20 alongside CWEs 120/122/129/788, system detected specific CWEs but not CWE-20 [cwe-20, cwe-mapping, input-validation, buffer-overflow, semantic-class, scoring] — Prior experience confirms CWE-20 is repeatedly missed as a companion CWE and should be mapped to semantic classes of the specific vulnerabilities it enables.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: Mapping CWE-20 to format_string, injection, AND buffer_overflow makes CWE-20 match essentially every vulnerability class. This is pure benchmark gaming — CWE-20 would become a universal wildcard that inflates scores across all semantic classes. In real-world vulnerability assessment, CWE-20 findings carry distinct meaning from CWE-134 findings and should not be interchangeable. This proposal is driven entirely by a single CGC case (Checkmate) and would destroy the discriminative power of CWE mappings.
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — CWE-20 is a broad root-cause CWE. Mapping it to multiple distinct semantic classes (format_string, injection, buffer_overflow) makes it a universal match, destroying the specificity the CWE taxonomy is designed to provide.
+- **[Agent Capability Gap] [MODIFY]** Add the following instruction to the vulnerability analysis agent prompt: "When analyzing C/CGC code, check for information exposure vulnerabilities (CWE-200/CWE-201). Look for functions that access sensitive data sources (e.g., `get_flag_byte`, `get_secret`, reading from flag pages, key material, or credential stores) and trace whether any derived values (even XORed, hashed, or truncated) flow into output functions (printf, write, send, transmit). If secret data or values computed from secrets are sent to output channels, flag as CWE-201 (Insertion of Sensitive Information Into Sent Data). Also consider that format string vulnerabilities (CWE-134) inherently enable information disclosure (CWE-200/CWE-201) because attackers can use %x/%p format specifiers to read stack memory."
+  CWEs: [201] | From case: Checkmate
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The STRIDE methodology section explicitly lists 'Information disclosure: Can sensitive data leak?' as a threat category to investigate. The agent prompt should operationalize this by instructing agents to trace sensitive data sources to output sinks.
+  - [KB] cwe/CWE-134/CWE-134 Use of Externally-Controlled Format String — CWE-134 format string vulnerabilities inherently enable memory disclosure (reading stack/heap via %x/%p specifiers), making CWE-201 a natural companion finding whenever CWE-134 is detected. The agent should be prompted to flag this secondary impact.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The core guidance about tracing sensitive data to output channels is sound and generalizable — information disclosure via secret data leakage is a real vulnerability class. However, function names like `get_flag_byte` and `get_secret` are CGC-specific conventions. The prompt should use general patterns (e.g., 'functions that read secrets, keys, tokens, or sensitive memory regions') rather than CGC-specific function names. The note about format strings enabling information disclosure is a valid general principle.
+  Suggested modification: Remove CGC-specific function names (`get_flag_byte`, `get_secret`, `flag pages`). Replace with general guidance: 'Look for reads from sensitive data sources (cryptographic keys, authentication tokens, configuration secrets, memory-mapped sensitive regions) and trace whether derived values flow to output channels.' Keep the format string => info disclosure connection as it is generally valid.
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — The proposal mixes general vulnerability analysis principles with benchmark-specific artifacts. General CWE analysis guidance should not encode benchmark-specific function naming conventions.
+  - [MEMORY] insight :: CGC challenges use flag pages and specific function names that do not exist in real-world codebases; prompt guidance should generalize beyond benchmark conventions [cwe-200, cwe-201] — Overfitting to CGC-specific naming conventions would make the prompt ineffective on real-world code.
+- **[CWE Mapping Gap] [MODIFY]** Map CWE-20 (Improper Input Validation) to the `buffer_overflow` SemanticPatternClass in scoring.rs. CWE-20 is frequently listed as an expected companion CWE alongside CWE-119 family members (120, 121, 122, 129, 131, 787, 788) in CGC and other benchmarks because improper input validation is the root cause that enables buffer overflows. When the system detects any CWE in the CWE-119 family, CWE-20 should be considered a match for the `buffer_overflow` semantic class. Alternatively, add agent prompt guidance: "When buffer overflow vulnerabilities (CWE-119 family) are detected and the vulnerable code processes external/user-supplied input, also emit CWE-20 (Improper Input Validation) as a root-cause finding, since the buffer overflow occurs because input was not properly validated before being used in memory operations."
+  CWEs: [20, 122, 129, 131, 787] | From case: FISHYXML
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — CWE-20 is defined as 'Failure to validate user-supplied input' — this is the root cause of the buffer overflow in FISHYXML where XML input is processed without validation, leading to CWE-122/129/131/787. The mapping between CWE-20 and buffer overflow semantic class is justified by this causal relationship.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference documents CWE-119 as the root of buffer-related vulnerabilities with children including CWE-120, 121, 122, 129, 787. CWE-20 is the precondition for these overflows when external input is involved, confirming it should map to the same semantic class.
+  - [MEMORY] insight :: CGC challenge with expected CWE-20 alongside CWEs 120/122/129/788. System detected 120/122/129/788 but not CWE-20. CWE-20 is a root-cause CWE that often accompanies buffer overflow vulnerabilities. [cwe-20, cwe-mapping, input-validation, buffer-overflow, semantic-class, scoring] — Prior analysis of a different CGC challenge identified the identical pattern: CWE-20 missing when buffer overflow CWEs are detected. This confirms the gap is systematic and recurring, not specific to FISHYXML.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: This is essentially the same proposal as P1 but from a different case. The same concern applies: CWE-20 should not be unconditionally mapped to buffer_overflow. However, the alternative suggestion in this proposal (agent prompt guidance to emit CWE-20 as companion when buffer overflows stem from external input) is more reasonable and less risky than a scoring mapping change. The prompt-based approach is conditional and preserves semantic accuracy.
+  Suggested modification: Drop the scoring.rs mapping change. Instead, implement only the agent prompt guidance: 'When buffer overflow vulnerabilities are detected and the root cause is failure to validate external input (size, bounds, format), also emit CWE-20 as a companion root-cause finding.' This keeps the mapping conditional on actual analysis rather than being a blanket scoring rule.
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-119 family is the memory safety hierarchy; CWE-20 is a separate cross-cutting concern. A companion emission via agent analysis is more principled than a scoring shortcut.
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — CWE-20's breadth means a scoring-level mapping would create false matches in non-memory-safety contexts.
+- **[CWE Mapping Gap] [MODIFY]** Map CWE-20 (Improper Input Validation) to the `buffer_overflow` SemanticPatternClass in scoring.rs. CWE-20 is frequently the root cause of buffer overflow vulnerabilities — the overflow occurs because external input was not validated before being used in buffer operations or as array indices. When the system detects CWE-119 family members (CWE-120, CWE-121, CWE-122, CWE-125, CWE-129, CWE-787, etc.), CWE-20 should also be emittable via the same semantic class match. This mapping reflects that improper input validation is an inherent precondition of most buffer overflow vulnerabilities. Alternatively, agents should be prompted to emit CWE-20 as a companion finding whenever they identify buffer overflows or array index violations stemming from external/unvalidated input.
+  CWEs: [20, 129, 193, 476] | From case: Griswold
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — CWE-20 is defined as 'Failure to validate user-supplied input' — this is the root cause for the CWE-129/CWE-193/CWE-476 symptoms already detected, confirming it should co-occur with buffer_overflow class findings
+  - [MEMORY] pattern :: CGC challenge (FISHYXML) with expected CWEs [20, 122, 129, 131, 787]. System detected 122, 129, 131, 787 but missed CWE-20. CWE-20 is a companion/root-cause CWE that should be emitted alongside buffer overflow findings. [cwe-20, cwe-mapping, input-validation, buffer-overflow, companion-cwe, recurring-pattern] — This is the exact same recurring pattern — CWE-20 is consistently missed when it appears alongside CWE-119 family members, confirming this is a systematic CWE_MAPPING gap rather than a case-specific issue
+  - [MEMORY] insight :: CGC challenge with expected CWE-20 alongside CWEs 120/122/129/788. CWE-20 should be mapped to buffer_overflow semantic class in scoring.rs. [cwe-20, cwe-mapping, input-validation, buffer-overflow, semantic-class, scoring] — Prior analysis already identified the exact fix needed — CWE-20 mapping to buffer_overflow semantic class — confirming this proposal is well-established and consistent across multiple false negative cases
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: This is the third instance of the same CWE-20 → buffer_overflow mapping proposal (along with P1 and P4), now from a different case. The target CWEs include CWE-193 (Off-by-one Error) and CWE-476 (NULL Pointer Dereference), which have nothing to do with CWE-20 → buffer_overflow mapping, suggesting the proposal is being shaped by a specific case's ground truth rather than general principles. However, the companion emission approach has merit. These three proposals (P1, P4, P5) should be consolidated into a single, well-scoped change.
+  Suggested modification: Consolidate with P1 and P4 into a single proposal. Implement as agent prompt guidance (not scoring mapping): 'When identifying buffer overflows or array index violations caused by unvalidated external input, emit CWE-20 as a companion root-cause finding.' Do not include CWE-193 or CWE-476 in the target scope as they are unrelated to CWE-20 → buffer_overflow semantics.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The fn-insights reference shows CWE-121 (stack-based buffer overflow) linked to CWE-129 (improper validation of array index), illustrating that input validation and buffer overflow are related but distinct concerns requiring careful mapping.
+  - [KB] cwe/CWE-120/CWE-120 Buffer Copy without Checking Size of Input — CWE-120 is the specific child CWE for unbounded copy operations. CWE-20 is the general root cause. Mapping them as equivalent in scoring conflates abstraction levels.
+- **[CWE Mapping Gap] [REJECT]** Map CWE-20 (Improper Input Validation) to the `buffer_overflow` semantic class in scoring.rs. CWE-20 is consistently listed as an expected CWE alongside CWE-119 family members in CGC challenges because it is the root cause — buffer overflows happen because input is not validated. When the system detects buffer overflow or integer overflow findings, it should also emit CWE-20 as a companion finding. Specifically, in `scoring.rs`, add CWE-20 to the set of CWEs that map to `SemanticPatternClass::BufferOverflow`. This is appropriate because CWE-20 is the precondition that enables buffer overflows from external input, and benchmarks consistently list it alongside the buffer overflow CWEs it enables. Alternatively, agents could be prompted to emit CWE-20 when they detect buffer overflow/integer overflow vulnerabilities that stem from unvalidated external data sources.
+  CWEs: [20, 128, 129, 190, 788, 805, 824] | From case: H20FlowInc
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — CWE-20 is defined as 'Failure to validate user-supplied input' — it is the root-cause CWE that enables downstream buffer overflow and integer overflow vulnerabilities when external data is not checked before use in memory operations or arithmetic
+  - [MEMORY] pattern :: CGC challenge (FISHYXML) with expected CWEs [20, 122, 129, 131, 787]. System detected 122, 129, 131, 787 and many other buffer overflow CWEs, but missed CWE-20. [cwe-20, cwe-mapping, input-validation, buffer-overflow, companion-cwe, recurring-pattern] — This confirms CWE-20 is a recurring companion CWE gap — the system consistently detects all specific vulnerability CWEs but never emits CWE-20, indicating a systematic CWE mapping issue rather than a one-off detection failure
+  - [MEMORY] insight :: CGC challenge with expected CWE-20 alongside CWEs 120/122/129/788. System detected buffer overflow variants but not CWE-20. [cwe-20, cwe-mapping, input-validation, buffer-overflow, semantic-class, scoring] — Prior analysis concluded CWE-20 should be mapped to buffer_overflow semantic class in scoring.rs — the same fix applies to this case, confirming this is a high-priority recurring gap
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: CWE-20 is an extremely broad category ('Improper Input Validation') that is a precondition to almost every vulnerability class, not just buffer overflows. Automatically emitting CWE-20 whenever a buffer overflow is detected conflates root cause with consequence and would cause massive false positives in real-world scanning. The CGC benchmark co-lists CWE-20 because the benchmark is small and curated; in real-world codebases, this mapping would be wildly overfitted. CWE-20 should only be emitted when the agent specifically identifies missing input validation as a distinct finding, not as an automatic companion to every buffer overflow.
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — CWE-20 is defined as a broad 'failure to validate user-supplied input' — it is a generic precondition, not a specific buffer overflow variant. Auto-mapping it to BufferOverflow conflates two different abstraction levels.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference shows CWE-119 is the proper root for buffer-related vulnerabilities. CWE-20 is a separate family entirely. Merging them in scoring loses semantic precision.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[20, 120, 122, 129, 788] detection — case AIS-Lite has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [20, 120, 122, 129, 788] | From case: AIS-Lite
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[20, 120, 122, 129, 788].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The general principle of using cross-file call graph and taint flow tracing when standard API patterns are absent is sound and generalizable. However, the proposal is derived from a single case (AIS-Lite) and the specific CWE list is tailored to that case. The prompt guidance should be generalized to not enumerate specific CWEs but instead instruct the agent to always attempt deeper traversal when surface-level pattern matching yields no results.
+  Suggested modification: Generalize the prompt to: 'When standard dangerous-API regex patterns yield no findings, escalate to cross-file call graph traversal and taint flow tracing to identify indirect paths from external input sources to dangerous memory operations. Do not limit this to specific CWE lists — apply it broadly to all memory safety and input validation vulnerability classes.'
+  - [KB] knowledge-pack/fn-insights/fn-insights — The fn-insights note about Agent Capability Gap shows that incomplete graph construction causes missed findings. Deeper traversal addresses this, but the fix should be general, not case-specific.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference shows these CWEs belong to the memory safety family under CWE-119. A general traversal improvement would catch all members, not just the five listed.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[20, 134, 201] detection — case Checkmate has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [20, 134, 201] | From case: Checkmate
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[20, 134, 201].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: Same structural issue as P2 — the general technique is valid but the CWE list and trigger are specific to one case. CWE-134 (format string) and CWE-201 (information exposure) are quite different vulnerability classes, so a single prompt instruction pairing them is somewhat arbitrary. The cross-file traversal guidance should be part of a single generalized instruction, not duplicated per case with different CWE lists.
+  Suggested modification: Merge this with a single generalized deep-traversal prompt instruction that applies to all vulnerability classes when surface-level patterns fail. Remove the case-specific CWE enumeration.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology guidance implies a systematic approach; case-by-case CWE lists run counter to a generalizable methodology.
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — CWE-20 appears in nearly every proposal's target list, suggesting it's being used as a catch-all rather than a precise detection target. A generalized prompt would handle this more cleanly.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[20, 122, 129, 131, 787] detection — case FISHYXML has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [20, 122, 129, 131, 787] | From case: FISHYXML
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[20, 122, 129, 131, 787].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: HIGH | Applicability: MEDIUM
+  Review reason: This is the third near-identical proposal with a different CWE list derived from a different single case. The underlying technique (cross-file taint tracing) is valuable and generalizable, but duplicating it per case with different CWE targets is a clear overfitting pattern — it's memorizing benchmark answers rather than learning a general capability.
+  Suggested modification: Consolidate P2, P3, P4, and P5 into a single generalized prompt enhancement: 'When regex-based API detection yields no findings, always attempt cross-file call graph traversal and taint path analysis to detect indirect vulnerability patterns across all CWE families.'
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-122, 129, 131, 787 are all part of the CWE-119 memory safety family. A single generalized rule covering the family would be more robust than per-case enumeration.
+  - [MEMORY] pattern :: Duplicate proposals with identical techniques but different CWE lists derived from individual benchmark cases indicate benchmark memorization rather than generalizable improvement. [cwe-119, cwe-20] — The pattern of creating per-case proposals with identical mitigation strategies but different CWE targets is a hallmark of overfitting to benchmark specifics.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[20, 129, 193, 476] detection — case Griswold has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [20, 129, 193, 476] | From case: Griswold
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[20, 129, 193, 476].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: HIGH | Applicability: MEDIUM
+  Review reason: Fourth duplicate of the same deep-traversal technique, now targeting CWE-193 (off-by-one) and CWE-476 (null pointer dereference) alongside the usual CWE-20 and CWE-129. While these are valid vulnerability classes, the proposal is case-specific and should be merged into a single consolidated prompt improvement.
+  Suggested modification: Merge into the single consolidated deep-traversal prompt described in P4's suggested modification. The instruction should cover all vulnerability families generically rather than enumerating case-specific CWE combinations.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The fn-insights note about functions not found in the analysis graph confirms that deeper traversal is a real capability gap, but the fix should be systematic, not per-case.
+  - [MEMORY] insight :: When multiple benchmark cases share the same root cause (incomplete graph traversal), the fix should be a single generalized improvement rather than N case-specific patches. [cwe-119, cwe-476, cwe-20] — Consolidating duplicate proposals reduces overfitting risk and produces a more maintainable, generalizable system improvement.
+
+---
+
+## Cycle: cgc (2026-03-31 03:52 UTC)
+
+### Missed Cases (3 false negatives)
+
+- **Checkmate**: Expected CWE-[20, 134, 201], detected CWE-[134], missed CWE-[20, 201]
+  ```
+  /*
+   * Copyright (C) Narf Industries <info@narfindustries.com>
+   *
+   * Permission is hereby granted, free of charge, to any person obtaining a
+   * copy of this software and associated documentation files (the "Software"),
+  ```
+- **One_Vote**: Expected CWE-[120, 121, 134, 201, 787, 788, 806], detected CWE-[787, 785, 120, 125, 126, 124, 129, 824, 822, 127, 123, 806, 825, 170, 118, 843, 839, 788, 467, 122, 823, 590, 131, 188, 176, 119, 135, 121, 805], missed CWE-[134, 201]
+  ```
+  /*
+   * Copyright (C) Narf Industries <info@narfindustries.com>
+   *
+   * Permission is hereby granted, free of charge, to any person obtaining a
+   * copy of this software and associated documentation files (the "Software"),
+  ```
+- **Packet_Analyzer**: Expected CWE-[125, 134], detected CWE-[824, 125, 805, 120, 131, 170, 126, 188, 839, 787, 127, 176, 119, 785, 135, 123, 822, 823, 118, 121, 843, 806, 129, 788, 825, 590, 124, 467, 122], missed CWE-[134]
+  ```
+  /*
+  
+  Author: Debbie Nuttall <debbie@cromulence.co>
+  
+  Copyright (c) 2015 Cromulence LLC
+  ```
+
+### Reviewed Improvement Proposals (7 total; 7 accepted, 0 rejected)
+
+- **[CWE Mapping Gap] [MODIFY]** Add CWE-20 (Improper Input Validation) as a companion mapping to the `format_string` semantic class in scoring.rs. When CWE-134 is detected and the format string originates from unvalidated external input, CWE-20 should also be emitted. Specifically, in the SemanticPatternClass mapping, add `CWE-20 => [FormatString, BufferOverflow, IntegerOverflow]` so that CWE-20 is recognized as a root-cause CWE that accompanies any vulnerability class where unvalidated input reaches a dangerous sink. This is the same fix needed for buffer overflow cases (CWE-20 as companion to CWE-119 family) — a single mapping addition that covers multiple benchmark gaps.
+  CWEs: [20, 134] | From case: Checkmate
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — CWE-20 is defined as 'Failure to validate user-supplied input' which is the root cause enabling the format string vulnerability — user input reaches printf without validation
+  - [MEMORY] pattern :: CWE-20 consistently missing as companion CWE alongside specific vulnerability CWEs in CGC challenges (FISHYXML, H20FlowInc, and others) [cwe-20, cwe-mapping, input-validation, companion-cwe, recurring-pattern] — This is now the 6th confirmed instance of CWE-20 being missed as a companion CWE, confirming a systematic mapping gap rather than a case-specific issue
+  Overfitting review: MODIFY | Risk: HIGH | Applicability: LOW
+  Review reason: CWE-20 is an extremely broad root-cause CWE. Automatically emitting it as a companion to every FormatString, BufferOverflow, and IntegerOverflow finding would generate massive false-positive noise in real-world scenarios. CWE-20 is a pillar CWE that MITRE explicitly discourages as a primary mapping — it should only be used when no more specific CWE applies. Mapping it to three semantic classes universally is overfitting to benchmark scoring rather than accurate vulnerability classification. However, allowing CWE-20 as a recognized companion when there is actual evidence of missing input validation is reasonable.
+  Suggested modification: Instead of unconditionally emitting CWE-20 as a companion for all FormatString/BufferOverflow/IntegerOverflow findings, add CWE-20 as an optional adjacency mapping that is only emitted when the agent explicitly identifies missing input validation as a root cause. Do not auto-emit CWE-20 for every detection in these classes.
+  - [KB] cwe/CWE-20/CWE-20 Improper Input Validation — CWE-20 is a pillar/class-level CWE. Auto-emitting it for every buffer overflow or format string finding dilutes specificity and contradicts CWE mapping best practices.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference shows CWE-119 family has specific children (CWE-120, CWE-121, etc.). CWE-20 as a blanket companion to all of these is overly broad.
+- **[Agent Capability Gap] [MODIFY]** Modify the vulnerability analysis agent prompt to add the following instruction: "When analyzing C/C++ code (especially CGC challenges), identify functions that access secret or sensitive data — such as `get_flag_byte`, `read_secret`, functions reading cryptographic keys, or functions accessing protected memory regions. If the return value or output of such a function flows (directly or through transformations like XOR, addition, hashing) into an output function (printf, transmit, write, send, cgc_transmit), flag this as CWE-201 (Information Exposure Through Sent Data). The data transformation does not sanitize the information — XOR, addition, and similar reversible operations still allow information leakage. Use `get_callees` to identify functions that call secret-accessing APIs, and `get_callers` to trace if their results reach output sinks." This is a general-purpose information disclosure detection pattern that applies to any code where secrets flow into outputs.
+  CWEs: [201] | From case: Checkmate
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The STRIDE methodology explicitly includes 'Information disclosure: Can sensitive data leak?' as a threat category. The methodology instructs defining 'trust zones and sensitive data boundaries' and tracing data flows, which directly supports detecting secret data flowing to output
+  - [MEMORY] insight :: CGC challenge where format string vulnerability (CWE-134) was detected but companion CWE-201 (Information Exposure Through Sent Data) was not. CWE-201 involves leaking sensitive data through program output. [cwe-20, cwe-134, cwe-201, format-string, information-exposure, companion-cwe, semantic-class] — Prior analysis of this exact pattern confirmed CWE-201 detection requires agents to recognize functions that access secret data and track their output to user-facing channels — an entirely new capability
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The general principle of detecting secret-to-output data flows for CWE-201 is sound and applicable beyond CGC. However, the specific function names (`get_flag_byte`, `read_secret`, `cgc_transmit`) are CGC-specific and would not generalize to real-world code. The core pattern — sensitive data flowing through reversible transformations to output sinks — is valid, but the prompt should use generalizable heuristics rather than CGC-specific API names.
+  Suggested modification: Rewrite the prompt to use generalized categories: 'Identify functions that access sensitive data (secrets, keys, tokens, flag values, protected memory) by looking for function names containing keywords like secret, key, flag, token, password, credential, or functions that read from protected/privileged memory regions. Then trace whether their outputs flow to any output sink (printf, write, send, transmit, or their wrappers). Reversible transformations (XOR, addition, subtraction, rotation) do not sanitize sensitive data.' Remove the CGC-specific examples from the primary instruction, or relegate them to a CGC-specific context section.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Methodology should be general-purpose; CGC-specific function names reduce generality.
+  - [MEMORY] insight :: Pattern detection should use generalizable heuristics rather than benchmark-specific API names to avoid overfitting [cwe-201] — Hardcoding CGC API names like get_flag_byte is benchmark-specific and won't transfer to real-world codebases.
+- **[Agent Capability Gap] [ACCEPT]** Modify the vulnerability analysis agent prompt to explicitly instruct it to detect CWE-134 (Format String) vulnerabilities when examining C/C++ code. Add instructions to: (1) Look for calls to printf-family functions (printf, fprintf, sprintf, snprintf, syslog, vprintf, vfprintf, and any custom wrappers) where the format string argument is a variable rather than a string literal (e.g., printf(buf) instead of printf("%s", buf) or printf("literal")). (2) Trace whether the format string variable originates from external input (network reads, user input, file reads, environment variables). (3) Check for custom printf implementations — functions that accept variadic arguments and format specifiers internally (e.g., wrapper functions or reimplementations with non-standard names like cgc_printf, cgc_sprintf). (4) When format string functions are called with a single variable argument (no explicit format specifier), flag this as a potential CWE-134 even without full taint analysis. (5) Map CWE-134 findings to the format_string semantic class. This addresses the root cause: the agent currently has no instructions to identify format string patterns, focusing exclusively on buffer overflow detection. The format string pattern printf(variable) vs printf("literal", variable) is a syntactic pattern that agents can identify during code review even when the graph is incomplete.
+  CWEs: [120, 121, 134, 201, 787, 788, 806] | From case: One_Vote
+  - [KB] cwe/CWE-134/CWE-134 Use of Externally-Controlled Format String — CWE-134 explicitly describes the vulnerability class where user-controlled format specifiers reach printf-family functions. The KB confirms this is a recognized vulnerability pattern requiring dedicated detection logic.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology KB explicitly lists "Format string (CWE-134): printf with user-controlled format string" as a detection signal under Memory Safety, confirming this should be a detection target but currently has no implementation.
+  - [MEMORY] pattern :: CGC challenge where format string vulnerability (CWE-134) was detected but companion CWEs were not [cwe-134, format-string, semantic-class] — Prior memory confirms format_string detection has gaps across CGC challenges — in some cases CWE-134 is detected but companions are missed, and in this case even CWE-134 itself is missed, indicating the detection is fragile and depends on graph availability rather than having robust pattern-based fallback.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a well-structured, general-purpose format string detection methodology. The pattern of printf(variable) vs printf("literal", variable) is a universally recognized vulnerability pattern taught in every security course. The instruction set covers standard APIs, custom wrappers, and taint tracing — all applicable to real-world C/C++ codebases. The target CWE list is broad (includes 120, 121, 787, 788, 806) which reflects that format strings can cause multiple downstream effects, though the primary detection is CWE-134. The CGC-specific examples (cgc_printf) are minor and presented as examples of the general wrapper pattern.
+  - [KB] cwe/CWE-134/CWE-134 Use of Externally-Controlled Format String — The proposal directly addresses detection of CWE-134, a well-known real-world vulnerability class. The printf(variable) pattern is the canonical detection heuristic.
+  - [KB] knowledge-pack/cwe-families/cwe-families — Format string vulnerabilities can lead to CWE-119 family issues (buffer overflows, stack corruption), justifying the broad target CWE set as downstream effects.
+- **[CWE Mapping Gap] [ACCEPT]** Add CWE-134 to the SemanticPatternClass mapping in scoring.rs, mapping it to `format_string`. Currently, the `format_string` semantic class has no CWE mappings at all, which means the class can never be detected through the scoring system regardless of what findings are produced. The mapping should be: `CWE-134 => SemanticPatternClass::FormatString`. This is a prerequisite fix — without it, no format string detection (whether pattern-based or graph-based) can ever register in the semantic class scoring. Additionally, CWE-134's siblings (e.g., CWE-785) should be reviewed for adjacency.
+  CWEs: [125, 134] | From case: Packet_Analyzer
+  - [KB] cwe/CWE-134/CWE-134 Use of Externally-Controlled Format String — CWE-134 is the canonical CWE for format string vulnerabilities. It must map to the format_string semantic class for scoring to work.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology explicitly lists "Format string (CWE-134): printf with user-controlled format string" as a memory safety vulnerability class, confirming CWE-134 is a well-defined detection target that should be mapped.
+  - [MEMORY] pattern :: CGC challenge with expected format_string semantic class (CWE-134) not detected. The system detected many buffer_overflow CWEs through regex but had no detection mechanism for format string vulnerabilities. CWE-134 was not in the 29 detected CWEs. [cwe-134, format-string, semantic-class-gap, empty-graph, custom-functions, cgc] — Prior memory confirms this exact same gap has been observed before: CWE-134 has no mapping to format_string semantic class, causing format_string to never be detected. This is a recurring systemic issue, not specific to one case.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference documents the memory safety family hierarchy but does not explicitly list CWE-134 as a child of CWE-119. CWE-134 is its own distinct vulnerability class (format string) that needs its own semantic mapping, separate from buffer_overflow.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a fundamental infrastructure fix. If the format_string semantic class has no CWE mapping, then no format string findings can ever be scored, regardless of detection quality. Adding CWE-134 => FormatString is the canonical, correct mapping and is a prerequisite for any format string detection to function. This is not overfitting — it's fixing a missing mapping that should have existed from the start. The target CWEs include CWE-125 which seems tangential, but the core mapping of CWE-134 to FormatString is correct and necessary.
+  - [KB] cwe/CWE-134/CWE-134 Use of Externally-Controlled Format String — CWE-134 is the canonical CWE for format string vulnerabilities. Mapping it to the format_string semantic class is the correct and expected mapping.
+  - [KB] cwe/CWE-125/CWE-125 Out-of-bounds Read — CWE-125 is listed as a target CWE but is not directly related to format string mapping. The primary fix (CWE-134 => FormatString) is sound; CWE-125 adjacency needs separate justification.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[20, 134, 201] detection — case Checkmate has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [20, 134, 201] | From case: Checkmate
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[20, 134, 201].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The proposal is too vague and case-specific. 'Use get_cross_file_calls and get_taint_paths' is a reasonable general instruction, but the proposal lacks specificity about what patterns to look for, what constitutes a dangerous sink in the absence of known API names, and how to handle the results. It also names specific tool functions (get_cross_file_calls, get_taint_paths) without confirming they exist or defining fallback behavior. The underlying principle — deeper graph traversal when surface-level patterns fail — is valid but needs more structure.
+  Suggested modification: Rewrite as a structured fallback strategy: 'When standard API pattern matching yields no results, the agent should: (1) Build a call graph from entry points to identify all reachable functions, (2) Identify functions that handle external input (read, recv, fgets, or any function receiving data from untrusted sources), (3) Trace data flow from these input handlers through the call graph to identify sinks (output functions, memory operations, format functions), (4) Flag paths where untrusted data reaches dangerous sinks without validation.' Remove the Checkmate case-specific framing and ensure the instruction is tool-agnostic.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The fn-insights knowledge shows that incomplete graph construction is a known failure mode. Deeper traversal is a valid mitigation, but it needs structured guidance rather than just naming tool functions.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Methodology should provide structured, generalizable steps rather than case-specific tool invocations.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[120, 121, 134, 201, 787, 788, 806] detection — case One_Vote has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [120, 121, 134, 201, 787, 788, 806] | From case: One_Vote
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[120, 121, 134, 201, 787, 788, 806].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The proposal addresses a real gap: when no regex-matchable APIs exist, deeper graph traversal is needed. However, it is overly broad in scope — targeting 7 CWEs simultaneously from a single case (One_Vote) risks overfitting to that specific binary's structure. The instruction 'look for indirect paths to dangerous sinks' is too vague and could produce excessive false positives in real-world scenarios. The proposal should be narrowed to a general-purpose cross-file taint tracing strategy without enumerating a case-specific CWE list, and should include sink-specificity guidance (e.g., what constitutes a dangerous sink for each CWE family).
+  Suggested modification: Generalize the prompt to: 'When no direct API pattern matches are found, invoke cross-file call graph traversal and taint flow analysis to identify indirect data flow to memory operation sinks (for CWE-119 family) and format string sinks (for CWE-134). Prioritize paths where external input reaches buffer writes, copies, or format specifiers without validation.' Remove the case-specific CWE enumeration list and instead reference CWE families (memory safety family CWE-119, format string CWE-134, information exposure CWE-200).
+  - [KB] knowledge-pack/cwe-families/cwe-families — The CWE family reference shows CWE-120, 121, 787 are all children of CWE-119 memory safety family. The proposal should reference the family root rather than enumerating all children, which is more generalizable and less case-specific.
+  - [MEMORY] failure :: Function not found in analysis graph indicating incomplete graph construction — deeper analysis needed for proper inclusion [cwe-121] — The known failure pattern of functions missing from analysis graphs supports the need for deeper traversal, but also warns that the fix must be general enough to cover various graph construction gaps, not just one case.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[125, 134] detection — case Packet_Analyzer has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [125, 134] | From case: Packet_Analyzer
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[125, 134].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: This proposal is nearly identical to P1 but scoped to a different case (Packet_Analyzer) with a different CWE subset. Having two essentially duplicate prompts that differ only in their CWE target lists indicates overfitting to individual benchmark cases. The underlying technique (cross-file taint tracing when no direct API matches exist) is sound and generally applicable, but should be consolidated into a single generalized instruction rather than duplicated per case. Additionally, CWE-125 (out-of-bounds read) and CWE-134 (format string) have very different sink types, and the prompt should differentiate them.
+  Suggested modification: Consolidate with P1 into a single generalized prompt: 'When no direct API pattern matches are found, invoke cross-file call graph traversal and taint flow analysis. For memory safety (CWE-119 family including CWE-125 reads, CWE-787 writes), trace to buffer access sinks. For format strings (CWE-134), trace to printf-family or equivalent format specifier sinks. Apply validation checks at each step.' This avoids case-specific duplication.
+  - [KB] cwe/CWE-125/CWE-125 Out-of-bounds Read — CWE-125 requires identifying reads past buffer boundaries — the sink type (read operations) differs from CWE-134 (format specifiers), so a generic 'dangerous sinks' instruction is insufficient without sink-type differentiation.
+  - [KB] cwe/CWE-134/CWE-134 Use of Externally-Controlled Format String — CWE-134 has distinct sink characteristics (format specifier parameters) that must be explicitly distinguished from memory access sinks to avoid false positives and ensure the taint tracing targets the correct sink type.
+
+---
+
+## Cycle: cgc (2026-03-31 03:56 UTC)
+
+### Missed Cases (2 false negatives)
+
+- **Multicast_Chat_Server**: Expected CWE-[200, 209, 457, 665], detected CWE-[457, 908, 563, 665], missed CWE-[200, 209]
+  ```
+  /*
+   * Copyright (C) Narf Industries <info@narfindustries.com>
+   *
+   * Permission is hereby granted, free of charge, to any person obtaining a
+   * copy of this software and associated documentation files (the "Software"),
+  ```
+- **ECM_TCM_Simulator**: Expected CWE-[125, 200], detected CWE-[590, 135, 129, 467, 805, 120, 121, 843, 119, 806, 839, 125, 127, 123, 122, 824, 788, 131, 787, 124, 825, 118, 823, 126, 785, 170, 822, 188, 176], missed CWE-[200]
+  ```
+  /*
+  
+  Author: Jason Williams <jdw@cromulence.com>
+  
+  Copyright (c) 2015 Cromulence LLC
+  ```
+
+### Reviewed Improvement Proposals (4 total; 3 accepted, 1 rejected)
+
+- **[Pattern Gap] [MODIFY]** Modify the vulnerability analysis agent prompt to add the following instruction: "When you detect CWE-457 (Use of Uninitialized Variable) or CWE-908 (Use of Uninitialized Resource), check whether the uninitialized value flows into any output function (transmit, write, send, printf, puts, fprintf, fwrite, or any custom output/transmit wrapper). If the uninitialized data is transmitted or written to an output channel, also emit CWE-200 (Exposure of Sensitive Information) as a companion finding — the uninitialized memory may contain sensitive data from previous operations. If the function containing the vulnerability is an error handler or error message generator (identifiable by function names containing 'error', 'err', 'wrong', 'invalid', 'fail', 'denied', or 'unauthorized', or by the context of being called during authentication/authorization failure), additionally emit CWE-209 (Generation of Error Message Containing Sensitive Information). Uninitialized memory transmitted in error responses is a classic information disclosure vulnerability because stack/heap residue may contain secrets, credentials, or flag data from prior operations."
+  CWEs: [200, 209] | From case: Multicast_Chat_Server
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The STRIDE methodology explicitly lists "Information disclosure: Can sensitive data leak?" as a threat category. The agent prompt should instruct analysts to check whether CWE-457 findings lead to information disclosure (the "I" in STRIDE) when uninitialized data reaches output functions.
+  - [MEMORY] pattern :: CGC challenge where format string vulnerability detected but companion CWE-201 (Information Exposure Through Sent Data) was not. CWE-201 involves leaking sensitive data through program output. [cwe-20, cwe-134, cwe-201, format-string, information-exposure, companion-cwe, semantic-class] — This is an identical pattern class — the system detects the root-cause CWE but fails to emit companion information-disclosure CWEs (CWE-200/CWE-201/CWE-209) when sensitive or uninitialized data flows to output functions. The prior lesson confirms this is a recurring detection gap affecting multiple vulnerability types.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The core logic (CWE-457/908 → output sink → CWE-200) is sound and represents a well-known real-world vulnerability class (e.g., kernel info leaks via uninitialized stack variables). However, the function-name heuristic for CWE-209 (matching 'err', 'wrong', 'invalid', etc.) is fragile and overfits to CGC naming conventions. Many production codebases have functions containing 'err' that are not error handlers (e.g., 'terrain', 'ferret', 'assertion'). The CWE-209 detection should require actual taint flow evidence (uninitialized data in an error-context output), not just function name matching.
+  Suggested modification: Keep the CWE-457/908 → output sink → CWE-200 companion finding logic. For CWE-209, remove the function-name substring matching heuristic and instead require: (1) the output occurs on an error/failure control flow path (e.g., after a failing condition check or in a catch/error branch), AND (2) uninitialized or sensitive data flows to the output sink on that path. Do not rely on function naming conventions alone.
+  - [KB] cwe/CWE-125/CWE-125 Out-of-bounds Read — CWE-125 reference shows that read-based memory safety issues leading to output are a recognized info disclosure pattern, supporting the CWE-457 → CWE-200 chain but highlighting the need for actual data flow rather than naming heuristics.
+  - [KB] knowledge-pack/cwe-families/cwe-families — Memory safety family reference confirms CWE-457 is a recognized root cause that can chain to CWE-200, but the CWE taxonomy doesn't support name-based detection — it requires actual data flow evidence.
+- **[Agent Capability Gap] [ACCEPT]** Modify the vulnerability analysis agent prompt to include consequence chain reasoning: When CWE-125 (Out-of-bounds Read), CWE-126 (Buffer Over-read), CWE-127 (Buffer Under-read), or CWE-457 (Uninitialized Variable) is detected, check whether the data read out-of-bounds or uninitialized flows to any output function (send, write, transmit, printf, cgc_transmit, or is returned from the function to callers that may output it). If OOB-read or uninitialized data reaches a user-facing output sink, emit CWE-200 (Exposure of Sensitive Information) as a companion finding. This is the Heartbleed pattern: OOB read + output = information disclosure. The general rule: any memory safety read vulnerability (CWE-125, CWE-126, CWE-127, CWE-457) whose data reaches a transmit/write/send/printf sink should additionally be flagged as CWE-200.
+  CWEs: [125, 200] | From case: ECM_TCM_Simulator
+  - [KB] knowledge-pack/cwe-families/cwe-families — CWE-125 is explicitly listed as 'Reading past buffer end (info disclosure)' — the parenthetical confirms that CWE-125 naturally leads to CWE-200 when data is exposed to users, and CGC-Specific Patterns section documents cgc_transmit as an output sink equivalent to send/write
+  - [MEMORY] pattern :: CGC challenge where uninitialized pointer variable is used in an error message function, system detected CWE-457/CWE-665 but missed CWE-200/CWE-209 consequence CWEs [cwe-200, cwe-209, cwe-457, cwe-665, uninitialized-variable, information-disclosure, companion-cwe, error-message, consequence-chain] — This is the exact same pattern — the system detects the root-cause memory defect but fails to emit the consequence CWE-200 when the defective data flows to output. The prior memory confirms this is a recurring systemic gap, not an isolated case.
+  - [MEMORY] pattern :: CGC challenge where format string vulnerability (CWE-134) was detected but companion CWE-201 (Information Exposure Through Sent Data) was not, because there's no agent capability to identify when sensitive/secret data flows into output functions [cwe-20, cwe-134, cwe-201, format-string, information-exposure, companion-cwe, semantic-class] — Another instance of the same systemic gap — the system detects the mechanism but not the information exposure consequence, confirming the need for consequence-chain reasoning in agent prompts
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This is a well-founded vulnerability pattern (the Heartbleed pattern) with strong real-world precedent. The proposal is general: it applies to any codebase where OOB-read data flows to an output sink. It requires actual taint flow evidence (data reaching a sink), not heuristic name matching. The listed CWEs (125, 126, 127, 457) are all legitimate root causes for information disclosure. The proposal correctly gates CWE-200 emission on the data actually reaching an output function, avoiding false positives from OOB reads that don't leak data.
+  - [KB] cwe/CWE-125/CWE-125 Out-of-bounds Read — CWE-125 explicitly describes reading past buffer boundaries, which is the exact root cause pattern this proposal chains to CWE-200 when output is involved.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The memory safety family (CWE-119 root) explicitly includes CWE-125 and related read vulnerabilities. The consequence chain from read-OOB to information disclosure is a well-documented CWE relationship.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[200, 209, 457, 665] detection — case Multicast_Chat_Server has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [200, 209, 457, 665] | From case: Multicast_Chat_Server
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[200, 209, 457, 665].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The general principle of using deeper graph traversal and taint flow when regex-based API matching fails is sound and broadly applicable. However, the proposal is too tightly scoped to a single case (Multicast_Chat_Server) and a specific CWE set without explaining the general triggering conditions. It also overlaps significantly with P1, creating potential redundancy. The instruction should be generalized to apply whenever initial pattern matching yields no results for any CWE, not just the four listed.
+  Suggested modification: Generalize the instruction: 'When initial API pattern matching fails to find expected vulnerability indicators, fall back to cross-file call graph traversal (get_cross_file_calls) and taint path analysis (get_taint_paths) to trace data flow through wrapper functions and indirect call chains. This applies to all CWE categories, not just specific ones. Prioritize this fallback for information disclosure (CWE-200/209), uninitialized variable use (CWE-457/665), and memory safety issues (CWE-119 family) where wrapper functions commonly obscure direct API calls.'
+  - [MEMORY] failure :: Function not found in analysis graph, indicating incomplete graph construction or missing function extraction [cwe-121] — The fn-insights knowledge base documents cases where functions are absent from the analysis graph, demonstrating that shallow graph traversal is a known systemic issue — not specific to Multicast_Chat_Server.
+- **[Agent Capability Gap] [REJECT]** Enhance agent graph traversal for CWE-[125, 200] detection — case ECM_TCM_Simulator has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [125, 200] | From case: ECM_TCM_Simulator
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[125, 200].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: REJECT | Risk: HIGH | Applicability: LOW
+  Review reason: This proposal is nearly identical to P3 but scoped to a different case (ECM_TCM_Simulator) and different CWE subset (125, 200). Having separate per-case graph traversal instructions is a clear overfitting pattern — the underlying issue (need for deeper traversal when regex fails) is the same. This should be consolidated with P3 into a single generalized instruction. Accepting both would create redundant, case-specific prompt bloat.
+  - [MEMORY] insight :: Per-case prompt modifications for the same underlying capability gap (shallow graph traversal) indicate overfitting rather than generalizable improvement [cwe-125, cwe-200] — The same graph traversal enhancement appears in P3 for a different case. Creating duplicate case-specific instructions is a textbook overfitting pattern — the fix should be generalized once, not duplicated per failing test case.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The fn-insights entry documents that missing functions in the analysis graph is a systemic issue affecting multiple cases, confirming that per-case fixes are the wrong granularity.
+
+---
+

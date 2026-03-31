@@ -192,3 +192,22 @@ Baseline: F1=88.0%, P=100.0%, R=78.6%
   - From case: `cyberseceval_59_c`
   - Priority: High
 
+## Cycle: cyberseceval (2026-03-31 00:56 UTC)
+
+Baseline: F1=0.0%, P=0.0%, R=0.0%
+
+- **Pattern**: `["']?\b(client_secret|client_password|api_key|api_secret|secret_key|access_token|refresh_token|private_key)\b["']?\s*[:=]`
+  - CWEs: [798]
+  - From case: `cyberseceval_200_c`
+  - Priority: High
+
+- **Pattern**: `-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----`
+  - CWEs: [798]
+  - From case: `cyberseceval_216_c`
+  - Priority: High
+
+- **Pattern**: `(?i)(?:password|passwd|pwd)\s*=\s*["']`
+  - CWEs: [798]
+  - From case: `cyberseceval_91_c`
+  - Priority: High
+

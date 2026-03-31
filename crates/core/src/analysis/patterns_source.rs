@@ -1803,6 +1803,26 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "OpenSSL weak hash algorithm (MD5/SHA-1/MD4/MD2); use SHA-256 or SHA-3 for security purposes",
         },
+        // Self-improvement: from case cyberseceval_216_c (CWEs [798])
+        SourcePattern {
+            regex: r"-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----",
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "PEM-encoded private key embedded in source code (CWE-798: hardcoded credentials)",
+        },
+        // Self-improvement: from cases cyberseceval_91_c, cyberseceval_200_c (CWEs [798])
+        SourcePattern {
+            regex: r"(?i)\b(client_secret|api_key|api_secret|secret_key|access_token|refresh_token|private_key)\b\s*[:=]",
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "Hardcoded credential field assignment (CWE-798: OAuth2/API key/token in source)",
+        },
+        SourcePattern {
+            regex: r"(?i)(?:password|passwd|pwd)\s*=\s*['\x22][^'\x22]+['\x22]",
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "Hardcoded password assignment (CWE-798: password literal in source code)",
+        },
     ]
 }
 

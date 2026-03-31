@@ -19,6 +19,7 @@ mod gym_with_profile {
 
     /// Helper: create a minimal skwaq_root with the required ground_truth dir
     /// so Gym::new / Gym::with_profile can find the fixtures adapter manifest.
+    #[allow(dead_code)]
     fn make_skwaq_root(tmp: &TempDir) -> PathBuf {
         let root = tmp.path().join("skwaq");
         let gt_dir = root.join("data/gym/ground_truth");

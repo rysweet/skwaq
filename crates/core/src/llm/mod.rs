@@ -172,12 +172,12 @@ pub fn validate_benchmark_copilot_config_for_pipeline(
     require_reasoning: bool,
     require_decompilation: bool,
 ) -> anyhow::Result<()> {
-    let allowed = ["copilot", "azure"];
+    let allowed = ["copilot", "azure", "anthropic"];
     if require_reasoning {
         let backend = validate_backend_name(config.reasoning.trim(), "llm.reasoning")?;
         if !allowed.contains(&backend.as_str()) {
             anyhow::bail!(
-                "Benchmark runs require [llm].reasoning = \"copilot\" or \"azure\", found {:?}",
+                "Benchmark runs require [llm].reasoning = \"copilot\", \"azure\", or \"anthropic\", found {:?}",
                 config.reasoning
             );
         }
@@ -188,7 +188,7 @@ pub fn validate_benchmark_copilot_config_for_pipeline(
             validate_backend_name(config.decompilation.trim(), "llm.decompilation")?;
         if !allowed.contains(&decompilation.as_str()) {
             anyhow::bail!(
-                "Benchmark runs require [llm].decompilation = \"copilot\" or \"azure\", found {:?}",
+                "Benchmark runs require [llm].decompilation = \"copilot\", \"azure\", or \"anthropic\", found {:?}",
                 config.decompilation
             );
         }
@@ -318,16 +318,25 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_benchmark_copilot_config_requires_copilot() {
+    fn test_validate_benchmark_config_rejects_invalid_backend() {
         let config = LlmConfig {
-            reasoning: "anthropic".into(),
+            reasoning: "invalid".into(),
             ..Default::default()
         };
 
         let err = validate_benchmark_copilot_config(&config).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("require [llm].reasoning = \"copilot\" or \"azure\""));
+        assert!(err.to_string().contains("Unsupported"));
+    }
+
+    #[test]
+    fn test_validate_benchmark_config_accepts_anthropic() {
+        let config = LlmConfig {
+            reasoning: "anthropic".into(),
+            decompilation: "anthropic".into(),
+            ..Default::default()
+        };
+
+        assert!(validate_benchmark_copilot_config(&config).is_ok());
     }
 
     #[test]
@@ -340,16 +349,14 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_benchmark_copilot_config_requires_copilot_decompilation() {
+    fn test_validate_benchmark_config_rejects_invalid_decompilation() {
         let config = LlmConfig {
-            decompilation: "anthropic".into(),
+            decompilation: "invalid".into(),
             ..Default::default()
         };
 
         let err = validate_benchmark_copilot_config(&config).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("require [llm].decompilation = \"copilot\" or \"azure\""));
+        assert!(err.to_string().contains("Unsupported"));
     }
 
     #[tokio::test]
