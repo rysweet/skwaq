@@ -510,6 +510,10 @@ impl Gym {
                     if let Some((i, &case)) = case_iter.next() {
                         let suite = suite_name.clone();
                         pending.push(Box::pin(async move {
+                            // Check cross-process backoff before making API calls
+                            crate::throttle::CrossProcessBackoff::new()
+                                .wait_if_needed()
+                                .await;
                             let result = tokio::time::timeout(
                                 std::time::Duration::from_secs(timeout_secs),
                                 adapter.run_case(case, data_dir, config),
@@ -582,12 +586,22 @@ impl Gym {
                         Ok(Err(e)) => {
                             let msg = e.to_string();
                             let is_retryable = msg.contains("429")
+                                || msg.contains("529")
+                                || msg.contains("overloaded")
                                 || msg.contains("rate")
                                 || msg.contains("Rate")
                                 || msg.contains("Timeout")
                                 || msg.contains("timed out")
                                 || msg.contains("throttl")
                                 || msg.contains("error sending request");
+                            // Signal cross-process backoff on rate limit errors
+                            if is_retryable
+                                && (msg.contains("429")
+                                    || msg.contains("529")
+                                    || msg.contains("overloaded"))
+                            {
+                                crate::throttle::CrossProcessBackoff::new().signal_rate_limited(30);
+                            }
                             // Extract retry count from the case index (stored as i)
                             let retry_count = retry_queue
                                 .iter()
