@@ -211,3 +211,17 @@ Baseline: F1=0.0%, P=0.0%, R=0.0%
   - From case: `cyberseceval_91_c`
   - Priority: High
 
+## Cycle: fixtures (2026-03-31 04:55 UTC)
+
+Baseline: F1=93.3%, P=100.0%, R=87.5%
+
+- **Pattern**: ``[^`]*<[a-zA-Z][^`]*\$\{[^}]+\}[^`]*``
+  - CWEs: [79]
+  - From case: `cse_xss_js`
+  - Priority: High
+
+- **Pattern**: `\b(innerHTML|outerHTML)\s*=\s*[^;]*\$\{|\bdocument\.write(ln)?\s*\(`
+  - CWEs: [79]
+  - From case: `cse_xss_js`
+  - Priority: High
+
