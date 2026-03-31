@@ -714,8 +714,27 @@ fn java_patterns() -> &'static [SourcePattern] {
             severity: Severity::Medium,
             reason: "Session setAttribute may store untrusted data across trust boundary (CWE-501)",
         },
-        // Cookie creation covered by broader pattern above (line ~332):
-        //   r"\bnew\s+[\w.]*Cookie\s*\("
+        // Trust boundary: getParameterMap() is an untrusted source (OWASP gap)
+        SourcePattern {
+            regex: r"\bgetParameterMap\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Medium,
+            reason: "getParameterMap() returns untrusted user input; validate before use in session/security context (CWE-501)",
+        },
+        // Trust boundary: getHeaders()/getHeaderNames() as untrusted source
+        SourcePattern {
+            regex: r"\b(?:getHeaders|getHeaderNames)\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Medium,
+            reason: "HTTP headers are untrusted input; validate before storing in session (CWE-501)",
+        },
+        // Trust boundary: putValue is legacy session storage (same as setAttribute)
+        SourcePattern {
+            regex: r"\bputValue\s*\(",
+            category: DangerCategory::Injection,
+            severity: Severity::Medium,
+            reason: "Session putValue stores data across trust boundary (CWE-501); validate input first",
+        },
     ]
 }
 
