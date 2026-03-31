@@ -268,7 +268,26 @@ After downloading, extract to `~/.local/share/skwaq/gym/cache/binpool/binpool_ar
 | OWASP | 90.2 | 100.0 | 82.1 | 533 | 0 | 116 |
 | Juliet | 59.0 | 100.0 | 41.8 | 341 | 0 | 474 |
 
-100% precision across all suites (zero false positives). Full eval with unlimited case counts in progress.
+100% precision across all suites (zero false positives).
+
+### Pattern-Only Detection (Latest, 2026-03-31)
+
+| Suite | Cases | F1% | P% | R% |
+|-------|-------|-----|----|----|
+| Fixtures | 99 | 93.2 | 98.1 | 88.8 |
+| OWASP | 500 | 92.7 | 100.0 | 86.4 |
+| CyberSecEval | 578 | 91.8 | 100.0 | 84.8 |
+| CGC | 226 | 89.8 | 100.0 | 81.5 |
+| Juliet | 1,000 | 88.8 | 100.0 | 79.9 |
+
+### Hybrid Agent Detection (Claude Opus via Anthropic API)
+
+| Suite | Cases | F1% | P% | R% |
+|-------|-------|-----|----|----|
+| Juliet | 20 | 97.3 | 100.0 | 94.7 |
+| OWASP | 20 | 95.2 | 100.0 | 90.9 |
+| Fixtures | 99 | 92.6 | 100.0 | 86.2 |
+| CyberSecEval | 20 | 90.9 | 100.0 | 83.3 |
 
 ## License
 
