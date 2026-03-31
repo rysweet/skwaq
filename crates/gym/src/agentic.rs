@@ -208,6 +208,134 @@ pub async fn run_agentic_source_analysis(
     run_agentic_source_analysis_with_hints(path, timeout_secs, &AnalysisHints::default()).await
 }
 
+/// Run full agentic analysis with additional companion files ingested into
+/// the same graph for cross-file relationship detection.
+///
+/// This is used for Juliet variants 51-68 where the vulnerability spans
+/// multiple files (e.g., source in 51a.c, sink in 51b.c).
+pub async fn run_agentic_multi_file_source_analysis(
+    primary: &Path,
+    companions: &[PathBuf],
+    timeout_secs: u64,
+) -> anyhow::Result<Vec<DetectedFinding>> {
+    if companions.len() <= 1 {
+        // No companions — fall back to single-file analysis
+        return run_agentic_source_analysis(primary, timeout_secs).await;
+    }
+
+    // Ingest all files into a shared graph, then run the agent pipeline
+    // on the primary file with cross-file context available.
+    let db = GraphDb::in_memory()?;
+    let inv_id = format!("gym-mf-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+    let now = chrono::Utc::now().to_rfc3339();
+    let file_str = primary.to_string_lossy().to_string();
+
+    db.execute(
+        "INSERT INTO investigations (id, name, target, status, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
+        &[
+            &inv_id.as_str(),
+            &file_str.as_str(),
+            &file_str.as_str(),
+            &now.as_str(),
+            &now.as_str(),
+        ],
+    )?;
+
+    // Ingest ALL companion files into the shared graph
+    let builder = GraphBuilder::new(&db);
+    let mut parsed_files = Vec::new();
+    for path in companions {
+        match parse_file(path) {
+            Ok(parsed) => parsed_files.push(parsed),
+            Err(e) => tracing::debug!("Multi-file parse skip {}: {}", path.display(), e),
+        }
+    }
+    if parsed_files.is_empty() {
+        return Ok(vec![]);
+    }
+    builder.build_from_source(&parsed_files, &inv_id)?;
+
+    tracing::info!(
+        "Multi-file agentic: ingested {} files into shared graph for {}",
+        parsed_files.len(),
+        file_str
+    );
+
+    // Run pattern detection across all files
+    let detector = DangerousApiDetector::new();
+    let mut all_findings = Vec::new();
+    for comp_path in companions {
+        let lang = comp_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("c");
+        if let Ok(hits) = detector.detect_in_source(comp_path, lang) {
+            for hit in hits {
+                all_findings.push(DetectedFinding {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    category: hit.danger_category.to_string(),
+                    severity: hit.severity.to_string(),
+                    cwes: vec![],
+                    file: comp_path.to_string_lossy().to_string(),
+                    function: hit.function_name.clone(),
+                    line: Some(hit.line as u32),
+                    title: format!(
+                        "Dangerous pattern: {} ({}:{})",
+                        hit.function_name,
+                        comp_path.file_name().unwrap_or_default().to_string_lossy(),
+                        hit.line
+                    ),
+                });
+            }
+        }
+    }
+
+    // Graph-based cross-file detection
+    if let Ok(graph_hits) = detector.detect(&db) {
+        let seen: std::collections::HashSet<String> =
+            all_findings.iter().map(|f| f.function.clone()).collect();
+        for hit in graph_hits {
+            if !seen.contains(&hit.function_name) {
+                all_findings.push(DetectedFinding {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    category: hit.danger_category.to_string(),
+                    severity: hit.severity.to_string(),
+                    cwes: vec![],
+                    file: hit.file.clone(),
+                    function: hit.function_name.clone(),
+                    line: Some(hit.line as u32),
+                    title: format!("Cross-file: {} ({})", hit.function_name, hit.reason),
+                });
+            }
+        }
+    }
+
+    // Run taint analysis on the shared graph
+    let taint = skwaq_core::analysis::TaintAnalyzer::new(&db, 10);
+    if let Ok(paths) = taint.find_unsanitized_paths() {
+        for tp in &paths {
+            all_findings.push(DetectedFinding {
+                id: uuid::Uuid::new_v4().to_string(),
+                category: "taint_flow".to_string(),
+                severity: "high".to_string(),
+                cwes: vec![],
+                file: file_str.clone(),
+                function: tp.sink.clone(),
+                line: None,
+                title: format!(
+                    "Cross-file taint: {} → {} ({})",
+                    tp.source,
+                    tp.sink,
+                    tp.hops.join(" → ")
+                ),
+            });
+        }
+    }
+
+    Ok(all_findings)
+}
+
 /// Run pattern-only analysis across multiple source files with a shared graph.
 ///
 /// Unlike per-file analysis, this ingests ALL files into a single Code Property
