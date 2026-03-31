@@ -25,6 +25,33 @@ impl DangerousApiDetector {
         }
     }
 
+    /// If `func_name` wraps exactly one dangerous API, return the wrapped name.
+    fn resolve_wrapper_sink(&self, db: &GraphDb, func_name: &str) -> Option<String> {
+        let base = func_name.split('@').next().unwrap_or(func_name);
+        if self.entries.iter().any(|e| e.name == base) {
+            return None;
+        }
+        let sql = "SELECT f2.name FROM calls c \
+                   JOIN functions f1 ON c.caller_id = f1.id \
+                   JOIN functions f2 ON c.callee_id = f2.id \
+                   WHERE f1.name = ?1";
+        let mut stmt = db.conn().prepare(sql).ok()?;
+        let callees: Vec<String> = stmt
+            .query_map([func_name], |row| row.get::<_, String>(0))
+            .ok()?
+            .filter_map(|r| r.ok())
+            .collect();
+        if callees.len() != 1 {
+            return None;
+        }
+        let callee_base = callees[0].split('@').next().unwrap_or(&callees[0]);
+        if self.entries.iter().any(|e| e.name == callee_base) {
+            Some(callee_base.to_string())
+        } else {
+            None
+        }
+    }
+
     /// Check a set of binary imports for dangerous function usage.
     pub fn check_imports(&self, imports: &[ImportInfo]) -> Vec<DangerousApiHit> {
         imports
@@ -70,6 +97,20 @@ impl DangerousApiDetector {
                         file: String::new(),
                         line: 0,
                     });
+                }
+            } else if let Some(resolved) = self.resolve_wrapper_sink(db, &name) {
+                if let Some(entry) = self.entries.iter().find(|e| e.name == resolved.as_str()) {
+                    if seen.insert(name.clone()) {
+                        hits.push(DangerousApiHit {
+                            function_name: name.clone(),
+                            library: format!("wrapper({})", resolved),
+                            reason: format!("wrapper around {}: {}", resolved, entry.reason),
+                            danger_category: entry.category.clone(),
+                            severity: entry.severity.clone(),
+                            file: String::new(),
+                            line: 0,
+                        });
+                    }
                 }
             }
         }
@@ -357,5 +398,41 @@ mod tests {
                 hits[0].danger_category
             );
         }
+    }
+
+    #[test]
+    fn test_detect_wrapper_around_dangerous_api() {
+        let db = GraphDb::in_memory().unwrap();
+        db.execute(
+            "INSERT INTO functions (id, name) VALUES ('f1', 'my_sprintf')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO functions (id, name) VALUES ('f2', 'sprintf')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO calls (caller_id, callee_id) VALUES ('f1', 'f2')",
+            &[],
+        )
+        .unwrap();
+        let detector = DangerousApiDetector::new();
+        let hits = detector.detect(&db).unwrap();
+        assert!(
+            hits.iter().any(|h| h.function_name == "sprintf"),
+            "should detect sprintf"
+        );
+        assert!(
+            hits.iter().any(|h| h.function_name == "my_sprintf"),
+            "should detect wrapper"
+        );
+        let w = hits
+            .iter()
+            .find(|h| h.function_name == "my_sprintf")
+            .unwrap();
+        assert!(w.library.contains("wrapper"));
+        assert_eq!(w.danger_category, DangerCategory::FormatString);
     }
 }

@@ -53,6 +53,35 @@ pub fn pattern_perspective(db: &GraphDb, inv_id: &str, cycle: u32) -> Vec<Findin
                             cycle_last_updated: cycle,
                         });
                     }
+                } else if let Some(resolved) = resolve_wrapper_sink(db, &name) {
+                    if let Some((cat, sev, reason)) = dangerous_api_info(&resolved) {
+                        if seen.insert(name.clone()) {
+                            findings.push(Finding {
+                                id: Uuid::new_v4().to_string(),
+                                title: format!("Dangerous API wrapper: {} -> {}", base, resolved),
+                                description: format!("Wrapper around {}: {}", resolved, reason),
+                                severity: sev.to_string(),
+                                category: cat.to_string(),
+                                location: FindingLocation {
+                                    file: String::new(),
+                                    function: name.clone(),
+                                    line: None,
+                                    address: if address.is_empty() {
+                                        None
+                                    } else {
+                                        Some(address.clone())
+                                    },
+                                },
+                                evidence: vec![format!(
+                                    "Function '{}' wraps dangerous API '{}': {}",
+                                    base, resolved, reason
+                                )],
+                                status: FindingStatus::New,
+                                cycle_discovered: cycle,
+                                cycle_last_updated: cycle,
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -133,6 +162,33 @@ pub fn pattern_perspective(db: &GraphDb, inv_id: &str, cycle: u32) -> Vec<Findin
     }
 
     findings
+}
+
+/// If `func_name` wraps exactly one dangerous API, return the wrapped name.
+fn resolve_wrapper_sink(db: &GraphDb, func_name: &str) -> Option<String> {
+    let base = func_name.split('@').next().unwrap_or(func_name);
+    if dangerous_api_info(base).is_some() {
+        return None;
+    }
+    let sql = "SELECT f2.name FROM calls c \
+               JOIN functions f1 ON c.caller_id = f1.id \
+               JOIN functions f2 ON c.callee_id = f2.id \
+               WHERE f1.name = ?1";
+    let mut stmt = db.conn().prepare(sql).ok()?;
+    let callees: Vec<String> = stmt
+        .query_map([func_name], |row| row.get::<_, String>(0))
+        .ok()?
+        .filter_map(|r| r.ok())
+        .collect();
+    if callees.len() != 1 {
+        return None;
+    }
+    let callee_base = callees[0].split('@').next().unwrap_or(&callees[0]);
+    if dangerous_api_info(callee_base).is_some() {
+        Some(callee_base.to_string())
+    } else {
+        None
+    }
 }
 
 /// Look up danger info for a function name. Returns (category, severity, reason).
@@ -270,5 +326,37 @@ mod tests {
         assert!(dangerous_api_info("system").is_some());
         assert!(dangerous_api_info("printf").is_some());
         assert!(dangerous_api_info("malloc").is_none());
+    }
+
+    #[test]
+    fn test_pattern_perspective_detects_wrapper() {
+        let db = GraphDb::in_memory().unwrap();
+        db.execute(
+            "INSERT INTO functions (id, name, investigation_id) VALUES ('f1', 'log_msg', 'inv1')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO functions (id, name, investigation_id) VALUES ('f2', 'sprintf', 'inv1')",
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO calls (caller_id, callee_id) VALUES ('f1', 'f2')",
+            &[],
+        )
+        .unwrap();
+        let findings = pattern_perspective(&db, "inv1", 1);
+        assert!(
+            findings.iter().any(|f| f.title.contains("sprintf")),
+            "should detect sprintf"
+        );
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.title.contains("log_msg") && f.title.contains("wrapper")),
+            "should detect log_msg as wrapper: {:?}",
+            findings.iter().map(|f| &f.title).collect::<Vec<_>>()
+        );
     }
 }
