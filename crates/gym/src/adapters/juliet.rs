@@ -146,16 +146,19 @@ impl BenchmarkAdapter for JulietAdapter {
         let companion_files = collect_companion_files(&source_path);
 
         if companion_files.len() > 1 {
-            // Multi-file case: analyze all files together
+            // Multi-file case: analyze all files together with shared graph
             if config.quick_mode {
                 crate::agentic::run_multi_file_pattern_analysis(&companion_files)
             } else if config.llm_only {
-                // For multi-file LLM analysis, analyze the primary file with context
                 crate::agentic::run_llm_only_source_analysis(&source_path, config.timeout_secs)
                     .await
             } else {
-                // Agentic multi-file: analyze primary with cross-file context
-                crate::agentic::run_agentic_source_analysis(&source_path, config.timeout_secs).await
+                crate::agentic::run_agentic_multi_file_source_analysis(
+                    &source_path,
+                    &companion_files,
+                    config.timeout_secs,
+                )
+                .await
             }
         } else if config.quick_mode {
             run_source_pattern_detection(&source_path)
