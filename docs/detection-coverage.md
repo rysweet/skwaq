@@ -28,9 +28,19 @@ family with any ground-truth CWE for that test case.
 ## Semantic Pattern Classes
 
 The `SemanticPatternClass` enum in `semantic_classifier.rs` defines 34
-vulnerability classes (as of 2026-03-31). The source pattern engine has 281
-patterns across 6 languages (C/C++, Java, Python, JavaScript/TypeScript, Go,
-Rust). Each class has a dedicated recognition function that checks category,
+vulnerability classes (as of 2026-03-31). The source pattern engine has 298
+patterns across 6 languages:
+
+| Language | Patterns |
+|----------|----------|
+| C/C++ | 173 |
+| Java | 43 |
+| Python | 39 |
+| JavaScript/TS | 15 |
+| Go | 10 |
+| Rust | 10 |
+
+Each class has a dedicated recognition function that checks category,
 title keywords, and function names.
 
 ### UnsafeApiUsage
