@@ -26,10 +26,33 @@ impl<'a> TaintAnalyzer<'a> {
         Self { db, max_depth }
     }
 
-    /// If `func_name` wraps exactly one dangerous sink, return the sink name.
+    /// Check if a function name is a known data source.
+    fn is_data_source(&self, func_name: &str) -> bool {
+        let sql = "SELECT COUNT(*) FROM data_sources WHERE name = ?1";
+        self.db
+            .conn()
+            .prepare(sql)
+            .ok()
+            .and_then(|mut stmt| stmt.query_row([func_name], |row| row.get::<_, i64>(0)).ok())
+            .unwrap_or(0)
+            > 0
+    }
+
+    /// If `func_name` wraps a dangerous sink (up to 3 hops), return the sink name.
     fn resolve_wrapper_sink(&self, func_name: &str) -> Option<String> {
+        self.resolve_wrapper_sink_depth(func_name, 3)
+    }
+
+    fn resolve_wrapper_sink_depth(&self, func_name: &str, remaining: u32) -> Option<String> {
+        if remaining == 0 {
+            return None;
+        }
         let base = func_name.split('@').next().unwrap_or(func_name);
         if DANGEROUS_SINK_NAMES.contains(&base) {
+            return None; // Already a dangerous sink, no wrapping needed
+        }
+        // Don't resolve data sources as wrappers
+        if self.is_data_source(func_name) {
             return None;
         }
         let sql = "SELECT f2.name FROM calls c \
@@ -43,13 +66,14 @@ impl<'a> TaintAnalyzer<'a> {
             .filter_map(|r| r.ok())
             .collect();
         if callees.len() != 1 {
-            return None;
+            return None; // Not a simple wrapper (0 or 2+ callees)
         }
         let callee_base = callees[0].split('@').next().unwrap_or(&callees[0]);
         if DANGEROUS_SINK_NAMES.contains(&callee_base) {
             Some(callee_base.to_string())
         } else {
-            None
+            // Recurse: callee might itself be a wrapper
+            self.resolve_wrapper_sink_depth(&callees[0], remaining - 1)
         }
     }
 
