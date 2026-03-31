@@ -41,7 +41,7 @@ opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
 opentelemetry-otlp = { version = "0.27", features = ["tonic"] }
 
 # TUI
-ratatui = "0.29"
+ratatui = "0.30"
 crossterm = "0.28"
 
 # HTTP
