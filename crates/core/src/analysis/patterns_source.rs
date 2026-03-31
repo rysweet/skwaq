@@ -1823,6 +1823,20 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "Hardcoded password assignment (CWE-798: password literal in source code)",
         },
+        // Self-improvement: from case cse_xss_js (CWEs [79])
+        SourcePattern {
+            regex: r"`[^`]*<[a-zA-Z][^`]*\$\{[^}]+\}[^`]*`",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Add a JavaScript/TypeScript-specific regex pattern to detect unsanitized user input interpolated into HTML template lite",
+        },
+        // Self-improvement: from case cse_xss_js (CWEs [79])
+        SourcePattern {
+            regex: r"\b(innerHTML|outerHTML)\s*=\s*[^;]*\$\{|\bdocument\.write(ln)?\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Add a secondary regex pattern to detect innerHTML/outerHTML assignment with template interpolation or document.write usa",
+        },
     ]
 }
 
