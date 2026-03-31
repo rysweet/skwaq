@@ -406,6 +406,41 @@ fn go_patterns() -> &'static [SourcePattern] {
             severity: Severity::Medium,
             reason: "HTTP without TLS; use ListenAndServeTLS for production",
         },
+        // Path traversal
+        SourcePattern {
+            regex: r"\bfilepath\.Join\s*\([^)]*\+",
+            category: DangerCategory::PathTraversal,
+            severity: Severity::High,
+            reason: "Path concatenation may allow traversal; use filepath.Clean and validate",
+        },
+        // Weak crypto
+        SourcePattern {
+            regex: r"\bcrypto/md5\b|\bcrypto/sha1\b|\bcrypto/des\b|\bcrypto/rc4\b",
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "Weak cryptographic algorithm; use crypto/sha256 or crypto/aes",
+        },
+        // SSRF / open redirect
+        SourcePattern {
+            regex: r"\bhttp\.Get\s*\([^)]*\+|\bhttp\.Post\s*\([^)]*\+",
+            category: DangerCategory::Injection,
+            severity: Severity::High,
+            reason: "HTTP request with concatenated URL; validate/allowlist to prevent SSRF",
+        },
+        // Hardcoded credentials
+        SourcePattern {
+            regex: r#"(?i)(?:password|secret|token|apikey)\s*[:=]\s*"[^"]{8,}""#,
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "Hardcoded credential in Go source (CWE-798)",
+        },
+        // Race condition: goroutine accessing shared state
+        SourcePattern {
+            regex: r"\bgo\s+func\s*\(",
+            category: DangerCategory::Race,
+            severity: Severity::Medium,
+            reason: "Goroutine may access shared state; use sync.Mutex or channels",
+        },
     ]
 }
 
@@ -440,6 +475,41 @@ fn rust_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::Memory,
             severity: Severity::Critical,
             reason: "transmute bypasses type safety; use safe alternatives",
+        },
+        // SQL injection
+        SourcePattern {
+            regex: r#"\.execute\s*\(\s*&?format!\s*\("#,
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "SQL via format!; use parameterized queries to prevent injection",
+        },
+        // Path traversal
+        SourcePattern {
+            regex: r"\bPath::new\s*\([^)]*\+|\bPathBuf::from\s*\([^)]*\+",
+            category: DangerCategory::PathTraversal,
+            severity: Severity::High,
+            reason: "Path construction with concatenation; validate and canonicalize",
+        },
+        // Hardcoded credentials
+        SourcePattern {
+            regex: r#"(?i)(?:password|secret|token|api_key)\s*[:=]\s*"[^"]{8,}""#,
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "Hardcoded credential in Rust source (CWE-798)",
+        },
+        // Use-after-free risk with raw pointers
+        SourcePattern {
+            regex: r"\bBox::from_raw\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "Box::from_raw requires exact ownership semantics; double-free risk",
+        },
+        // Unvalidated deserialization
+        SourcePattern {
+            regex: r"\bserde_json::from_str\s*\(|\bserde_json::from_slice\s*\(",
+            category: DangerCategory::Deserialization,
+            severity: Severity::Medium,
+            reason: "Deserialization of untrusted input; validate schema and size limits",
         },
     ]
 }
