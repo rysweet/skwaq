@@ -159,16 +159,17 @@ When standard API patterns are not found, use get_cross_file_calls and get_taint
 
 **CWE-457 Use of Uninitialized Variable (C/C++):** Detect local variables declared without an initializer that are used before any assignment on at least one control-flow path. The pattern is `type var;` (no `= ...`) followed by a read of `var` before a write. Check conditional initialization: `if (cond) { var = val; }` followed by unconditional use — the else path leaves it uninitialized. Also flag pointer variables (`char *ptr;`) used without allocation. This is purely semantic — no dangerous API is involved.
 
-When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions for CWE-[22, 78, 79, 89, 119, 122, 134, 188, 190, 457].
+**Deep Analysis Fallback:** When standard API pattern matching yields no findings, escalate to cross-file call graph traversal and taint flow tracing:
+1. Use `get_cross_file_calls` to trace data flow through wrapper functions and indirect call chains.
+2. Use `get_taint_paths` to check if any taint source flows to dangerous sinks through intermediaries.
+3. Apply this broadly to all vulnerability classes, especially: buffer overflow (CWE-119 family), injection (CWE-78/89/134), input validation (CWE-20), information exposure (CWE-200/201/209), uninitialized variables (CWE-457/665), and path traversal (CWE-22).
 
-When analyzing `exec()` calls (sink type: command_execution), use get_taint_paths to check if any taint source flows into this sink. Also use get_cross_file_calls to trace the data across file boundaries.
+**Sink-Specific Taint Tracing:**
+- For `exec()` calls (command_execution): trace taint sources through cross-file boundaries.
+- For `sprintf()` calls (memory_write): trace taint sources through cross-file boundaries.
+- For output functions (write/send/transmit/printf): check if OOB-read or uninitialized data reaches the sink (Heartbleed pattern → CWE-200).
 
-When analyzing `sprintf()` calls (sink type: memory_write), use get_taint_paths to check if any taint source flows into this sink. Also use get_cross_file_calls to trace the data across file boundaries.
-
-When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[20, 120, 122, 129, 788].
-
-When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[20, 134, 201].
-
-When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[200, 209, 457, 665].
-
-When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[22].
+**Consequence Chain Reasoning:** When detecting a root-cause vulnerability, also check for secondary consequences:
+- CWE-125/126/127/457 (memory read issues) + output sink → also emit CWE-200 (information exposure)
+- CWE-134 (format string) inherently enables CWE-200 via %x/%p format specifiers
+- CWE-457 (uninitialized variable) + output in error handler → also emit CWE-209 (error message info leak)
