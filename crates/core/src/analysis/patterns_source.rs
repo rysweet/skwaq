@@ -706,6 +706,34 @@ fn java_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "MD5/SHA-1 are cryptographically broken; use SHA-256 or SHA-3",
         },
+        // Weak cipher via KeyGenerator (CWE-327/328 OWASP gap)
+        SourcePattern {
+            regex: r#"\bKeyGenerator\.getInstance\s*\(\s*"(?i)(DES|DESede|RC2|RC4|Blowfish|RC5)""#,
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "Weak cipher algorithm in KeyGenerator; use AES (CWE-327)",
+        },
+        // Weak MAC algorithm (CWE-328)
+        SourcePattern {
+            regex: r#"\bMac\.getInstance\s*\(\s*"(?i)(HmacMD5|HmacSHA1)""#,
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "Weak HMAC algorithm (MD5/SHA1); use HmacSHA256 or HmacSHA512 (CWE-328)",
+        },
+        // Weak SecretKeySpec
+        SourcePattern {
+            regex: r#"\bnew\s+SecretKeySpec\s*\([^)]*"(?i)(DES|DESede|RC4|Blowfish)""#,
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "Weak cipher in SecretKeySpec; use AES (CWE-327)",
+        },
+        // Cipher with weak algorithm string
+        SourcePattern {
+            regex: r#"\bCipher\.getInstance\s*\(\s*"(?i)(DESede|RC2|RC4|Blowfish|RC5)"#,
+            category: DangerCategory::Crypto,
+            severity: Severity::High,
+            reason: "Weak cipher algorithm; use AES-256-GCM (CWE-327)",
+        },
         // Weak random
         SourcePattern {
             regex: r"\bnew\s+(?:java\.util\.)?Random\s*\(",
