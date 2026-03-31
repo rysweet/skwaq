@@ -140,7 +140,24 @@ impl BenchmarkAdapter for JulietAdapter {
         }
 
         let source_path = data_dir.join(&case.path);
-        if config.quick_mode {
+
+        // Collect companion files for cross-file cases (variants 51-68).
+        // E.g., CWE134_..._51a.c has a companion CWE134_..._51b.c with the sink.
+        let companion_files = collect_companion_files(&source_path);
+
+        if companion_files.len() > 1 {
+            // Multi-file case: analyze all files together
+            if config.quick_mode {
+                crate::agentic::run_multi_file_pattern_analysis(&companion_files)
+            } else if config.llm_only {
+                // For multi-file LLM analysis, analyze the primary file with context
+                crate::agentic::run_llm_only_source_analysis(&source_path, config.timeout_secs)
+                    .await
+            } else {
+                // Agentic multi-file: analyze primary with cross-file context
+                crate::agentic::run_agentic_source_analysis(&source_path, config.timeout_secs).await
+            }
+        } else if config.quick_mode {
             run_source_pattern_detection(&source_path)
         } else if config.llm_only {
             crate::agentic::run_llm_only_source_analysis(&source_path, config.timeout_secs).await
@@ -152,6 +169,62 @@ impl BenchmarkAdapter for JulietAdapter {
     fn map_finding_to_cwes(&self, finding: &DetectedFinding) -> Vec<u32> {
         crate::adapters::default_map_finding_to_cwes(finding)
     }
+}
+
+/// Collect companion files for Juliet cross-file test cases.
+///
+/// Juliet variants 51-68 split the vulnerability across multiple files:
+/// - `CWE134_..._51a.c` (source) + `CWE134_..._51b.c` (sink)
+/// - `CWE134_..._52a.c` + `52b.c` + `52c.c` (3-hop chain)
+///
+/// This function finds all files with the same base prefix but different
+/// variant letter suffixes (a, b, c, d, e).
+fn collect_companion_files(primary: &Path) -> Vec<PathBuf> {
+    let mut files = vec![primary.to_path_buf()];
+
+    let stem = match primary.file_stem().and_then(|s| s.to_str()) {
+        Some(s) => s,
+        None => return files,
+    };
+    let ext = primary.extension().and_then(|e| e.to_str()).unwrap_or("c");
+    let parent = match primary.parent() {
+        Some(p) => p,
+        None => return files,
+    };
+
+    // Check if this is a multi-file variant (ends with digit + letter, e.g., "51a")
+    let chars: Vec<char> = stem.chars().collect();
+    if chars.len() < 2 {
+        return files;
+    }
+    let last = chars[chars.len() - 1];
+    let second_last = chars[chars.len() - 2];
+
+    // Pattern: ends with digit + 'a' (the primary file is always the 'a' variant)
+    if last != 'a' || !second_last.is_ascii_digit() {
+        return files;
+    }
+
+    // Strip the trailing 'a' to get the base prefix
+    let base = &stem[..stem.len() - 1];
+
+    // Look for companion files: b, c, d, e
+    for suffix in ['b', 'c', 'd', 'e'] {
+        let companion = parent.join(format!("{}{}.{}", base, suffix, ext));
+        if companion.exists() {
+            files.push(companion);
+        }
+    }
+
+    if files.len() > 1 {
+        tracing::debug!(
+            "Juliet multi-file case: {} + {} companions",
+            primary.display(),
+            files.len() - 1
+        );
+    }
+
+    files
 }
 
 /// Compile a single C/C++ Juliet test case with sandboxed resource limits.
