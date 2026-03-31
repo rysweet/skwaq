@@ -593,7 +593,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             let mut ready_suite_list: Vec<&str> = Vec::new();
             for s in &suite_list {
                 let adapter = adapters.iter().find(|a| a.name() == *s);
-                let ready = adapter.map_or(false, |a| a.is_ready(gym_config));
+                let ready = adapter.is_some_and(|a| a.is_ready(gym_config));
 
                 // Deep validation: check that cache dir exists, symlinks resolve, and dir is non-empty
                 let cache_path = gym_config.cache_dir.join(s);
@@ -755,8 +755,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                             let stderr_content = std::fs::read_to_string(&stderr_path)
                                 .ok()
                                 .filter(|s| !s.trim().is_empty());
-                            let content_to_show =
-                                stderr_content.as_deref().or_else(|| None).unwrap_or("");
+                            let content_to_show = stderr_content.as_deref().unwrap_or("");
                             let show_path = if !content_to_show.is_empty() {
                                 &stderr_path
                             } else {
@@ -1594,6 +1593,7 @@ fn ratio(numerator: u32, denominator: u32) -> f64 {
 }
 
 /// Spawn a single shard process with separate stdout and stderr log files.
+#[allow(clippy::too_many_arguments)]
 fn spawn_shard(
     exe: &std::path::Path,
     suite: &str,

@@ -12,8 +12,6 @@
 //!   6. Gym::with_profile constructor (isolated paths)
 //!   7. Error handling and edge cases
 
-use std::path::PathBuf;
-
 // =============================================================================
 // 1. ProfileName validation
 // =============================================================================
@@ -363,9 +361,11 @@ mod config_merge {
         base.llm.decompilation = "copilot".to_string();
         base.llm.copilot.model = "claude-sonnet-4-5-20250514".to_string();
 
-        let mut overlay = LlmConfig::default();
-        overlay.reasoning = "azure".to_string();
-        overlay.decompilation = "azure".to_string();
+        let mut overlay = LlmConfig {
+            reasoning: "azure".to_string(),
+            decompilation: "azure".to_string(),
+            ..Default::default()
+        };
         overlay.azure.endpoint = "https://my-endpoint.openai.azure.com/".to_string();
         overlay.azure.deployment = "gpt-54-skwaq".to_string();
 

@@ -94,8 +94,13 @@ where
     )
     .entered();
 
-    let mut request = CreateMessageRequest::new(model, vec![Message::user(user_prompt)], 128_000)
-        .with_system(system_prompt.to_string());
+    // Normalize model name for the active backend.
+    // Copilot uses dots (claude-opus-4.6), Anthropic uses hyphens (claude-opus-4-6).
+    let effective_model = normalize_model_for_backend(model, client);
+
+    let mut request =
+        CreateMessageRequest::new(&effective_model, vec![Message::user(user_prompt)], 128_000)
+            .with_system(system_prompt.to_string());
 
     // Only set tools if non-empty — Anthropic API rejects empty tools arrays.
     if !tools.is_empty() {
@@ -122,6 +127,40 @@ where
     );
 
     Ok(text_content(&response))
+}
+
+/// Normalize a model name for the active backend.
+///
+/// Copilot uses dot-separated versions (`claude-opus-4.6`), while the Anthropic
+/// Messages API uses hyphen-separated versions (`claude-opus-4-6`). This function
+/// translates between the two so agent definitions can use one canonical name.
+fn normalize_model_for_backend(model: &str, client: &Client) -> String {
+    use rustyclawd_core::client::config::Backend;
+    match client.backend() {
+        Backend::Anthropic => {
+            // claude-opus-4.6 → claude-opus-4-6
+            model.replace('.', "-")
+        }
+        Backend::Copilot => {
+            // claude-opus-4-6 → claude-opus-4.6  (replace last hyphen-digit with dot-digit)
+            // Only convert the version portion, not the "claude-opus" prefix.
+            // Pattern: trailing "-DIGIT" sequences after a digit.
+            if let Some(pos) = model.rfind(['-', '.']) {
+                let after = &model[pos + 1..];
+                if after.chars().all(|c| c.is_ascii_digit()) && model.as_bytes()[pos] == b'-' {
+                    // Check if the char before the hyphen is also a digit (version boundary)
+                    if pos > 0 && model.as_bytes()[pos - 1].is_ascii_digit() {
+                        let mut s = model[..pos].to_string();
+                        s.push('.');
+                        s.push_str(after);
+                        return s;
+                    }
+                }
+            }
+            model.to_string()
+        }
+        Backend::AzureFoundry => model.to_string(),
+    }
 }
 
 #[cfg(test)]
