@@ -7,6 +7,16 @@ tools:
   - read_function
   - get_callers
   - get_callees
+  - get_taint_paths
+  - get_cross_file_calls
+  - get_data_sources
+  - get_imports
+  - search_similar
+  - lookup_knowledge
+  - lookup_cwe
+  - create_finding
+  - store_memory
+  - recall_memory
 max_turns: 25
 ---
 
