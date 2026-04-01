@@ -121,6 +121,14 @@ pub struct AnalysisConfig {
     pub false_positive_target: f64,
     #[serde(default = "default_token_budget")]
     pub default_token_budget: u64,
+    /// Confidence threshold below which findings are rejected (0-100).
+    /// Findings with confidence < this value are dropped entirely.
+    #[serde(default = "default_confidence_reject_threshold")]
+    pub confidence_reject_threshold: u8,
+    /// Confidence threshold below which finding severity is downgraded (0-100).
+    /// Findings with confidence >= reject but < this value have severity reduced.
+    #[serde(default = "default_confidence_downgrade_threshold")]
+    pub confidence_downgrade_threshold: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -170,6 +178,12 @@ fn default_fp_target() -> f64 {
 }
 fn default_token_budget() -> u64 {
     250_000
+}
+fn default_confidence_reject_threshold() -> u8 {
+    25
+}
+fn default_confidence_downgrade_threshold() -> u8 {
+    55
 }
 fn default_format() -> String {
     "text".into()
@@ -234,6 +248,8 @@ impl Default for AnalysisConfig {
             max_taint_depth: default_taint_depth(),
             false_positive_target: default_fp_target(),
             default_token_budget: default_token_budget(),
+            confidence_reject_threshold: default_confidence_reject_threshold(),
+            confidence_downgrade_threshold: default_confidence_downgrade_threshold(),
         }
     }
 }
