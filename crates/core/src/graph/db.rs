@@ -157,7 +157,13 @@ impl GraphDb {
                 id TEXT PRIMARY KEY,
                 cwe_id TEXT DEFAULT '',
                 name TEXT NOT NULL,
-                description TEXT DEFAULT ''
+                description TEXT DEFAULT '',
+                parent_cwe TEXT DEFAULT '',
+                semantic_class TEXT DEFAULT '',
+                danger_categories TEXT DEFAULT '',
+                detection_signals TEXT DEFAULT '',
+                skwaq_tools TEXT DEFAULT '',
+                fn_insight TEXT DEFAULT ''
             );
 
             CREATE TABLE IF NOT EXISTS investigations (
@@ -258,6 +264,37 @@ impl GraphDb {
             CREATE INDEX IF NOT EXISTS idx_vulns_investigation ON vulnerabilities(investigation_id);
             ",
         )?;
+        self.migrate_cwes_columns()?;
+        Ok(())
+    }
+
+    /// Add CWE knowledge graph columns if they don't exist (migration for existing DBs).
+    fn migrate_cwes_columns(&self) -> anyhow::Result<()> {
+        // Check if the new columns exist by querying table info
+        let has_column = |col: &str| -> bool {
+            let sql =
+                format!("SELECT COUNT(*) FROM pragma_table_info('cwes') WHERE name = '{col}'");
+            self.conn
+                .query_row(&sql, [], |row| row.get::<_, i64>(0))
+                .unwrap_or(0)
+                > 0
+        };
+
+        let new_columns = [
+            ("parent_cwe", "TEXT DEFAULT ''"),
+            ("semantic_class", "TEXT DEFAULT ''"),
+            ("danger_categories", "TEXT DEFAULT ''"),
+            ("detection_signals", "TEXT DEFAULT ''"),
+            ("skwaq_tools", "TEXT DEFAULT ''"),
+            ("fn_insight", "TEXT DEFAULT ''"),
+        ];
+
+        for (col, typedef) in &new_columns {
+            if !has_column(col) {
+                let sql = format!("ALTER TABLE cwes ADD COLUMN {col} {typedef}");
+                self.conn.execute_batch(&sql)?;
+            }
+        }
         Ok(())
     }
 }
