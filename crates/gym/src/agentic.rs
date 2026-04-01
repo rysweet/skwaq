@@ -1878,8 +1878,11 @@ async fn run_llm_pipeline(
     // reasoning lane independently so they do not force decompilation auth;
     // binary/decompile pipelines still cache the full pair together.
     let pipeline_clients = cached_pipeline_clients(&config, &pipeline, file_str).await?;
-    let budget_amount = config.analysis.default_token_budget;
-    let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
+    // Use unlimited budget: each agent call is independently bounded by the
+    // model's max output tokens (128K). A shared budget across pipeline stages
+    // causes the deep pipeline (5+ stages + debate) to exhaust before later
+    // stages can run. Per-agent-call limits are the correct approach.
+    let mut budget = skwaq_core::llm::TokenBudget::unlimited();
 
     let target = std::path::Path::new(file_str)
         .file_name()
