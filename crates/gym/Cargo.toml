@@ -32,6 +32,11 @@ indicatif = "0.17"
 regex = "1"
 memmap2 = "0.9.10"
 humantime = { workspace = true }
+lazy_static = "1"
+prometheus = "0.13"
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
 opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 tracing-opentelemetry = { workspace = true }

@@ -11,6 +11,7 @@ pub mod download;
 pub mod ground_truth;
 pub mod history;
 pub mod improve;
+pub mod metrics;
 pub mod profiles;
 pub mod reporting;
 pub mod scoring;
@@ -457,6 +458,8 @@ impl Gym {
                     if i % 10 == 0 && i > 0 {
                         tracing::info!("[{}/{}] Processing {}", i, total, case.id);
                     }
+                    metrics::CASES_IN_PROGRESS.inc();
+                    let case_start = std::time::Instant::now();
                     match tokio::time::timeout(
                         std::time::Duration::from_secs(timeout_secs),
                         adapter.run_case(case, &data_dir, &config),
@@ -464,6 +467,14 @@ impl Gym {
                     .await
                     {
                         Ok(Ok(findings)) => {
+                            let elapsed = case_start.elapsed().as_secs_f64();
+                            metrics::CASES_IN_PROGRESS.dec();
+                            metrics::CASES_TOTAL
+                                .with_label_values(&[&suite_name, "completed"])
+                                .inc();
+                            metrics::CASE_DURATION
+                                .with_label_values(&[&suite_name])
+                                .observe(elapsed);
                             let mut outcome = scoring::score_case(case, &findings, &|f| {
                                 adapter.map_finding_to_cwes(f)
                             });
@@ -471,9 +482,17 @@ impl Gym {
                             outcomes.push(outcome);
                         }
                         Ok(Err(e)) => {
+                            metrics::CASES_IN_PROGRESS.dec();
+                            metrics::CASES_TOTAL
+                                .with_label_values(&[&suite_name, "failed"])
+                                .inc();
                             tracing::warn!("Case {} failed: {}", case.id, e);
                         }
                         Err(_) => {
+                            metrics::CASES_IN_PROGRESS.dec();
+                            metrics::CASES_TOTAL
+                                .with_label_values(&[&suite_name, "timeout"])
+                                .inc();
                             tracing::warn!("Case {} timed out after {}s", case.id, timeout_secs);
                         }
                     }
@@ -509,6 +528,7 @@ impl Gym {
                 for _ in 0..concurrency {
                     if let Some((i, &case)) = case_iter.next() {
                         let suite = suite_name.clone();
+                        metrics::CASES_IN_PROGRESS.inc();
                         pending.push(Box::pin(async move {
                             // Check cross-process backoff before making API calls
                             crate::throttle::CrossProcessBackoff::new()
@@ -527,6 +547,7 @@ impl Gym {
                 // Process completions and feed new cases
                 while let Some((i, case, suite, result)) = pending.next().await {
                     completed += 1;
+                    metrics::CASES_IN_PROGRESS.dec();
                     if completed.is_multiple_of(10) {
                         tracing::info!("[{}/{}] Completed {}", completed, total, case.id);
                     }
@@ -577,6 +598,9 @@ impl Gym {
 
                     match result {
                         Ok(Ok(findings)) => {
+                            metrics::CASES_TOTAL
+                                .with_label_values(&[&suite, "completed"])
+                                .inc();
                             let mut outcome = scoring::score_case(case, &findings, &|f| {
                                 adapter.map_finding_to_cwes(f)
                             });
@@ -614,9 +638,13 @@ impl Gym {
                                     "[{}/{}] Case {} failed (retryable), requeueing (attempt {}/{}): {}",
                                     i, total, case.id, retry_count + 1, MAX_RETRIES, msg.chars().take(80).collect::<String>()
                                 );
+                                metrics::RETRIES_TOTAL.with_label_values(&[&suite]).inc();
                                 retry_queue.push((i, case, retry_count + 1));
                                 total_retries += 1;
                             } else {
+                                metrics::CASES_TOTAL
+                                    .with_label_values(&[&suite, "failed"])
+                                    .inc();
                                 tracing::warn!(
                                     "[{}/{}] Case {} failed (not retryable or max retries): {}",
                                     i,
@@ -642,9 +670,13 @@ impl Gym {
                                     retry_count + 1,
                                     MAX_RETRIES
                                 );
+                                metrics::RETRIES_TOTAL.with_label_values(&[&suite]).inc();
                                 retry_queue.push((i, case, retry_count + 1));
                                 total_retries += 1;
                             } else {
+                                metrics::CASES_TOTAL
+                                    .with_label_values(&[&suite, "timeout"])
+                                    .inc();
                                 tracing::warn!(
                                     "[{}/{}] Case {} timed out after {}s (max retries exhausted)",
                                     i,
@@ -677,6 +709,7 @@ impl Gym {
                         // Prefer retries over new cases (they've already waited).
                         if let Some((retry_i, retry_case, _retry_count)) = retry_queue.pop() {
                             let suite = suite_name.clone();
+                            metrics::CASES_IN_PROGRESS.inc();
                             pending.push(Box::pin(async move {
                                 // Brief delay before retry to avoid hammering.
                                 tokio::time::sleep(std::time::Duration::from_secs(5)).await;
@@ -689,6 +722,7 @@ impl Gym {
                             }));
                         } else if let Some((next_i, &next_case)) = case_iter.next() {
                             let suite = suite_name.clone();
+                            metrics::CASES_IN_PROGRESS.inc();
                             pending.push(Box::pin(async move {
                                 let result = tokio::time::timeout(
                                     std::time::Duration::from_secs(timeout_secs),
