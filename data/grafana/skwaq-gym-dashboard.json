@@ -1,0 +1,64 @@
+{
+  "dashboard": {
+    "title": "Skwaq Gym Eval Monitor",
+    "uid": "skwaq-gym",
+    "panels": [
+      {
+        "title": "Cases Completed (by suite)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [{"expr": "sum(skwaq_gym_cases_total) by (suite, status)", "legendFormat": "{{suite}} {{status}}"}]
+      },
+      {
+        "title": "Throughput (cases/min)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [{"expr": "sum(rate(skwaq_gym_cases_total{status=\"completed\"}[1m])) by (suite) * 60", "legendFormat": "{{suite}}"}]
+      },
+      {
+        "title": "Cases In Progress",
+        "type": "gauge",
+        "gridPos": {"h": 6, "w": 6, "x": 0, "y": 8},
+        "targets": [{"expr": "skwaq_gym_cases_in_progress"}]
+      },
+      {
+        "title": "Rate Limit Retries",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 6, "y": 8},
+        "targets": [{"expr": "sum(skwaq_gym_retries_total) by (suite)", "legendFormat": "{{suite}}"}]
+      },
+      {
+        "title": "Agent Duration (p50/p95)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {"expr": "histogram_quantile(0.5, rate(skwaq_gym_agent_duration_seconds_bucket[5m]))", "legendFormat": "p50 {{agent}}"},
+          {"expr": "histogram_quantile(0.95, rate(skwaq_gym_agent_duration_seconds_bucket[5m]))", "legendFormat": "p95 {{agent}}"}
+        ]
+      },
+      {
+        "title": "Token Usage Rate (tokens/min)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {"expr": "sum(rate(skwaq_gym_tokens_total{direction=\"input\"}[1m])) * 60", "legendFormat": "input"},
+          {"expr": "sum(rate(skwaq_gym_tokens_total{direction=\"output\"}[1m])) * 60", "legendFormat": "output"}
+        ]
+      },
+      {
+        "title": "Tokens by Agent",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [{"expr": "sum(rate(skwaq_gym_tokens_total[1m])) by (agent) * 60", "legendFormat": "{{agent}}"}]
+      },
+      {
+        "title": "Agent Calls by Type",
+        "type": "barchart",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+        "targets": [{"expr": "sum(skwaq_gym_agent_calls_total) by (agent)", "legendFormat": "{{agent}}"}]
+      }
+    ],
+    "time": {"from": "now-1h", "to": "now"},
+    "refresh": "5s"
+  }
+}

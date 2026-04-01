@@ -127,6 +127,11 @@ pub enum GymSub {
         /// Use a named model profile for isolated results and config
         #[arg(long)]
         profile: Option<String>,
+
+        /// Expose a Prometheus /metrics HTTP endpoint on this port.
+        /// Useful for monitoring long-running eval jobs.
+        #[arg(long)]
+        metrics_port: Option<u16>,
     },
 
     /// Run self-improvement loop: analyze failures and propose fixes
@@ -483,6 +488,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             output,
             tag,
             profile,
+            metrics_port,
         } => {
             let gym = resolve_gym(&skwaq_root, profile.as_deref())?;
             let mode = if *quick {
@@ -502,6 +508,16 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 PathBuf::from(format!("/tmp/gym-eval-{}", ts))
             });
             std::fs::create_dir_all(&eval_dir)?;
+
+            // Start Prometheus metrics server if requested.
+            if let Some(&port) = metrics_port.as_ref() {
+                tokio::spawn(async move {
+                    if let Err(e) = skwaq_gym::metrics::serve_metrics(port).await {
+                        tracing::error!("Metrics server failed: {}", e);
+                    }
+                });
+                println!("Prometheus metrics: http://0.0.0.0:{}/metrics", port);
+            }
 
             let eval_metadata = EvalRunMetadata {
                 started_at: chrono::Utc::now().to_rfc3339(),
