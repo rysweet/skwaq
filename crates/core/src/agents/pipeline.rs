@@ -1287,7 +1287,13 @@ pub fn default_pipeline() -> AnalysisPipeline {
     default_pipeline_for_target("")
 }
 
-/// Build the default source-analysis pipeline: attack-surface -> vuln-hunter -> critic.
+/// Build the default source-analysis pipeline:
+/// attack-surface -> taint-tracer -> vuln-hunter -> critic.
+///
+/// The taint-tracer stage runs between attack-surface and vuln-hunter to
+/// enrich the context with data flow paths. This helps vuln-hunter detect
+/// cross-file vulnerabilities where the source and sink are in different
+/// functions or files.
 pub fn source_pipeline_for_target(target: &str) -> AnalysisPipeline {
     let hunter = select_vuln_hunter(target);
     AnalysisPipeline {
@@ -1295,6 +1301,17 @@ pub fn source_pipeline_for_target(target: &str) -> AnalysisPipeline {
             PipelineStage {
                 agent_name: "attack-surface".into(),
                 context_mode: ContextMode::FromGraph,
+                client_role: ClientRole::Reasoning,
+            },
+            PipelineStage {
+                agent_name: "taint-tracer".into(),
+                context_mode: ContextMode::FromPreviousResults {
+                    preamble: "The attack surface has been mapped. Now trace data flow from \
+                               untrusted sources to dangerous sinks. Use get_taint_paths and \
+                               get_cross_file_calls to find unsanitized paths. Create findings \
+                               for each confirmed taint flow."
+                        .into(),
+                },
                 client_role: ClientRole::Reasoning,
             },
             vuln_hunter_stage(hunter, false),
