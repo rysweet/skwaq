@@ -695,7 +695,15 @@ pub async fn run_agentic_source_analysis_with_hints(
         // Enrich findings with confidence from debate results.
         enrich_findings_with_confidence(&mut deduped, &confidence_map);
 
-        return Ok(deduped);
+        // Apply confidence thresholds to reject/downgrade low-confidence findings.
+        let config = Config::load().unwrap_or_default();
+        let filtered = apply_confidence_thresholds(
+            deduped,
+            config.analysis.confidence_reject_threshold,
+            config.analysis.confidence_downgrade_threshold,
+        );
+
+        return Ok(filtered);
     }
 
     // --- Layer 5: Synthesis (pattern-only, no LLM) ---
@@ -2075,6 +2083,79 @@ fn enrich_findings_with_confidence(
                 }
             }
         }
+    }
+}
+
+/// Apply confidence thresholds to filter and downgrade findings.
+///
+/// - Findings with confidence < reject_threshold are dropped entirely.
+/// - Findings with confidence < downgrade_threshold have severity reduced one level.
+/// - Findings without confidence (pattern-only) are kept unchanged.
+fn apply_confidence_thresholds(
+    findings: Vec<DetectedFinding>,
+    reject_threshold: u8,
+    downgrade_threshold: u8,
+) -> Vec<DetectedFinding> {
+    let initial_count = findings.len();
+    let mut result = Vec::with_capacity(findings.len());
+    let mut rejected = 0usize;
+    let mut downgraded = 0usize;
+
+    for mut finding in findings {
+        match finding.confidence {
+            Some(conf) if conf < reject_threshold => {
+                tracing::debug!(
+                    "Rejecting low-confidence finding '{}' (confidence={}%, threshold={}%)",
+                    finding.title,
+                    conf,
+                    reject_threshold
+                );
+                rejected += 1;
+                continue;
+            }
+            Some(conf) if conf < downgrade_threshold => {
+                let new_severity = downgrade_severity(&finding.severity);
+                if new_severity != finding.severity {
+                    tracing::debug!(
+                        "Downgrading finding '{}' from {} to {} (confidence={}%, threshold={}%)",
+                        finding.title,
+                        finding.severity,
+                        new_severity,
+                        conf,
+                        downgrade_threshold
+                    );
+                    finding.severity = new_severity;
+                    downgraded += 1;
+                }
+                result.push(finding);
+            }
+            _ => {
+                // High confidence or no confidence (pattern-only) — keep as-is
+                result.push(finding);
+            }
+        }
+    }
+
+    if rejected > 0 || downgraded > 0 {
+        tracing::info!(
+            "Confidence thresholds: {} findings → {} kept ({} rejected, {} downgraded)",
+            initial_count,
+            result.len(),
+            rejected,
+            downgraded,
+        );
+    }
+
+    result
+}
+
+/// Downgrade severity by one level: critical→high, high→medium, medium→low.
+fn downgrade_severity(severity: &str) -> String {
+    match severity.to_lowercase().as_str() {
+        "critical" => "high".into(),
+        "high" => "medium".into(),
+        "medium" => "low".into(),
+        _ => severity.to_string(), // "low" stays "low"
     }
 }
 
@@ -4349,5 +4430,91 @@ mod tests {
 
         enrich_findings_with_confidence(&mut findings, &confidence_map);
         assert_eq!(findings[0].confidence, Some(75));
+    }
+
+    #[test]
+    fn test_apply_confidence_thresholds_rejects_low_confidence() {
+        let findings = vec![
+            DetectedFinding {
+                id: "1".into(),
+                category: "memory".into(),
+                severity: "critical".into(),
+                cwes: vec![121],
+                file: "test.c".into(),
+                function: "foo".into(),
+                line: Some(10),
+                title: "High confidence".into(),
+                confidence: Some(80),
+            },
+            DetectedFinding {
+                id: "2".into(),
+                category: "memory".into(),
+                severity: "high".into(),
+                cwes: vec![121],
+                file: "test.c".into(),
+                function: "bar".into(),
+                line: Some(20),
+                title: "Low confidence".into(),
+                confidence: Some(15),
+            },
+        ];
+        let result = apply_confidence_thresholds(findings, 25, 55);
+        assert_eq!(result.len(), 1, "Low confidence finding should be rejected");
+        assert_eq!(result[0].title, "High confidence");
+    }
+
+    #[test]
+    fn test_apply_confidence_thresholds_downgrades_medium() {
+        let findings = vec![DetectedFinding {
+            id: "1".into(),
+            category: "injection".into(),
+            severity: "critical".into(),
+            cwes: vec![78],
+            file: "test.c".into(),
+            function: "exec".into(),
+            line: Some(10),
+            title: "Medium confidence finding".into(),
+            confidence: Some(40),
+        }];
+        let result = apply_confidence_thresholds(findings, 25, 55);
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result[0].severity, "high",
+            "Critical should be downgraded to high"
+        );
+    }
+
+    #[test]
+    fn test_apply_confidence_thresholds_keeps_no_confidence() {
+        let findings = vec![DetectedFinding {
+            id: "1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![121],
+            file: "test.c".into(),
+            function: "foo".into(),
+            line: Some(10),
+            title: "Pattern-only finding".into(),
+            confidence: None,
+        }];
+        let result = apply_confidence_thresholds(findings, 25, 55);
+        assert_eq!(
+            result.len(),
+            1,
+            "Pattern-only findings (no confidence) should be kept"
+        );
+        assert_eq!(
+            result[0].severity, "critical",
+            "Severity unchanged for pattern-only"
+        );
+    }
+
+    #[test]
+    fn test_downgrade_severity() {
+        assert_eq!(downgrade_severity("critical"), "high");
+        assert_eq!(downgrade_severity("high"), "medium");
+        assert_eq!(downgrade_severity("medium"), "low");
+        assert_eq!(downgrade_severity("low"), "low");
+        assert_eq!(downgrade_severity("Critical"), "high");
     }
 }
