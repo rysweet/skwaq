@@ -63,7 +63,11 @@ pub fn agent_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::new(
             "lookup_cwe",
-            "Look up a CWE entry by ID and return its name, description, and mitigations.",
+            "Look up a CWE entry by ID. Returns enriched response: name, description, \
+             detection_signals (exact API names to search for), recommended_tools (which skwaq \
+             tools to use for this CWE type), fn_insight (lessons from benchmark false negatives), \
+             parent_cwe, children (child CWEs), semantic_class, and danger_categories. \
+             Use this to understand what signals to look for and which tools to call next.",
             serde_json::json!({
                 "type": "object",
                 "properties": {

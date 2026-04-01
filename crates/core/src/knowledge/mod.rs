@@ -7,5 +7,6 @@ pub mod search;
 pub use cwe::CweDatabase;
 pub use patterns::VulnerabilityPatterns;
 pub use search::{
-    find_knowledge_dir, initialize_cwe_catalog, search_knowledge, InitSummary, KnowledgeHit,
+    find_cwe_kg_file, find_knowledge_dir, initialize_cwe_catalog, load_cwe_knowledge_graph,
+    search_knowledge, CweEntry, CweKnowledgeGraph, InitSummary, KnowledgeHit,
 };

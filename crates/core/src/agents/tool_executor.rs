@@ -272,8 +272,14 @@ fn execute_lookup_cwe(db: &GraphDb, args: &serde_json::Value) -> anyhow::Result<
         .unwrap_or("CWE-0");
     tracing::info!("Tool lookup_cwe: {cwe_id}");
 
+    let enriched = std::env::var("SKWAQ_CWE_KG_ENRICHED")
+        .map(|v| v != "0")
+        .unwrap_or(true);
+
     let result = db.conn().query_row(
-        "SELECT id, cwe_id, name, description FROM cwes WHERE cwe_id = ?1 LIMIT 1",
+        "SELECT id, cwe_id, name, description, parent_cwe, semantic_class, \
+         danger_categories, detection_signals, skwaq_tools, fn_insight \
+         FROM cwes WHERE cwe_id = ?1 LIMIT 1",
         rusqlite::params![cwe_id],
         |row| {
             Ok((
@@ -281,23 +287,105 @@ fn execute_lookup_cwe(db: &GraphDb, args: &serde_json::Value) -> anyhow::Result<
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
                 row.get::<_, String>(3)?,
+                row.get::<_, String>(4).unwrap_or_default(),
+                row.get::<_, String>(5).unwrap_or_default(),
+                row.get::<_, String>(6).unwrap_or_default(),
+                row.get::<_, String>(7).unwrap_or_default(),
+                row.get::<_, String>(8).unwrap_or_default(),
+                row.get::<_, String>(9).unwrap_or_default(),
             ))
         },
     );
 
     match result {
-        Ok((_id, cwe_id, name, description)) => Ok(serde_json::json!({
-            "status": "ok",
-            "cwe_id": cwe_id,
-            "name": name,
-            "description": description
-        })),
+        Ok((
+            _id,
+            cwe_id,
+            name,
+            description,
+            parent_cwe,
+            semantic_class,
+            danger_categories,
+            detection_signals,
+            skwaq_tools,
+            fn_insight,
+        )) => {
+            if !enriched {
+                // Legacy response for A/B testing
+                return Ok(serde_json::json!({
+                    "status": "ok",
+                    "cwe_id": cwe_id,
+                    "name": name,
+                    "description": description
+                }));
+            }
+
+            // Query children (CWEs that have this CWE as parent)
+            let children = lookup_cwe_children(db, &cwe_id);
+
+            let signals: Vec<&str> = if detection_signals.is_empty() {
+                Vec::new()
+            } else {
+                detection_signals.split(',').collect()
+            };
+            let tools: Vec<&str> = if skwaq_tools.is_empty() {
+                Vec::new()
+            } else {
+                skwaq_tools.split(',').collect()
+            };
+            let categories: Vec<&str> = if danger_categories.is_empty() {
+                Vec::new()
+            } else {
+                danger_categories.split(',').collect()
+            };
+
+            let mut resp = serde_json::json!({
+                "status": "ok",
+                "cwe_id": cwe_id,
+                "name": name,
+                "description": description,
+                "semantic_class": semantic_class,
+                "danger_categories": categories,
+                "detection_signals": signals,
+                "recommended_tools": tools,
+                "children": children,
+            });
+
+            if !parent_cwe.is_empty() {
+                resp["parent_cwe"] = serde_json::json!(parent_cwe);
+            }
+            if !fn_insight.is_empty() {
+                resp["fn_insight"] = serde_json::json!(fn_insight);
+            }
+
+            Ok(resp)
+        }
         Err(_) => Ok(serde_json::json!({
             "status": "not_found",
             "cwe_id": cwe_id,
             "error": format!("CWE '{}' not found in knowledge base. Run `skwaq kb init` to populate.", cwe_id)
         })),
     }
+}
+
+/// Query the cwes table for children of a given CWE (entries whose parent_cwe matches).
+fn lookup_cwe_children(db: &GraphDb, parent_cwe_id: &str) -> Vec<serde_json::Value> {
+    let mut stmt = match db
+        .conn()
+        .prepare("SELECT cwe_id, name FROM cwes WHERE parent_cwe = ?1 ORDER BY cwe_id")
+    {
+        Ok(s) => s,
+        Err(_) => return Vec::new(),
+    };
+    let rows = match stmt.query_map(rusqlite::params![parent_cwe_id], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    }) {
+        Ok(r) => r,
+        Err(_) => return Vec::new(),
+    };
+    rows.filter_map(|r| r.ok())
+        .map(|(id, name)| serde_json::json!({"cwe_id": id, "name": name}))
+        .collect()
 }
 
 /// Look up vulnerability analysis knowledge from the knowledge pack.
@@ -1611,5 +1699,126 @@ mod tests {
             imports.iter().any(|i| i["name"] == "stdlib.h"),
             "Should include stdlib.h import"
         );
+    }
+
+    // ===== CWE Knowledge Graph: enriched lookup_cwe tests =====
+
+    #[test]
+    fn test_lookup_cwe_enriched_response() {
+        let db = GraphDb::in_memory().unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let knowledge_dir = temp.path().join("knowledge");
+        std::fs::create_dir_all(&knowledge_dir).unwrap();
+        initialize_cwe_catalog_with_dir(&db, &knowledge_dir).unwrap();
+
+        // Unset feature flag to ensure enriched mode (default)
+        std::env::remove_var("SKWAQ_CWE_KG_ENRICHED");
+
+        let args = serde_json::json!({"cwe_id": "CWE-119"});
+        let result = execute_tool(&db, "inv1", "lookup_cwe", &args).unwrap();
+
+        assert_eq!(result["status"], "ok");
+        assert_eq!(result["cwe_id"], "CWE-119");
+        // Enriched fields should be present
+        assert!(
+            result.get("semantic_class").is_some(),
+            "missing semantic_class"
+        );
+        assert!(
+            result.get("detection_signals").is_some(),
+            "missing detection_signals"
+        );
+        assert!(
+            result.get("recommended_tools").is_some(),
+            "missing recommended_tools"
+        );
+        assert!(
+            result.get("danger_categories").is_some(),
+            "missing danger_categories"
+        );
+        assert!(result.get("children").is_some(), "missing children");
+    }
+
+    #[test]
+    fn test_lookup_cwe_children_query() {
+        let db = GraphDb::in_memory().unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let knowledge_dir = temp.path().join("knowledge");
+        std::fs::create_dir_all(&knowledge_dir).unwrap();
+        initialize_cwe_catalog_with_dir(&db, &knowledge_dir).unwrap();
+
+        std::env::remove_var("SKWAQ_CWE_KG_ENRICHED");
+
+        let args = serde_json::json!({"cwe_id": "CWE-119"});
+        let result = execute_tool(&db, "inv1", "lookup_cwe", &args).unwrap();
+
+        assert_eq!(result["status"], "ok");
+        let children = result["children"].as_array().unwrap();
+        // CWE-119 should have children (CWE-120, CWE-125, CWE-787, etc.)
+        assert!(!children.is_empty(), "CWE-119 should have child CWEs");
+        // Check that at least CWE-125 is a child
+        assert!(
+            children.iter().any(|c| c["cwe_id"] == "CWE-125"),
+            "CWE-125 should be a child of CWE-119"
+        );
+    }
+
+    #[test]
+    fn test_lookup_cwe_feature_flag_legacy() {
+        let db = GraphDb::in_memory().unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let knowledge_dir = temp.path().join("knowledge");
+        std::fs::create_dir_all(&knowledge_dir).unwrap();
+        initialize_cwe_catalog_with_dir(&db, &knowledge_dir).unwrap();
+
+        // Set feature flag to 0 for legacy mode
+        std::env::set_var("SKWAQ_CWE_KG_ENRICHED", "0");
+
+        let args = serde_json::json!({"cwe_id": "CWE-119"});
+        let result = execute_tool(&db, "inv1", "lookup_cwe", &args).unwrap();
+
+        assert_eq!(result["status"], "ok");
+        assert_eq!(result["cwe_id"], "CWE-119");
+        // Legacy response should NOT have enriched fields
+        assert!(
+            result.get("semantic_class").is_none(),
+            "legacy mode should not have semantic_class"
+        );
+        assert!(
+            result.get("children").is_none(),
+            "legacy mode should not have children"
+        );
+        assert!(
+            result.get("detection_signals").is_none(),
+            "legacy mode should not have detection_signals"
+        );
+
+        // Clean up env var
+        std::env::remove_var("SKWAQ_CWE_KG_ENRICHED");
+    }
+
+    #[test]
+    fn test_lookup_cwe_with_fn_insight() {
+        let db = GraphDb::in_memory().unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let knowledge_dir = temp.path().join("knowledge");
+        std::fs::create_dir_all(&knowledge_dir).unwrap();
+        initialize_cwe_catalog_with_dir(&db, &knowledge_dir).unwrap();
+
+        std::env::remove_var("SKWAQ_CWE_KG_ENRICHED");
+
+        let args = serde_json::json!({"cwe_id": "CWE-119"});
+        let result = execute_tool(&db, "inv1", "lookup_cwe", &args).unwrap();
+
+        assert_eq!(result["status"], "ok");
+        // If KG JSON was loaded, fn_insight should be non-empty
+        if crate::knowledge::search::load_cwe_knowledge_graph().is_some() {
+            assert!(
+                result.get("fn_insight").is_some(),
+                "fn_insight should be present when KG is loaded"
+            );
+            let insight = result["fn_insight"].as_str().unwrap();
+            assert!(!insight.is_empty(), "fn_insight should be non-empty");
+        }
     }
 }
