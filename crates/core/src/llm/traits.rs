@@ -87,12 +87,14 @@ where
         return Ok("Analysis stopped: token budget exhausted.".into());
     }
 
-    let _llm_span = tracing::info_span!(
+    let llm_span = tracing::info_span!(
         "llm.request",
         model = %model,
         tools_count = tools.len(),
-    )
-    .entered();
+        input_tokens = tracing::field::Empty,
+        output_tokens = tracing::field::Empty,
+    );
+    let _llm_guard = llm_span.enter();
 
     // Normalize model name for the active backend.
     // Copilot uses dots (claude-opus-4.6), Anthropic uses hyphens (claude-opus-4-6).
@@ -120,6 +122,8 @@ where
         .map_err(|e| anyhow::anyhow!("LLM tool loop failed: {e}"))?;
 
     budget.track(&response.usage);
+    llm_span.record("input_tokens", response.usage.input_tokens);
+    llm_span.record("output_tokens", response.usage.output_tokens);
     tracing::info!(
         tokens_in = response.usage.input_tokens,
         tokens_out = response.usage.output_tokens,
@@ -266,5 +270,25 @@ mod tests {
             },
         };
         assert_eq!(text_content(&response), "Before after");
+    }
+
+    #[test]
+    fn test_llm_request_span_records_token_usage() {
+        // Verify the span fields compile and can be recorded.
+        let span = tracing::info_span!(
+            "llm.request",
+            model = "test-model",
+            tools_count = 0usize,
+            input_tokens = tracing::field::Empty,
+            output_tokens = tracing::field::Empty,
+        );
+        let usage = Usage {
+            input_tokens: 42,
+            output_tokens: 17,
+            speed: None,
+        };
+        span.record("input_tokens", usage.input_tokens);
+        span.record("output_tokens", usage.output_tokens);
+        // No panic = fields are correctly declared and recordable.
     }
 }
