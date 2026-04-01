@@ -751,6 +751,7 @@ mod tests {
             function: "main".to_string(),
             line: Some(10),
             title: "test finding".to_string(),
+            confidence: None,
         }
     }
 
@@ -764,6 +765,7 @@ mod tests {
             function: function.to_string(),
             line: Some(10),
             title: title.to_string(),
+            confidence: None,
         }
     }
 
@@ -923,6 +925,7 @@ mod tests {
             function: "main".to_string(),
             line: Some(10),
             title: "test finding".to_string(),
+            confidence: None,
         };
         let outcome = score_case(&case, &[critical_finding], &|f| f.cwes.clone());
         assert_eq!(outcome.detected_cwes, vec![119]);
@@ -938,6 +941,7 @@ mod tests {
             function: "main".to_string(),
             line: Some(10),
             title: "vague finding".to_string(),
+            confidence: None,
         };
         let outcome = score_case(&case, &[vague_finding], &|f| f.cwes.clone());
         assert!(

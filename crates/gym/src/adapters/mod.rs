@@ -104,6 +104,9 @@ pub struct DetectedFinding {
     pub line: Option<u32>,
     /// Short description.
     pub title: String,
+    /// Confidence score from agent debate synthesis (0-100).
+    /// None for pattern-only findings; Some(n) for agent-assessed findings.
+    pub confidence: Option<u8>,
 }
 
 pub fn default_map_finding_to_cwes(finding: &DetectedFinding) -> Vec<u32> {
@@ -141,6 +144,7 @@ pub fn run_binary_pattern_detection(path: &Path) -> anyhow::Result<Vec<DetectedF
             function: hit.function_name.clone(),
             line: None,
             title: format!("Binary import: {}", hit.function_name),
+            confidence: None,
         })
         .collect();
 
@@ -194,6 +198,7 @@ pub fn run_binary_pattern_detection(path: &Path) -> anyhow::Result<Vec<DetectedF
                 function: hit.function_name.clone(),
                 line: None,
                 title: format!("Binary function: {}", hit.function_name),
+                confidence: None,
             });
         }
     }
@@ -238,6 +243,7 @@ pub fn run_source_pattern_detection(path: &Path) -> anyhow::Result<Vec<DetectedF
                 None
             },
             title: format!("Dangerous API: {}", hit.function_name),
+            confidence: None,
         })
         .collect();
 

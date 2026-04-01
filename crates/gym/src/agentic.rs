@@ -286,6 +286,7 @@ pub async fn run_agentic_multi_file_source_analysis(
                         comp_path.file_name().unwrap_or_default().to_string_lossy(),
                         hit.line
                     ),
+                    confidence: None,
                 });
             }
         }
@@ -306,6 +307,7 @@ pub async fn run_agentic_multi_file_source_analysis(
                     function: hit.function_name.clone(),
                     line: Some(hit.line as u32),
                     title: format!("Cross-file: {} ({})", hit.function_name, hit.reason),
+                    confidence: None,
                 });
             }
         }
@@ -329,6 +331,7 @@ pub async fn run_agentic_multi_file_source_analysis(
                     tp.sink,
                     tp.hops.join(" → ")
                 ),
+                confidence: None,
             });
         }
     }
@@ -409,6 +412,7 @@ pub fn run_multi_file_pattern_analysis(paths: &[PathBuf]) -> anyhow::Result<Vec<
                         path.file_name().unwrap_or_default().to_string_lossy(),
                         hit.line
                     ),
+                    confidence: None,
                 });
             }
         }
@@ -435,6 +439,7 @@ pub fn run_multi_file_pattern_analysis(paths: &[PathBuf]) -> anyhow::Result<Vec<
                     function: base,
                     line: None,
                     title: format!("Cross-file graph: {}", hit.function_name),
+                    confidence: None,
                 });
             }
         }
@@ -670,24 +675,32 @@ pub async fn run_agentic_source_analysis_with_hints(
             file_str,
         );
     } else {
-        run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+        let agent_results = run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+
+        // Extract confidence from structured agent outputs and enrich findings.
+        let confidence_map = extract_confidence_from_agent_results(&agent_results);
+        if !confidence_map.is_empty() {
+            tracing::debug!(
+                "Extracted confidence for {} findings from agent structured outputs",
+                confidence_map.len()
+            );
+        }
+
+        // --- Layer 5: Synthesis — weigh all evidence ---
+        let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
+        let synthesized =
+            synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await?;
+        let mut deduped = dedup_findings_by_best_severity(synthesized);
+
+        // Enrich findings with confidence from debate results.
+        enrich_findings_with_confidence(&mut deduped, &confidence_map);
+
+        return Ok(deduped);
     }
 
-    // --- Layer 5: Synthesis — weigh all evidence ---
-    // Collect ALL findings from DB (pattern + orchestrator + LLM)
+    // --- Layer 5: Synthesis (pattern-only, no LLM) ---
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
-
-    // Synthesize: use the LLM to weigh all evidence and decide which findings are credible.
-    // Unlike the old intersection filter, this preserves LLM-only findings that
-    // demonstrate real understanding of the code, but it fails loudly if synthesis
-    // cannot run instead of silently downgrading analysis quality.
-    let synthesized = if skip_llm_pipeline {
-        all_findings
-    } else {
-        synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await?
-    };
-
-    let deduped = dedup_findings_by_best_severity(synthesized);
+    let deduped = dedup_findings_by_best_severity(all_findings);
 
     Ok(deduped)
 }
@@ -786,7 +799,7 @@ pub async fn run_agentic_binary_analysis(
             file_str,
         );
     } else {
-        run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+        let _agent_results = run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
     }
 
     // Synthesis — weigh all evidence
@@ -835,12 +848,14 @@ pub async fn run_llm_only_source_analysis(
     builder.build_from_source(std::slice::from_ref(&parsed), &inv_id)?;
 
     // Skip pattern detection — go straight to LLM pipeline
-    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+    let agent_results = run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+    let confidence_map = extract_confidence_from_agent_results(&agent_results);
 
     // Return all LLM findings directly (no intersection filter)
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
 
-    let deduped = dedup_findings_by_best_severity(all_findings);
+    let mut deduped = dedup_findings_by_best_severity(all_findings);
+    enrich_findings_with_confidence(&mut deduped, &confidence_map);
 
     Ok(deduped)
 }
@@ -876,11 +891,13 @@ pub async fn run_llm_only_binary_analysis(
     enrich_binary_graph_with_ghidra(path, &builder, &inv_id).await?;
 
     // Skip pattern detection — go straight to LLM pipeline
-    run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+    let agent_results = run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+    let confidence_map = extract_confidence_from_agent_results(&agent_results);
 
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
 
-    let deduped = dedup_findings_by_best_severity(all_findings);
+    let mut deduped = dedup_findings_by_best_severity(all_findings);
+    enrich_findings_with_confidence(&mut deduped, &confidence_map);
 
     Ok(deduped)
 }
@@ -984,6 +1001,7 @@ fn should_skip_llm_pipeline_for_pattern_confidence(
                 "Dangerous pattern: {} ({}:{})",
                 hit.function_name, hit.file, hit.line
             ),
+            confidence: None,
         })
         .collect();
 
@@ -1837,12 +1855,13 @@ fn open_memory_store() -> Option<skwaq_core::memory::MemoryStore> {
 }
 
 /// Run the LLM agent pipeline and fail explicitly if the client is unavailable.
+/// Returns the agent results so callers can extract structured confidence data.
 async fn run_llm_pipeline(
     db: &GraphDb,
     inv_id: &str,
     file_str: &str,
     timeout_secs: u64,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<skwaq_core::agents::AgentResult>> {
     let config = Config::load()
         .context("Failed to load skwaq configuration for hybrid benchmark analysis")?;
     let pipeline = pipeline_for_target(file_str);
@@ -1935,7 +1954,7 @@ async fn run_llm_pipeline(
                 results.len(),
                 total_tokens,
             );
-            Ok(())
+            Ok(results)
         }
         Ok(Err(e)) => {
             anyhow::bail!("LLM pipeline failed for {}: {}", file_str, e);
@@ -1975,6 +1994,85 @@ fn inject_knowledge_context(db: &GraphDb, _inv_id: &str, file_str: &str) {
                     results.len(),
                     file_str
                 );
+            }
+        }
+    }
+}
+
+/// Extract per-finding confidence scores from structured agent outputs.
+///
+/// Looks at exploit-analyst and defense-analyst structured outputs to build
+/// a map of finding_title → confidence_percent. When both analysts provide
+/// assessments, confidence is the average of their individual confidences.
+fn extract_confidence_from_agent_results(
+    results: &[skwaq_core::agents::AgentResult],
+) -> std::collections::HashMap<String, u8> {
+    use skwaq_core::agents::output_schema::ParsedAgentOutput;
+    let mut confidence_map: std::collections::HashMap<String, Vec<u8>> =
+        std::collections::HashMap::new();
+
+    for result in results {
+        let parsed = match &result.parsed_output {
+            Some(p) => p,
+            None => continue,
+        };
+        match parsed {
+            ParsedAgentOutput::ExploitAnalystV1(output) => {
+                for assessment in &output.assessments {
+                    let key = normalize_finding_title(&assessment.finding_title);
+                    confidence_map
+                        .entry(key)
+                        .or_default()
+                        .push(assessment.confidence_percent);
+                }
+            }
+            ParsedAgentOutput::DefenseAnalystV1(output) => {
+                for assessment in &output.assessments {
+                    let key = normalize_finding_title(&assessment.finding_title);
+                    confidence_map
+                        .entry(key)
+                        .or_default()
+                        .push(assessment.confidence_percent);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Average multiple confidence scores per finding
+    confidence_map
+        .into_iter()
+        .map(|(title, scores)| {
+            let avg = scores.iter().map(|&s| s as u16).sum::<u16>() / scores.len() as u16;
+            (title, avg as u8)
+        })
+        .collect()
+}
+
+/// Normalize finding titles for fuzzy matching between agent outputs and DB findings.
+fn normalize_finding_title(title: &str) -> String {
+    title.to_lowercase().trim().to_string()
+}
+
+/// Enrich findings with confidence scores from agent structured outputs.
+fn enrich_findings_with_confidence(
+    findings: &mut [DetectedFinding],
+    confidence_map: &std::collections::HashMap<String, u8>,
+) {
+    if confidence_map.is_empty() {
+        return;
+    }
+    for finding in findings.iter_mut() {
+        let key = normalize_finding_title(&finding.title);
+        if let Some(&confidence) = confidence_map.get(&key) {
+            finding.confidence = Some(confidence);
+        } else {
+            // Try fuzzy match: check if any confidence key is contained in the finding title
+            for (conf_title, &conf_score) in confidence_map {
+                if key.contains(conf_title) || conf_title.contains(&key) {
+                    finding.confidence = Some(conf_score);
+                    break;
+                }
             }
         }
     }
@@ -2093,6 +2191,7 @@ fn collect_findings_from_db(
                 function: extract_function_from_title(&title),
                 line: extract_line_from_title(&title),
                 title,
+                confidence: None,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -2126,6 +2225,7 @@ fn collect_all_findings_from_db(
                 function: extract_function_from_title(&title),
                 line: extract_line_from_title(&title),
                 title,
+                confidence: None,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -2310,6 +2410,7 @@ mod tests {
                 function: "strcpy".into(),
                 line: Some(10),
                 title: "Pattern: strcpy".into(),
+                confidence: None,
             },
             DetectedFinding {
                 id: "2".into(),
@@ -2320,6 +2421,7 @@ mod tests {
                 function: "strcpy".into(),
                 line: Some(10),
                 title: "LLM: buffer overflow in strcpy".into(),
+                confidence: None,
             },
         ];
 
@@ -2354,6 +2456,7 @@ mod tests {
                 function: "strcpy".into(),
                 line: Some(10),
                 title: "Pattern: strcpy".into(),
+                confidence: None,
             },
             DetectedFinding {
                 id: "2".into(),
@@ -2364,6 +2467,7 @@ mod tests {
                 function: "cleanup".into(),
                 line: Some(40),
                 title: "LLM: use-after-free in cleanup".into(),
+                confidence: None,
             },
         ];
 
@@ -2383,6 +2487,7 @@ mod tests {
                 function: "create_temp".into(),
                 line: Some(10),
                 title: "Pattern: mktemp".into(),
+                confidence: None,
             },
             DetectedFinding {
                 id: "2".into(),
@@ -2393,6 +2498,7 @@ mod tests {
                 function: "create_temp".into(),
                 line: Some(20),
                 title: "Pattern: mktemp".into(),
+                confidence: None,
             },
         ];
 
@@ -2412,6 +2518,7 @@ mod tests {
                 function: "strcpy".into(),
                 line: Some(10),
                 title: "Pattern: strcpy".into(),
+                confidence: None,
             },
             DetectedFinding {
                 id: "2".into(),
@@ -2422,6 +2529,7 @@ mod tests {
                 function: "strcpy".into(),
                 line: Some(10),
                 title: "LLM: buffer overflow in strcpy".into(),
+                confidence: None,
             },
         ];
 
@@ -2441,6 +2549,7 @@ mod tests {
             function: "strcpy".into(),
             line: Some(10),
             title: "LLM: stack buffer overflow in strcpy".into(),
+            confidence: None,
         };
 
         assert_eq!(
@@ -2460,6 +2569,7 @@ mod tests {
             function: "cleanup".into(),
             line: Some(10),
             title: "LLM: use-after-free in cleanup".into(),
+            confidence: None,
         };
 
         assert_eq!(semantic_prompt_hint(&finding), "none");
@@ -2476,6 +2586,7 @@ mod tests {
             function: "free".into(),
             line: Some(10),
             title: "Dangerous API: free".into(),
+            confidence: None,
         };
 
         assert_eq!(semantic_prompt_hint(&finding), "use_after_free");
@@ -2492,6 +2603,7 @@ mod tests {
             function: "parse".into(),
             line: None,
             title: String::new(),
+            confidence: None,
         };
 
         assert_eq!(dedup_location_key(&finding), "id:finding-1");
@@ -2508,6 +2620,7 @@ mod tests {
             function: "parse".into(),
             line: None,
             title: "!!!".into(),
+            confidence: None,
         };
 
         assert_eq!(dedup_location_key(&finding), "id:finding-2");
@@ -2609,6 +2722,7 @@ mod tests {
             function: "f".into(),
             line: Some(1),
             title: "Dangerous pattern: strcpy".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -2619,6 +2733,7 @@ mod tests {
             function: "g".into(),
             line: Some(2),
             title: "LLM: command injection".into(),
+            confidence: None,
         }];
         let response = "CONFIRM p1\nCONFIRM l1\n";
         let result = apply_synthesis_decisions(&pattern, &llm, response);
@@ -2636,6 +2751,7 @@ mod tests {
             function: "f".into(),
             line: Some(1),
             title: "Dangerous pattern: strcpy".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -2646,6 +2762,7 @@ mod tests {
             function: "g".into(),
             line: Some(2),
             title: "LLM: command injection".into(),
+            confidence: None,
         }];
         let response = "CONFIRM l1\nREJECT p1 — insufficient evidence\n";
         let result = apply_synthesis_decisions(&pattern, &llm, response);
@@ -2664,6 +2781,7 @@ mod tests {
             function: "strcpy".into(),
             line: Some(10),
             title: "Dangerous pattern: strcpy".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -2674,6 +2792,7 @@ mod tests {
             function: "strcpy".into(),
             line: Some(10),
             title: "LLM: buffer overflow in strcpy".into(),
+            confidence: None,
         }];
         let response = "CONFIRM p1\nCONFIRM l1\n";
         let result = apply_synthesis_decisions(&pattern, &llm, response);
@@ -2693,6 +2812,7 @@ mod tests {
             function: "f".into(),
             line: Some(1),
             title: "Dangerous pattern: strcpy".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -2703,6 +2823,7 @@ mod tests {
             function: "g".into(),
             line: Some(2),
             title: "LLM: something".into(),
+            confidence: None,
         }];
         let response = "I'm not sure what to do with these findings.\n";
         let result = apply_synthesis_decisions(&pattern, &llm, response);
@@ -2724,6 +2845,7 @@ mod tests {
             function: "f".into(),
             line: Some(1),
             title: "Dangerous pattern: x".into(),
+            confidence: None,
         }];
         let response = "reject p1\n"; // lowercase reject, lowercase id
         let result = apply_synthesis_decisions(&pattern, &[], response);
@@ -2750,6 +2872,7 @@ mod tests {
             function: "copy".into(),
             line: Some(12),
             title: "LLM: possible stack overflow".into(),
+            confidence: None,
         }];
         let response = "REVIEW l1 — re-check required\n";
         let result = apply_synthesis_decisions(&[], &llm, response);
@@ -2771,6 +2894,7 @@ mod tests {
             function: "copy".into(),
             line: Some(10),
             title: "Dangerous pattern: strcpy".into(),
+            confidence: None,
         }];
         let mut review_ids = HashSet::new();
         review_ids.insert("p1".to_string());
@@ -2830,6 +2954,7 @@ mod tests {
             function: "strcpy".into(),
             line: Some(1),
             title: "Dangerous pattern: strcpy".into(),
+            confidence: None,
         }];
         let result = synthesize_findings(findings.clone(), &cats, &db, 30)
             .await
@@ -2888,6 +3013,7 @@ mod tests {
                 function: "f".into(),
                 line: Some(1),
                 title: "Dangerous pattern: strcpy".into(),
+                confidence: None,
             },
             DetectedFinding {
                 id: "l1".into(),
@@ -2898,6 +3024,7 @@ mod tests {
                 function: "g".into(),
                 line: Some(2),
                 title: "LLM: command injection".into(),
+                confidence: None,
             },
         ];
 
@@ -2962,6 +3089,7 @@ mod tests {
             function: "strcpy".into(),
             line: Some(10),
             title: "Dangerous pattern: strcpy".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -2972,6 +3100,7 @@ mod tests {
             function: "strcpy".into(),
             line: Some(10),
             title: "LLM: buffer overflow in strcpy".into(),
+            confidence: None,
         }];
         assert!(
             findings_have_consensus(&pattern, &llm),
@@ -2991,6 +3120,7 @@ mod tests {
             function: "strcpy".into(),
             line: Some(10),
             title: "Dangerous pattern: strcpy".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3001,6 +3131,7 @@ mod tests {
             function: "exec".into(),
             line: Some(20),
             title: "LLM: command injection in exec".into(),
+            confidence: None,
         }];
         assert!(
             !findings_have_consensus(&pattern, &llm),
@@ -3021,6 +3152,7 @@ mod tests {
             function: "process_request".into(),
             line: Some(10),
             title: "Dangerous pattern: process_request".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3031,6 +3163,7 @@ mod tests {
             function: "process_request".into(),
             line: Some(10),
             title: "LLM: auth bypass in process_request".into(),
+            confidence: None,
         }];
         assert!(
             !findings_have_consensus(&pattern, &llm),
@@ -3065,6 +3198,7 @@ mod tests {
                 function: "strcpy".into(),
                 line: Some(10),
                 title: "Dangerous pattern: strcpy".into(),
+                confidence: None,
             },
             DetectedFinding {
                 id: "l1".into(),
@@ -3075,6 +3209,7 @@ mod tests {
                 function: "strcpy".into(),
                 line: Some(10),
                 title: "LLM: buffer overflow in strcpy".into(),
+                confidence: None,
             },
         ];
 
@@ -3159,6 +3294,7 @@ mod tests {
             function: "render".into(),
             line: Some(42),
             title: "Orchestrator: format string risk".into(),
+            confidence: None,
         }];
 
         assert!(should_skip_llm_pipeline_for_pattern_confidence(
@@ -3179,6 +3315,7 @@ mod tests {
             function: "strcpy".into(),
             line: Some(42),
             title: "Orchestrator: buffer overflow risk".into(),
+            confidence: None,
         }];
 
         assert!(should_skip_llm_pipeline_for_pattern_confidence(
@@ -3199,6 +3336,7 @@ mod tests {
             function: "exec".into(),
             line: Some(42),
             title: "Orchestrator: command injection risk".into(),
+            confidence: None,
         }];
 
         assert!(!should_skip_llm_pipeline_for_pattern_confidence(
@@ -3232,6 +3370,7 @@ mod tests {
             function: "strcpy".into(),
             line: Some(42),
             title: "Orchestrator: buffer overflow risk".into(),
+            confidence: None,
         }];
 
         assert!(!should_skip_llm_pipeline_for_pattern_confidence(
@@ -3253,6 +3392,7 @@ mod tests {
                 function: "strcpy".into(),
                 line: Some(42),
                 title: "Orchestrator: buffer overflow risk".into(),
+                confidence: None,
             },
             DetectedFinding {
                 id: "o2".into(),
@@ -3263,6 +3403,7 @@ mod tests {
                 function: "system".into(),
                 line: Some(7),
                 title: "Orchestrator: shell injection risk".into(),
+                confidence: None,
             },
         ];
 
@@ -3283,6 +3424,7 @@ mod tests {
             function: "copy".into(),
             line: Some(10),
             title: "Dangerous pattern: copy".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3293,6 +3435,7 @@ mod tests {
             function: "copy".into(),
             line: Some(11),
             title: "LLM: memory corruption in copy".into(),
+            confidence: None,
         }];
 
         assert!(findings_have_semantic_confidence(&pattern, &llm));
@@ -3313,6 +3456,7 @@ mod tests {
             function: "copy_wrapper".into(),
             line: Some(10),
             title: "Dangerous pattern: buffer overflow in copy wrapper".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3323,6 +3467,7 @@ mod tests {
             function: "copy_wrapper".into(),
             line: Some(11),
             title: "LLM: use-after-free in copy wrapper".into(),
+            confidence: None,
         }];
 
         assert!(!same_function_and_category(&pattern[0], &llm[0]));
@@ -3346,6 +3491,7 @@ mod tests {
             function: "scale".into(),
             line: Some(10),
             title: "Dangerous pattern: integer overflow in scale".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3356,6 +3502,7 @@ mod tests {
             function: "scale".into(),
             line: Some(11),
             title: "LLM: division by zero in scale".into(),
+            confidence: None,
         }];
 
         assert!(findings_have_semantic_confidence(&pattern, &llm));
@@ -3376,6 +3523,7 @@ mod tests {
             function: "handler".into(),
             line: Some(10),
             title: "Dangerous pattern: strcpy".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3386,6 +3534,7 @@ mod tests {
             function: "handler".into(),
             line: Some(11),
             title: "LLM: null pointer dereference after unchecked malloc".into(),
+            confidence: None,
         }];
 
         assert!(!same_function_and_category(&pattern[0], &llm[0]));
@@ -3409,6 +3558,7 @@ mod tests {
             function: "copy".into(),
             line: Some(10),
             title: "Dangerous pattern: copy".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3419,6 +3569,7 @@ mod tests {
             function: "parse".into(),
             line: Some(11),
             title: "LLM: memory corruption in parse".into(),
+            confidence: None,
         }];
 
         assert!(findings_have_semantic_confidence(&pattern, &llm));
@@ -3439,6 +3590,7 @@ mod tests {
             function: "copy".into(),
             line: Some(10),
             title: "Dangerous pattern: strcpy".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3449,6 +3601,7 @@ mod tests {
             function: "alloc".into(),
             line: Some(11),
             title: "LLM: null pointer dereference after unchecked malloc".into(),
+            confidence: None,
         }];
 
         assert!(!same_cwe_family_overlap(&pattern[0], &llm[0]));
@@ -3471,6 +3624,7 @@ mod tests {
             function: "copy".into(),
             line: Some(10),
             title: "Dangerous pattern: copy".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3481,6 +3635,7 @@ mod tests {
             function: "exec".into(),
             line: Some(20),
             title: "LLM: command injection in exec".into(),
+            confidence: None,
         }];
 
         assert!(!findings_have_semantic_confidence(&pattern, &llm));
@@ -3502,6 +3657,7 @@ mod tests {
             function: "handler".into(),
             line: Some(10),
             title: "Dangerous pattern: handler".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3512,6 +3668,7 @@ mod tests {
             function: "dispatch".into(),
             line: Some(20),
             title: "LLM: suspicious dispatch".into(),
+            confidence: None,
         }];
 
         assert!(!findings_have_semantic_confidence(&pattern, &llm));
@@ -3532,6 +3689,7 @@ mod tests {
             function: "f".into(),
             line: Some(1),
             title: "x".into(),
+            confidence: None,
         };
         let b = DetectedFinding {
             id: "b".into(),
@@ -3542,6 +3700,7 @@ mod tests {
             function: "g".into(),
             line: Some(2),
             title: "y".into(),
+            confidence: None,
         };
         assert!(same_cwe_family_overlap(&a, &b));
     }
@@ -3557,6 +3716,7 @@ mod tests {
             function: "f".into(),
             line: Some(1),
             title: "x".into(),
+            confidence: None,
         };
         let b = DetectedFinding {
             id: "b".into(),
@@ -3567,6 +3727,7 @@ mod tests {
             function: "g".into(),
             line: Some(2),
             title: "y".into(),
+            confidence: None,
         };
         assert!(!same_cwe_family_overlap(&a, &b));
     }
@@ -3584,6 +3745,7 @@ mod tests {
                 function: "strcpy".into(),
                 line: Some(10),
                 title: "Dangerous pattern: strcpy".into(),
+                confidence: None,
             },
             DetectedFinding {
                 id: "p2".into(),
@@ -3594,6 +3756,7 @@ mod tests {
                 function: "md5_init".into(),
                 line: Some(20),
                 title: "Dangerous pattern: md5_init".into(),
+                confidence: None,
             },
         ];
         let llm = vec![DetectedFinding {
@@ -3605,6 +3768,7 @@ mod tests {
             function: "copy".into(),
             line: Some(11),
             title: "LLM: buffer overflow".into(),
+            confidence: None,
         }];
 
         // p2 (crypto) has no LLM match → not fully covered
@@ -3686,6 +3850,7 @@ mod tests {
             function: "scale".into(),
             line: Some(10),
             title: "Dangerous pattern: integer overflow in scale".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3696,6 +3861,7 @@ mod tests {
             function: "normalize".into(),
             line: Some(20),
             title: "LLM: division by zero in normalize".into(),
+            confidence: None,
         }];
 
         assert_eq!(
@@ -3718,6 +3884,7 @@ mod tests {
             function: "strcpy".into(),
             line: Some(10),
             title: "Dangerous pattern: strcpy buffer overflow".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3728,6 +3895,7 @@ mod tests {
             function: "memcpy".into(),
             line: Some(20),
             title: "LLM: heap buffer overflow in memcpy".into(),
+            confidence: None,
         }];
 
         assert_eq!(
@@ -3747,6 +3915,7 @@ mod tests {
             function: "open_file".into(),
             line: Some(10),
             title: "Dangerous pattern: file handle leak".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3757,6 +3926,7 @@ mod tests {
             function: "connect".into(),
             line: Some(20),
             title: "LLM: socket handle not closed on error".into(),
+            confidence: None,
         }];
 
         assert_eq!(
@@ -3776,6 +3946,7 @@ mod tests {
             function: "printf".into(),
             line: Some(10),
             title: "Dangerous pattern: format string in printf".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3786,6 +3957,7 @@ mod tests {
             function: "sprintf".into(),
             line: Some(20),
             title: "LLM: user-controlled format string".into(),
+            confidence: None,
         }];
 
         assert_eq!(
@@ -3805,6 +3977,7 @@ mod tests {
             function: "strcpy".into(),
             line: Some(10),
             title: "Dangerous pattern: strcpy".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3815,6 +3988,7 @@ mod tests {
             function: "md5".into(),
             line: Some(20),
             title: "LLM: weak hash algorithm".into(),
+            confidence: None,
         }];
 
         assert_eq!(dominant_expert_domain(&pattern, &llm), None);
@@ -3831,6 +4005,7 @@ mod tests {
             function: "foo".into(),
             line: Some(1),
             title: "Dangerous pattern: foo".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3841,6 +4016,7 @@ mod tests {
             function: "bar".into(),
             line: Some(2),
             title: "LLM: something".into(),
+            confidence: None,
         }];
 
         assert_eq!(dominant_expert_domain(&pattern, &llm), None);
@@ -3857,6 +4033,7 @@ mod tests {
             function: "system".into(),
             line: Some(10),
             title: "Dangerous pattern: system".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3867,6 +4044,7 @@ mod tests {
             function: "run_command".into(),
             line: Some(30),
             title: "LLM: command injection in run_command".into(),
+            confidence: None,
         }];
 
         assert!(!findings_have_consensus(&pattern, &llm));
@@ -3915,6 +4093,7 @@ mod tests {
             function: "strcpy".into(),
             line: Some(10),
             title: "Dangerous pattern: strcpy".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3925,6 +4104,7 @@ mod tests {
             function: "strcpy".into(),
             line: Some(10),
             title: "Dangerous pattern: strcpy".into(),
+            confidence: None,
         }];
 
         assert!(findings_have_consensus(&pattern, &llm));
@@ -3945,6 +4125,7 @@ mod tests {
             function: "open_file".into(),
             line: Some(10),
             title: "Dangerous pattern: open_file".into(),
+            confidence: None,
         }];
         let llm = vec![DetectedFinding {
             id: "l1".into(),
@@ -3955,6 +4136,7 @@ mod tests {
             function: "create_socket".into(),
             line: Some(20),
             title: "LLM: suspicious create_socket behavior".into(),
+            confidence: None,
         }];
 
         assert!(!findings_have_consensus(&pattern, &llm));
@@ -4030,5 +4212,142 @@ mod tests {
             pipeline.stages.len() >= 4,
             "Binary files should use deep pipeline with at least 4 stages"
         );
+    }
+
+    #[test]
+    fn test_extract_confidence_from_empty_results() {
+        let results: Vec<skwaq_core::agents::AgentResult> = vec![];
+        let map = extract_confidence_from_agent_results(&results);
+        assert!(map.is_empty());
+    }
+
+    #[test]
+    fn test_extract_confidence_from_exploit_analyst() {
+        use skwaq_core::agents::output_schema::*;
+        use skwaq_core::agents::{AgentContextFrame, AgentResult};
+
+        let output = ExploitAnalystStructuredOutput {
+            summary: "test".into(),
+            assessments: vec![ExploitAnalystAssessment {
+                finding_title: "Buffer Overflow in parse_input".into(),
+                verdict: ExploitAnalystVerdict::Confirmed,
+                confidence_percent: 85,
+                evidence: vec!["reachable from network".into()],
+            }],
+        };
+
+        let result = AgentResult {
+            agent_name: "exploit-analyst".into(),
+            output: "test".into(),
+            tokens_used: 100,
+            context_frame: AgentContextFrame::synthetic("exploit-analyst", "test", None, "test"),
+            parsed_output: Some(ParsedAgentOutput::ExploitAnalystV1(output)),
+            parsed_output_error: None,
+        };
+
+        let map = extract_confidence_from_agent_results(&[result]);
+        assert_eq!(map.len(), 1);
+        assert_eq!(*map.get("buffer overflow in parse_input").unwrap(), 85);
+    }
+
+    #[test]
+    fn test_extract_confidence_averages_both_analysts() {
+        use skwaq_core::agents::output_schema::*;
+        use skwaq_core::agents::{AgentContextFrame, AgentResult};
+
+        let exploit_output = ExploitAnalystStructuredOutput {
+            summary: "test".into(),
+            assessments: vec![ExploitAnalystAssessment {
+                finding_title: "SQL Injection".into(),
+                verdict: ExploitAnalystVerdict::Confirmed,
+                confidence_percent: 90,
+                evidence: vec!["user input reaches query".into()],
+            }],
+        };
+        let defense_output = DefenseAnalystStructuredOutput {
+            summary: "test".into(),
+            assessments: vec![DefenseAnalystAssessment {
+                finding_title: "SQL Injection".into(),
+                verdict: DefenseAnalystVerdict::Vulnerable,
+                confidence_percent: 80,
+                evidence: vec!["no parameterized queries".into()],
+            }],
+        };
+
+        let results = vec![
+            AgentResult {
+                agent_name: "exploit-analyst".into(),
+                output: "test".into(),
+                tokens_used: 100,
+                context_frame: AgentContextFrame::synthetic(
+                    "exploit-analyst",
+                    "test",
+                    None,
+                    "test",
+                ),
+                parsed_output: Some(ParsedAgentOutput::ExploitAnalystV1(exploit_output)),
+                parsed_output_error: None,
+            },
+            AgentResult {
+                agent_name: "defense-analyst".into(),
+                output: "test".into(),
+                tokens_used: 100,
+                context_frame: AgentContextFrame::synthetic(
+                    "defense-analyst",
+                    "test",
+                    None,
+                    "test",
+                ),
+                parsed_output: Some(ParsedAgentOutput::DefenseAnalystV1(defense_output)),
+                parsed_output_error: None,
+            },
+        ];
+
+        let map = extract_confidence_from_agent_results(&results);
+        assert_eq!(map.len(), 1);
+        // Average of 90 and 80 = 85
+        assert_eq!(*map.get("sql injection").unwrap(), 85);
+    }
+
+    #[test]
+    fn test_enrich_findings_with_confidence() {
+        let mut findings = vec![DetectedFinding {
+            id: "1".into(),
+            category: "injection".into(),
+            severity: "high".into(),
+            cwes: vec![89],
+            file: "app.py".into(),
+            function: "handle_query".into(),
+            line: Some(42),
+            title: "SQL Injection in handle_query".into(),
+            confidence: None,
+        }];
+
+        let mut confidence_map = std::collections::HashMap::new();
+        confidence_map.insert("sql injection in handle_query".to_string(), 92u8);
+
+        enrich_findings_with_confidence(&mut findings, &confidence_map);
+        assert_eq!(findings[0].confidence, Some(92));
+    }
+
+    #[test]
+    fn test_enrich_findings_fuzzy_match() {
+        let mut findings = vec![DetectedFinding {
+            id: "1".into(),
+            category: "memory".into(),
+            severity: "critical".into(),
+            cwes: vec![121],
+            file: "vuln.c".into(),
+            function: "parse_input".into(),
+            line: Some(10),
+            title: "Stack Buffer Overflow in parse_input via strcpy".into(),
+            confidence: None,
+        }];
+
+        let mut confidence_map = std::collections::HashMap::new();
+        confidence_map.insert("stack buffer overflow in parse_input".to_string(), 75u8);
+
+        enrich_findings_with_confidence(&mut findings, &confidence_map);
+        assert_eq!(findings[0].confidence, Some(75));
     }
 }
