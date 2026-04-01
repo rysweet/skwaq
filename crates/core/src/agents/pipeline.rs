@@ -1329,6 +1329,62 @@ pub fn source_pipeline_for_target(target: &str) -> AnalysisPipeline {
     }
 }
 
+/// Build a deep source pipeline with exploit/defense debate and CWE classification.
+///
+/// Pipeline: attack-surface → taint-tracer → vuln-hunter
+///   → [exploit-analyst + defense-analyst debate]
+///   → verdict-synthesizer → cwe-classifier
+///
+/// This pipeline uses all available agents for maximum detection accuracy.
+/// The debate stage surfaces disagreements between offense and defense
+/// perspectives. The CWE-classifier ensures precise vulnerability taxonomy.
+pub fn source_deep_pipeline_for_target(target: &str) -> AnalysisPipeline {
+    let hunter = select_vuln_hunter(target);
+    AnalysisPipeline {
+        stages: vec![
+            PipelineStage {
+                agent_name: "attack-surface".into(),
+                context_mode: ContextMode::FromGraph,
+                client_role: ClientRole::Reasoning,
+            },
+            PipelineStage {
+                agent_name: "taint-tracer".into(),
+                context_mode: ContextMode::FromPreviousResults {
+                    preamble: "The attack surface has been mapped. Trace data flow from \
+                               untrusted sources to dangerous sinks. Use get_taint_paths and \
+                               get_cross_file_calls to find unsanitized paths."
+                        .into(),
+                },
+                client_role: ClientRole::Reasoning,
+            },
+            vuln_hunter_stage(hunter, true), // deep mode = true
+            // NOTE: exploit-analyst and defense-analyst run via debate group
+            // after vuln-hunter (stage index 2), not as pipeline stages.
+            PipelineStage {
+                agent_name: "verdict-synthesizer".into(),
+                context_mode: ContextMode::FromPreviousResults {
+                    preamble: "You have received findings from attack-surface mapping, taint \
+                               tracing, vulnerability hunting, and the exploit/defense debate. \
+                               Synthesize a final verdict for each finding: CONFIRMED, \
+                               DOWNGRADED, or REJECTED."
+                        .into(),
+                },
+                client_role: ClientRole::Reasoning,
+            },
+            PipelineStage {
+                agent_name: "cwe-classifier".into(),
+                context_mode: ContextMode::FromPreviousResults {
+                    preamble: "Review each confirmed finding and ensure the CWE classification \
+                               is precise. Use lookup_cwe to verify. Assign the most specific \
+                               CWE, not generic parent CWEs."
+                        .into(),
+                },
+                client_role: ClientRole::Reasoning,
+            },
+        ],
+    }
+}
+
 /// Build the default analysis pipeline with language-aware vuln-hunter selection.
 pub fn default_pipeline_for_target(target: &str) -> AnalysisPipeline {
     let hunter = select_vuln_hunter(target);
@@ -3167,7 +3223,7 @@ mod tests {
                 .iter()
                 .map(|stage| stage.agent_name.as_str())
                 .collect::<Vec<_>>(),
-            vec!["attack-surface", "vuln-hunter", "critic"]
+            vec!["attack-surface", "taint-tracer", "vuln-hunter", "critic"]
         );
     }
 
@@ -3227,5 +3283,76 @@ mod tests {
                 "{name} should expose recall_memory"
             );
         }
+    }
+
+    #[test]
+    fn test_source_deep_pipeline_has_5_stages() {
+        let pipeline = source_deep_pipeline_for_target("test.c");
+        assert_eq!(
+            pipeline.stages.len(),
+            5,
+            "Source deep pipeline should have 5 stages"
+        );
+    }
+
+    #[test]
+    fn test_source_deep_pipeline_stage_order() {
+        let pipeline = source_deep_pipeline_for_target("test.c");
+        let names: Vec<&str> = pipeline
+            .stages
+            .iter()
+            .map(|s| s.agent_name.as_str())
+            .collect();
+        assert_eq!(names[0], "attack-surface");
+        assert_eq!(names[1], "taint-tracer");
+        assert_eq!(names[2], "vuln-hunter"); // language-fallback for .c
+        assert_eq!(names[3], "verdict-synthesizer");
+        assert_eq!(names[4], "cwe-classifier");
+    }
+
+    #[test]
+    fn test_source_deep_pipeline_first_stage_uses_graph() {
+        let pipeline = source_deep_pipeline_for_target("test.c");
+        assert!(
+            matches!(pipeline.stages[0].context_mode, ContextMode::FromGraph),
+            "attack-surface should use FromGraph context"
+        );
+    }
+
+    #[test]
+    fn test_source_deep_pipeline_later_stages_use_previous_results() {
+        let pipeline = source_deep_pipeline_for_target("test.c");
+        for i in [1, 3, 4] {
+            assert!(
+                matches!(
+                    pipeline.stages[i].context_mode,
+                    ContextMode::FromPreviousResults { .. }
+                ),
+                "Stage {} ({}) should use FromPreviousResults",
+                i,
+                pipeline.stages[i].agent_name
+            );
+        }
+    }
+
+    #[test]
+    fn test_source_deep_pipeline_selects_language_hunter() {
+        let pipeline = source_deep_pipeline_for_target("App.java");
+        let hunter_name = &pipeline.stages[2].agent_name;
+        // Should be java-specific hunter if available, otherwise generic
+        assert!(
+            hunter_name == "vuln-hunter-java" || hunter_name == "vuln-hunter",
+            "Expected Java vuln-hunter, got: {}",
+            hunter_name
+        );
+    }
+
+    #[test]
+    fn test_deep_pipeline_debate_agents() {
+        let debate = deep_pipeline_debate();
+        assert_eq!(debate.agent_a, "exploit-analyst");
+        assert_eq!(debate.agent_b, "defense-analyst");
+        assert!(!debate.preamble_a.is_empty());
+        assert!(!debate.preamble_b.is_empty());
     }
 }

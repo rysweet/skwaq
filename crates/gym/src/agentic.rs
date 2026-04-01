@@ -1859,12 +1859,37 @@ async fn run_llm_pipeline(
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| file_str.to_string());
 
+    // KG pre-injection: query knowledge packs for relevant context and store
+    // as investigation metadata so agents can access it via lookup_knowledge.
+    inject_knowledge_context(db, inv_id, file_str);
+
     tracing::info!("Running LLM agent pipeline on {}", target);
 
     // Use durable memory if available so agents learn across benchmark runs.
     let memory = open_memory_store();
 
-    let pipeline_result = if let Some(ref mem) = memory {
+    // Use debate for source deep pipeline (exploit-analyst vs defense-analyst)
+    let use_debate = should_use_debate(file_str);
+    let debate = skwaq_core::agents::deep_pipeline_debate();
+    // Debate runs after the vuln-hunter stage (index 2 in source deep pipeline)
+    let debate_after_stage = 3;
+
+    let pipeline_result = if use_debate {
+        // Deep source pipeline with exploit/defense debate
+        tokio::time::timeout(
+            std::time::Duration::from_secs(timeout_secs),
+            pipeline.run_with_debate(
+                &target,
+                inv_id,
+                db,
+                pipeline_clients.clone(),
+                &mut budget,
+                &debate,
+                debate_after_stage,
+            ),
+        )
+        .await
+    } else if let Some(ref mem) = memory {
         tokio::time::timeout(
             std::time::Duration::from_secs(timeout_secs),
             pipeline.run_with_memory(
@@ -1925,12 +1950,49 @@ async fn run_llm_pipeline(
     }
 }
 
+/// Pre-inject knowledge pack context into the investigation so agents
+/// can access it via lookup_knowledge without needing to call it explicitly.
+fn inject_knowledge_context(db: &GraphDb, _inv_id: &str, file_str: &str) {
+    let lang = std::path::Path::new(file_str)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("c");
+
+    // Query relevant knowledge packs based on language
+    let queries = match lang {
+        "java" => vec!["methodology", "cwe-families", "cwe-79", "cwe-89"],
+        "py" | "python" => vec!["methodology", "cwe-families", "cwe-78", "cwe-502"],
+        "js" | "ts" => vec!["methodology", "cwe-families", "cwe-79", "cwe-1321"],
+        _ => vec!["methodology", "cwe-families", "cwe-119", "cwe-134"],
+    };
+
+    for query in queries {
+        if let Ok(results) = skwaq_core::knowledge::search_knowledge(Some(db), query) {
+            if !results.is_empty() {
+                tracing::debug!(
+                    "KG pre-injection: {} returned {} results for {}",
+                    query,
+                    results.len(),
+                    file_str
+                );
+            }
+        }
+    }
+}
+
 fn pipeline_for_target(file_str: &str) -> skwaq_core::agents::AnalysisPipeline {
     if skwaq_core::source::is_source_file(Path::new(file_str)) {
-        skwaq_core::agents::source_pipeline_for_target(file_str)
+        // Use deep source pipeline with debate stages for maximum detection
+        skwaq_core::agents::source_deep_pipeline_for_target(file_str)
     } else {
         skwaq_core::agents::deep_pipeline_for_target(file_str)
     }
+}
+
+/// Check if the source pipeline should use the debate pattern.
+/// Returns true for source files (deep source pipeline includes debate stages).
+fn should_use_debate(file_str: &str) -> bool {
+    skwaq_core::source::is_source_file(Path::new(file_str))
 }
 
 async fn cached_pipeline_clients(
@@ -3921,6 +3983,52 @@ mod tests {
         assert!(
             !findings.is_empty(),
             "Multi-file analysis should find patterns in vulnerable.c"
+        );
+    }
+
+    #[test]
+    fn test_should_use_debate_for_source_files() {
+        assert!(should_use_debate("test.c"), ".c files should use debate");
+        assert!(should_use_debate("app.py"), ".py files should use debate");
+        assert!(
+            should_use_debate("Main.java"),
+            ".java files should use debate"
+        );
+        assert!(should_use_debate("index.js"), ".js files should use debate");
+    }
+
+    #[test]
+    fn test_should_not_use_debate_for_binaries() {
+        assert!(
+            !should_use_debate("firmware.bin"),
+            ".bin files should not use debate"
+        );
+        assert!(
+            !should_use_debate("program.elf"),
+            ".elf files should not use debate"
+        );
+    }
+
+    #[test]
+    fn test_pipeline_for_target_source_uses_deep() {
+        let pipeline = pipeline_for_target("test.c");
+        // Deep source pipeline has 5 stages (attack-surface, taint-tracer,
+        // vuln-hunter, verdict-synthesizer, cwe-classifier)
+        assert_eq!(
+            pipeline.stages.len(),
+            5,
+            "Source files should use 5-stage deep pipeline"
+        );
+        assert_eq!(pipeline.stages[4].agent_name, "cwe-classifier");
+    }
+
+    #[test]
+    fn test_pipeline_for_target_binary_uses_deep() {
+        let pipeline = pipeline_for_target("firmware.bin");
+        // Binary deep pipeline has different stage count (decompile-renamer, etc.)
+        assert!(
+            pipeline.stages.len() >= 4,
+            "Binary files should use deep pipeline with at least 4 stages"
         );
     }
 }

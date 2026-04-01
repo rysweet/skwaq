@@ -6,7 +6,10 @@ tools:
   - query_graph
   - read_function
   - lookup_cwe
+  - lookup_knowledge
   - get_callers
+  - create_finding
+  - recall_memory
 max_turns: 15
 ---
 
