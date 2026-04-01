@@ -1904,6 +1904,7 @@ async fn run_llm_pipeline(
     // Debate runs after the vuln-hunter stage (index 2 in source deep pipeline)
     let debate_after_stage = 3;
 
+    let pipeline_start = Instant::now();
     let pipeline_result = if use_debate {
         // Deep source pipeline with exploit/defense debate
         tokio::time::timeout(
@@ -1959,6 +1960,25 @@ async fn run_llm_pipeline(
                     );
                 }
             }
+            // Record Prometheus metrics for each agent in the pipeline.
+            let pipeline_elapsed = pipeline_start.elapsed().as_secs_f64();
+            let per_agent_duration = if results.is_empty() {
+                0.0
+            } else {
+                pipeline_elapsed / results.len() as f64
+            };
+            for result in &results {
+                crate::metrics::AGENT_CALLS_TOTAL
+                    .with_label_values(&[&result.agent_name, "eval"])
+                    .inc();
+                crate::metrics::TOKENS_TOTAL
+                    .with_label_values(&[&result.agent_name, "total"])
+                    .inc_by(result.tokens_used as f64);
+                crate::metrics::AGENT_DURATION
+                    .with_label_values(&[&result.agent_name])
+                    .observe(per_agent_duration);
+            }
+
             tracing::info!(
                 "LLM pipeline completed for {}: {} agents, {} tokens",
                 target,
