@@ -13,7 +13,7 @@ The internal module structure of each workspace crate, showing how functionality
 | `binary` | cache, ghidra, native, subprocess, types | Binary analysis — ELF parsing (goblin), Ghidra integration, analysis caching |
 | `graph` | builder, builder_binary, builder_ghidra, builder_source, db, queries, types | Code property graph — SQLite-backed graph DB with typed nodes and relationships |
 | `investigation` | annotations, hypotheses, manager | Investigation management — annotation and hypothesis tracking |
-| `knowledge` | cwe, patterns, search | Knowledge base — CWE catalog, vulnerability patterns, search |
+| `knowledge` | cwe, patterns, search | Knowledge base — CWE catalog (947 entries from MITRE CWE v4.19.1 with parent hierarchy), vulnerability patterns, search |
 | `llm` | traits | LLM client abstraction — wraps RustyClawd for Claude API access |
 | `memory` | experience, pattern, store | Agent memory — experience store, pattern detector |
 | `reporting` | json, markdown, sarif | Report generation — JSON, Markdown, SARIF output formats |

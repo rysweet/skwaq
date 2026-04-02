@@ -449,6 +449,15 @@ property graph that the CPG builder populates during analysis. SQLite is
 retained only for the `lookup_cwe` tool (static reference table). The context
 budget allocations are compile-time constants.
 
+### Parallel Safety
+
+When multiple gym shard processes open the same LadybugDB in read-only mode,
+`open_read_only()` uses `flock(LOCK_EX)` on a `.open.lock` file to serialize
+`Database::new()` calls. This prevents a race condition where concurrent buffer
+pool initialization causes mmap failures. The lock is held only during the
+`Database::new()` call and released immediately after — concurrent reads
+proceed without contention once the database is open.
+
 ### Token Budget Impact
 
 The enriched context adds approximately 20K characters in the typical case.

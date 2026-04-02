@@ -122,7 +122,8 @@ skwaq kb search "cwe-119 buffer overflow" --json
 
 Run `skwaq kb init` once per workspace before searching. `kb search` uses the same
 shared backend as agent knowledge lookup and can return mixed CWE and knowledge-pack
-results; use `--json` for automation.
+results; use `--json` for automation. The CWE knowledge graph contains 947 entries
+sourced from the full MITRE CWE database (v4.19.1) with parent-CWE hierarchy.
 
 ### System
 ```bash

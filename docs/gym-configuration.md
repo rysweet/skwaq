@@ -37,7 +37,7 @@ CLI flags map directly to these fields:
 | `llm_only` | `--llm-only` | bool | false | — | LLM agents only (no pattern detection) |
 | `cwe_filter` | `--cwe` | Vec\<u32\> | all | — | Filter to specific CWE IDs |
 | `max_cases` | `--max-cases` | usize | 20 | [1, 50] | Maximum cases per suite |
-| `parallelism` | `--procs` | usize | 5 | [1, 50] | Parallel processes per suite |
+| `parallelism` | `--procs` | usize | 5 | [1, 50] | Parallel processes per suite (flock-serialized DB open) |
 | `concurrency` | `-j` | usize | 2 | [1, 16] | In-process async concurrency |
 | `timeout_secs` | `--timeout` | u64 | 120 | [5, 600] | Per-case timeout in seconds |
 | `holdout_fraction` | `--holdout-fraction` | f64 | 0.2 | (0.0, 0.5] | Fraction reserved for validation |

@@ -64,7 +64,7 @@ You are [Agent], a [specialist]. Your job is to [task].
 | `get_callers` | Return all functions calling a specified function |
 | `get_callees` | Return all functions called by a specified function |
 | `lookup_cwe` | Look up CWE by ID with description and mitigations |
-| `lookup_knowledge` | Search the CWE knowledge base and knowledge packs |
+| `lookup_knowledge` | Search the CWE knowledge base (947 CWEs from MITRE) and knowledge packs |
 | `store_memory` | Persist findings/insights for other agents |
 | `recall_memory` | Retrieve findings stored by other agents |
 | `create_finding` | Register a vulnerability finding |
