@@ -103,6 +103,7 @@ impl LadybugGraphDb {
                 &db_path,
                 lbug::SystemConfig::default()
                     .buffer_pool_size(64 * 1024 * 1024)
+                    .max_db_size(1 << 28)
                     .max_num_threads(1),
             )
             .map_err(|e| anyhow::anyhow!("Failed to open LadybugDB: {e}"))?,
