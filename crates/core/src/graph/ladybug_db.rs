@@ -99,8 +99,13 @@ impl LadybugGraphDb {
         let tmp = tempfile::tempdir()?;
         let db_path = tmp.path().join("ladybug_test");
         let db = Arc::new(
-            lbug::Database::new(&db_path, lbug::SystemConfig::default())
-                .map_err(|e| anyhow::anyhow!("Failed to open LadybugDB: {e}"))?,
+            lbug::Database::new(
+                &db_path,
+                lbug::SystemConfig::default()
+                    .buffer_pool_size(64 * 1024 * 1024)
+                    .max_num_threads(1),
+            )
+            .map_err(|e| anyhow::anyhow!("Failed to open LadybugDB: {e}"))?,
         );
         let gdb = Self { db, path: db_path };
         gdb.ensure_schema()?;
