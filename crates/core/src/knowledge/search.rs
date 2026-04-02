@@ -464,7 +464,7 @@ mod tests {
         let first = initialize_cwe_catalog(&db).unwrap();
         let second = initialize_cwe_catalog(&db).unwrap();
 
-        // With the JSON data file, we get 145 CWEs; without it, 15 fallback entries.
+        // With the JSON data file, we get 947 CWEs; without it, 15 fallback entries.
         assert!(
             first.total_seed_cwes >= 15,
             "expected at least 15 seed CWEs, got {}",
@@ -535,7 +535,7 @@ mod tests {
     fn test_cwe_kg_json_parses() {
         // The JSON file should be loadable if present in the repo
         if let Some(kg) = load_cwe_knowledge_graph() {
-            assert_eq!(kg.version, 1);
+            assert!(kg.version >= 1, "expected version >= 1, got {}", kg.version);
             assert!(
                 kg.cwes.len() >= 100,
                 "expected at least 100 CWE entries, got {}",

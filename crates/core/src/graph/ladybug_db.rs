@@ -5,6 +5,8 @@
 //! Kuzu) is an embeddable property graph database optimized for complex
 //! analytical workloads on large graphs.
 
+use std::fs::File;
+use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -32,8 +34,8 @@ impl LadybugGraphDb {
 
     /// Open an existing LadybugDB database in read-only mode.
     ///
-    /// Multiple processes can open the same path in read-only mode
-    /// simultaneously without mmap contention or lock conflicts.
+    /// Uses flock serialization to prevent multiple processes from racing on
+    /// buffer pool initialization (mmap). The lock is released after open.
     pub fn open_read_only(path: &Path) -> anyhow::Result<Self> {
         let db_path = path.join("skwaq_graph");
         if !db_path.exists() {
@@ -42,11 +44,31 @@ impl LadybugGraphDb {
                 db_path.display()
             );
         }
+
+        // Serialize Database::new() across processes to avoid mmap race on
+        // buffer pool initialization. The lock file lives next to the DB dir.
+        let lock_path = db_path.with_extension("open.lock");
+        let lock_file = File::create(&lock_path).map_err(|e| {
+            anyhow::anyhow!("Failed to create lock file {}: {e}", lock_path.display())
+        })?;
+        let fd = lock_file.as_raw_fd();
+
+        // LOCK_EX: exclusive lock — blocks until acquired
+        let ret = unsafe { libc::flock(fd, libc::LOCK_EX) };
+        if ret != 0 {
+            let err = std::io::Error::last_os_error();
+            anyhow::bail!("flock({}) failed: {err}", lock_path.display());
+        }
+
         let config = lbug::SystemConfig::default().read_only(true);
-        let db = Arc::new(
-            lbug::Database::new(&db_path, config)
-                .map_err(|e| anyhow::anyhow!("Failed to open LadybugDB read-only: {e}"))?,
-        );
+        let result = lbug::Database::new(&db_path, config)
+            .map_err(|e| anyhow::anyhow!("Failed to open LadybugDB read-only: {e}"));
+
+        // Unlock (also happens on drop, but be explicit)
+        unsafe { libc::flock(fd, libc::LOCK_UN) };
+        drop(lock_file);
+
+        let db = Arc::new(result?);
         Ok(Self { db, path: db_path })
     }
 
