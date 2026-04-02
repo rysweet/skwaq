@@ -218,6 +218,63 @@ mod tests {
     }
 
     #[test]
+    fn test_open_read_only_creates_lock_file() {
+        // Create a writable DB first, then open read-only
+        let tmp = tempfile::tempdir().unwrap();
+        let db_path = tmp.path();
+        let _db = LadybugGraphDb::open(db_path).unwrap();
+        drop(_db);
+
+        // open_read_only should create a .open.lock file during open
+        let ro = LadybugGraphDb::open_read_only(db_path).unwrap();
+        let lock_path = db_path.join("skwaq_graph.open.lock");
+        assert!(
+            lock_path.exists(),
+            "flock lock file should exist after open_read_only"
+        );
+        drop(ro);
+    }
+
+    #[test]
+    fn test_open_read_only_fails_on_missing_db() {
+        let tmp = tempfile::tempdir().unwrap();
+        let result = LadybugGraphDb::open_read_only(tmp.path());
+        let err = result.err().expect("should fail on missing DB");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("does not exist"),
+            "expected 'does not exist' error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_concurrent_open_read_only_succeeds() {
+        // Create a writable DB, then open read-only from multiple threads.
+        // Without flock serialization, this would race on buffer pool init.
+        let tmp = tempfile::tempdir().unwrap();
+        let db_path = tmp.path().to_path_buf();
+        let _db = LadybugGraphDb::open(&db_path).unwrap();
+        drop(_db);
+
+        let mut handles = Vec::new();
+        for _ in 0..4 {
+            let p = db_path.clone();
+            handles.push(std::thread::spawn(move || {
+                LadybugGraphDb::open_read_only(&p)
+            }));
+        }
+
+        let mut successes = 0;
+        for h in handles {
+            match h.join().unwrap() {
+                Ok(_db) => successes += 1,
+                Err(e) => panic!("concurrent open_read_only failed: {e}"),
+            }
+        }
+        assert_eq!(successes, 4, "all 4 concurrent opens should succeed");
+    }
+
+    #[test]
     fn test_taint_flow() {
         let db = LadybugGraphDb::in_memory().unwrap();
         db.execute("CREATE (s:DataSource {id: 'src1', name: 'recv', source_type: 'network'})")

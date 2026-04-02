@@ -607,6 +607,135 @@ mod tests {
     }
 
     #[test]
+    fn test_cwe_kg_has_947_entries() {
+        // The full MITRE CWE database should have 947 entries
+        if let Some(kg) = load_cwe_knowledge_graph() {
+            assert_eq!(
+                kg.cwes.len(),
+                947,
+                "expected 947 CWE entries from full MITRE database, got {}",
+                kg.cwes.len()
+            );
+        }
+    }
+
+    #[test]
+    fn test_cwe_kg_parent_hierarchy_present() {
+        // Most CWEs should have a parent_cwe from MITRE RelatedWeaknesses
+        if let Some(kg) = load_cwe_knowledge_graph() {
+            let with_parent = kg.cwes.iter().filter(|c| c.parent_cwe.is_some()).count();
+            assert!(
+                with_parent >= 900,
+                "expected at least 900 CWEs with parent_cwe, got {with_parent}"
+            );
+            // Spot-check: CWE-120 should be child of CWE-787 per MITRE
+            let cwe120 = kg.cwes.iter().find(|c| c.cwe_id == "CWE-120").unwrap();
+            assert_eq!(
+                cwe120.parent_cwe.as_deref(),
+                Some("CWE-787"),
+                "CWE-120 should have parent CWE-787"
+            );
+        }
+    }
+
+    #[test]
+    fn test_enriched_entries_preserved_after_expansion() {
+        // The original 144 enriched entries must retain detection_signals and fn_insight
+        if let Some(kg) = load_cwe_knowledge_graph() {
+            let enriched: Vec<_> = kg
+                .cwes
+                .iter()
+                .filter(|c| !c.detection_signals.is_empty())
+                .collect();
+            assert!(
+                enriched.len() >= 140,
+                "expected at least 140 enriched CWEs with detection_signals, got {}",
+                enriched.len()
+            );
+
+            // Spot-check: CWE-79 (XSS) should have detection signals
+            let cwe79 = kg.cwes.iter().find(|c| c.cwe_id == "CWE-79");
+            assert!(cwe79.is_some(), "CWE-79 must exist");
+            let cwe79 = cwe79.unwrap();
+            assert!(
+                !cwe79.detection_signals.is_empty(),
+                "CWE-79 should have detection_signals"
+            );
+            assert!(
+                !cwe79.fn_insight.is_empty(),
+                "CWE-79 should have fn_insight"
+            );
+        }
+    }
+
+    #[test]
+    fn test_initialize_full_cwe_catalog_count() {
+        // When JSON is available, initialize should insert all 947 entries
+        let db = crate::graph::GraphDb::in_memory().unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let knowledge_dir = temp.path().join("knowledge");
+        std::fs::create_dir_all(&knowledge_dir).unwrap();
+        let summary = initialize_cwe_catalog_with_dir(&db, &knowledge_dir).unwrap();
+
+        // With the full MITRE data, we expect 947 entries; without it, 15 fallback
+        if load_cwe_knowledge_graph().is_some() {
+            assert_eq!(
+                summary.total_seed_cwes, 947,
+                "expected 947 total seed CWEs"
+            );
+            assert_eq!(
+                summary.inserted_cwes, 947,
+                "expected 947 inserted CWEs on first run"
+            );
+        }
+    }
+
+    #[test]
+    fn test_parent_cwe_column_populated() {
+        // parent_cwe should be stored in the DB for hierarchy queries
+        let db = crate::graph::GraphDb::in_memory().unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let knowledge_dir = temp.path().join("knowledge");
+        std::fs::create_dir_all(&knowledge_dir).unwrap();
+        initialize_cwe_catalog_with_dir(&db, &knowledge_dir).unwrap();
+
+        if load_cwe_knowledge_graph().is_some() {
+            let parent: String = db
+                .conn()
+                .query_row(
+                    "SELECT parent_cwe FROM cwes WHERE cwe_id = 'CWE-120'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(
+                parent, "CWE-787",
+                "CWE-120 parent_cwe should be CWE-787 in DB"
+            );
+        }
+    }
+
+    #[test]
+    fn test_search_finds_newly_added_cwes() {
+        // CWEs that were NOT in the original 145 should now be searchable
+        let db = crate::graph::GraphDb::in_memory().unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let knowledge_dir = temp.path().join("knowledge");
+        std::fs::create_dir_all(&knowledge_dir).unwrap();
+        initialize_cwe_catalog_with_dir(&db, &knowledge_dir).unwrap();
+
+        if load_cwe_knowledge_graph().is_some() {
+            // CWE-5 (J2EE Misconfiguration) is in the expanded set but not in FALLBACK_CWES
+            let results =
+                search_knowledge_with_dir(Some(&db), "cwe-5", &knowledge_dir).unwrap();
+            assert!(
+                results.iter().any(|h| h.topic == "CWE-5"),
+                "CWE-5 from expanded MITRE data should be searchable"
+            );
+        }
+    }
+
+    #[test]
     fn test_fallback_when_json_missing() {
         // The fallback CWEs should always work even if JSON is gone
         let entries: Vec<CweEntry> = FALLBACK_CWES
