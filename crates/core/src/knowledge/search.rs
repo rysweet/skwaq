@@ -464,7 +464,7 @@ mod tests {
         let first = initialize_cwe_catalog(&db).unwrap();
         let second = initialize_cwe_catalog(&db).unwrap();
 
-        // With the JSON data file, we get 145 CWEs; without it, 15 fallback entries.
+        // With the JSON data file, we get 944 CWEs (full MITRE); without it, 15 fallback entries.
         assert!(
             first.total_seed_cwes >= 15,
             "expected at least 15 seed CWEs, got {}",
@@ -535,19 +535,24 @@ mod tests {
     fn test_cwe_kg_json_parses() {
         // The JSON file should be loadable if present in the repo
         if let Some(kg) = load_cwe_knowledge_graph() {
-            assert_eq!(kg.version, 1);
+            assert_eq!(kg.version, 2);
             assert!(
-                kg.cwes.len() >= 100,
-                "expected at least 100 CWE entries, got {}",
+                kg.cwes.len() >= 900,
+                "expected at least 900 CWE entries (full MITRE database), got {}",
                 kg.cwes.len()
             );
-            // Spot check a known entry
+            // Spot check a known enriched entry
             let cwe119 = kg.cwes.iter().find(|c| c.cwe_id == "CWE-119");
             assert!(cwe119.is_some(), "CWE-119 must be in the knowledge graph");
             let cwe119 = cwe119.unwrap();
             assert!(!cwe119.detection_signals.is_empty());
             assert!(!cwe119.skwaq_tools.is_empty());
             assert!(!cwe119.fn_insight.is_empty());
+            // Verify parent_cwe hierarchy from MITRE
+            assert!(
+                cwe119.parent_cwe.is_some(),
+                "CWE-119 should have a parent_cwe from MITRE hierarchy"
+            );
         }
     }
 

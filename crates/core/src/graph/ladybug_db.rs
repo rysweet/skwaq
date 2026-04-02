@@ -5,6 +5,8 @@
 //! Kuzu) is an embeddable property graph database optimized for complex
 //! analytical workloads on large graphs.
 
+use std::fs::File;
+use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -17,23 +19,60 @@ pub struct LadybugGraphDb {
 }
 
 impl LadybugGraphDb {
+    /// Acquire an exclusive flock on `<db_path>/.open.lock`, call `f()`, then
+    /// release. This serializes `Database::new()` across processes so that
+    /// concurrent shard workers don't race on buffer-pool / mmap initialization.
+    fn with_open_lock<T>(
+        db_path: &Path,
+        f: impl FnOnce() -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
+        let lock_path = db_path.with_extension("open.lock");
+        // Ensure parent dir exists so the lock file can be created.
+        if let Some(parent) = lock_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let lock_file = File::create(&lock_path).map_err(|e| {
+            anyhow::anyhow!("Failed to create lock file {}: {e}", lock_path.display())
+        })?;
+        let fd = lock_file.as_raw_fd();
+
+        // Block until we hold the exclusive lock.
+        let ret = unsafe { libc::flock(fd, libc::LOCK_EX) };
+        if ret != 0 {
+            let err = std::io::Error::last_os_error();
+            anyhow::bail!("flock(LOCK_EX) failed on {}: {err}", lock_path.display());
+        }
+
+        let result = f();
+
+        // Release — also happens on drop, but be explicit.
+        unsafe { libc::flock(fd, libc::LOCK_UN) };
+        drop(lock_file);
+
+        result
+    }
+
     /// Open or create a LadybugDB database at the given path.
     pub fn open(path: &Path) -> anyhow::Result<Self> {
         std::fs::create_dir_all(path)?;
         let db_path = path.join("skwaq_graph");
-        let db = Arc::new(
+        let db = Self::with_open_lock(&db_path, || {
             lbug::Database::new(&db_path, lbug::SystemConfig::default())
-                .map_err(|e| anyhow::anyhow!("Failed to open LadybugDB: {e}"))?,
-        );
-        let gdb = Self { db, path: db_path };
+                .map_err(|e| anyhow::anyhow!("Failed to open LadybugDB: {e}"))
+        })?;
+        let gdb = Self {
+            db: Arc::new(db),
+            path: db_path,
+        };
         gdb.ensure_schema()?;
         Ok(gdb)
     }
 
     /// Open an existing LadybugDB database in read-only mode.
     ///
-    /// Multiple processes can open the same path in read-only mode
-    /// simultaneously without mmap contention or lock conflicts.
+    /// Uses flock serialization to prevent concurrent buffer-pool
+    /// initialization races when multiple shard processes open
+    /// the same database simultaneously.
     pub fn open_read_only(path: &Path) -> anyhow::Result<Self> {
         let db_path = path.join("skwaq_graph");
         if !db_path.exists() {
@@ -43,14 +82,19 @@ impl LadybugGraphDb {
             );
         }
         let config = lbug::SystemConfig::default().read_only(true);
-        let db = Arc::new(
+        let db = Self::with_open_lock(&db_path, || {
             lbug::Database::new(&db_path, config)
-                .map_err(|e| anyhow::anyhow!("Failed to open LadybugDB read-only: {e}"))?,
-        );
-        Ok(Self { db, path: db_path })
+                .map_err(|e| anyhow::anyhow!("Failed to open LadybugDB read-only: {e}"))
+        })?;
+        Ok(Self {
+            db: Arc::new(db),
+            path: db_path,
+        })
     }
 
     /// Create a temporary LadybugDB database (for tests).
+    ///
+    /// Skips flock since temp dirs are never shared across processes.
     pub fn in_memory() -> anyhow::Result<Self> {
         let tmp = tempfile::tempdir()?;
         let db_path = tmp.path().join("ladybug_test");
@@ -193,6 +237,47 @@ mod tests {
             .collect();
         assert!(names.contains(&"helper"));
         assert!(names.contains(&"dangerous_sink"));
+    }
+
+    #[test]
+    fn test_open_creates_lock_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _db = LadybugGraphDb::open(tmp.path()).unwrap();
+        let lock_path = tmp.path().join("skwaq_graph.open.lock");
+        assert!(lock_path.exists(), "flock lock file should be created");
+    }
+
+    #[test]
+    fn test_open_read_only_uses_flock() {
+        let tmp = tempfile::tempdir().unwrap();
+        // First create the database.
+        let _db = LadybugGraphDb::open(tmp.path()).unwrap();
+        drop(_db);
+        // Now open read-only — should succeed with flock.
+        let _db2 = LadybugGraphDb::open_read_only(tmp.path()).unwrap();
+        let lock_path = tmp.path().join("skwaq_graph.open.lock");
+        assert!(
+            lock_path.exists(),
+            "flock lock file should exist after read-only open"
+        );
+    }
+
+    #[test]
+    fn test_concurrent_open_serialized() {
+        // Verify that multiple sequential opens to the same path succeed
+        // (flock serialization prevents buffer pool race).
+        let tmp = tempfile::tempdir().unwrap();
+        let db1 = LadybugGraphDb::open(tmp.path()).unwrap();
+        db1.execute("CREATE (f:Function {id: 'f1', name: 'first'})")
+            .unwrap();
+        drop(db1);
+
+        let db2 = LadybugGraphDb::open(tmp.path()).unwrap();
+        let rows = db2
+            .query("MATCH (f:Function {id: 'f1'}) RETURN f.name")
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(LadybugGraphDb::as_str(&rows[0][0]), Some("first"));
     }
 
     #[test]
