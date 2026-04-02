@@ -11,12 +11,10 @@ use super::ladybug_db::LadybugGraphDb;
 /// Wrapper around the graph database.
 ///
 /// Backed by LadybugDB for native Cypher graph queries and SQLite for
-/// legacy schema compatibility. LadybugDB is optional — gym eval uses
-/// SQLite-only mode to avoid mmap overhead on per-case databases.
+/// legacy schema compatibility. New graph queries should use `cypher()`.
 pub struct GraphDb {
     conn: rusqlite::Connection,
-    /// LadybugDB backend for native Cypher queries (None in SQLite-only mode).
-    ladybug: Option<LadybugGraphDb>,
+    ladybug: LadybugGraphDb,
 }
 
 impl GraphDb {
@@ -27,10 +25,7 @@ impl GraphDb {
         let conn = rusqlite::Connection::open(&db_file)?;
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
         let ladybug = LadybugGraphDb::open(path)?;
-        let gdb = Self {
-            conn,
-            ladybug: Some(ladybug),
-        };
+        let gdb = Self { conn, ladybug };
         gdb.ensure_schema()?;
         Ok(gdb)
     }
@@ -39,25 +34,7 @@ impl GraphDb {
     pub fn in_memory() -> anyhow::Result<Self> {
         let conn = rusqlite::Connection::open_in_memory()?;
         let ladybug = LadybugGraphDb::in_memory()?;
-        let gdb = Self {
-            conn,
-            ladybug: Some(ladybug),
-        };
-        gdb.ensure_schema()?;
-        Ok(gdb)
-    }
-
-    /// Open an in-memory SQLite-only database (no LadybugDB).
-    ///
-    /// Used by gym eval where per-case LadybugDB is dead weight —
-    /// GraphBuilder writes only to SQLite, and agent queries fall through
-    /// to the SQL-based path in tool_executor. Eliminates mmap overhead.
-    pub fn in_memory_sqlite_only() -> anyhow::Result<Self> {
-        let conn = rusqlite::Connection::open_in_memory()?;
-        let gdb = Self {
-            conn,
-            ladybug: None,
-        };
+        let gdb = Self { conn, ladybug };
         gdb.ensure_schema()?;
         Ok(gdb)
     }
@@ -84,38 +61,27 @@ impl GraphDb {
     }
 
     /// Execute a Cypher query via LadybugDB.
-    /// Returns empty results when in SQLite-only mode.
     #[allow(dead_code)]
     pub fn cypher_query(&self, cypher: &str) -> anyhow::Result<Vec<Vec<lbug::Value>>> {
-        match &self.ladybug {
-            Some(lg) => lg.query(cypher),
-            None => Ok(Vec::new()),
-        }
+        self.ladybug.query(cypher)
     }
 
     /// Execute a Cypher statement (no results expected).
-    /// No-op when in SQLite-only mode.
     #[allow(dead_code)]
     pub fn cypher_execute(&self, cypher: &str) -> anyhow::Result<()> {
-        match &self.ladybug {
-            Some(lg) => lg.execute(cypher),
-            None => {
-                let _ = cypher;
-                Ok(())
-            }
-        }
+        self.ladybug.execute(cypher)
     }
 
-    /// Whether LadybugDB is available.
+    /// Whether LadybugDB is available (always true now).
     #[allow(dead_code)]
     pub fn has_ladybug(&self) -> bool {
-        self.ladybug.is_some()
+        true
     }
 
-    /// Get the LadybugDB handle (if available).
+    /// Get the LadybugDB handle.
     #[allow(dead_code)]
-    pub fn ladybug(&self) -> Option<&LadybugGraphDb> {
-        self.ladybug.as_ref()
+    pub fn ladybug(&self) -> &LadybugGraphDb {
+        &self.ladybug
     }
 
     fn ensure_schema(&self) -> anyhow::Result<()> {
@@ -345,37 +311,6 @@ mod tests {
             .query_row("SELECT count(*) FROM functions", [], |row| row.get(0))
             .unwrap();
         assert_eq!(count, 0);
-    }
-
-    #[test]
-    fn test_open_in_memory_sqlite_only() {
-        let db = GraphDb::in_memory_sqlite_only().unwrap();
-        // Schema should exist (SQLite tables work)
-        let count: i64 = db
-            .conn()
-            .query_row("SELECT count(*) FROM functions", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(count, 0);
-        // LadybugDB not available
-        assert!(!db.has_ladybug());
-        // cypher_query returns empty (not error)
-        let rows = db.cypher_query("MATCH (n) RETURN n").unwrap();
-        assert!(rows.is_empty());
-        // cypher_execute is a no-op
-        assert!(db.cypher_execute("CREATE (n:Test {id: '1'})").is_ok());
-        // SQLite operations still work
-        db.execute(
-            "INSERT INTO functions (id, name) VALUES ('f1', 'test')",
-            &[],
-        )
-        .unwrap();
-        let name: String = db
-            .conn()
-            .query_row("SELECT name FROM functions WHERE id = 'f1'", [], |row| {
-                row.get(0)
-            })
-            .unwrap();
-        assert_eq!(name, "test");
     }
 
     #[test]
