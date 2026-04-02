@@ -180,8 +180,30 @@ pub(crate) fn initialize_cwe_catalog_with_dir(
 ) -> anyhow::Result<InitSummary> {
     let entries = load_cwe_entries();
     let total = entries.len();
+
+    // Wrap all inserts in a single transaction for performance.
+    // Without this, 947 individual INSERTs each trigger a disk sync.
+    db.mutate("BEGIN TRANSACTION;")?;
+    let result = insert_cwe_entries(db, &entries);
+    if result.is_ok() {
+        db.mutate("COMMIT;")?;
+    } else if let Err(e) = db.mutate("ROLLBACK;") {
+        tracing::error!("Failed to rollback CWE catalog transaction: {e}");
+    }
+    let inserted = result?;
+
+    let knowledge_packs_found = count_knowledge_packs(knowledge_dir)?;
+
+    Ok(InitSummary {
+        inserted_cwes: inserted,
+        total_seed_cwes: total,
+        knowledge_packs_found,
+    })
+}
+
+fn insert_cwe_entries(db: &GraphDb, entries: &[CweEntry]) -> anyhow::Result<usize> {
     let mut inserted = 0usize;
-    for entry in &entries {
+    for entry in entries {
         let id = entry.cwe_id.to_lowercase().replace('-', "_");
         let parent = entry.parent_cwe.as_deref().unwrap_or("");
         let danger_cats = entry.danger_categories.join(",");
@@ -207,14 +229,7 @@ pub(crate) fn initialize_cwe_catalog_with_dir(
             inserted += result;
         }
     }
-
-    let knowledge_packs_found = count_knowledge_packs(knowledge_dir)?;
-
-    Ok(InitSummary {
-        inserted_cwes: inserted,
-        total_seed_cwes: total,
-        knowledge_packs_found,
-    })
+    Ok(inserted)
 }
 
 pub fn search_knowledge(db: Option<&GraphDb>, query: &str) -> anyhow::Result<Vec<KnowledgeHit>> {
@@ -282,9 +297,28 @@ pub(crate) fn search_knowledge_with_dir(
             .then_with(|| a.1.topic.cmp(&b.1.topic))
             .then_with(|| a.1.title.cmp(&b.1.title))
     });
-    scored.truncate(KB_SEARCH_LIMIT);
 
-    Ok(scored.into_iter().map(|(_, hit)| hit).collect())
+    // Ensure both CWE and knowledge-pack sources are represented in results.
+    // With 947 CWEs, pure score-based truncation can push knowledge-packs out entirely.
+    // Reserve up to 2 slots for knowledge-packs, fill remainder with CWE hits.
+    let pack_hits: Vec<_> = scored
+        .iter()
+        .filter(|(_, h)| h.source == "knowledge-pack")
+        .take(2)
+        .cloned()
+        .collect();
+    let cwe_slots = KB_SEARCH_LIMIT.saturating_sub(pack_hits.len());
+    let cwe_hits: Vec<_> = scored
+        .iter()
+        .filter(|(_, h)| h.source == "cwe")
+        .take(cwe_slots)
+        .cloned()
+        .collect();
+
+    let mut merged: Vec<_> = cwe_hits.into_iter().chain(pack_hits).collect();
+    merged.sort_by(|a, b| b.0.cmp(&a.0));
+
+    Ok(merged.into_iter().map(|(_, hit)| hit).collect())
 }
 
 fn search_cwes(db: &GraphDb, query: &str) -> anyhow::Result<Vec<(usize, KnowledgeHit)>> {
