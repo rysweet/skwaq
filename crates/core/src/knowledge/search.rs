@@ -282,9 +282,29 @@ pub(crate) fn search_knowledge_with_dir(
             .then_with(|| a.1.topic.cmp(&b.1.topic))
             .then_with(|| a.1.title.cmp(&b.1.title))
     });
-    scored.truncate(KB_SEARCH_LIMIT);
 
-    Ok(scored.into_iter().map(|(_, hit)| hit).collect())
+    // Ensure source diversity: don't let one source type crowd out others.
+    // Take the best hit from each source first, then fill remaining slots
+    // by score.
+    let mut seen_sources: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut selected = Vec::with_capacity(KB_SEARCH_LIMIT);
+    let mut deferred = Vec::new();
+    for item in scored {
+        if seen_sources.insert(item.1.source.clone()) {
+            selected.push(item);
+        } else {
+            deferred.push(item);
+        }
+    }
+    for item in deferred {
+        if selected.len() >= KB_SEARCH_LIMIT {
+            break;
+        }
+        selected.push(item);
+    }
+    selected.truncate(KB_SEARCH_LIMIT);
+
+    Ok(selected.into_iter().map(|(_, hit)| hit).collect())
 }
 
 fn search_cwes(db: &GraphDb, query: &str) -> anyhow::Result<Vec<(usize, KnowledgeHit)>> {
@@ -292,16 +312,26 @@ fn search_cwes(db: &GraphDb, query: &str) -> anyhow::Result<Vec<(usize, Knowledg
     let mut where_parts = Vec::new();
     let mut params = Vec::new();
     for term in &terms {
-        let pattern = format!("%{term}%");
-        for column in [
-            "lower(cwe_id)",
-            "lower(name)",
-            "lower(description)",
-            "lower(semantic_class)",
-            "lower(detection_signals)",
-        ] {
-            where_parts.push(format!("{column} LIKE ?{}", params.len() + 1));
-            params.push(pattern.clone());
+        // When the term looks like a CWE identifier (e.g. "cwe-119"), use
+        // exact match on cwe_id to avoid picking up CWE-1190, CWE-1191, etc.
+        let is_cwe_id = term
+            .strip_prefix("cwe-")
+            .is_some_and(|rest| rest.chars().all(|c| c.is_ascii_digit()));
+        if is_cwe_id {
+            where_parts.push(format!("lower(cwe_id) = ?{}", params.len() + 1));
+            params.push(term.to_string());
+        } else {
+            let pattern = format!("%{term}%");
+            for column in [
+                "lower(cwe_id)",
+                "lower(name)",
+                "lower(description)",
+                "lower(semantic_class)",
+                "lower(detection_signals)",
+            ] {
+                where_parts.push(format!("{column} LIKE ?{}", params.len() + 1));
+                params.push(pattern.clone());
+            }
         }
     }
 
