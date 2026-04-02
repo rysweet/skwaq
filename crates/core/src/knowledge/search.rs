@@ -180,8 +180,30 @@ pub(crate) fn initialize_cwe_catalog_with_dir(
 ) -> anyhow::Result<InitSummary> {
     let entries = load_cwe_entries();
     let total = entries.len();
+
+    // Wrap all inserts in a single transaction for performance.
+    // Without this, 947 individual INSERTs each trigger a disk sync.
+    db.mutate("BEGIN TRANSACTION;")?;
+    let result = insert_cwe_entries(db, &entries);
+    if result.is_ok() {
+        db.mutate("COMMIT;")?;
+    } else if let Err(e) = db.mutate("ROLLBACK;") {
+        tracing::error!("Failed to rollback CWE catalog transaction: {e}");
+    }
+    let inserted = result?;
+
+    let knowledge_packs_found = count_knowledge_packs(knowledge_dir)?;
+
+    Ok(InitSummary {
+        inserted_cwes: inserted,
+        total_seed_cwes: total,
+        knowledge_packs_found,
+    })
+}
+
+fn insert_cwe_entries(db: &GraphDb, entries: &[CweEntry]) -> anyhow::Result<usize> {
     let mut inserted = 0usize;
-    for entry in &entries {
+    for entry in entries {
         let id = entry.cwe_id.to_lowercase().replace('-', "_");
         let parent = entry.parent_cwe.as_deref().unwrap_or("");
         let danger_cats = entry.danger_categories.join(",");
@@ -207,14 +229,7 @@ pub(crate) fn initialize_cwe_catalog_with_dir(
             inserted += result;
         }
     }
-
-    let knowledge_packs_found = count_knowledge_packs(knowledge_dir)?;
-
-    Ok(InitSummary {
-        inserted_cwes: inserted,
-        total_seed_cwes: total,
-        knowledge_packs_found,
-    })
+    Ok(inserted)
 }
 
 pub fn search_knowledge(db: Option<&GraphDb>, query: &str) -> anyhow::Result<Vec<KnowledgeHit>> {
@@ -285,26 +300,22 @@ pub(crate) fn search_knowledge_with_dir(
 
     // Ensure both CWE and knowledge-pack sources are represented in results.
     // With 947 CWEs, pure score-based truncation can push knowledge-packs out entirely.
-    let min_per_source = 2;
-    let mut cwe_hits: Vec<_> = scored
-        .iter()
-        .filter(|(_, h)| h.source == "cwe")
-        .take(KB_SEARCH_LIMIT)
-        .collect();
-    let mut pack_hits: Vec<_> = scored
+    // Reserve up to 2 slots for knowledge-packs, fill remainder with CWE hits.
+    let pack_hits: Vec<_> = scored
         .iter()
         .filter(|(_, h)| h.source == "knowledge-pack")
-        .take(min_per_source)
+        .take(2)
+        .cloned()
+        .collect();
+    let cwe_slots = KB_SEARCH_LIMIT.saturating_sub(pack_hits.len());
+    let cwe_hits: Vec<_> = scored
+        .iter()
+        .filter(|(_, h)| h.source == "cwe")
+        .take(cwe_slots)
+        .cloned()
         .collect();
 
-    // If one source has fewer than min_per_source, give the other more slots
-    let cwe_slots = KB_SEARCH_LIMIT.saturating_sub(pack_hits.len().min(min_per_source));
-    cwe_hits.truncate(cwe_slots);
-    let remaining = KB_SEARCH_LIMIT.saturating_sub(cwe_hits.len());
-    pack_hits.truncate(remaining);
-
-    let mut merged: Vec<(usize, KnowledgeHit)> =
-        cwe_hits.into_iter().chain(pack_hits).cloned().collect();
+    let mut merged: Vec<_> = cwe_hits.into_iter().chain(pack_hits).collect();
     merged.sort_by(|a, b| b.0.cmp(&a.0));
 
     Ok(merged.into_iter().map(|(_, hit)| hit).collect())
@@ -679,10 +690,7 @@ mod tests {
 
         // With the full MITRE data, we expect 947 entries; without it, 15 fallback
         if load_cwe_knowledge_graph().is_some() {
-            assert_eq!(
-                summary.total_seed_cwes, 947,
-                "expected 947 total seed CWEs"
-            );
+            assert_eq!(summary.total_seed_cwes, 947, "expected 947 total seed CWEs");
             assert_eq!(
                 summary.inserted_cwes, 947,
                 "expected 947 inserted CWEs on first run"
@@ -726,8 +734,7 @@ mod tests {
 
         if load_cwe_knowledge_graph().is_some() {
             // CWE-5 (J2EE Misconfiguration) is in the expanded set but not in FALLBACK_CWES
-            let results =
-                search_knowledge_with_dir(Some(&db), "cwe-5", &knowledge_dir).unwrap();
+            let results = search_knowledge_with_dir(Some(&db), "cwe-5", &knowledge_dir).unwrap();
             assert!(
                 results.iter().any(|h| h.topic == "CWE-5"),
                 "CWE-5 from expanded MITRE data should be searchable"
