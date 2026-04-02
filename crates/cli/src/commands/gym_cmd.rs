@@ -1629,7 +1629,8 @@ fn spawn_shard(
     let stderr_file = std::fs::File::create(&stderr_path)?;
 
     let mut cmd = std::process::Command::new(exe);
-    cmd.args(["gym", "run", suite])
+    cmd.env("SKWAQ_GYM_SHARD", shard_idx.to_string())
+        .args(["gym", "run", suite])
         .args(["--skip", &skip.to_string()])
         .args(["--max-cases", &cases_per.to_string()])
         .args(["--shard-total", &total.to_string()])

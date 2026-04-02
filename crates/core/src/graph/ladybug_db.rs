@@ -30,6 +30,26 @@ impl LadybugGraphDb {
         Ok(gdb)
     }
 
+    /// Open an existing LadybugDB database in read-only mode.
+    ///
+    /// Multiple processes can open the same path in read-only mode
+    /// simultaneously without mmap contention or lock conflicts.
+    pub fn open_read_only(path: &Path) -> anyhow::Result<Self> {
+        let db_path = path.join("skwaq_graph");
+        if !db_path.exists() {
+            anyhow::bail!(
+                "Cannot open LadybugDB in read-only mode: {} does not exist",
+                db_path.display()
+            );
+        }
+        let config = lbug::SystemConfig::default().read_only(true);
+        let db = Arc::new(
+            lbug::Database::new(&db_path, config)
+                .map_err(|e| anyhow::anyhow!("Failed to open LadybugDB read-only: {e}"))?,
+        );
+        Ok(Self { db, path: db_path })
+    }
+
     /// Create a temporary LadybugDB database (for tests).
     pub fn in_memory() -> anyhow::Result<Self> {
         let tmp = tempfile::tempdir()?;

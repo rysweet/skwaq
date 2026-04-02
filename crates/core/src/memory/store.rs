@@ -39,12 +39,29 @@ impl MemoryStore {
         Ok(store)
     }
 
+    /// Open an existing memory store in read-only mode.
+    ///
+    /// Multiple processes can open the same store read-only simultaneously.
+    /// Write operations (store, recall_count increment) are silently skipped.
+    pub fn open_read_only(path: &Path) -> anyhow::Result<Self> {
+        let db = LadybugGraphDb::open_read_only(path)?;
+        Ok(Self { db })
+    }
+
     /// Open the default memory store.
     pub fn open_default() -> anyhow::Result<Self> {
         let home =
             dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
         let path = home.join(".skwaq").join("memory_graph");
         Self::open(&path)
+    }
+
+    /// Open the default memory store in read-only mode (for parallel shards).
+    pub fn open_default_read_only() -> anyhow::Result<Self> {
+        let home =
+            dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
+        let path = home.join(".skwaq").join("memory_graph");
+        Self::open_read_only(&path)
     }
 
     fn ensure_schema(&self) -> anyhow::Result<()> {
@@ -138,11 +155,14 @@ impl MemoryStore {
         });
         experiences.truncate(limit);
 
+        // Increment recall_count — best-effort, silently skipped in read-only mode.
         for exp in &experiences {
-            let _ = self.db.execute(&format!(
+            if let Err(e) = self.db.execute(&format!(
                 "MATCH (e:Experience {{id: '{}'}}) SET e.recall_count = e.recall_count + 1",
                 Self::esc(&exp.id)
-            ));
+            )) {
+                tracing::trace!("recall_count update skipped (read-only?): {e}");
+            }
         }
 
         Ok(experiences)

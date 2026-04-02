@@ -1847,16 +1847,36 @@ static MEMORY_STORE: std::sync::OnceLock<Option<skwaq_core::memory::MemoryStore>
 
 /// Returns `None` if memory cannot be initialized (non-fatal — agents
 /// simply run without cross-run learning).
+///
+/// When running as a gym shard subprocess (`SKWAQ_GYM_SHARD` env var is set),
+/// the memory store is opened in **read-only mode**. This allows multiple
+/// shard processes to read shared agent memories simultaneously without
+/// mmap contention. Writes (store_memory, recall_count updates) are
+/// silently skipped in read-only mode.
 fn open_memory_store() -> Option<skwaq_core::memory::MemoryStore> {
+    let is_shard = std::env::var_os("SKWAQ_GYM_SHARD").is_some();
+
     MEMORY_STORE
-        .get_or_init(|| match skwaq_core::memory::MemoryStore::open_default() {
-            Ok(store) => {
-                tracing::info!("Durable agent memory enabled (shared across gym cases)");
-                Some(store)
-            }
-            Err(e) => {
-                tracing::warn!("Could not open durable memory store: {e}. Running without memory.");
-                None
+        .get_or_init(|| {
+            let result = if is_shard {
+                skwaq_core::memory::MemoryStore::open_default_read_only()
+            } else {
+                skwaq_core::memory::MemoryStore::open_default()
+            };
+            match result {
+                Ok(store) => {
+                    let mode = if is_shard { "read-only" } else { "read-write" };
+                    tracing::info!(
+                        "Durable agent memory enabled ({mode}, shared across gym cases)"
+                    );
+                    Some(store)
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Could not open durable memory store: {e}. Running without memory."
+                    );
+                    None
+                }
             }
         })
         .clone()
