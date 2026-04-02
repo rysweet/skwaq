@@ -282,9 +282,32 @@ pub(crate) fn search_knowledge_with_dir(
             .then_with(|| a.1.topic.cmp(&b.1.topic))
             .then_with(|| a.1.title.cmp(&b.1.title))
     });
-    scored.truncate(KB_SEARCH_LIMIT);
 
-    Ok(scored.into_iter().map(|(_, hit)| hit).collect())
+    // Ensure both CWE and knowledge-pack sources are represented in results.
+    // With 947 CWEs, pure score-based truncation can push knowledge-packs out entirely.
+    let min_per_source = 2;
+    let mut cwe_hits: Vec<_> = scored
+        .iter()
+        .filter(|(_, h)| h.source == "cwe")
+        .take(KB_SEARCH_LIMIT)
+        .collect();
+    let mut pack_hits: Vec<_> = scored
+        .iter()
+        .filter(|(_, h)| h.source == "knowledge-pack")
+        .take(min_per_source)
+        .collect();
+
+    // If one source has fewer than min_per_source, give the other more slots
+    let cwe_slots = KB_SEARCH_LIMIT.saturating_sub(pack_hits.len().min(min_per_source));
+    cwe_hits.truncate(cwe_slots);
+    let remaining = KB_SEARCH_LIMIT.saturating_sub(cwe_hits.len());
+    pack_hits.truncate(remaining);
+
+    let mut merged: Vec<(usize, KnowledgeHit)> =
+        cwe_hits.into_iter().chain(pack_hits).cloned().collect();
+    merged.sort_by(|a, b| b.0.cmp(&a.0));
+
+    Ok(merged.into_iter().map(|(_, hit)| hit).collect())
 }
 
 fn search_cwes(db: &GraphDb, query: &str) -> anyhow::Result<Vec<(usize, KnowledgeHit)>> {
