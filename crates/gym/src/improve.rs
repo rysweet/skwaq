@@ -3154,8 +3154,18 @@ analysis
 
         let context = build_overfitting_knowledge_context(&knowledge_db, &proposals).unwrap();
 
-        assert_eq!(context.matches("### Query: cwe-119").count(), 1);
-        assert_eq!(context.matches("### Query: cwe-120").count(), 1);
+        // Each query runs once (deduplication) but may produce up to
+        // IMPROVE_KB_HITS_PER_QUERY (2) sections if multiple sources match.
+        let cwe119_count = context.matches("### Query: cwe-119").count();
+        let cwe120_count = context.matches("### Query: cwe-120").count();
+        assert!(
+            (1..=IMPROVE_KB_HITS_PER_QUERY).contains(&cwe119_count),
+            "cwe-119 should appear 1-{IMPROVE_KB_HITS_PER_QUERY} times (deduped), got {cwe119_count}"
+        );
+        assert!(
+            (1..=IMPROVE_KB_HITS_PER_QUERY).contains(&cwe120_count),
+            "cwe-120 should appear 1-{IMPROVE_KB_HITS_PER_QUERY} times (deduped), got {cwe120_count}"
+        );
     }
 
     #[test]
