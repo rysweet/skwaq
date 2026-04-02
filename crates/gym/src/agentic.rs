@@ -225,7 +225,8 @@ pub async fn run_agentic_multi_file_source_analysis(
 
     // Ingest all files into a shared graph, then run the agent pipeline
     // on the primary file with cross-file context available.
-    let db = GraphDb::in_memory()?;
+    // SQLite-only: skip LadybugDB mmap overhead for per-case gym databases.
+    let db = GraphDb::in_memory_sqlite_only()?;
     let inv_id = format!("gym-mf-{}", &uuid::Uuid::new_v4().to_string()[..8]);
     let now = chrono::Utc::now().to_rfc3339();
     let file_str = primary.to_string_lossy().to_string();
@@ -353,7 +354,7 @@ pub fn run_multi_file_pattern_analysis(paths: &[PathBuf]) -> anyhow::Result<Vec<
         return Ok(vec![]);
     }
 
-    let db = GraphDb::in_memory()?;
+    let db = GraphDb::in_memory_sqlite_only()?;
     let inv_id = format!("gym-mf-{}", &uuid::Uuid::new_v4().to_string()[..8]);
     let now = chrono::Utc::now().to_rfc3339();
     let target = paths
@@ -465,7 +466,7 @@ pub async fn run_agentic_source_analysis_with_hints(
     timeout_secs: u64,
     hints: &AnalysisHints,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
-    let db = GraphDb::in_memory()?;
+    let db = GraphDb::in_memory_sqlite_only()?;
     let parsed = parse_file(path)?;
 
     let inv_id = format!("gym-{}", &uuid::Uuid::new_v4().to_string()[..8]);
@@ -723,7 +724,7 @@ pub async fn run_agentic_binary_analysis(
 ) -> anyhow::Result<Vec<DetectedFinding>> {
     use skwaq_core::binary::native::parse_binary;
 
-    let db = GraphDb::in_memory()?;
+    let db = GraphDb::in_memory_sqlite_only()?;
     let binary_info = parse_binary(path)?;
 
     let inv_id = format!("gym-bin-{}", &uuid::Uuid::new_v4().to_string()[..8]);
@@ -833,7 +834,7 @@ pub async fn run_llm_only_source_analysis(
     path: &Path,
     timeout_secs: u64,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
-    let db = GraphDb::in_memory()?;
+    let db = GraphDb::in_memory_sqlite_only()?;
     let parsed = parse_file(path)?;
 
     let inv_id = format!("gym-llm-{}", &uuid::Uuid::new_v4().to_string()[..8]);
@@ -875,7 +876,7 @@ pub async fn run_llm_only_binary_analysis(
 ) -> anyhow::Result<Vec<DetectedFinding>> {
     use skwaq_core::binary::native::parse_binary;
 
-    let db = GraphDb::in_memory()?;
+    let db = GraphDb::in_memory_sqlite_only()?;
     let binary_info = parse_binary(path)?;
 
     let inv_id = format!("gym-llm-bin-{}", &uuid::Uuid::new_v4().to_string()[..8]);

@@ -156,26 +156,54 @@ fn execute_read_function(
     let inv = esc(investigation_id);
     let name_esc = esc(func_name);
 
-    // Try by name first
-    let cypher = format!(
-        "MATCH (f:Function) WHERE f.investigation_id = '{inv}' \
-         AND f.name = '{name_esc}' \
-         RETURN f.id, f.name, f.address, f.decompiled, f.confidence LIMIT 1"
-    );
+    // Try Cypher first (when LadybugDB is available)
+    if db.has_ladybug() {
+        let cypher = format!(
+            "MATCH (f:Function) WHERE f.investigation_id = '{inv}' \
+             AND f.name = '{name_esc}' \
+             RETURN f.id, f.name, f.address, f.decompiled, f.confidence LIMIT 1"
+        );
 
-    if let Some(val) = read_function_from_rows(db.cypher_query(&cypher).ok()) {
-        return Ok(val);
+        if let Some(val) = read_function_from_rows(db.cypher_query(&cypher).ok()) {
+            return Ok(val);
+        }
+
+        // Try by address
+        let cypher = format!(
+            "MATCH (f:Function) WHERE f.investigation_id = '{inv}' \
+             AND f.address = '{name_esc}' \
+             RETURN f.id, f.name, f.address, f.decompiled, f.confidence LIMIT 1"
+        );
+
+        if let Some(val) = read_function_from_rows(db.cypher_query(&cypher).ok()) {
+            return Ok(val);
+        }
     }
 
-    // Try by address
-    let cypher = format!(
-        "MATCH (f:Function) WHERE f.investigation_id = '{inv}' \
-         AND f.address = '{name_esc}' \
-         RETURN f.id, f.name, f.address, f.decompiled, f.confidence LIMIT 1"
-    );
-
-    if let Some(val) = read_function_from_rows(db.cypher_query(&cypher).ok()) {
-        return Ok(val);
+    // SQL fallback — always works (SQLite-only mode or LadybugDB miss)
+    if let Ok(row) = db.conn().query_row(
+        "SELECT id, name, address, decompiled, confidence FROM functions \
+         WHERE investigation_id = ?1 AND (name = ?2 OR address = ?2) LIMIT 1",
+        rusqlite::params![investigation_id, func_name],
+        |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, f64>(4)?,
+            ))
+        },
+    ) {
+        let safe_decompiled = format!("<code_data>\n{}\n</code_data>", row.3);
+        return Ok(serde_json::json!({
+            "status": "ok",
+            "function_id": row.0,
+            "function": row.1,
+            "address": row.2,
+            "decompiled": safe_decompiled,
+            "confidence": row.4
+        }));
     }
 
     Ok(serde_json::json!({
@@ -231,27 +259,54 @@ fn execute_get_call_neighbors(
         ("caller", "callee")
     };
 
-    let cypher = format!(
-        "MATCH (caller:Function)-[:CALLS]->(callee:Function) \
-         WHERE {match_side}.name = '{}' AND {match_side}.investigation_id = '{}' \
-         RETURN {return_side}.name, {return_side}.address LIMIT 50",
-        esc(func_name),
-        esc(investigation_id)
-    );
+    let results: Vec<serde_json::Value> = if db.has_ladybug() {
+        let cypher = format!(
+            "MATCH (caller:Function)-[:CALLS]->(callee:Function) \
+             WHERE {match_side}.name = '{}' AND {match_side}.investigation_id = '{}' \
+             RETURN {return_side}.name, {return_side}.address LIMIT 50",
+            esc(func_name),
+            esc(investigation_id)
+        );
 
-    let results: Vec<serde_json::Value> = match db.cypher_query(&cypher) {
-        Ok(rows) => rows
-            .iter()
-            .filter_map(|r| {
-                let name = LadybugGraphDb::as_str(&r[0])?.to_string();
-                let addr = LadybugGraphDb::as_str(&r[1]).unwrap_or("").to_string();
-                Some(serde_json::json!({"name": name, "address": addr}))
-            })
-            .collect(),
-        Err(e) => {
-            tracing::debug!("get_{direction} query failed: {e}");
-            Vec::new()
+        match db.cypher_query(&cypher) {
+            Ok(rows) => rows
+                .iter()
+                .filter_map(|r| {
+                    let name = LadybugGraphDb::as_str(&r[0])?.to_string();
+                    let addr = LadybugGraphDb::as_str(&r[1]).unwrap_or("").to_string();
+                    Some(serde_json::json!({"name": name, "address": addr}))
+                })
+                .collect(),
+            Err(e) => {
+                tracing::debug!("get_{direction} query failed: {e}");
+                Vec::new()
+            }
         }
+    } else {
+        // SQL fallback for SQLite-only mode
+        let sql = if callers {
+            "SELECT f1.name, f1.address FROM calls c \
+             JOIN functions f2 ON c.callee_id = f2.id \
+             JOIN functions f1 ON c.caller_id = f1.id \
+             WHERE f2.name = ?1 AND f2.investigation_id = ?2 LIMIT 50"
+        } else {
+            "SELECT f2.name, f2.address FROM calls c \
+             JOIN functions f1 ON c.caller_id = f1.id \
+             JOIN functions f2 ON c.callee_id = f2.id \
+             WHERE f1.name = ?1 AND f1.investigation_id = ?2 LIMIT 50"
+        };
+        let mut stmt = db
+            .conn()
+            .prepare(sql)
+            .unwrap_or_else(|_| db.conn().prepare("SELECT '' WHERE 0").unwrap());
+        stmt.query_map(rusqlite::params![func_name, investigation_id], |row| {
+            Ok(serde_json::json!({
+                "name": row.get::<_, String>(0)?,
+                "address": row.get::<_, String>(1)?
+            }))
+        })
+        .map(|rows| rows.filter_map(|r| r.ok()).collect())
+        .unwrap_or_default()
     };
 
     Ok(serde_json::json!({
@@ -480,43 +535,66 @@ fn execute_rename_function(
     let name_esc = esc(func_name);
     let code = esc(renamed_code);
 
-    // Try by name — check existence then update
-    let check = format!(
-        "MATCH (f:Function) WHERE f.investigation_id = '{inv}' AND f.name = '{name_esc}' \
-         RETURN f.name LIMIT 1"
-    );
-    if db
-        .cypher_query(&check)
-        .map(|r| !r.is_empty())
-        .unwrap_or(false)
-    {
-        let update = format!(
+    if db.has_ladybug() {
+        // Try by name — check existence then update via Cypher
+        let check = format!(
             "MATCH (f:Function) WHERE f.investigation_id = '{inv}' AND f.name = '{name_esc}' \
-             SET f.decompiled = '{code}'"
+             RETURN f.name LIMIT 1"
         );
-        db.cypher_execute(&update)?;
-        return Ok(serde_json::json!({
-            "status": "ok",
-            "function": func_name,
-            "message": format!("Updated decompiled code for '{}'", func_name)
-        }));
+        if db
+            .cypher_query(&check)
+            .map(|r| !r.is_empty())
+            .unwrap_or(false)
+        {
+            let update = format!(
+                "MATCH (f:Function) WHERE f.investigation_id = '{inv}' AND f.name = '{name_esc}' \
+                 SET f.decompiled = '{code}'"
+            );
+            db.cypher_execute(&update)?;
+            return Ok(serde_json::json!({
+                "status": "ok",
+                "function": func_name,
+                "message": format!("Updated decompiled code for '{}'", func_name)
+            }));
+        }
+
+        // Try by address
+        let check = format!(
+            "MATCH (f:Function) WHERE f.investigation_id = '{inv}' AND f.address = '{name_esc}' \
+             RETURN f.name LIMIT 1"
+        );
+        if db
+            .cypher_query(&check)
+            .map(|r| !r.is_empty())
+            .unwrap_or(false)
+        {
+            let update = format!(
+                "MATCH (f:Function) WHERE f.investigation_id = '{inv}' AND f.address = '{name_esc}' \
+                 SET f.decompiled = '{code}'"
+            );
+            db.cypher_execute(&update)?;
+            return Ok(serde_json::json!({
+                "status": "ok",
+                "function": func_name,
+                "message": format!("Updated decompiled code for '{}'", func_name)
+            }));
+        }
     }
 
-    // Try by address
-    let check = format!(
-        "MATCH (f:Function) WHERE f.investigation_id = '{inv}' AND f.address = '{name_esc}' \
-         RETURN f.name LIMIT 1"
-    );
-    if db
-        .cypher_query(&check)
-        .map(|r| !r.is_empty())
-        .unwrap_or(false)
-    {
-        let update = format!(
-            "MATCH (f:Function) WHERE f.investigation_id = '{inv}' AND f.address = '{name_esc}' \
-             SET f.decompiled = '{code}'"
-        );
-        db.cypher_execute(&update)?;
+    // SQL fallback — works in SQLite-only mode
+    let updated = db
+        .execute(
+            "UPDATE functions SET decompiled = ?1 \
+             WHERE investigation_id = ?2 AND (name = ?3 OR address = ?3)",
+            &[
+                &renamed_code as &dyn rusqlite::types::ToSql,
+                &investigation_id,
+                &func_name,
+            ],
+        )
+        .unwrap_or(0);
+
+    if updated > 0 {
         return Ok(serde_json::json!({
             "status": "ok",
             "function": func_name,
