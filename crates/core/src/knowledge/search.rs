@@ -282,9 +282,26 @@ pub(crate) fn search_knowledge_with_dir(
             .then_with(|| a.1.topic.cmp(&b.1.topic))
             .then_with(|| a.1.title.cmp(&b.1.title))
     });
-    scored.truncate(KB_SEARCH_LIMIT);
 
-    Ok(scored.into_iter().map(|(_, hit)| hit).collect())
+    // Source-aware merging: reserve up to 2 slots for knowledge-pack results
+    // so high-scoring CWE entries don't push them all out.
+    let pack_hits: Vec<_> = scored
+        .iter()
+        .filter(|(_, h)| h.source == "knowledge-pack")
+        .take(2)
+        .cloned()
+        .collect();
+    let cwe_slots = KB_SEARCH_LIMIT.saturating_sub(pack_hits.len());
+    let cwe_hits: Vec<_> = scored
+        .iter()
+        .filter(|(_, h)| h.source != "knowledge-pack")
+        .take(cwe_slots)
+        .cloned()
+        .collect();
+
+    let mut merged: Vec<_> = cwe_hits.into_iter().chain(pack_hits).collect();
+    merged.sort_by(|a, b| b.0.cmp(&a.0));
+    Ok(merged.into_iter().map(|(_, hit)| hit).collect())
 }
 
 fn search_cwes(db: &GraphDb, query: &str) -> anyhow::Result<Vec<(usize, KnowledgeHit)>> {
