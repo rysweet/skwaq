@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 const KB_SEARCH_LIMIT: usize = 5;
+const KB_PACK_RESERVED_SLOTS: usize = 2;
 
 /// A single CWE entry from the knowledge graph JSON file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -304,7 +305,7 @@ pub(crate) fn search_knowledge_with_dir(
     let pack_hits: Vec<_> = scored
         .iter()
         .filter(|(_, h)| h.source == "knowledge-pack")
-        .take(2)
+        .take(KB_PACK_RESERVED_SLOTS)
         .cloned()
         .collect();
     let cwe_slots = KB_SEARCH_LIMIT.saturating_sub(pack_hits.len());
