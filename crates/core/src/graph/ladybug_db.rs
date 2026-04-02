@@ -286,6 +286,34 @@ mod tests {
     }
 
     #[test]
+    fn test_in_memory_multiple_instances() {
+        // Verify that many in_memory instances can coexist without exhausting
+        // virtual address space.  Before the buffer_pool_size fix each instance
+        // reserved ~204 GB; with the 64 MiB cap they need only ~4 GB each.
+        let mut dbs = Vec::new();
+        for i in 0..8 {
+            let db = LadybugGraphDb::in_memory()
+                .unwrap_or_else(|e| panic!("Failed to create in_memory instance {i}: {e}"));
+            db.execute(&format!(
+                "CREATE (f:Function {{id: 'f{i}', name: 'func_{i}'}})"
+            ))
+            .unwrap();
+            dbs.push(db);
+        }
+        // Each instance is independent.
+        for (i, db) in dbs.iter().enumerate() {
+            let rows = db
+                .query(&format!("MATCH (f:Function {{id: 'f{i}'}}) RETURN f.name"))
+                .unwrap();
+            assert_eq!(rows.len(), 1);
+            assert_eq!(
+                LadybugGraphDb::as_str(&rows[0][0]),
+                Some(format!("func_{i}").as_str())
+            );
+        }
+    }
+
+    #[test]
     fn test_taint_flow() {
         let db = LadybugGraphDb::in_memory().unwrap();
         db.execute("CREATE (s:DataSource {id: 'src1', name: 'recv', source_type: 'network'})")
