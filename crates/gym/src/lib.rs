@@ -442,6 +442,7 @@ impl Gym {
             // Each case creates its own in-memory GraphDb, so no shared state.
             // Concurrency > 1 lets multiple LLM API calls overlap (network I/O).
             let mut outcomes = Vec::with_capacity(total);
+            let mut content_filtered: u32 = 0;
             let timeout_secs = config.timeout_secs;
 
             if concurrency <= 1 {
@@ -484,11 +485,23 @@ impl Gym {
                         }
                         Ok(Err(e)) => {
                             metrics::CASES_IN_PROGRESS.dec();
-                            metrics::CASES_TOTAL
-                                .with_label_values(&[&suite_name, "failed"])
-                                .inc();
-                            println!("CASE_DONE {}", case.id);
-                            tracing::warn!("Case {} failed: {}", case.id, e);
+                            if is_content_filter_error(&e) {
+                                content_filtered += 1;
+                                metrics::CASES_TOTAL
+                                    .with_label_values(&[&suite_name, "content_filtered"])
+                                    .inc();
+                                println!("CASE_DONE {}", case.id);
+                                tracing::info!(
+                                    "Case {} content-filtered (excluded from scoring)",
+                                    case.id
+                                );
+                            } else {
+                                metrics::CASES_TOTAL
+                                    .with_label_values(&[&suite_name, "failed"])
+                                    .inc();
+                                println!("CASE_DONE {}", case.id);
+                                tracing::warn!("Case {} failed: {}", case.id, e);
+                            }
                         }
                         Err(_) => {
                             metrics::CASES_IN_PROGRESS.dec();
@@ -612,52 +625,68 @@ impl Gym {
                             outcomes.push(outcome);
                         }
                         Ok(Err(e)) => {
-                            let msg = e.to_string();
-                            let is_retryable = msg.contains("429")
-                                || msg.contains("529")
-                                || msg.contains("overloaded")
-                                || msg.contains("rate")
-                                || msg.contains("Rate")
-                                || msg.contains("Timeout")
-                                || msg.contains("timed out")
-                                || msg.contains("throttl")
-                                || msg.contains("error sending request");
-                            // Signal cross-process backoff on rate limit errors
-                            if is_retryable
-                                && (msg.contains("429")
-                                    || msg.contains("529")
-                                    || msg.contains("overloaded"))
-                            {
-                                crate::throttle::CrossProcessBackoff::new().signal_rate_limited(30);
-                            }
-                            // Extract retry count from the case index (stored as i)
-                            let retry_count = retry_queue
-                                .iter()
-                                .filter(|(idx, _, _)| *idx == i)
-                                .map(|(_, _, r)| *r)
-                                .next()
-                                .unwrap_or(0);
-                            if is_retryable && retry_count < MAX_RETRIES {
+                            // Content filter errors are deterministic — never retry.
+                            if is_content_filter_error(&e) {
+                                content_filtered += 1;
+                                metrics::CASES_TOTAL
+                                    .with_label_values(&[&suite, "content_filtered"])
+                                    .inc();
+                                println!("CASE_DONE {}", case.id);
                                 tracing::info!(
+                                    "[{}/{}] Case {} content-filtered (excluded from scoring)",
+                                    i,
+                                    total,
+                                    case.id
+                                );
+                            } else {
+                                let msg = e.to_string();
+                                let is_retryable = msg.contains("429")
+                                    || msg.contains("529")
+                                    || msg.contains("overloaded")
+                                    || msg.contains("rate")
+                                    || msg.contains("Rate")
+                                    || msg.contains("Timeout")
+                                    || msg.contains("timed out")
+                                    || msg.contains("throttl")
+                                    || msg.contains("error sending request");
+                                // Signal cross-process backoff on rate limit errors
+                                if is_retryable
+                                    && (msg.contains("429")
+                                        || msg.contains("529")
+                                        || msg.contains("overloaded"))
+                                {
+                                    crate::throttle::CrossProcessBackoff::new()
+                                        .signal_rate_limited(30);
+                                }
+                                // Extract retry count from the case index (stored as i)
+                                let retry_count = retry_queue
+                                    .iter()
+                                    .filter(|(idx, _, _)| *idx == i)
+                                    .map(|(_, _, r)| *r)
+                                    .next()
+                                    .unwrap_or(0);
+                                if is_retryable && retry_count < MAX_RETRIES {
+                                    tracing::info!(
                                     "[{}/{}] Case {} failed (retryable), requeueing (attempt {}/{}): {}",
                                     i, total, case.id, retry_count + 1, MAX_RETRIES, msg.chars().take(80).collect::<String>()
                                 );
-                                metrics::RETRIES_TOTAL.with_label_values(&[&suite]).inc();
-                                retry_queue.push((i, case, retry_count + 1));
-                                total_retries += 1;
-                            } else {
-                                metrics::CASES_TOTAL
-                                    .with_label_values(&[&suite, "failed"])
-                                    .inc();
-                                println!("CASE_DONE {}", case.id);
-                                tracing::warn!(
-                                    "[{}/{}] Case {} failed (not retryable or max retries): {}",
-                                    i,
-                                    total,
-                                    case.id,
-                                    e
-                                );
-                            }
+                                    metrics::RETRIES_TOTAL.with_label_values(&[&suite]).inc();
+                                    retry_queue.push((i, case, retry_count + 1));
+                                    total_retries += 1;
+                                } else {
+                                    metrics::CASES_TOTAL
+                                        .with_label_values(&[&suite, "failed"])
+                                        .inc();
+                                    println!("CASE_DONE {}", case.id);
+                                    tracing::warn!(
+                                        "[{}/{}] Case {} failed (not retryable or max retries): {}",
+                                        i,
+                                        total,
+                                        case.id,
+                                        e
+                                    );
+                                }
+                            } // end else (not content-filtered)
                         }
                         Err(_) => {
                             let retry_count = retry_queue
@@ -908,7 +937,11 @@ impl Gym {
             };
             self.history_db.finish_run(&run)?;
 
-            reporting::terminal::print_summary(&score, &suite_name);
+            reporting::terminal::print_summary_with_content_filtered(
+                &score,
+                &suite_name,
+                content_filtered,
+            );
         }
 
         // Report synthesis usage across the entire run
@@ -1074,6 +1107,17 @@ fn build_run_metadata(
     }
 }
 
+/// Detect Azure content filter errors (HTTP 400 with ResponsibleAIPolicyViolation).
+///
+/// These are deterministic rejections for specific content — not transient failures.
+/// Cases blocked by content filters are unevaluated, not false negatives.
+fn is_content_filter_error(err: &anyhow::Error) -> bool {
+    let msg = err.to_string();
+    msg.contains("content_filter")
+        || msg.contains("ResponsibleAIPolicyViolation")
+        || msg.contains("content_filter_result")
+}
+
 fn classify_case_result(outcome: &scoring::CaseOutcome) -> &'static str {
     if outcome.expected_cwes.is_empty() {
         if outcome.detected_cwes.is_empty() {
@@ -1179,7 +1223,10 @@ fn reconstruct_score(
 
 #[cfg(test)]
 mod tests {
-    use super::{case_outcomes_for_history, classify_case_result, reconstruct_score, Gym};
+    use super::{
+        case_outcomes_for_history, classify_case_result, is_content_filter_error,
+        reconstruct_score, Gym,
+    };
     use crate::history;
     use crate::scoring;
 
@@ -1350,5 +1397,32 @@ language = "c"
         assert!(negative_rows
             .iter()
             .all(|row| { row.outcome == history::CaseOutcomeKind::FalsePositive }));
+    }
+
+    #[test]
+    fn content_filter_error_detected() {
+        let err = anyhow::anyhow!(
+            "Bad Request: innererror.code=ResponsibleAIPolicyViolation, \
+             content_filter_result: violence filtered=true"
+        );
+        assert!(is_content_filter_error(&err));
+    }
+
+    #[test]
+    fn content_filter_detects_content_filter_keyword() {
+        let err = anyhow::anyhow!("HTTP 400: content_filter block on input");
+        assert!(is_content_filter_error(&err));
+    }
+
+    #[test]
+    fn content_filter_ignores_unrelated_errors() {
+        let err = anyhow::anyhow!("HTTP 429: rate limit exceeded");
+        assert!(!is_content_filter_error(&err));
+
+        let err = anyhow::anyhow!("connection timed out after 120s");
+        assert!(!is_content_filter_error(&err));
+
+        let err = anyhow::anyhow!("internal server error");
+        assert!(!is_content_filter_error(&err));
     }
 }
