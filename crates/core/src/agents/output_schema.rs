@@ -12,6 +12,7 @@ pub enum VulnHunterSeverity {
     High,
     Medium,
     Low,
+    Info,
 }
 
 impl fmt::Display for VulnHunterSeverity {
@@ -21,6 +22,7 @@ impl fmt::Display for VulnHunterSeverity {
             Self::High => write!(f, "high"),
             Self::Medium => write!(f, "medium"),
             Self::Low => write!(f, "low"),
+            Self::Info => write!(f, "info"),
         }
     }
 }
@@ -205,7 +207,7 @@ pub fn output_schema_contract(schema_name: &str) -> Option<&'static str> {
                \"findings\": [\n\
                  {\n\
                    \"title\": \"Specific vulnerability title\",\n\
-                   \"severity\": \"critical|high|medium|low\",\n\
+                   \"severity\": \"critical|high|medium|low|info\",\n\
                    \"cwe_id\": \"CWE-XXX\",\n\
                    \"function\": \"function_name\"\n\
                  }\n\
@@ -614,5 +616,37 @@ mod tests {
 
         let error = parse_structured_output(EXPLOIT_ANALYST_V1_SCHEMA, output).unwrap_err();
         assert!(error.to_string().contains("at least one evidence item"));
+    }
+
+    #[test]
+    fn parses_info_severity_finding() {
+        let output = r#"```json
+{
+  "summary": "Informational observation",
+  "findings": [
+    {
+      "title": "Unused import detected",
+      "severity": "info",
+      "cwe_id": "CWE-561",
+      "function": "main"
+    }
+  ]
+}
+```"#;
+
+        let parsed = parse_structured_output(VULN_HUNTER_V1_SCHEMA, output).unwrap();
+        match parsed {
+            ParsedAgentOutput::VulnHunterV1(data) => {
+                assert_eq!(data.findings[0].severity, VulnHunterSeverity::Info);
+                assert_eq!(data.findings[0].severity.to_string(), "info");
+            }
+            other => panic!("expected vuln hunter output, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn output_contract_includes_info_severity() {
+        let contract = output_schema_contract(VULN_HUNTER_V1_SCHEMA).unwrap();
+        assert!(contract.contains("info"));
     }
 }

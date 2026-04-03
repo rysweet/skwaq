@@ -827,14 +827,18 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                         }
                     }
 
-                    // Count cases from logs
+                    // Count completed cases from stdout logs (CASE_DONE markers)
                     let mut total_cases = 0;
                     let mut total_retries = 0;
                     for i in 0..children.len() {
                         let log = suite_dir.join(format!("shard-{i}.log"));
                         if let Ok(content) = std::fs::read_to_string(&log) {
-                            total_cases += content.matches("Agent").count().saturating_sub(1) / 5;
-                            total_retries += content.matches("Retrying").count();
+                            total_cases += content.matches("CASE_DONE").count();
+                        }
+                        let stderr_log = suite_dir.join(format!("shard-{i}.stderr.log"));
+                        if let Ok(content) = std::fs::read_to_string(&stderr_log) {
+                            total_retries += content.matches("Retrying").count()
+                                + content.matches("requeueing").count();
                         }
                     }
                     let target = suite_cases.get(suite.as_str()).copied().unwrap_or(0);
