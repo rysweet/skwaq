@@ -475,6 +475,7 @@ impl Gym {
                             metrics::CASE_DURATION
                                 .with_label_values(&[&suite_name])
                                 .observe(elapsed);
+                            println!("CASE_DONE {}", case.id);
                             let mut outcome = scoring::score_case(case, &findings, &|f| {
                                 adapter.map_finding_to_cwes(f)
                             });
@@ -486,6 +487,7 @@ impl Gym {
                             metrics::CASES_TOTAL
                                 .with_label_values(&[&suite_name, "failed"])
                                 .inc();
+                            println!("CASE_DONE {}", case.id);
                             tracing::warn!("Case {} failed: {}", case.id, e);
                         }
                         Err(_) => {
@@ -493,6 +495,7 @@ impl Gym {
                             metrics::CASES_TOTAL
                                 .with_label_values(&[&suite_name, "timeout"])
                                 .inc();
+                            println!("CASE_DONE {}", case.id);
                             tracing::warn!("Case {} timed out after {}s", case.id, timeout_secs);
                         }
                     }
@@ -601,6 +604,7 @@ impl Gym {
                             metrics::CASES_TOTAL
                                 .with_label_values(&[&suite, "completed"])
                                 .inc();
+                            println!("CASE_DONE {}", case.id);
                             let mut outcome = scoring::score_case(case, &findings, &|f| {
                                 adapter.map_finding_to_cwes(f)
                             });
@@ -645,6 +649,7 @@ impl Gym {
                                 metrics::CASES_TOTAL
                                     .with_label_values(&[&suite, "failed"])
                                     .inc();
+                                println!("CASE_DONE {}", case.id);
                                 tracing::warn!(
                                     "[{}/{}] Case {} failed (not retryable or max retries): {}",
                                     i,
@@ -677,6 +682,7 @@ impl Gym {
                                 metrics::CASES_TOTAL
                                     .with_label_values(&[&suite, "timeout"])
                                     .inc();
+                                println!("CASE_DONE {}", case.id);
                                 tracing::warn!(
                                     "[{}/{}] Case {} timed out after {}s (max retries exhausted)",
                                     i,
