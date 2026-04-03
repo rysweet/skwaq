@@ -269,7 +269,9 @@ struct EvalSuiteSummary {
     false_negatives: u32,
     true_negatives: u32,
     shard_reports: u32,
+    expected_shards: u32,
     target_cases: u32,
+    partial: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -553,6 +555,14 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             println!("  Output:      {}", eval_dir.display());
             println!();
 
+            if eval_metadata.llm_backend == "azure" && (*concurrency > 24 || *procs > 6) {
+                eprintln!(
+                    "WARNING: Azure evals above -j 24 or --procs 6 have previously degraded \
+                     benchmark quality due to throttling. Requested: -j {} --procs {}.\n",
+                    concurrency, procs
+                );
+            }
+
             let valid_suites = gym.available_suite_names();
             let valid_suite_set: std::collections::HashSet<&str> =
                 valid_suites.iter().map(String::as_str).collect();
@@ -737,6 +747,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
 
                 let mut all_done = true;
                 let mut any_early_death = false;
+                let mut live_summaries = Vec::new();
                 println!();
                 for (suite, children) in &mut all_children {
                     let mut running = 0;
@@ -857,6 +868,17 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                             "  {suite}: ~{total_cases}/{target} ({pct}%) | {running} procs | {total_retries} retries"
                         );
                     }
+
+                    if let Ok((summary, _)) =
+                        summarize_eval_suite(suite, &suite_dir, children.len(), target as u32)
+                    {
+                        live_summaries.push(summary);
+                    }
+                }
+
+                if !live_summaries.is_empty() {
+                    let _ =
+                        write_partial_eval_artifacts(&eval_dir, &eval_metadata, &live_summaries);
                 }
 
                 if !early_death_checked && monitor_start.elapsed().as_secs() <= 60 {
@@ -886,10 +908,11 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             println!("{}", "-".repeat(70));
 
             let mut summaries = Vec::new();
+            let mut missing_summaries = Vec::new();
             for suite in &suite_list {
                 let suite_dir = eval_dir.join(suite);
                 let shard_count = suite_shards.get(*suite).copied().unwrap_or(1);
-                let (summary, cwe_results) = summarize_eval_suite(
+                let (summary, cwe_results) = match summarize_eval_suite(
                     suite,
                     &suite_dir,
                     shard_count,
@@ -898,7 +921,14 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                         .copied()
                         .expect("suite validated before spawning shards")
                         as u32,
-                )?;
+                ) {
+                    Ok(result) => result,
+                    Err(err) => {
+                        eprintln!("WARNING: Failed to summarize suite '{}': {}", suite, err);
+                        missing_summaries.push((*suite).to_string());
+                        continue;
+                    }
+                };
                 let run_metadata = skwaq_gym::history::RunMetadata {
                     llm_backend: eval_metadata.llm_backend.clone(),
                     llm_model: eval_metadata.llm_model.clone(),
@@ -953,9 +983,29 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                     summary.false_negatives,
                     summary.true_negatives
                 );
+                if summary.partial {
+                    println!(
+                        "                partial shard coverage: {}/{} shard reports",
+                        summary.shard_reports, summary.expected_shards
+                    );
+                }
                 summaries.push(summary);
             }
             println!();
+
+            if summaries.is_empty() {
+                anyhow::bail!(
+                    "No shard reports were available for any suite in '{}'",
+                    eval_dir.display()
+                );
+            }
+            if !missing_summaries.is_empty() {
+                eprintln!(
+                    "WARNING: Missing shard summaries for suites: {}",
+                    missing_summaries.join(", ")
+                );
+                eprintln!("Partial results were still written from available shard reports.");
+            }
 
             // Results Skeptic: validate coverage and flag suspicious results
             for summary in &summaries {
@@ -997,6 +1047,12 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             println!("Metadata: {}", eval_dir.join("metadata.json").display());
             println!("Summary: {}", eval_dir.join("summary.md").display());
             println!("Dashboard: {}", eval_dir.join("dashboard.md").display());
+            if eval_dir.join("partial-summary.json").exists() {
+                println!(
+                    "Partial summary: {}",
+                    eval_dir.join("partial-summary.json").display()
+                );
+            }
 
             if *tag {
                 println!();
@@ -1435,13 +1491,13 @@ fn summarize_eval_suite(
     let mut per_cwe: std::collections::BTreeMap<u32, AggregatedCwe> =
         std::collections::BTreeMap::new();
 
-    for report in reports {
+    for report in &reports {
         true_positives += report.true_positives;
         false_positives += report.false_positives;
         false_negatives += report.false_negatives;
         true_negatives += report.true_negatives;
 
-        for cwe in report.per_cwe {
+        for cwe in &report.per_cwe {
             let entry = per_cwe.entry(cwe.cwe_id).or_default();
             entry.total_cases += cwe.total_cases;
             entry.true_positives += cwe.true_positives;
@@ -1472,6 +1528,8 @@ fn summarize_eval_suite(
         })
         .collect();
 
+    let loaded_reports = reports.len() as u32;
+
     Ok((
         EvalSuiteSummary {
             suite: suite.to_string(),
@@ -1483,8 +1541,10 @@ fn summarize_eval_suite(
             false_positives,
             false_negatives,
             true_negatives,
-            shard_reports: shard_count as u32,
+            shard_reports: loaded_reports,
+            expected_shards: shard_count as u32,
             target_cases,
+            partial: loaded_reports < shard_count as u32,
         },
         cwe_results,
     ))
@@ -1563,6 +1623,28 @@ fn write_eval_artifacts(
     Ok(())
 }
 
+fn write_partial_eval_artifacts(
+    eval_dir: &std::path::Path,
+    metadata: &EvalRunMetadata,
+    summaries: &[EvalSuiteSummary],
+) -> anyhow::Result<()> {
+    let summary_report = EvalSummaryReport {
+        generated_at: chrono::Utc::now().to_rfc3339(),
+        mode: format!("{}-partial", metadata.mode),
+        metadata: metadata.clone(),
+        suites: summaries.to_vec(),
+    };
+    std::fs::write(
+        eval_dir.join("partial-summary.json"),
+        serde_json::to_string_pretty(&summary_report)?,
+    )?;
+    std::fs::write(
+        eval_dir.join("partial-summary.md"),
+        render_eval_summary_markdown(metadata, summaries),
+    )?;
+    Ok(())
+}
+
 fn render_eval_summary_markdown(
     metadata: &EvalRunMetadata,
     summaries: &[EvalSuiteSummary],
@@ -1579,15 +1661,15 @@ fn render_eval_summary_markdown(
         metadata.llm_model,
     ));
     output.push_str(
-        "| Suite | F1 | Precision | Recall | TP | FP | FN | TN | Shards | Target cases |\n",
+        "| Suite | F1 | Precision | Recall | TP | FP | FN | TN | Shards | Status | Target cases |\n",
     );
     output.push_str(
-        "|-------|----|-----------|--------|----|----|----|----|--------|--------------|\n",
+        "|-------|----|-----------|--------|----|----|----|----|--------|--------|--------------|\n",
     );
 
     for summary in summaries {
         output.push_str(&format!(
-            "| {} | {:.1}% | {:.1}% | {:.1}% | {} | {} | {} | {} | {} | {} |\n",
+            "| {} | {:.1}% | {:.1}% | {:.1}% | {} | {} | {} | {} | {}/{} | {} | {} |\n",
             summary.suite,
             summary.f1 * 100.0,
             summary.precision * 100.0,
@@ -1597,6 +1679,12 @@ fn render_eval_summary_markdown(
             summary.false_negatives,
             summary.true_negatives,
             summary.shard_reports,
+            summary.expected_shards,
+            if summary.partial {
+                "partial"
+            } else {
+                "complete"
+            },
             summary.target_cases
         ));
     }
@@ -1856,6 +1944,9 @@ mod tests {
         assert_eq!(summary.false_positives, 1);
         assert_eq!(summary.false_negatives, 3);
         assert_eq!(summary.true_negatives, 7);
+        assert_eq!(summary.shard_reports, 2);
+        assert_eq!(summary.expected_shards, 2);
+        assert!(!summary.partial);
         assert!((summary.precision - 0.75).abs() < f64::EPSILON);
         assert!((summary.recall - 0.5).abs() < f64::EPSILON);
         assert!((summary.f1 - 0.6).abs() < 1e-9);
@@ -1893,13 +1984,49 @@ mod tests {
                 false_negatives: 3,
                 true_negatives: 7,
                 shard_reports: 2,
+                expected_shards: 2,
                 target_cases: 7,
+                partial: false,
             }],
         );
 
         assert!(markdown.contains("# Skwaq Gym Evaluation Summary"));
         assert!(markdown.contains("pattern-only"));
         assert!(markdown.contains("claude-opus-4.6"));
-        assert!(markdown.contains("| fixtures | 60.0% | 75.0% | 50.0% | 3 | 1 | 3 | 7 | 2 | 7 |"));
+        assert!(markdown
+            .contains("| fixtures | 60.0% | 75.0% | 50.0% | 3 | 1 | 3 | 7 | 2/2 | complete | 7 |"));
+    }
+
+    #[test]
+    fn test_summarize_eval_suite_marks_partial_when_some_shards_missing() {
+        let dir = tempdir().unwrap();
+        let suite_dir = dir.path();
+        let shard0 = JsonReport {
+            suite: "fixtures".to_string(),
+            timestamp: "2026-01-01T00:00:00Z".to_string(),
+            skwaq_commit: "abc123".to_string(),
+            metadata: RunMetadata::default(),
+            precision: 0.0,
+            recall: 0.0,
+            f1: 0.0,
+            true_positives: 2,
+            false_positives: 1,
+            false_negatives: 1,
+            true_negatives: 3,
+            per_cwe: vec![],
+            per_original_cwe: vec![],
+            per_semantic: vec![],
+        };
+
+        std::fs::write(
+            suite_dir.join("shard-0.json"),
+            serde_json::to_string_pretty(&shard0).unwrap(),
+        )
+        .unwrap();
+
+        let (summary, _) = summarize_eval_suite("fixtures", suite_dir, 2, 7).unwrap();
+        assert_eq!(summary.shard_reports, 1);
+        assert_eq!(summary.expected_shards, 2);
+        assert!(summary.partial);
     }
 }

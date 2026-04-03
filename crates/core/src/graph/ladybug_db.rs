@@ -9,6 +9,7 @@ use std::fs::File;
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tempfile::TempDir;
 
 /// LadybugDB-backed graph database.
 #[derive(Clone)]
@@ -16,6 +17,8 @@ pub struct LadybugGraphDb {
     db: Arc<lbug::Database>,
     #[allow(dead_code)] // Used in Phase 2 for db path discovery
     path: PathBuf,
+    #[allow(dead_code)] // Keeps temporary in-memory DB directories alive for the DB lifetime.
+    temp_dir: Option<Arc<TempDir>>,
 }
 
 impl LadybugGraphDb {
@@ -63,6 +66,7 @@ impl LadybugGraphDb {
         let gdb = Self {
             db: Arc::new(db),
             path: db_path,
+            temp_dir: None,
         };
         gdb.ensure_schema()?;
         Ok(gdb)
@@ -89,12 +93,15 @@ impl LadybugGraphDb {
         Ok(Self {
             db: Arc::new(db),
             path: db_path,
+            temp_dir: None,
         })
     }
 
     /// Create a temporary LadybugDB database (for tests).
     ///
     /// Skips flock since temp dirs are never shared across processes.
+    /// The temporary directory is owned by the database handle and cleaned up
+    /// automatically when the last clone is dropped.
     pub fn in_memory() -> anyhow::Result<Self> {
         let tmp = tempfile::tempdir()?;
         let db_path = tmp.path().join("ladybug_test");
@@ -108,9 +115,12 @@ impl LadybugGraphDb {
             )
             .map_err(|e| anyhow::anyhow!("Failed to open LadybugDB: {e}"))?,
         );
-        let gdb = Self { db, path: db_path };
+        let gdb = Self {
+            db,
+            path: db_path,
+            temp_dir: Some(Arc::new(tmp)),
+        };
         gdb.ensure_schema()?;
-        std::mem::forget(tmp);
         Ok(gdb)
     }
 
@@ -299,5 +309,23 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(LadybugGraphDb::as_str(&rows[0][0]), Some("recv"));
         assert_eq!(LadybugGraphDb::as_str(&rows[0][1]), Some("strcpy"));
+    }
+
+    #[test]
+    fn test_in_memory_tempdir_is_cleaned_up_on_drop() {
+        let temp_root = {
+            let db = LadybugGraphDb::in_memory().unwrap();
+            let temp_root = db.path.parent().unwrap().to_path_buf();
+            assert!(
+                temp_root.exists(),
+                "temp dir should exist while DB is alive"
+            );
+            temp_root
+        };
+
+        assert!(
+            !temp_root.exists(),
+            "temp dir should be removed when the DB handle is dropped"
+        );
     }
 }
