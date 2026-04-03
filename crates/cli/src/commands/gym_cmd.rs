@@ -1,7 +1,7 @@
 //! CLI dispatch for `skwaq gym *` subcommands.
 
 use anyhow::Context;
-use clap::Subcommand;
+use clap::{Subcommand, ValueEnum};
 use serde::Serialize;
 use std::path::PathBuf;
 
@@ -73,8 +73,8 @@ pub enum GymSub {
     /// Show latest benchmark results
     Report {
         /// Output format (terminal, json, markdown)
-        #[arg(long, default_value = "terminal")]
-        format: String,
+        #[arg(long, value_enum, default_value_t = GymReportFormatArg::Terminal)]
+        format: GymReportFormatArg,
     },
 
     /// Compare the latest two finished runs for the most recently run suite
@@ -251,9 +251,9 @@ pub enum ProfileAction {
         /// Profile name (alphanumeric, hyphens, underscores; max 64 chars)
         name: String,
 
-        /// LLM backend (copilot, azure)
-        #[arg(long)]
-        backend: Option<String>,
+        /// LLM backend template (copilot, azure, anthropic)
+        #[arg(long, value_enum)]
+        backend: Option<ProfileBackendArg>,
 
         /// Model name (e.g. claude-opus-4.6, gpt-5.4)
         #[arg(long)]
@@ -267,6 +267,31 @@ pub enum ProfileAction {
         #[arg(long)]
         deployment: Option<String>,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum GymReportFormatArg {
+    Terminal,
+    Json,
+    #[value(alias = "md")]
+    Markdown,
+}
+
+impl From<GymReportFormatArg> for skwaq_gym::ReportFormat {
+    fn from(value: GymReportFormatArg) -> Self {
+        match value {
+            GymReportFormatArg::Terminal => skwaq_gym::ReportFormat::Terminal,
+            GymReportFormatArg::Json => skwaq_gym::ReportFormat::Json,
+            GymReportFormatArg::Markdown => skwaq_gym::ReportFormat::Markdown,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ProfileBackendArg {
+    Copilot,
+    Azure,
+    Anthropic,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -395,10 +420,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             profile,
         } => {
             let mut gym = resolve_gym(&skwaq_root, profile.as_deref())?;
-            let cwe_filter = cwe
-                .as_ref()
-                .map(|c| parse_cwe_number(c).map(|n| vec![n]))
-                .transpose()?;
+            let cwe_filter = parse_optional_cwe_filter(cwe.as_deref())?;
             let binary_mode = !*source_only;
             // Default concurrency: 4 for hybrid mode, 1 for quick mode
             let conc = concurrency.unwrap_or(if *quick { 1 } else { 4 });
@@ -430,12 +452,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
         }
         GymSub::Report { format } => {
             let gym = skwaq_gym::Gym::new(skwaq_root.clone())?;
-            let fmt = match format.as_str() {
-                "json" => skwaq_gym::ReportFormat::Json,
-                "markdown" | "md" => skwaq_gym::ReportFormat::Markdown,
-                _ => skwaq_gym::ReportFormat::Terminal,
-            };
-            let output = gym.report(fmt)?;
+            let output = gym.report((*format).into())?;
             if !output.is_empty() {
                 println!("{}", output);
             }
@@ -819,17 +836,16 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                     let mut running = 0;
                     let mut failed_shards: Vec<(usize, Option<i32>)> = Vec::new();
                     for (idx, child) in children.iter_mut().enumerate() {
-                        match child.try_wait() {
-                            Ok(None) => {
+                        match interpret_shard_wait(suite, idx, child.try_wait())? {
+                            None => {
                                 running += 1;
                                 all_done = false;
                             }
-                            Ok(Some(status)) => {
+                            Some(status) => {
                                 if !status.success() {
                                     failed_shards.push((idx, status.code()));
                                 }
                             }
-                            Err(_) => {}
                         }
                     }
 
@@ -1225,10 +1241,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 timeout
             );
 
-            let cwe_filter = cwe.as_ref().and_then(|c| {
-                let num_str = c.trim_start_matches("CWE-").trim_start_matches("cwe-");
-                num_str.parse::<u32>().ok().map(|n| vec![n])
-            });
+            let cwe_filter = parse_optional_cwe_filter(cwe.as_deref())?;
             let config = skwaq_gym::adapters::BenchmarkConfig {
                 cache_dir: dirs::data_dir()
                     .unwrap_or_else(|| std::path::PathBuf::from("."))
@@ -1316,7 +1329,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             if profiles.is_empty() {
                 println!("No profiles configured.");
                 println!(
-                    "Create one with: skwaq gym profile create <name> --backend <copilot|azure>"
+                    "Create one with: skwaq gym profile create <name> --backend <copilot|azure|anthropic>"
                 );
             } else {
                 println!("Available profiles:");
@@ -1346,51 +1359,35 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 }
             }
         }
-        GymSub::Profile { action } => {
-            match action {
-                ProfileAction::Create {
+        GymSub::Profile { action } => match action {
+            ProfileAction::Create {
+                name,
+                backend,
+                model,
+                endpoint,
+                deployment,
+            } => {
+                let pn = skwaq_gym::profiles::ProfileName::new(name)?;
+                let base = skwaq_gym::profiles::default_profiles_base()?;
+                let paths = skwaq_gym::profiles::ProfilePaths::new(&pn, &base);
+                paths.ensure()?;
+
+                let config_content = build_profile_config(
+                    *backend,
+                    model.as_deref(),
+                    endpoint.as_deref(),
+                    deployment.as_deref(),
+                )?;
+
+                std::fs::write(paths.config_path(), &config_content)?;
+                println!(
+                    "Profile '{}' created at {}",
                     name,
-                    backend,
-                    model,
-                    endpoint,
-                    deployment,
-                } => {
-                    let pn = skwaq_gym::profiles::ProfileName::new(name)?;
-                    let base = skwaq_gym::profiles::default_profiles_base()?;
-                    let paths = skwaq_gym::profiles::ProfilePaths::new(&pn, &base);
-                    paths.ensure()?;
-
-                    // Build config.toml content from CLI args
-                    let backend_str = backend.as_deref().unwrap_or("copilot");
-                    let model_str = model.as_deref().unwrap_or("claude-opus-4.6");
-
-                    let config_content = match backend_str {
-                        "azure" => {
-                            let ep = endpoint.as_deref().unwrap_or("");
-                            let dep = deployment.as_deref().unwrap_or("");
-                            format!(
-                                "[llm]\nreasoning = \"azure\"\ndecompilation = \"azure\"\n\n\
-                                 [llm.azure]\nendpoint = \"{ep}\"\ndeployment = \"{dep}\"\n"
-                            )
-                        }
-                        _ => {
-                            format!(
-                                "[llm]\nreasoning = \"{backend_str}\"\ndecompilation = \"{backend_str}\"\n\n\
-                                 [llm.copilot]\nmodel = \"{model_str}\"\n"
-                            )
-                        }
-                    };
-
-                    std::fs::write(paths.config_path(), &config_content)?;
-                    println!(
-                        "Profile '{}' created at {}",
-                        name,
-                        paths.profile_dir().display()
-                    );
-                    println!("Config:\n{config_content}");
-                }
+                    paths.profile_dir().display()
+                );
+                println!("Config:\n{config_content}");
             }
-        }
+        },
         GymSub::Telemetry { action } => {
             let telemetry_dir = default_telemetry_dir();
             match action {
@@ -1867,6 +1864,61 @@ fn parse_cwe_number(s: &str) -> anyhow::Result<u32> {
         .map_err(|_| anyhow::anyhow!("Invalid CWE number: '{}'. Use format: CWE-119 or 119", s))
 }
 
+fn parse_optional_cwe_filter(cwe: Option<&str>) -> anyhow::Result<Option<Vec<u32>>> {
+    cwe.map(|value| parse_cwe_number(value).map(|n| vec![n]))
+        .transpose()
+}
+
+fn interpret_shard_wait(
+    suite: &str,
+    shard_idx: usize,
+    result: std::io::Result<Option<std::process::ExitStatus>>,
+) -> anyhow::Result<Option<std::process::ExitStatus>> {
+    result.with_context(|| format!("Failed to poll eval shard [{suite}] shard {shard_idx}"))
+}
+
+fn build_profile_config(
+    backend: Option<ProfileBackendArg>,
+    model: Option<&str>,
+    endpoint: Option<&str>,
+    deployment: Option<&str>,
+) -> anyhow::Result<String> {
+    let backend = backend.unwrap_or(ProfileBackendArg::Copilot);
+    match backend {
+        ProfileBackendArg::Azure => {
+            let endpoint =
+                require_non_empty_arg(endpoint, "--endpoint is required when --backend azure")?;
+            let deployment =
+                require_non_empty_arg(deployment, "--deployment is required when --backend azure")?;
+            Ok(format!(
+                "[llm]\nreasoning = \"azure\"\ndecompilation = \"azure\"\n\n\
+                 [llm.azure]\nendpoint = \"{endpoint}\"\ndeployment = \"{deployment}\"\n"
+            ))
+        }
+        ProfileBackendArg::Copilot | ProfileBackendArg::Anthropic => {
+            let backend_str = match backend {
+                ProfileBackendArg::Copilot => "copilot",
+                ProfileBackendArg::Anthropic => "anthropic",
+                ProfileBackendArg::Azure => unreachable!("handled above"),
+            };
+            let model = require_non_empty_arg(
+                model.or(Some("claude-opus-4.6")),
+                "--model must not be empty",
+            )?;
+            Ok(format!(
+                "[llm]\nreasoning = \"{backend_str}\"\ndecompilation = \"{backend_str}\"\n\n\
+                 [llm.copilot]\nmodel = \"{model}\"\n"
+            ))
+        }
+    }
+}
+
+fn require_non_empty_arg(value: Option<&str>, message: &str) -> anyhow::Result<String> {
+    let trimmed = value.unwrap_or_default().trim();
+    anyhow::ensure!(!trimmed.is_empty(), "{message}");
+    Ok(trimmed.to_string())
+}
+
 /// Find the workspace root by looking for Cargo.toml with [workspace].
 ///
 /// Resolution order:
@@ -1910,7 +1962,7 @@ fn find_skwaq_root() -> anyhow::Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::CommandFactory;
+    use clap::{CommandFactory, Parser};
     use skwaq_gym::{
         history::RunMetadata,
         reporting::json_report::{JsonCweResult, JsonReport},
@@ -1938,6 +1990,58 @@ mod tests {
     #[test]
     fn test_parse_cwe_number_empty() {
         assert!(parse_cwe_number("").is_err());
+    }
+
+    #[test]
+    fn test_parse_optional_cwe_filter_rejects_invalid_value() {
+        let err = parse_optional_cwe_filter(Some("bogus")).unwrap_err();
+        assert!(err.to_string().contains("Invalid CWE number"));
+    }
+
+    #[test]
+    fn test_interpret_shard_wait_surfaces_poll_errors() {
+        let err = interpret_shard_wait("fixtures", 2, Err(std::io::Error::other("poll failed")))
+            .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Failed to poll eval shard [fixtures] shard 2"));
+    }
+
+    #[test]
+    fn test_build_profile_config_requires_azure_endpoint() {
+        let err = build_profile_config(
+            Some(ProfileBackendArg::Azure),
+            None,
+            None,
+            Some("deployment"),
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "--endpoint is required when --backend azure"
+        );
+    }
+
+    #[test]
+    fn test_build_profile_config_requires_azure_deployment() {
+        let err = build_profile_config(
+            Some(ProfileBackendArg::Azure),
+            None,
+            Some("https://example.openai.azure.com"),
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "--deployment is required when --backend azure"
+        );
+    }
+
+    #[test]
+    fn test_build_profile_config_defaults_to_copilot() {
+        let config = build_profile_config(None, None, None, None).unwrap();
+        assert!(config.contains("reasoning = \"copilot\""));
+        assert!(config.contains("model = \"claude-opus-4.6\""));
     }
 
     #[test]
@@ -1991,6 +2095,38 @@ mod tests {
         assert!(help.contains("--force-unsafe-azure-concurrency"));
         assert!(help.contains("Azure evals clamp to `-j 24` by default unless forced"));
         assert!(help.contains("Azure evals clamp to `--procs 6` by default unless forced"));
+    }
+
+    #[test]
+    fn test_gym_report_rejects_invalid_format() {
+        let err = match crate::commands::Cli::try_parse_from([
+            "skwaq", "gym", "report", "--format", "bogus",
+        ]) {
+            Ok(_) => panic!("invalid report format should be rejected"),
+            Err(err) => err,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("invalid value 'bogus'"));
+        assert!(msg.contains("[possible values: terminal, json, markdown]"));
+    }
+
+    #[test]
+    fn test_gym_profile_create_rejects_invalid_backend() {
+        let err = match crate::commands::Cli::try_parse_from([
+            "skwaq",
+            "gym",
+            "profile",
+            "create",
+            "bad",
+            "--backend",
+            "bogus",
+        ]) {
+            Ok(_) => panic!("invalid backend should be rejected"),
+            Err(err) => err,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("invalid value 'bogus'"));
+        assert!(msg.contains("[possible values: copilot, azure, anthropic]"));
     }
 
     #[test]
