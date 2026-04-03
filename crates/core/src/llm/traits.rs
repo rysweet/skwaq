@@ -93,6 +93,9 @@ where
         tools_count = tools.len(),
         input_tokens = tracing::field::Empty,
         output_tokens = tracing::field::Empty,
+        retries = tracing::field::Empty,
+        retry_wait_ms = tracing::field::Empty,
+        retry_reason = tracing::field::Empty,
     );
     let _llm_guard = llm_span.enter();
 
@@ -109,7 +112,7 @@ where
         request = request.with_tools(tools.to_vec());
     }
 
-    let response = client
+    let (response, retry_stats) = client
         .execute_with_tools(request, |tool_name, tool_args| {
             tracing::info!("Tool called: {tool_name}");
             let fut = tool_executor(tool_name, tool_args);
@@ -124,9 +127,16 @@ where
     budget.track(&response.usage);
     llm_span.record("input_tokens", response.usage.input_tokens);
     llm_span.record("output_tokens", response.usage.output_tokens);
+    llm_span.record("retries", retry_stats.retries);
+    llm_span.record("retry_wait_ms", retry_stats.total_wait_ms);
+    if let Some(ref reason) = retry_stats.last_retry_reason {
+        llm_span.record("retry_reason", format!("{:?}", reason).as_str());
+    }
     tracing::info!(
         tokens_in = response.usage.input_tokens,
         tokens_out = response.usage.output_tokens,
+        retries = retry_stats.retries,
+        retry_wait_ms = retry_stats.total_wait_ms,
         "LLM request complete"
     );
 
@@ -281,6 +291,9 @@ mod tests {
             tools_count = 0usize,
             input_tokens = tracing::field::Empty,
             output_tokens = tracing::field::Empty,
+            retries = tracing::field::Empty,
+            retry_wait_ms = tracing::field::Empty,
+            retry_reason = tracing::field::Empty,
         );
         let usage = Usage {
             input_tokens: 42,
@@ -289,6 +302,9 @@ mod tests {
         };
         span.record("input_tokens", usage.input_tokens);
         span.record("output_tokens", usage.output_tokens);
+        span.record("retries", 2u32);
+        span.record("retry_wait_ms", 1500u64);
+        span.record("retry_reason", "RateLimited");
         // No panic = fields are correctly declared and recordable.
     }
 }
