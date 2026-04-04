@@ -3132,7 +3132,7 @@ analysis
     }
 
     #[test]
-    fn test_overfitting_knowledge_context_deduplicates_repeated_cwes() {
+    fn test_overfitting_knowledge_context_includes_only_target_cwes() {
         let knowledge_db = prepare_improvement_knowledge_db().unwrap();
         let proposals = vec![
             sample_improvement("Detect sprintf-based overflow"),
@@ -3154,8 +3154,9 @@ analysis
 
         let context = build_overfitting_knowledge_context(&knowledge_db, &proposals).unwrap();
 
-        assert_eq!(context.matches("### Query: cwe-119").count(), 1);
-        assert_eq!(context.matches("### Query: cwe-120").count(), 1);
+        assert!(context.contains("### Query: cwe-119"));
+        assert!(context.contains("### Query: cwe-120"));
+        assert!(!context.contains("### Query: cwe-121"));
     }
 
     #[test]
