@@ -1,0 +1,70 @@
+name: "skwaq gym eval - Azure concurrency clamp"
+description: |
+  Verifies that Azure-backed evals clamp unsafe requested parallelism to the
+  safe default envelope and surface the effective values to the user.
+version: "1.0.0"
+
+config:
+  timeout: 240000
+  retries: 0
+  parallel: false
+
+agents:
+  - name: "skwaq-cli"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "."
+      timeout: 240000
+      capture_output: true
+
+steps:
+  - name: "Run quick Azure fixtures eval with unsafe requested parallelism"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: >
+        cargo build -q -p skwaq &&
+        ./tests/qa/bin/gym-eval-azure-clamp.sh
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "=== command.log ==="
+        - "Procs/suite: 6"
+        - "Concurrency: 24"
+        - "WARNING: Azure eval concurrency was clamped from -j 32 --procs 9 to -j 24 --procs 6."
+        - "--force-unsafe-azure-concurrency"
+        - "Results saved to:"
+        - "=== metadata.json ==="
+        - "\"llm_backend\": \"azure\""
+        - "\"procs_per_suite\": 6"
+        - "\"concurrency\": 24"
+    timeout: 240000
+
+assertions:
+  - name: "Azure clamp command succeeds"
+    type: "command_success"
+    agent: "skwaq-cli"
+    params:
+      step: "Run quick Azure fixtures eval with unsafe requested parallelism"
+
+  - name: "Azure clamp output includes effective values"
+    type: "output_contains_all"
+    agent: "skwaq-cli"
+    params:
+      step: "Run quick Azure fixtures eval with unsafe requested parallelism"
+      required_strings:
+        - "Procs/suite: 6"
+        - "Concurrency: 24"
+        - "\"procs_per_suite\": 6"
+        - "\"concurrency\": 24"
+
+metadata:
+  tags:
+    - "cli"
+    - "benchmark"
+    - "azure"
+    - "regression"
+    - "safety"
+  priority: "high"
+  author: "copilot-cli"

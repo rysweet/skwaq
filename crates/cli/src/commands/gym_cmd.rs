@@ -1,9 +1,12 @@
 //! CLI dispatch for `skwaq gym *` subcommands.
 
 use anyhow::Context;
-use clap::Subcommand;
+use clap::{Subcommand, ValueEnum};
 use serde::Serialize;
 use std::path::PathBuf;
+
+const AZURE_SAFE_EVAL_PROCS: usize = 6;
+const AZURE_SAFE_EVAL_CONCURRENCY: usize = 24;
 
 #[derive(Subcommand)]
 pub enum GymSub {
@@ -70,8 +73,8 @@ pub enum GymSub {
     /// Show latest benchmark results
     Report {
         /// Output format (terminal, json, markdown)
-        #[arg(long, default_value = "terminal")]
-        format: String,
+        #[arg(long, value_enum, default_value_t = GymReportFormatArg::Terminal)]
+        format: GymReportFormatArg,
     },
 
     /// Compare the latest two finished runs for the most recently run suite
@@ -86,6 +89,8 @@ pub enum GymSub {
 
     /// Full evaluation: run all benchmarks in parallel, collect, and report.
     /// Combines --skip, --concurrency, and multi-process execution into one command.
+    /// Azure-backed evals default to a safe envelope of `--procs 6` and `-j 24`;
+    /// pass `--force-unsafe-azure-concurrency` to bypass that clamp intentionally.
     Eval {
         /// Comma-separated suite list (default: all)
         #[arg(long, default_value = "fixtures,juliet,owasp,cyberseceval,cgc")]
@@ -95,13 +100,20 @@ pub enum GymSub {
         #[arg(long, default_value = "0")]
         max_cases: usize,
 
-        /// Processes per suite for multi-process parallelism (1-50)
+        /// Processes per suite for multi-process parallelism (1-50).
+        /// Azure evals clamp to `--procs 6` by default unless forced.
         #[arg(long, default_value = "5")]
         procs: usize,
 
-        /// In-process async concurrency per process
+        /// In-process async concurrency per process.
+        /// Azure evals clamp to `-j 24` by default unless forced.
         #[arg(long, short = 'j', default_value = "2")]
         concurrency: usize,
+
+        /// Bypass the default Azure eval safety clamp (`--procs 6`, `-j 24`).
+        /// Use this only when you intentionally want higher concurrency despite throttling risk.
+        #[arg(long)]
+        force_unsafe_azure_concurrency: bool,
 
         /// Use quick pattern-only mode
         #[arg(long, alias = "pattern-only", conflicts_with = "llm_only")]
@@ -239,9 +251,9 @@ pub enum ProfileAction {
         /// Profile name (alphanumeric, hyphens, underscores; max 64 chars)
         name: String,
 
-        /// LLM backend (copilot, azure)
-        #[arg(long)]
-        backend: Option<String>,
+        /// LLM backend template (copilot, azure, anthropic)
+        #[arg(long, value_enum)]
+        backend: Option<ProfileBackendArg>,
 
         /// Model name (e.g. claude-opus-4.6, gpt-5.4)
         #[arg(long)]
@@ -257,6 +269,31 @@ pub enum ProfileAction {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum GymReportFormatArg {
+    Terminal,
+    Json,
+    #[value(alias = "md")]
+    Markdown,
+}
+
+impl From<GymReportFormatArg> for skwaq_gym::ReportFormat {
+    fn from(value: GymReportFormatArg) -> Self {
+        match value {
+            GymReportFormatArg::Terminal => skwaq_gym::ReportFormat::Terminal,
+            GymReportFormatArg::Json => skwaq_gym::ReportFormat::Json,
+            GymReportFormatArg::Markdown => skwaq_gym::ReportFormat::Markdown,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ProfileBackendArg {
+    Copilot,
+    Azure,
+    Anthropic,
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq)]
 struct EvalSuiteSummary {
     suite: String,
@@ -269,7 +306,9 @@ struct EvalSuiteSummary {
     false_negatives: u32,
     true_negatives: u32,
     shard_reports: u32,
+    expected_shards: u32,
     target_cases: u32,
+    partial: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -295,6 +334,38 @@ struct EvalSummaryReport {
     mode: String,
     metadata: EvalRunMetadata,
     suites: Vec<EvalSuiteSummary>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct EvalParallelism {
+    procs: usize,
+    concurrency: usize,
+    clamped: bool,
+}
+
+fn resolve_eval_parallelism(
+    llm_backend: &str,
+    requested_procs: usize,
+    requested_concurrency: usize,
+    force_unsafe_azure_concurrency: bool,
+) -> EvalParallelism {
+    if llm_backend != "azure" || force_unsafe_azure_concurrency {
+        return EvalParallelism {
+            procs: requested_procs,
+            concurrency: requested_concurrency,
+            clamped: false,
+        };
+    }
+
+    let effective_procs = requested_procs.min(AZURE_SAFE_EVAL_PROCS);
+    let effective_concurrency = requested_concurrency.min(AZURE_SAFE_EVAL_CONCURRENCY);
+
+    EvalParallelism {
+        procs: effective_procs,
+        concurrency: effective_concurrency,
+        clamped: effective_procs != requested_procs
+            || effective_concurrency != requested_concurrency,
+    }
 }
 
 #[derive(Debug, Default)]
@@ -349,10 +420,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             profile,
         } => {
             let mut gym = resolve_gym(&skwaq_root, profile.as_deref())?;
-            let cwe_filter = cwe
-                .as_ref()
-                .map(|c| parse_cwe_number(c).map(|n| vec![n]))
-                .transpose()?;
+            let cwe_filter = parse_optional_cwe_filter(cwe.as_deref())?;
             let binary_mode = !*source_only;
             // Default concurrency: 4 for hybrid mode, 1 for quick mode
             let conc = concurrency.unwrap_or(if *quick { 1 } else { 4 });
@@ -384,12 +452,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
         }
         GymSub::Report { format } => {
             let gym = skwaq_gym::Gym::new(skwaq_root.clone())?;
-            let fmt = match format.as_str() {
-                "json" => skwaq_gym::ReportFormat::Json,
-                "markdown" | "md" => skwaq_gym::ReportFormat::Markdown,
-                _ => skwaq_gym::ReportFormat::Terminal,
-            };
-            let output = gym.report(fmt)?;
+            let output = gym.report((*format).into())?;
             if !output.is_empty() {
                 println!("{}", output);
             }
@@ -482,6 +545,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             max_cases,
             procs,
             concurrency,
+            force_unsafe_azure_concurrency,
             quick,
             llm_only,
             adaptive,
@@ -502,6 +566,14 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             if !quick {
                 ensure_hybrid_benchmark_ready_with_llm(&config.llm).await?;
             }
+            let requested_procs = *procs;
+            let requested_concurrency = *concurrency;
+            let effective_parallelism = resolve_eval_parallelism(
+                &config.llm.reasoning,
+                requested_procs,
+                requested_concurrency,
+                *force_unsafe_azure_concurrency,
+            );
 
             let eval_dir = output.clone().unwrap_or_else(|| {
                 let ts = chrono::Utc::now().format("%Y%m%d-%H%M%S");
@@ -525,8 +597,8 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 git_dirty: git_is_dirty(&skwaq_root)?,
                 mode: mode.to_string(),
                 suites: suites.clone(),
-                procs_per_suite: *procs,
-                concurrency: *concurrency,
+                procs_per_suite: effective_parallelism.procs,
+                concurrency: effective_parallelism.concurrency,
                 llm_backend: config.llm.reasoning.clone(),
                 llm_model: config.llm.copilot.model.clone(),
                 binary_mode: true,
@@ -547,11 +619,32 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             }
             println!("=== Skwaq Gym Evaluation ({mode}) ===");
             println!("  Suites:      {suites}");
-            println!("  Procs/suite: {procs}");
-            println!("  Concurrency: {concurrency}");
+            println!("  Procs/suite: {}", effective_parallelism.procs);
+            println!("  Concurrency: {}", effective_parallelism.concurrency);
             println!("  Adaptive:    {adaptive}");
             println!("  Output:      {}", eval_dir.display());
             println!();
+
+            if effective_parallelism.clamped {
+                eprintln!(
+                    "WARNING: Azure eval concurrency was clamped from -j {} --procs {} to -j {} --procs {}. \
+                     Pass --force-unsafe-azure-concurrency to bypass the default safety envelope.\n",
+                    requested_concurrency,
+                    requested_procs,
+                    effective_parallelism.concurrency,
+                    effective_parallelism.procs
+                );
+            } else if eval_metadata.llm_backend == "azure"
+                && *force_unsafe_azure_concurrency
+                && (requested_concurrency > AZURE_SAFE_EVAL_CONCURRENCY
+                    || requested_procs > AZURE_SAFE_EVAL_PROCS)
+            {
+                eprintln!(
+                    "WARNING: Azure eval safety clamp disabled via --force-unsafe-azure-concurrency; \
+                     honoring requested -j {} --procs {}.\n",
+                    requested_concurrency, requested_procs
+                );
+            }
 
             let valid_suites = gym.available_suite_names();
             let valid_suite_set: std::collections::HashSet<&str> =
@@ -695,7 +788,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 let n_procs = if *suite == "fixtures" {
                     1
                 } else {
-                    (*procs).clamp(1, total.max(1))
+                    effective_parallelism.procs.clamp(1, total.max(1))
                 };
                 let cases_per = total.div_ceil(n_procs);
                 let suite_dir = eval_dir.join(suite);
@@ -712,7 +805,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                         skip,
                         cases_per,
                         total,
-                        *concurrency,
+                        effective_parallelism.concurrency,
                         &suite_dir,
                         i,
                         *quick,
@@ -737,22 +830,22 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
 
                 let mut all_done = true;
                 let mut any_early_death = false;
+                let mut live_summaries = Vec::new();
                 println!();
                 for (suite, children) in &mut all_children {
                     let mut running = 0;
                     let mut failed_shards: Vec<(usize, Option<i32>)> = Vec::new();
                     for (idx, child) in children.iter_mut().enumerate() {
-                        match child.try_wait() {
-                            Ok(None) => {
+                        match interpret_shard_wait(suite, idx, child.try_wait())? {
+                            None => {
                                 running += 1;
                                 all_done = false;
                             }
-                            Ok(Some(status)) => {
+                            Some(status) => {
                                 if !status.success() {
                                     failed_shards.push((idx, status.code()));
                                 }
                             }
-                            Err(_) => {}
                         }
                     }
 
@@ -806,7 +899,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                                     skip,
                                     cases_per,
                                     total,
-                                    *concurrency,
+                                    effective_parallelism.concurrency,
                                     &suite_dir,
                                     *idx,
                                     *quick,
@@ -857,6 +950,17 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                             "  {suite}: ~{total_cases}/{target} ({pct}%) | {running} procs | {total_retries} retries"
                         );
                     }
+
+                    if let Ok((summary, _)) =
+                        summarize_eval_suite(suite, &suite_dir, children.len(), target as u32)
+                    {
+                        live_summaries.push(summary);
+                    }
+                }
+
+                if !live_summaries.is_empty() {
+                    let _ =
+                        write_partial_eval_artifacts(&eval_dir, &eval_metadata, &live_summaries);
                 }
 
                 if !early_death_checked && monitor_start.elapsed().as_secs() <= 60 {
@@ -886,10 +990,11 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             println!("{}", "-".repeat(70));
 
             let mut summaries = Vec::new();
+            let mut missing_summaries = Vec::new();
             for suite in &suite_list {
                 let suite_dir = eval_dir.join(suite);
                 let shard_count = suite_shards.get(*suite).copied().unwrap_or(1);
-                let (summary, cwe_results) = summarize_eval_suite(
+                let (summary, cwe_results) = match summarize_eval_suite(
                     suite,
                     &suite_dir,
                     shard_count,
@@ -898,14 +1003,21 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                         .copied()
                         .expect("suite validated before spawning shards")
                         as u32,
-                )?;
+                ) {
+                    Ok(result) => result,
+                    Err(err) => {
+                        eprintln!("WARNING: Failed to summarize suite '{}': {}", suite, err);
+                        missing_summaries.push((*suite).to_string());
+                        continue;
+                    }
+                };
                 let run_metadata = skwaq_gym::history::RunMetadata {
                     llm_backend: eval_metadata.llm_backend.clone(),
                     llm_model: eval_metadata.llm_model.clone(),
                     run_mode: mode.to_string(),
                     binary_mode: eval_metadata.binary_mode,
                     git_dirty: eval_metadata.git_dirty,
-                    concurrency: *concurrency,
+                    concurrency: effective_parallelism.concurrency,
                     skip: 0,
                     max_cases: Some(summary.target_cases as usize),
                     profile: profile.clone(),
@@ -953,9 +1065,29 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                     summary.false_negatives,
                     summary.true_negatives
                 );
+                if summary.partial {
+                    println!(
+                        "                partial shard coverage: {}/{} shard reports",
+                        summary.shard_reports, summary.expected_shards
+                    );
+                }
                 summaries.push(summary);
             }
             println!();
+
+            if summaries.is_empty() {
+                anyhow::bail!(
+                    "No shard reports were available for any suite in '{}'",
+                    eval_dir.display()
+                );
+            }
+            if !missing_summaries.is_empty() {
+                eprintln!(
+                    "WARNING: Missing shard summaries for suites: {}",
+                    missing_summaries.join(", ")
+                );
+                eprintln!("Partial results were still written from available shard reports.");
+            }
 
             // Results Skeptic: validate coverage and flag suspicious results
             for summary in &summaries {
@@ -997,6 +1129,12 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             println!("Metadata: {}", eval_dir.join("metadata.json").display());
             println!("Summary: {}", eval_dir.join("summary.md").display());
             println!("Dashboard: {}", eval_dir.join("dashboard.md").display());
+            if eval_dir.join("partial-summary.json").exists() {
+                println!(
+                    "Partial summary: {}",
+                    eval_dir.join("partial-summary.json").display()
+                );
+            }
 
             if *tag {
                 println!();
@@ -1056,8 +1194,8 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                     reproducible_command: skwaq_gym::tagging::build_reproducible_command(
                         suites,
                         *max_cases,
-                        *procs,
-                        *concurrency,
+                        effective_parallelism.procs,
+                        effective_parallelism.concurrency,
                         *quick,
                         *llm_only,
                         *adaptive,
@@ -1103,10 +1241,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 timeout
             );
 
-            let cwe_filter = cwe.as_ref().and_then(|c| {
-                let num_str = c.trim_start_matches("CWE-").trim_start_matches("cwe-");
-                num_str.parse::<u32>().ok().map(|n| vec![n])
-            });
+            let cwe_filter = parse_optional_cwe_filter(cwe.as_deref())?;
             let config = skwaq_gym::adapters::BenchmarkConfig {
                 cache_dir: dirs::data_dir()
                     .unwrap_or_else(|| std::path::PathBuf::from("."))
@@ -1194,7 +1329,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             if profiles.is_empty() {
                 println!("No profiles configured.");
                 println!(
-                    "Create one with: skwaq gym profile create <name> --backend <copilot|azure>"
+                    "Create one with: skwaq gym profile create <name> --backend <copilot|azure|anthropic>"
                 );
             } else {
                 println!("Available profiles:");
@@ -1224,51 +1359,35 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 }
             }
         }
-        GymSub::Profile { action } => {
-            match action {
-                ProfileAction::Create {
+        GymSub::Profile { action } => match action {
+            ProfileAction::Create {
+                name,
+                backend,
+                model,
+                endpoint,
+                deployment,
+            } => {
+                let pn = skwaq_gym::profiles::ProfileName::new(name)?;
+                let base = skwaq_gym::profiles::default_profiles_base()?;
+                let paths = skwaq_gym::profiles::ProfilePaths::new(&pn, &base);
+                paths.ensure()?;
+
+                let config_content = build_profile_config(
+                    *backend,
+                    model.as_deref(),
+                    endpoint.as_deref(),
+                    deployment.as_deref(),
+                )?;
+
+                std::fs::write(paths.config_path(), &config_content)?;
+                println!(
+                    "Profile '{}' created at {}",
                     name,
-                    backend,
-                    model,
-                    endpoint,
-                    deployment,
-                } => {
-                    let pn = skwaq_gym::profiles::ProfileName::new(name)?;
-                    let base = skwaq_gym::profiles::default_profiles_base()?;
-                    let paths = skwaq_gym::profiles::ProfilePaths::new(&pn, &base);
-                    paths.ensure()?;
-
-                    // Build config.toml content from CLI args
-                    let backend_str = backend.as_deref().unwrap_or("copilot");
-                    let model_str = model.as_deref().unwrap_or("claude-opus-4.6");
-
-                    let config_content = match backend_str {
-                        "azure" => {
-                            let ep = endpoint.as_deref().unwrap_or("");
-                            let dep = deployment.as_deref().unwrap_or("");
-                            format!(
-                                "[llm]\nreasoning = \"azure\"\ndecompilation = \"azure\"\n\n\
-                                 [llm.azure]\nendpoint = \"{ep}\"\ndeployment = \"{dep}\"\n"
-                            )
-                        }
-                        _ => {
-                            format!(
-                                "[llm]\nreasoning = \"{backend_str}\"\ndecompilation = \"{backend_str}\"\n\n\
-                                 [llm.copilot]\nmodel = \"{model_str}\"\n"
-                            )
-                        }
-                    };
-
-                    std::fs::write(paths.config_path(), &config_content)?;
-                    println!(
-                        "Profile '{}' created at {}",
-                        name,
-                        paths.profile_dir().display()
-                    );
-                    println!("Config:\n{config_content}");
-                }
+                    paths.profile_dir().display()
+                );
+                println!("Config:\n{config_content}");
             }
-        }
+        },
         GymSub::Telemetry { action } => {
             let telemetry_dir = default_telemetry_dir();
             match action {
@@ -1435,13 +1554,13 @@ fn summarize_eval_suite(
     let mut per_cwe: std::collections::BTreeMap<u32, AggregatedCwe> =
         std::collections::BTreeMap::new();
 
-    for report in reports {
+    for report in &reports {
         true_positives += report.true_positives;
         false_positives += report.false_positives;
         false_negatives += report.false_negatives;
         true_negatives += report.true_negatives;
 
-        for cwe in report.per_cwe {
+        for cwe in &report.per_cwe {
             let entry = per_cwe.entry(cwe.cwe_id).or_default();
             entry.total_cases += cwe.total_cases;
             entry.true_positives += cwe.true_positives;
@@ -1472,6 +1591,8 @@ fn summarize_eval_suite(
         })
         .collect();
 
+    let loaded_reports = reports.len() as u32;
+
     Ok((
         EvalSuiteSummary {
             suite: suite.to_string(),
@@ -1483,8 +1604,10 @@ fn summarize_eval_suite(
             false_positives,
             false_negatives,
             true_negatives,
-            shard_reports: shard_count as u32,
+            shard_reports: loaded_reports,
+            expected_shards: shard_count as u32,
             target_cases,
+            partial: loaded_reports < shard_count as u32,
         },
         cwe_results,
     ))
@@ -1563,6 +1686,28 @@ fn write_eval_artifacts(
     Ok(())
 }
 
+fn write_partial_eval_artifacts(
+    eval_dir: &std::path::Path,
+    metadata: &EvalRunMetadata,
+    summaries: &[EvalSuiteSummary],
+) -> anyhow::Result<()> {
+    let summary_report = EvalSummaryReport {
+        generated_at: chrono::Utc::now().to_rfc3339(),
+        mode: format!("{}-partial", metadata.mode),
+        metadata: metadata.clone(),
+        suites: summaries.to_vec(),
+    };
+    std::fs::write(
+        eval_dir.join("partial-summary.json"),
+        serde_json::to_string_pretty(&summary_report)?,
+    )?;
+    std::fs::write(
+        eval_dir.join("partial-summary.md"),
+        render_eval_summary_markdown(metadata, summaries),
+    )?;
+    Ok(())
+}
+
 fn render_eval_summary_markdown(
     metadata: &EvalRunMetadata,
     summaries: &[EvalSuiteSummary],
@@ -1579,15 +1724,15 @@ fn render_eval_summary_markdown(
         metadata.llm_model,
     ));
     output.push_str(
-        "| Suite | F1 | Precision | Recall | TP | FP | FN | TN | Shards | Target cases |\n",
+        "| Suite | F1 | Precision | Recall | TP | FP | FN | TN | Shards | Status | Target cases |\n",
     );
     output.push_str(
-        "|-------|----|-----------|--------|----|----|----|----|--------|--------------|\n",
+        "|-------|----|-----------|--------|----|----|----|----|--------|--------|--------------|\n",
     );
 
     for summary in summaries {
         output.push_str(&format!(
-            "| {} | {:.1}% | {:.1}% | {:.1}% | {} | {} | {} | {} | {} | {} |\n",
+            "| {} | {:.1}% | {:.1}% | {:.1}% | {} | {} | {} | {} | {}/{} | {} | {} |\n",
             summary.suite,
             summary.f1 * 100.0,
             summary.precision * 100.0,
@@ -1597,6 +1742,12 @@ fn render_eval_summary_markdown(
             summary.false_negatives,
             summary.true_negatives,
             summary.shard_reports,
+            summary.expected_shards,
+            if summary.partial {
+                "partial"
+            } else {
+                "complete"
+            },
             summary.target_cases
         ));
     }
@@ -1713,6 +1864,61 @@ fn parse_cwe_number(s: &str) -> anyhow::Result<u32> {
         .map_err(|_| anyhow::anyhow!("Invalid CWE number: '{}'. Use format: CWE-119 or 119", s))
 }
 
+fn parse_optional_cwe_filter(cwe: Option<&str>) -> anyhow::Result<Option<Vec<u32>>> {
+    cwe.map(|value| parse_cwe_number(value).map(|n| vec![n]))
+        .transpose()
+}
+
+fn interpret_shard_wait(
+    suite: &str,
+    shard_idx: usize,
+    result: std::io::Result<Option<std::process::ExitStatus>>,
+) -> anyhow::Result<Option<std::process::ExitStatus>> {
+    result.with_context(|| format!("Failed to poll eval shard [{suite}] shard {shard_idx}"))
+}
+
+fn build_profile_config(
+    backend: Option<ProfileBackendArg>,
+    model: Option<&str>,
+    endpoint: Option<&str>,
+    deployment: Option<&str>,
+) -> anyhow::Result<String> {
+    let backend = backend.unwrap_or(ProfileBackendArg::Copilot);
+    match backend {
+        ProfileBackendArg::Azure => {
+            let endpoint =
+                require_non_empty_arg(endpoint, "--endpoint is required when --backend azure")?;
+            let deployment =
+                require_non_empty_arg(deployment, "--deployment is required when --backend azure")?;
+            Ok(format!(
+                "[llm]\nreasoning = \"azure\"\ndecompilation = \"azure\"\n\n\
+                 [llm.azure]\nendpoint = \"{endpoint}\"\ndeployment = \"{deployment}\"\n"
+            ))
+        }
+        ProfileBackendArg::Copilot | ProfileBackendArg::Anthropic => {
+            let backend_str = match backend {
+                ProfileBackendArg::Copilot => "copilot",
+                ProfileBackendArg::Anthropic => "anthropic",
+                ProfileBackendArg::Azure => unreachable!("handled above"),
+            };
+            let model = require_non_empty_arg(
+                model.or(Some("claude-opus-4.6")),
+                "--model must not be empty",
+            )?;
+            Ok(format!(
+                "[llm]\nreasoning = \"{backend_str}\"\ndecompilation = \"{backend_str}\"\n\n\
+                 [llm.copilot]\nmodel = \"{model}\"\n"
+            ))
+        }
+    }
+}
+
+fn require_non_empty_arg(value: Option<&str>, message: &str) -> anyhow::Result<String> {
+    let trimmed = value.unwrap_or_default().trim();
+    anyhow::ensure!(!trimmed.is_empty(), "{message}");
+    Ok(trimmed.to_string())
+}
+
 /// Find the workspace root by looking for Cargo.toml with [workspace].
 ///
 /// Resolution order:
@@ -1756,6 +1962,7 @@ fn find_skwaq_root() -> anyhow::Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::{CommandFactory, Parser};
     use skwaq_gym::{
         history::RunMetadata,
         reporting::json_report::{JsonCweResult, JsonReport},
@@ -1783,6 +1990,143 @@ mod tests {
     #[test]
     fn test_parse_cwe_number_empty() {
         assert!(parse_cwe_number("").is_err());
+    }
+
+    #[test]
+    fn test_parse_optional_cwe_filter_rejects_invalid_value() {
+        let err = parse_optional_cwe_filter(Some("bogus")).unwrap_err();
+        assert!(err.to_string().contains("Invalid CWE number"));
+    }
+
+    #[test]
+    fn test_interpret_shard_wait_surfaces_poll_errors() {
+        let err = interpret_shard_wait("fixtures", 2, Err(std::io::Error::other("poll failed")))
+            .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Failed to poll eval shard [fixtures] shard 2"));
+    }
+
+    #[test]
+    fn test_build_profile_config_requires_azure_endpoint() {
+        let err = build_profile_config(
+            Some(ProfileBackendArg::Azure),
+            None,
+            None,
+            Some("deployment"),
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "--endpoint is required when --backend azure"
+        );
+    }
+
+    #[test]
+    fn test_build_profile_config_requires_azure_deployment() {
+        let err = build_profile_config(
+            Some(ProfileBackendArg::Azure),
+            None,
+            Some("https://example.openai.azure.com"),
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "--deployment is required when --backend azure"
+        );
+    }
+
+    #[test]
+    fn test_build_profile_config_defaults_to_copilot() {
+        let config = build_profile_config(None, None, None, None).unwrap();
+        assert!(config.contains("reasoning = \"copilot\""));
+        assert!(config.contains("model = \"claude-opus-4.6\""));
+    }
+
+    #[test]
+    fn test_resolve_eval_parallelism_clamps_azure_by_default() {
+        let parallelism = resolve_eval_parallelism("azure", 9, 32, false);
+        assert_eq!(
+            parallelism,
+            EvalParallelism {
+                procs: 6,
+                concurrency: 24,
+                clamped: true,
+            }
+        );
+    }
+
+    #[test]
+    fn test_resolve_eval_parallelism_honors_force_override_for_azure() {
+        let parallelism = resolve_eval_parallelism("azure", 9, 32, true);
+        assert_eq!(
+            parallelism,
+            EvalParallelism {
+                procs: 9,
+                concurrency: 32,
+                clamped: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_resolve_eval_parallelism_leaves_non_azure_unchanged() {
+        let parallelism = resolve_eval_parallelism("copilot", 9, 32, false);
+        assert_eq!(
+            parallelism,
+            EvalParallelism {
+                procs: 9,
+                concurrency: 32,
+                clamped: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_gym_eval_help_mentions_azure_clamp_override() {
+        let mut cmd = crate::commands::Cli::command();
+        let gym = cmd.find_subcommand_mut("gym").unwrap();
+        let eval = gym.find_subcommand_mut("eval").unwrap();
+        let mut help = Vec::new();
+        eval.write_long_help(&mut help).unwrap();
+        let help = String::from_utf8(help).unwrap();
+
+        assert!(help.contains("--force-unsafe-azure-concurrency"));
+        assert!(help.contains("Azure evals clamp to `-j 24` by default unless forced"));
+        assert!(help.contains("Azure evals clamp to `--procs 6` by default unless forced"));
+    }
+
+    #[test]
+    fn test_gym_report_rejects_invalid_format() {
+        let err = match crate::commands::Cli::try_parse_from([
+            "skwaq", "gym", "report", "--format", "bogus",
+        ]) {
+            Ok(_) => panic!("invalid report format should be rejected"),
+            Err(err) => err,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("invalid value 'bogus'"));
+        assert!(msg.contains("[possible values: terminal, json, markdown]"));
+    }
+
+    #[test]
+    fn test_gym_profile_create_rejects_invalid_backend() {
+        let err = match crate::commands::Cli::try_parse_from([
+            "skwaq",
+            "gym",
+            "profile",
+            "create",
+            "bad",
+            "--backend",
+            "bogus",
+        ]) {
+            Ok(_) => panic!("invalid backend should be rejected"),
+            Err(err) => err,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("invalid value 'bogus'"));
+        assert!(msg.contains("[possible values: copilot, azure, anthropic]"));
     }
 
     #[test]
@@ -1856,6 +2200,9 @@ mod tests {
         assert_eq!(summary.false_positives, 1);
         assert_eq!(summary.false_negatives, 3);
         assert_eq!(summary.true_negatives, 7);
+        assert_eq!(summary.shard_reports, 2);
+        assert_eq!(summary.expected_shards, 2);
+        assert!(!summary.partial);
         assert!((summary.precision - 0.75).abs() < f64::EPSILON);
         assert!((summary.recall - 0.5).abs() < f64::EPSILON);
         assert!((summary.f1 - 0.6).abs() < 1e-9);
@@ -1893,13 +2240,49 @@ mod tests {
                 false_negatives: 3,
                 true_negatives: 7,
                 shard_reports: 2,
+                expected_shards: 2,
                 target_cases: 7,
+                partial: false,
             }],
         );
 
         assert!(markdown.contains("# Skwaq Gym Evaluation Summary"));
         assert!(markdown.contains("pattern-only"));
         assert!(markdown.contains("claude-opus-4.6"));
-        assert!(markdown.contains("| fixtures | 60.0% | 75.0% | 50.0% | 3 | 1 | 3 | 7 | 2 | 7 |"));
+        assert!(markdown
+            .contains("| fixtures | 60.0% | 75.0% | 50.0% | 3 | 1 | 3 | 7 | 2/2 | complete | 7 |"));
+    }
+
+    #[test]
+    fn test_summarize_eval_suite_marks_partial_when_some_shards_missing() {
+        let dir = tempdir().unwrap();
+        let suite_dir = dir.path();
+        let shard0 = JsonReport {
+            suite: "fixtures".to_string(),
+            timestamp: "2026-01-01T00:00:00Z".to_string(),
+            skwaq_commit: "abc123".to_string(),
+            metadata: RunMetadata::default(),
+            precision: 0.0,
+            recall: 0.0,
+            f1: 0.0,
+            true_positives: 2,
+            false_positives: 1,
+            false_negatives: 1,
+            true_negatives: 3,
+            per_cwe: vec![],
+            per_original_cwe: vec![],
+            per_semantic: vec![],
+        };
+
+        std::fs::write(
+            suite_dir.join("shard-0.json"),
+            serde_json::to_string_pretty(&shard0).unwrap(),
+        )
+        .unwrap();
+
+        let (summary, _) = summarize_eval_suite("fixtures", suite_dir, 2, 7).unwrap();
+        assert_eq!(summary.shard_reports, 1);
+        assert_eq!(summary.expected_shards, 2);
+        assert!(summary.partial);
     }
 }

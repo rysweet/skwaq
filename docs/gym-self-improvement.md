@@ -150,10 +150,17 @@ skwaq gym eval [OPTIONS]
 | `--suites <LIST>` | all registered | Comma-separated suite names |
 | `--procs <N>` | 5 | Parallel processes per suite |
 | `-j <N>` | 2 | In-process async concurrency per shard |
+| `--force-unsafe-azure-concurrency` | false | Bypass the default Azure eval clamp of `--procs 6` and `-j 24` |
 | `--quick` | false | Pattern-only mode (no LLM agents) |
 | `--llm-only` | false | LLM agents only (no patterns) |
 | `--adaptive` | false | AIMD rate throttling for API calls |
 | `--output <DIR>` | `data/gym/results/` | Results directory |
+
+When the active eval backend is Azure, `skwaq gym eval` now clamps requested
+parallelism to `--procs 6` and `-j 24` by default. This keeps benchmark runs
+inside the observed safe envelope that avoids Azure throttling-driven quality
+regressions. Use `--force-unsafe-azure-concurrency` only when you intentionally
+want to exceed that envelope.
 
 **Example:**
 
