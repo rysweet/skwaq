@@ -22,6 +22,13 @@ use std::path::{Path, PathBuf};
 
 const FALLBACK_SOURCE_SCAN_MAX_DEPTH: u32 = 5;
 
+/// Directory names that signal "we are already at the project root" — descending
+/// into them would land inside the project's own source tree, not inside a
+/// packaging wrapper.
+const SOURCE_LAYOUT_DIRS: &[&str] = &[
+    "src", "lib", "include", "source", "Sources", "core", "main", "libs", "includes",
+];
+
 pub struct CyberGymAdapter {
     manifest_path: PathBuf,
 }
@@ -137,7 +144,15 @@ impl BenchmarkAdapter for CyberGymAdapter {
         // like FFmpeg or Wireshark).
         let source_files = patch_affected_files(&case_dir, data_dir, &case.id)
             .or_else(|| paired_case_affected_files(case, data_dir, &case_dir))
-            .unwrap_or_else(|| collect_source_files_limited(&case_dir, 25));
+            .unwrap_or_else(|| {
+                tracing::warn!(
+                    "CyberGym case {}: patch path resolution failed, \
+                     falling back to shallow source scan (≤25 files from {})",
+                    case.id,
+                    case_dir.display()
+                );
+                collect_source_files_limited(&case_dir, 25)
+            });
 
         // Filter out header-only files with no executable code (issue #394).
         // Some benchmarks attribute project-level CVEs to all files including
@@ -510,7 +525,15 @@ fn single_child_dir_without_sources(root: &Path) -> Option<PathBuf> {
     if has_source_files || dirs.len() != 1 {
         None
     } else {
-        dirs.into_iter().next()
+        let child = dirs.into_iter().next()?;
+        let child_name = child.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        // If the single child is a conventional source-layout directory, we are
+        // already at the project root.  Descending further would land inside the
+        // project's own source tree, breaking patch-relative path resolution.
+        if SOURCE_LAYOUT_DIRS.contains(&child_name) {
+            return None;
+        }
+        Some(child)
     }
 }
 
@@ -760,5 +783,81 @@ mod tests {
 
         let affected = paired_case_affected_files(&case, temp.path(), &case_dir).unwrap();
         assert_eq!(affected, vec![vul_file]);
+    }
+
+    #[test]
+    fn test_source_tree_root_stops_at_project_root_not_src() {
+        // Layout: case_dir/project-1.2.3/src/vuln.c
+        // source_tree_root must return case_dir/project-1.2.3/, NOT src/
+        let temp = tempfile::tempdir().unwrap();
+        let case_dir = temp.path();
+        let vuln_file = case_dir.join("project-1.2.3").join("src").join("vuln.c");
+        std::fs::create_dir_all(vuln_file.parent().unwrap()).unwrap();
+        std::fs::write(&vuln_file, "void vuln(char *s) { strcpy(buf, s); }\n").unwrap();
+
+        let root = source_tree_root(case_dir);
+        assert_eq!(
+            root,
+            case_dir.join("project-1.2.3"),
+            "source_tree_root must stop at the project root, not descend into src/"
+        );
+    }
+
+    #[test]
+    fn test_source_tree_root_stops_at_conventional_lib() {
+        // Layout: case_dir/myproject/lib/util.c — should stop at myproject/
+        let temp = tempfile::tempdir().unwrap();
+        let case_dir = temp.path();
+        let src_file = case_dir.join("myproject").join("lib").join("util.c");
+        std::fs::create_dir_all(src_file.parent().unwrap()).unwrap();
+        std::fs::write(&src_file, "int util(void) { return 0; }\n").unwrap();
+
+        let root = source_tree_root(case_dir);
+        assert_eq!(
+            root,
+            case_dir.join("myproject"),
+            "source_tree_root must not descend into lib/"
+        );
+    }
+
+    #[test]
+    fn test_patch_affected_files_resolves_src_relative_paths() {
+        // Verifies the over-descent fix: patch says "src/parser.c" (relative to
+        // project root), and source_tree_root(case_dir) must return the project
+        // root so the file resolves correctly.
+        let temp = tempfile::tempdir().unwrap();
+        let case_dir = temp.path().join("cases").join("arvo_2000");
+        let data_dir = temp.path();
+
+        // Extracted layout: case_dir/project-2.0/src/parser.c
+        let src_file = case_dir.join("project-2.0").join("src").join("parser.c");
+        std::fs::create_dir_all(src_file.parent().unwrap()).unwrap();
+        std::fs::write(&src_file, "int parser(void) { return 1; }\n").unwrap();
+
+        // Patch diff references src/parser.c relative to project root
+        let patch_dir = data_dir
+            .join("dataset")
+            .join("data")
+            .join("arvo")
+            .join("2000");
+        std::fs::create_dir_all(&patch_dir).unwrap();
+        std::fs::write(
+            patch_dir.join("patch.diff"),
+            "diff --git a/src/parser.c b/src/parser.c\n\
+             --- a/src/parser.c\n\
+             +++ b/src/parser.c\n\
+             @@ -1 +1 @@\n\
+             -int parser(void) { return 1; }\n\
+             +int parser(void) { return 0; }\n",
+        )
+        .unwrap();
+
+        let affected = patch_affected_files(&case_dir, data_dir, "arvo:2000")
+            .expect("patch_affected_files must find parser.c");
+        assert_eq!(
+            affected,
+            vec![src_file],
+            "patch path src/parser.c must resolve to project-2.0/src/parser.c"
+        );
     }
 }
