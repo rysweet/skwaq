@@ -1,0 +1,61 @@
+name: "CyberGym stale cache case targeting"
+description: |
+  Verifies that a stale CyberGym cache still extracts a missing -fix case on demand
+  and that the CLI no longer falls back to "No C/C++ source files found" for a
+  representative deep-tree case whose sidecars are Git LFS pointers.
+version: "1.0.0"
+
+config:
+  timeout: 300000
+  retries: 0
+  parallel: false
+
+agents:
+  - name: "skwaq-cli"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "."
+      timeout: 300000
+      capture_output: true
+
+steps:
+  - name: "Run stale-cache CyberGym targeting regression"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: >
+        cargo build -q -p skwaq &&
+        ./tests/qa/bin/gym-cybergym-case-targeting.sh
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "=== cybergym-targeting-command ==="
+        - "=== report-check ==="
+        - "validated cybergym report cwe_totals=401:1,457:2"
+        - "validated missing fix case extracted on demand"
+        - "validated deep-tree case avoided missing-source warning"
+        - "=== report.json ==="
+        - "\"suite\": \"cybergym\""
+        - "\"cwe_id\": 401"
+        - "\"cwe_id\": 457"
+        - "\"total_cases\": 1"
+        - "\"total_cases\": 2"
+    timeout: 300000
+
+assertions:
+  - name: "CyberGym stale-cache targeting command succeeds"
+    type: "command_success"
+    agent: "skwaq-cli"
+    params:
+      step: "Run stale-cache CyberGym targeting regression"
+
+metadata:
+  tags:
+    - "cli"
+    - "benchmark"
+    - "cybergym"
+    - "regression"
+    - "stale-cache"
+  priority: "high"
+  author: "copilot-cli"

@@ -1,14 +1,20 @@
 name: Gym Smoke
 on: [pull_request]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   # Minimum F1 score (0.0-1.0) required to pass the benchmark gate.
-  # Adjust as detection improves. Current baseline: 0.10 (10%).
   GYM_F1_THRESHOLD: "0.10"
+  GYM_SMOKE_MAX_CASES: "5"
+  GYM_JULIET_MAX_CASES: "20"
 
 jobs:
   gym-smoke:
     runs-on: ubuntu-latest
+    # No timeout: user requirement — this job must not be time-bounded.
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -19,7 +25,7 @@ jobs:
 
       - name: Gym smoke test (fixtures, pattern mode)
         run: |
-          ./target/debug/skwaq gym run fixtures --max-cases 5 --quick
+          ./target/debug/skwaq gym run fixtures --max-cases "$GYM_SMOKE_MAX_CASES" --quick
           echo "Gym smoke test passed"
 
       - name: Gym report (JSON)
@@ -28,13 +34,15 @@ jobs:
           cat gym-smoke-results.json
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: gym-smoke-results
           path: gym-smoke-results.json
 
   ci-benchmark:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # No timeout: user requirement — this job must not be time-bounded.
+    needs: gym-smoke
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -48,42 +56,114 @@ jobs:
           ./target/debug/skwaq gym run fixtures --quick
           echo "Fixtures benchmark completed"
 
-      - name: Run juliet subset benchmark (20 cases, pattern mode)
+      - name: Generate fixtures benchmark report
         run: |
-          ./target/debug/skwaq gym run juliet --max-cases 20 --quick || true
-          echo "Juliet subset benchmark completed (may skip if data not available)"
+          ./target/debug/skwaq gym report --format json > fixtures-benchmark-results.json
+          cat fixtures-benchmark-results.json
 
-      - name: Generate benchmark report
+      - name: Assert fixtures benchmark report
         run: |
-          ./target/debug/skwaq gym report --format json > ci-benchmark-results.json
-          cat ci-benchmark-results.json
+          python3 - <<'EOF'
+          import json, sys
+          with open('fixtures-benchmark-results.json') as f:
+              data = json.load(f)
+          if data.get('suite') != 'fixtures':
+              print(f"ERROR: expected fixtures report, got {data.get('suite')!r}", file=sys.stderr)
+              sys.exit(1)
+          if 'f1' not in data and 'F1' not in data:
+              print("ERROR: fixtures report is missing an f1/F1 field", file=sys.stderr)
+              sys.exit(1)
+          EOF
+
+      - name: Check fixtures F1 threshold
+        run: |
+          python3 - <<'EOF'
+          import json, sys, os
+          threshold = float(os.environ['GYM_F1_THRESHOLD'])
+          with open('fixtures-benchmark-results.json') as f:
+              data = json.load(f)
+          if 'f1' in data:
+              f1_value = data['f1']
+          elif 'F1' in data:
+              f1_value = data['F1']
+          else:
+              print("ERROR: fixtures report is missing an f1/F1 field", file=sys.stderr)
+              sys.exit(1)
+          f1 = float(f1_value)
+          print(f"Fixtures F1 score: {f1:.4f}")
+          print(f"Threshold: {threshold:.4f}")
+          if f1 < threshold:
+              print(f"FAIL: fixtures F1 {f1:.4f} is below threshold {threshold:.4f}", file=sys.stderr)
+              sys.exit(1)
+          print(f"PASS: fixtures F1 {f1:.4f} >= threshold {threshold:.4f}")
+          EOF
+
+      - name: Detect juliet benchmark availability
+        id: juliet-availability
+        run: |
+          if [ -d data/juliet ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "Juliet data detected; juliet benchmark will run"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Juliet data not available in CI; skipping juliet benchmark"
+          fi
+
+      - name: Run juliet subset benchmark (pattern mode)
+        if: steps.juliet-availability.outputs.available == 'true'
+        run: |
+          ./target/debug/skwaq gym run juliet --max-cases "$GYM_JULIET_MAX_CASES" --quick
+          echo "Juliet subset benchmark completed"
+
+      - name: Generate juliet benchmark report
+        if: steps.juliet-availability.outputs.available == 'true'
+        run: |
+          ./target/debug/skwaq gym report --format json > juliet-benchmark-results.json
+          cat juliet-benchmark-results.json
+
+      - name: Assert juliet benchmark report
+        if: steps.juliet-availability.outputs.available == 'true'
+        run: |
+          python3 - <<'EOF'
+          import json, sys
+          with open('juliet-benchmark-results.json') as f:
+              data = json.load(f)
+          if data.get('suite') != 'juliet':
+              print(f"ERROR: expected juliet report, got {data.get('suite')!r}", file=sys.stderr)
+              sys.exit(1)
+          if 'f1' not in data and 'F1' not in data:
+              print("ERROR: juliet report is missing an f1/F1 field", file=sys.stderr)
+              sys.exit(1)
+          EOF
 
       - name: Check F1 threshold
+        if: steps.juliet-availability.outputs.available == 'true'
         run: |
-          F1=$(python3 -c "
-          import json, sys
-          try:
-              data = json.load(open('ci-benchmark-results.json'))
-              f1 = float(data.get('f1', data.get('F1', 0)))
-              print(f'{f1:.4f}')
-          except Exception as e:
-              print(f'Warning: could not parse results: {e}', file=sys.stderr)
-              print('0.0')
-          ")
-          echo "F1 score: $F1"
-          echo "Threshold: $GYM_F1_THRESHOLD"
-          python3 -c "
-          import sys
-          f1 = float('$F1')
-          threshold = float('$GYM_F1_THRESHOLD')
-          if f1 < threshold:
-              print(f'FAIL: F1 {f1:.4f} is below threshold {threshold:.4f}')
-              sys.exit(1)
+          python3 - <<'EOF'
+          import json, sys, os
+          threshold = float(os.environ['GYM_F1_THRESHOLD'])
+          with open('juliet-benchmark-results.json') as f:
+              data = json.load(f)
+          if 'f1' in data:
+              f1_value = data['f1']
+          elif 'F1' in data:
+              f1_value = data['F1']
           else:
-              print(f'PASS: F1 {f1:.4f} >= threshold {threshold:.4f}')
-          "
+              print("ERROR: benchmark report is missing an f1/F1 field", file=sys.stderr)
+              sys.exit(1)
+          f1 = float(f1_value)
+          print(f"F1 score: {f1:.4f}")
+          print(f"Threshold: {threshold:.4f}")
+          if f1 < threshold:
+              print(f"FAIL: F1 {f1:.4f} is below threshold {threshold:.4f}", file=sys.stderr)
+              sys.exit(1)
+          print(f"PASS: F1 {f1:.4f} >= threshold {threshold:.4f}")
+          EOF
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: ci-benchmark-results
-          path: ci-benchmark-results.json
+          path: |
+            fixtures-benchmark-results.json
+            juliet-benchmark-results.json

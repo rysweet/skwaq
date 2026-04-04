@@ -10,7 +10,7 @@ Replace the sections below with information about your project.
 
 ---
 
-## Project: skwaq
+## Project: pr-cybergym-case-targeting
 
 ## Overview
 
