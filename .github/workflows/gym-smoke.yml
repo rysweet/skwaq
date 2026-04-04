@@ -14,7 +14,7 @@ env:
 jobs:
   gym-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # No timeout: user requirement — this job must not be time-bounded.
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -41,7 +41,8 @@ jobs:
 
   ci-benchmark:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # No timeout: user requirement — this job must not be time-bounded.
+    needs: gym-smoke
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -57,12 +58,12 @@ jobs:
 
       - name: Run juliet subset benchmark (pattern mode)
         run: |
-          if [ -d data/juliet ]; then
-            ./target/debug/skwaq gym run juliet --max-cases "$GYM_JULIET_MAX_CASES" --quick
-            echo "Juliet subset benchmark completed"
-          else
-            echo "Juliet data not available; skipping juliet benchmark"
+          if [ ! -d data/juliet ]; then
+            echo "ERROR: data/juliet directory is absent — juliet benchmark data is required" >&2
+            exit 1
           fi
+          ./target/debug/skwaq gym run juliet --max-cases "$GYM_JULIET_MAX_CASES" --quick
+          echo "Juliet subset benchmark completed"
 
       - name: Generate benchmark report
         run: |
@@ -79,6 +80,9 @@ jobs:
           names = [s.get('name', '') for s in suites] if isinstance(suites, list) else list(suites.keys())
           if not any('fixture' in n.lower() for n in names):
               print("ERROR: fixtures suite missing from benchmark results", file=sys.stderr)
+              sys.exit(1)
+          if not any('juliet' in n.lower() for n in names):
+              print("ERROR: juliet suite missing from benchmark results — fixture-only results are insufficient", file=sys.stderr)
               sys.exit(1)
           print(f"Suite coverage OK: {names}")
           EOF

@@ -21,6 +21,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 const FALLBACK_SOURCE_SCAN_MAX_DEPTH: u32 = 5;
+const CASE_READY_MARKER: &str = ".extracted";
 
 pub struct CyberGymAdapter {
     manifest_path: PathBuf,
@@ -74,10 +75,17 @@ impl BenchmarkAdapter for CyberGymAdapter {
         std::fs::create_dir_all(&cases_dir)?;
 
         for case in &gt.cases {
-            let safe_id = sanitize_case_id(&case.id);
-            let case_dir = cases_dir.join(&safe_id);
-            if case_dir.exists() {
+            let case_dir = case_dir_for_id(&dest, &case.id);
+            if case_is_ready(&case_dir) {
                 continue;
+            }
+            if case_dir.exists() {
+                tracing::warn!(
+                    "CyberGym case {} has a stale partial extraction at {}; re-extracting",
+                    case.id,
+                    case_dir.display()
+                );
+                reset_case_dir(&case_dir)?;
             }
 
             // Determine archive path from task ID (arvo:NNN or oss-fuzz:NNN)
@@ -99,9 +107,10 @@ impl BenchmarkAdapter for CyberGymAdapter {
                     e
                 );
                 // Remove partial extraction
-                let _ = std::fs::remove_dir_all(&case_dir);
+                let _ = reset_case_dir(&case_dir);
                 continue;
             }
+            write_case_ready_marker(&case_dir)?;
         }
 
         std::fs::write(dest.join(".ready"), "")?;
@@ -221,6 +230,37 @@ fn sanitize_case_id(case_id: &str) -> String {
     case_id.replace(':', "_")
 }
 
+fn case_dir_for_id(data_dir: &Path, case_id: &str) -> PathBuf {
+    data_dir.join("cases").join(sanitize_case_id(case_id))
+}
+
+fn case_ready_marker_path(case_dir: &Path) -> PathBuf {
+    case_dir.join(CASE_READY_MARKER)
+}
+
+fn case_is_ready(case_dir: &Path) -> bool {
+    case_dir.is_dir() && case_ready_marker_path(case_dir).is_file()
+}
+
+fn write_case_ready_marker(case_dir: &Path) -> anyhow::Result<()> {
+    std::fs::write(case_ready_marker_path(case_dir), "")?;
+    Ok(())
+}
+
+fn reset_case_dir(case_dir: &Path) -> anyhow::Result<()> {
+    if !case_dir.exists() {
+        return Ok(());
+    }
+
+    let metadata = std::fs::symlink_metadata(case_dir)?;
+    if metadata.is_dir() {
+        std::fs::remove_dir_all(case_dir)?;
+    } else {
+        std::fs::remove_file(case_dir)?;
+    }
+    Ok(())
+}
+
 /// Map a CyberGym task ID to its archive path within the dataset.
 ///
 /// Task IDs are formatted as `arvo:NNN` or `oss-fuzz:NNN`.
@@ -254,9 +294,17 @@ fn ensure_case_extracted(
     case_id: &str,
     is_negative: bool,
 ) -> anyhow::Result<PathBuf> {
-    let case_dir = data_dir.join("cases").join(sanitize_case_id(case_id));
-    if case_dir.exists() {
+    let case_dir = case_dir_for_id(data_dir, case_id);
+    if case_is_ready(&case_dir) {
         return Ok(case_dir);
+    }
+    if case_dir.exists() {
+        tracing::warn!(
+            "CyberGym case {} has a stale partial extraction at {}; re-extracting",
+            case_id,
+            case_dir.display()
+        );
+        reset_case_dir(&case_dir)?;
     }
 
     let archive = archive_path_for_case(&data_dir.join("dataset"), case_id, is_negative);
@@ -270,9 +318,10 @@ fn ensure_case_extracted(
 
     std::fs::create_dir_all(&case_dir)?;
     if let Err(err) = extract_tar_gz(&archive, &case_dir) {
-        let _ = std::fs::remove_dir_all(&case_dir);
+        let _ = reset_case_dir(&case_dir);
         return Err(err);
     }
+    write_case_ready_marker(&case_dir)?;
 
     tracing::info!("CyberGym extracted case {} on demand", case_id);
     Ok(case_dir)
@@ -593,6 +642,63 @@ fn extract_tar_gz(archive: &Path, dest: &Path) -> anyhow::Result<()> {
 mod tests {
     use super::*;
     use crate::ground_truth::TestCase;
+    use flate2::{write::GzEncoder, Compression};
+    use tar::Builder;
+
+    fn write_manifest(path: &Path) {
+        std::fs::write(
+            path,
+            r#"suite = "cybergym"
+version = "test"
+download_url = ""
+download_sha256 = ""
+
+[[cases]]
+id = "arvo:1065"
+path = "cases/arvo:1065"
+expected_cwes = [457]
+is_negative = false
+language = "cpp"
+"#,
+        )
+        .unwrap();
+    }
+
+    fn test_config(cache_dir: PathBuf) -> BenchmarkConfig {
+        BenchmarkConfig {
+            cache_dir,
+            cwe_filter: None,
+            max_cases: None,
+            quick_mode: true,
+            llm_only: false,
+            binary_mode: false,
+            parallelism: 1,
+            skip: 0,
+            concurrency: 1,
+            timeout_secs: 30,
+            holdout_fraction: 0.0,
+            max_improvements_per_cycle: 0,
+        }
+    }
+
+    fn write_test_archive(archive: &Path, entries: &[(&str, &str)]) {
+        let file = std::fs::File::create(archive).unwrap();
+        let encoder = GzEncoder::new(file, Compression::default());
+        let mut builder = Builder::new(encoder);
+
+        for (path, contents) in entries {
+            let mut header = tar::Header::new_gnu();
+            header.set_mode(0o644);
+            header.set_size(contents.len() as u64);
+            header.set_cksum();
+            builder
+                .append_data(&mut header, *path, contents.as_bytes())
+                .unwrap();
+        }
+
+        let encoder = builder.into_inner().unwrap();
+        encoder.finish().unwrap();
+    }
 
     #[test]
     fn test_adapter_name() {
@@ -747,6 +853,11 @@ mod tests {
         std::fs::write(&fix_file, "int parser(void) { return 0; }\n").unwrap();
         std::fs::write(&shared_vul, "int shared(void) { return 7; }\n").unwrap();
         std::fs::write(&shared_fix, "int shared(void) { return 7; }\n").unwrap();
+        // Write the ready marker so ensure_case_extracted treats the fix dir as already extracted.
+        let fix_case_dir = temp.path().join("cases").join("arvo_1065-fix");
+        std::fs::write(fix_case_dir.join(CASE_READY_MARKER), "").unwrap();
+        let vul_case_dir = temp.path().join("cases").join("arvo_1065");
+        std::fs::write(vul_case_dir.join(CASE_READY_MARKER), "").unwrap();
 
         let case = TestCase {
             id: "arvo:1065".to_string(),
@@ -760,5 +871,75 @@ mod tests {
 
         let affected = paired_case_affected_files(&case, temp.path(), &case_dir).unwrap();
         assert_eq!(affected, vec![vul_file]);
+    }
+
+    #[test]
+    fn test_ensure_case_extracted_reextracts_partial_case_without_ready_marker() {
+        let temp = tempfile::tempdir().unwrap();
+        let data_dir = temp.path();
+        let archive = data_dir
+            .join("dataset")
+            .join("data")
+            .join("arvo")
+            .join("1065")
+            .join("repo-vul.tar.gz");
+        std::fs::create_dir_all(archive.parent().unwrap()).unwrap();
+        write_test_archive(
+            &archive,
+            &[(
+                "src-vul/project/parser.c",
+                "int parser(void) { return 0; }\n",
+            )],
+        );
+
+        let case_dir = data_dir.join("cases").join("arvo_1065");
+        std::fs::create_dir_all(&case_dir).unwrap();
+        std::fs::write(case_dir.join("stale.txt"), "stale").unwrap();
+
+        let extracted = ensure_case_extracted(data_dir, "arvo:1065", false).unwrap();
+        assert_eq!(extracted, case_dir);
+        assert!(extracted.join(CASE_READY_MARKER).is_file());
+        assert!(extracted.join("src-vul/project/parser.c").is_file());
+        assert!(!extracted.join("stale.txt").exists());
+    }
+
+    #[tokio::test]
+    async fn test_setup_reextracts_partial_case_without_ready_marker() {
+        let temp = tempfile::tempdir().unwrap();
+        let manifest = temp.path().join("cybergym.toml");
+        write_manifest(&manifest);
+
+        let cache_dir = temp.path().join("cache");
+        let archive = cache_dir
+            .join("cybergym")
+            .join("dataset")
+            .join("data")
+            .join("arvo")
+            .join("1065")
+            .join("repo-vul.tar.gz");
+        std::fs::create_dir_all(archive.parent().unwrap()).unwrap();
+        write_test_archive(
+            &archive,
+            &[(
+                "src-vul/project/parser.c",
+                "int parser(void) { return 0; }\n",
+            )],
+        );
+
+        let case_dir = cache_dir.join("cybergym").join("cases").join("arvo_1065");
+        std::fs::create_dir_all(&case_dir).unwrap();
+        std::fs::write(case_dir.join("stale.txt"), "stale").unwrap();
+
+        let adapter = CyberGymAdapter::new(manifest);
+        let extracted_root = adapter
+            .setup(&test_config(cache_dir.clone()))
+            .await
+            .unwrap();
+
+        assert_eq!(extracted_root, cache_dir.join("cybergym"));
+        assert!(cache_dir.join("cybergym").join(".ready").is_file());
+        assert!(case_dir.join(CASE_READY_MARKER).is_file());
+        assert!(case_dir.join("src-vul/project/parser.c").is_file());
+        assert!(!case_dir.join("stale.txt").exists());
     }
 }
