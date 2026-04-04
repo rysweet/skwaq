@@ -296,7 +296,11 @@ impl Default for ObservabilityConfig {
 
 impl Config {
     pub fn load() -> anyhow::Result<Self> {
-        let config_path = Self::find_config_file();
+        Self::load_from_dir(PathBuf::from("."))
+    }
+
+    pub fn load_from_dir(dir: impl Into<PathBuf>) -> anyhow::Result<Self> {
+        let config_path = Self::find_config_file_from(dir.into());
         match config_path {
             Some(path) => {
                 let content = std::fs::read_to_string(&path)?;
@@ -307,11 +311,11 @@ impl Config {
         }
     }
 
-    fn find_config_file() -> Option<PathBuf> {
-        // Check current directory first, then home
+    fn find_config_file_from(dir: PathBuf) -> Option<PathBuf> {
+        // Check the requested directory first, then home.
         let candidates = [
-            PathBuf::from("skwaq.toml"),
-            PathBuf::from(".skwaq/config.toml"),
+            dir.join("skwaq.toml"),
+            dir.join(".skwaq/config.toml"),
             dirs::home_dir()?.join(".skwaq/config.toml"),
         ];
         candidates.into_iter().find(|p| p.exists())
@@ -329,6 +333,7 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn test_default_llm_backend_stays_copilot_even_with_anthropic_key() {
@@ -344,5 +349,46 @@ mod tests {
             Some(key) => std::env::set_var("ANTHROPIC_API_KEY", key),
             None => std::env::remove_var("ANTHROPIC_API_KEY"),
         }
+    }
+
+    #[test]
+    fn test_load_from_dir_reads_requested_root_config() {
+        let temp = tempdir().unwrap();
+        let repo = temp.path().join("repo");
+        let nested = repo.join("nested");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        std::fs::write(
+            repo.join("skwaq.toml"),
+            r#"
+[general]
+log_level = "warn"
+
+[llm]
+reasoning = "azure"
+decompilation = "azure"
+
+[llm.azure]
+endpoint = "https://example.cognitiveservices.azure.com/"
+deployment = "gpt-54"
+"#,
+        )
+        .unwrap();
+
+        std::fs::write(
+            nested.join("skwaq.toml"),
+            r#"
+[general]
+log_level = "debug"
+"#,
+        )
+        .unwrap();
+
+        let config = Config::load_from_dir(&repo).unwrap();
+        assert_eq!(config.general.log_level, "warn");
+        assert_eq!(config.llm.reasoning, "azure");
+
+        let nested_config = Config::load_from_dir(&nested).unwrap();
+        assert_eq!(nested_config.general.log_level, "debug");
     }
 }

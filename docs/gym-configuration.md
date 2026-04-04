@@ -229,3 +229,15 @@ loading, the profile's LLM config replaces the base `skwaq.toml` LLM config
 entirely.
 
 For the full reference, see [Gym Model Profiles](gym-profiles.md).
+
+### Sharded evals preserve the active profile
+
+`skwaq gym eval` may split work across shard subprocesses when `--procs` is
+greater than 1. Those shard processes are launched from the repository root and
+forward the active `--profile` argument so they load the same base config and
+profile overlay as the parent eval process.
+
+This matters when you launch `gym eval` from a nested working directory or use
+`--profile azure` to route reasoning/decompilation through a non-default
+backend. Without profile/CWD preservation, shards can silently pick a different
+LLM backend than the parent process.

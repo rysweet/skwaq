@@ -395,6 +395,23 @@ fn resolve_gym(
     }
 }
 
+fn load_runtime_config(
+    skwaq_root: &std::path::Path,
+    profile: Option<&str>,
+) -> anyhow::Result<skwaq_core::config::Config> {
+    let base = skwaq_core::config::Config::load_from_dir(skwaq_root)?;
+    match profile {
+        Some(name) => {
+            let pn = skwaq_gym::profiles::ProfileName::new(name)?;
+            let base_dir = skwaq_gym::profiles::default_profiles_base()?;
+            let paths = skwaq_gym::profiles::ProfilePaths::new(&pn, &base_dir);
+            paths.ensure()?;
+            paths.load_merged_config(&base)
+        }
+        None => Ok(base),
+    }
+}
+
 pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
     let skwaq_root = find_skwaq_root()?;
 
@@ -420,12 +437,13 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             profile,
         } => {
             let mut gym = resolve_gym(&skwaq_root, profile.as_deref())?;
+            let runtime_config = load_runtime_config(&skwaq_root, profile.as_deref())?;
             let cwe_filter = parse_optional_cwe_filter(cwe.as_deref())?;
             let binary_mode = !*source_only;
             // Default concurrency: 4 for hybrid mode, 1 for quick mode
             let conc = concurrency.unwrap_or(if *quick { 1 } else { 4 });
             if !quick {
-                ensure_hybrid_benchmark_ready().await?;
+                ensure_hybrid_benchmark_ready_with_llm(&runtime_config.llm).await?;
             }
             gym.run(
                 suite.as_deref(),
@@ -562,7 +580,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             } else {
                 "hybrid"
             };
-            let config = skwaq_core::config::Config::load()?;
+            let config = load_runtime_config(&skwaq_root, profile.as_deref())?;
             if !quick {
                 ensure_hybrid_benchmark_ready_with_llm(&config.llm).await?;
             }
@@ -811,6 +829,8 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                         *quick,
                         *llm_only,
                         *adaptive,
+                        &skwaq_root,
+                        profile.as_deref(),
                     )?;
                     children.push(child);
                 }
@@ -905,6 +925,8 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                                     *quick,
                                     *llm_only,
                                     *adaptive,
+                                    &skwaq_root,
+                                    profile.as_deref(),
                                 ) {
                                     Ok(new_child) => {
                                         children[*idx] = new_child;
@@ -1430,11 +1452,6 @@ fn default_telemetry_dir() -> String {
         .unwrap_or_else(|| "~/.skwaq/telemetry".to_string())
 }
 
-async fn ensure_hybrid_benchmark_ready() -> anyhow::Result<()> {
-    let config = skwaq_core::config::Config::load()?;
-    ensure_hybrid_benchmark_ready_with_llm(&config.llm).await
-}
-
 async fn ensure_hybrid_benchmark_ready_with_llm(
     llm: &skwaq_core::config::LlmConfig,
 ) -> anyhow::Result<()> {
@@ -1777,6 +1794,8 @@ fn spawn_shard(
     quick: bool,
     llm_only: bool,
     adaptive: bool,
+    skwaq_root: &std::path::Path,
+    profile: Option<&str>,
 ) -> anyhow::Result<std::process::Child> {
     let log_path = suite_dir.join(format!("shard-{shard_idx}.log"));
     let stderr_path = suite_dir.join(format!("shard-{shard_idx}.stderr.log"));
@@ -1784,7 +1803,10 @@ fn spawn_shard(
     let stderr_file = std::fs::File::create(&stderr_path)?;
 
     let mut cmd = std::process::Command::new(exe);
-    cmd.env("SKWAQ_GYM_SHARD", shard_idx.to_string())
+    // Run shard from the skwaq root so Config::load() finds skwaq.toml regardless
+    // of the working directory from which `skwaq gym eval` was invoked.
+    cmd.current_dir(skwaq_root)
+        .env("SKWAQ_GYM_SHARD", shard_idx.to_string())
         .args(["gym", "run", suite])
         .args(["--skip", &skip.to_string()])
         .args(["--max-cases", &cases_per.to_string()])
@@ -1798,6 +1820,12 @@ fn spawn_shard(
         ])
         .stdout(log_file)
         .stderr(stderr_file);
+
+    // Forward the profile so shards use the same LLM backend override as the
+    // parent eval process (e.g. --profile azure).
+    if let Some(p) = profile {
+        cmd.args(["--profile", p]);
+    }
 
     if quick {
         cmd.arg("--quick");
@@ -1965,6 +1993,7 @@ mod tests {
     use clap::{CommandFactory, Parser};
     use skwaq_gym::{
         history::RunMetadata,
+        profiles::{ProfileName, ProfilePaths},
         reporting::json_report::{JsonCweResult, JsonReport},
     };
     use tempfile::tempdir;
@@ -2081,6 +2110,83 @@ mod tests {
                 clamped: false,
             }
         );
+    }
+
+    #[test]
+    fn test_load_runtime_config_uses_root_config_and_profile_overlay() {
+        let temp = tempdir().unwrap();
+        let repo = temp.path().join("repo");
+        let nested = repo.join("nested");
+        let temp_home = temp.path().join("home");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::create_dir_all(&temp_home).unwrap();
+
+        std::fs::write(
+            repo.join("skwaq.toml"),
+            r#"
+[general]
+log_level = "warn"
+
+[llm]
+reasoning = "copilot"
+decompilation = "copilot"
+"#,
+        )
+        .unwrap();
+        std::fs::create_dir_all(nested.join(".skwaq")).unwrap();
+        std::fs::write(
+            nested.join(".skwaq/config.toml"),
+            r#"
+[general]
+log_level = "debug"
+
+[llm]
+reasoning = "copilot"
+decompilation = "copilot"
+"#,
+        )
+        .unwrap();
+
+        let profiles_base = temp_home.join(".skwaq/profiles");
+        std::fs::create_dir_all(&profiles_base).unwrap();
+        let name = ProfileName::new("azure").unwrap();
+        let paths = ProfilePaths::new(&name, &profiles_base);
+        paths.ensure().unwrap();
+        std::fs::write(
+            paths.config_path(),
+            r#"
+[llm]
+reasoning = "azure"
+decompilation = "azure"
+
+[llm.azure]
+endpoint = "https://example.cognitiveservices.azure.com/"
+deployment = "gpt-54-test"
+"#,
+        )
+        .unwrap();
+
+        let original_cwd = std::env::current_dir().unwrap();
+        let original_home = std::env::var("HOME").ok();
+        std::env::set_current_dir(&nested).unwrap();
+        std::env::set_var("HOME", &temp_home);
+
+        let config = load_runtime_config(&repo, Some("azure")).unwrap();
+
+        std::env::set_current_dir(original_cwd).unwrap();
+        match original_home {
+            Some(home) => std::env::set_var("HOME", home),
+            None => std::env::remove_var("HOME"),
+        }
+
+        assert_eq!(config.general.log_level, "warn");
+        assert_eq!(config.llm.reasoning, "azure");
+        assert_eq!(config.llm.decompilation, "azure");
+        assert_eq!(
+            config.llm.azure.endpoint,
+            "https://example.cognitiveservices.azure.com/"
+        );
+        assert_eq!(config.llm.azure.deployment, "gpt-54-test");
     }
 
     #[test]
