@@ -56,6 +56,48 @@ jobs:
           ./target/debug/skwaq gym run fixtures --quick
           echo "Fixtures benchmark completed"
 
+      - name: Generate fixtures benchmark report
+        run: |
+          ./target/debug/skwaq gym report --format json > fixtures-benchmark-results.json
+          cat fixtures-benchmark-results.json
+
+      - name: Assert fixtures benchmark report
+        run: |
+          python3 - <<'EOF'
+          import json, sys
+          with open('fixtures-benchmark-results.json') as f:
+              data = json.load(f)
+          if data.get('suite') != 'fixtures':
+              print(f"ERROR: expected fixtures report, got {data.get('suite')!r}", file=sys.stderr)
+              sys.exit(1)
+          if 'f1' not in data and 'F1' not in data:
+              print("ERROR: fixtures report is missing an f1/F1 field", file=sys.stderr)
+              sys.exit(1)
+          EOF
+
+      - name: Check fixtures F1 threshold
+        run: |
+          python3 - <<'EOF'
+          import json, sys, os
+          threshold = float(os.environ['GYM_F1_THRESHOLD'])
+          with open('fixtures-benchmark-results.json') as f:
+              data = json.load(f)
+          if 'f1' in data:
+              f1_value = data['f1']
+          elif 'F1' in data:
+              f1_value = data['F1']
+          else:
+              print("ERROR: fixtures report is missing an f1/F1 field", file=sys.stderr)
+              sys.exit(1)
+          f1 = float(f1_value)
+          print(f"Fixtures F1 score: {f1:.4f}")
+          print(f"Threshold: {threshold:.4f}")
+          if f1 < threshold:
+              print(f"FAIL: fixtures F1 {f1:.4f} is below threshold {threshold:.4f}", file=sys.stderr)
+              sys.exit(1)
+          print(f"PASS: fixtures F1 {f1:.4f} >= threshold {threshold:.4f}")
+          EOF
+
       - name: Run juliet subset benchmark (pattern mode)
         run: |
           if [ ! -d data/juliet ]; then
@@ -65,26 +107,23 @@ jobs:
           ./target/debug/skwaq gym run juliet --max-cases "$GYM_JULIET_MAX_CASES" --quick
           echo "Juliet subset benchmark completed"
 
-      - name: Generate benchmark report
+      - name: Generate juliet benchmark report
         run: |
-          ./target/debug/skwaq gym report --format json > ci-benchmark-results.json
-          cat ci-benchmark-results.json
+          ./target/debug/skwaq gym report --format json > juliet-benchmark-results.json
+          cat juliet-benchmark-results.json
 
-      - name: Assert suite coverage
+      - name: Assert juliet benchmark report
         run: |
           python3 - <<'EOF'
           import json, sys
-          with open('ci-benchmark-results.json') as f:
+          with open('juliet-benchmark-results.json') as f:
               data = json.load(f)
-          suites = data.get('suites', [])
-          names = [s.get('name', '') for s in suites] if isinstance(suites, list) else list(suites.keys())
-          if not any('fixture' in n.lower() for n in names):
-              print("ERROR: fixtures suite missing from benchmark results", file=sys.stderr)
+          if data.get('suite') != 'juliet':
+              print(f"ERROR: expected juliet report, got {data.get('suite')!r}", file=sys.stderr)
               sys.exit(1)
-          if not any('juliet' in n.lower() for n in names):
-              print("ERROR: juliet suite missing from benchmark results — fixture-only results are insufficient", file=sys.stderr)
+          if 'f1' not in data and 'F1' not in data:
+              print("ERROR: juliet report is missing an f1/F1 field", file=sys.stderr)
               sys.exit(1)
-          print(f"Suite coverage OK: {names}")
           EOF
 
       - name: Check F1 threshold
@@ -92,9 +131,16 @@ jobs:
           python3 - <<'EOF'
           import json, sys, os
           threshold = float(os.environ['GYM_F1_THRESHOLD'])
-          with open('ci-benchmark-results.json') as f:
+          with open('juliet-benchmark-results.json') as f:
               data = json.load(f)
-          f1 = float(data.get('f1', data.get('F1', 0)))
+          if 'f1' in data:
+              f1_value = data['f1']
+          elif 'F1' in data:
+              f1_value = data['F1']
+          else:
+              print("ERROR: benchmark report is missing an f1/F1 field", file=sys.stderr)
+              sys.exit(1)
+          f1 = float(f1_value)
           print(f"F1 score: {f1:.4f}")
           print(f"Threshold: {threshold:.4f}")
           if f1 < threshold:
@@ -107,4 +153,6 @@ jobs:
         if: always()
         with:
           name: ci-benchmark-results
-          path: ci-benchmark-results.json
+          path: |
+            fixtures-benchmark-results.json
+            juliet-benchmark-results.json
