@@ -229,3 +229,32 @@ loading, the profile's LLM config replaces the base `skwaq.toml` LLM config
 entirely.
 
 For the full reference, see [Gym Model Profiles](gym-profiles.md).
+
+## CI Workflow Timeouts
+
+The gym runs in two CI jobs defined in `.github/workflows/gym-smoke.yml`,
+triggered on every pull request:
+
+| Job | Purpose | `timeout-minutes` |
+|-----|---------|-------------------|
+| `gym-smoke` | Quick smoke test (5 fixture cases) | none (GitHub default: 360) |
+| `ci-benchmark` | Full fixtures + juliet subset with F1 gate | 20 |
+
+The `ci-benchmark` job timeout covers the entire job: checkout, Rust toolchain
+install, dependency caching, `cargo build`, two benchmark runs, report
+generation, F1 threshold check, and artifact upload. On a cold cache the Rust
+build alone can take 8–12 minutes on `ubuntu-latest`, so the 20-minute budget
+provides headroom without masking runaway builds.
+
+### F1 Threshold Gate
+
+The `ci-benchmark` job fails the PR if the reported F1 score falls below the
+`GYM_F1_THRESHOLD` environment variable (currently `0.10`). Adjust this value
+in the workflow file as detection improves.
+
+### Adjusting the Timeout
+
+If the workspace grows significantly or CI runners slow down, increase
+`timeout-minutes` in the `ci-benchmark` job. A value of 20–30 minutes is
+appropriate for a workspace of this size. Avoid removing the timeout entirely —
+an explicit cap prevents runaway builds from consuming CI minutes.

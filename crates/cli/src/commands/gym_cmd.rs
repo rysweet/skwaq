@@ -811,6 +811,8 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                         *quick,
                         *llm_only,
                         *adaptive,
+                        &skwaq_root,
+                        profile.as_deref(),
                     )?;
                     children.push(child);
                 }
@@ -905,6 +907,8 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                                     *quick,
                                     *llm_only,
                                     *adaptive,
+                                    &skwaq_root,
+                                    profile.as_deref(),
                                 ) {
                                     Ok(new_child) => {
                                         children[*idx] = new_child;
@@ -1777,6 +1781,8 @@ fn spawn_shard(
     quick: bool,
     llm_only: bool,
     adaptive: bool,
+    skwaq_root: &std::path::Path,
+    profile: Option<&str>,
 ) -> anyhow::Result<std::process::Child> {
     let log_path = suite_dir.join(format!("shard-{shard_idx}.log"));
     let stderr_path = suite_dir.join(format!("shard-{shard_idx}.stderr.log"));
@@ -1784,7 +1790,10 @@ fn spawn_shard(
     let stderr_file = std::fs::File::create(&stderr_path)?;
 
     let mut cmd = std::process::Command::new(exe);
-    cmd.env("SKWAQ_GYM_SHARD", shard_idx.to_string())
+    // Run shard from the skwaq root so Config::load() finds skwaq.toml regardless
+    // of the working directory from which `skwaq gym eval` was invoked.
+    cmd.current_dir(skwaq_root)
+        .env("SKWAQ_GYM_SHARD", shard_idx.to_string())
         .args(["gym", "run", suite])
         .args(["--skip", &skip.to_string()])
         .args(["--max-cases", &cases_per.to_string()])
@@ -1798,6 +1807,12 @@ fn spawn_shard(
         ])
         .stdout(log_file)
         .stderr(stderr_file);
+
+    // Forward the profile so shards use the same LLM backend override as the
+    // parent eval process (e.g. --profile azure).
+    if let Some(p) = profile {
+        cmd.args(["--profile", p]);
+    }
 
     if quick {
         cmd.arg("--quick");
