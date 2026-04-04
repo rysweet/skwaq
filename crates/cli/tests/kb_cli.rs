@@ -59,12 +59,26 @@ fn test_kb_init_populates_cwe_catalog_via_cli() {
 #[test]
 fn test_kb_search_json_returns_cwe_and_pack_results() {
     let workspace = create_temp_workspace();
+    std::fs::write(
+        workspace
+            .path()
+            .join("data")
+            .join("knowledge")
+            .join("durable-memory-lessons.md"),
+        "# Durable Memory Lessons\n\nUse durable memory lessons xyzunique to reason about buffer overflow triage.",
+    )
+    .unwrap();
     let init = run_cli(workspace.path(), &["kb", "init"]);
     assert!(init.status.success(), "{init:?}");
 
     let output = run_cli(
         workspace.path(),
-        &["kb", "search", "cwe-119 buffer overflow", "--json"],
+        &[
+            "kb",
+            "search",
+            "cwe-119 durable memory lessons xyzunique",
+            "--json",
+        ],
     );
     assert!(output.status.success(), "{output:?}");
 
