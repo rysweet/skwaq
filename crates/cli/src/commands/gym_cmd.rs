@@ -598,6 +598,10 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 PathBuf::from(format!("/tmp/gym-eval-{}", ts))
             });
             std::fs::create_dir_all(&eval_dir)?;
+            // Canonicalize to an absolute path so shard subprocesses (which run
+            // with current_dir(skwaq_root)) resolve all output paths correctly
+            // when a relative --output path (e.g. ./results) was supplied.
+            let eval_dir = eval_dir.canonicalize()?;
 
             // Start Prometheus metrics server if requested.
             if let Some(&port) = metrics_port.as_ref() {
@@ -1996,7 +2000,13 @@ mod tests {
         profiles::{ProfileName, ProfilePaths},
         reporting::json_report::{JsonCweResult, JsonReport},
     };
+    use std::sync::{Mutex, OnceLock};
     use tempfile::tempdir;
+
+    fn cwd_test_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
 
     #[test]
     fn test_parse_cwe_number_plain() {
@@ -2114,6 +2124,7 @@ mod tests {
 
     #[test]
     fn test_load_runtime_config_uses_root_config_and_profile_overlay() {
+        let _lock = cwd_test_lock().lock().unwrap();
         let temp = tempdir().unwrap();
         let repo = temp.path().join("repo");
         let nested = repo.join("nested");
@@ -2168,12 +2179,14 @@ deployment = "gpt-54-test"
 
         let original_cwd = std::env::current_dir().unwrap();
         let original_home = std::env::var("HOME").ok();
-        std::env::set_current_dir(&nested).unwrap();
-        std::env::set_var("HOME", &temp_home);
+        let config = {
+            std::env::set_current_dir(&nested).unwrap();
+            std::env::set_var("HOME", &temp_home);
+            let result = load_runtime_config(&repo, Some("azure"));
+            std::env::set_current_dir(&original_cwd).unwrap();
+            result.unwrap()
+        };
 
-        let config = load_runtime_config(&repo, Some("azure")).unwrap();
-
-        std::env::set_current_dir(original_cwd).unwrap();
         match original_home {
             Some(home) => std::env::set_var("HOME", home),
             None => std::env::remove_var("HOME"),
@@ -2390,5 +2403,66 @@ deployment = "gpt-54-test"
         assert_eq!(summary.shard_reports, 1);
         assert_eq!(summary.expected_shards, 2);
         assert!(summary.partial);
+    }
+
+    // ── Relative eval_dir path normalization tests ────────────────────────────
+
+    /// Simulates invoking `skwaq gym eval --output ./results` from a nested
+    /// subdirectory. Verifies that canonicalizing eval_dir after create_dir_all
+    /// produces an absolute path, so shard subprocesses running from skwaq_root
+    /// resolve output files under the caller's cwd rather than skwaq_root.
+    #[test]
+    fn test_eval_dir_relative_path_is_canonicalized_from_nested_cwd() {
+        let _lock = cwd_test_lock().lock().unwrap();
+        let base = tempdir().unwrap();
+        let nested = base.path().join("subdir");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        let original_cwd = std::env::current_dir().unwrap();
+        let canonical = {
+            std::env::set_current_dir(&nested).unwrap();
+            let relative_output = PathBuf::from("results");
+            std::fs::create_dir_all(&relative_output).unwrap();
+            let canonical = relative_output.canonicalize().unwrap();
+            std::env::set_current_dir(&original_cwd).unwrap();
+            canonical
+        };
+
+        assert!(
+            canonical.is_absolute(),
+            "canonicalized eval_dir must be absolute, got: {}",
+            canonical.display()
+        );
+        // Must resolve under the nested subdir, not under original_cwd or base.
+        assert!(
+            canonical.starts_with(&nested),
+            "expected canonical path under {}, got {}",
+            nested.display(),
+            canonical.display()
+        );
+    }
+
+    /// Verifies that paths derived from an absolute eval_dir (suite_dir, shard
+    /// JSON path, log paths) are all absolute — meaning shard subprocesses
+    /// running with a different current_dir will write to the correct location.
+    #[test]
+    fn test_shard_paths_derived_from_absolute_eval_dir_are_absolute() {
+        let base = tempdir().unwrap();
+        let eval_dir = base.path().to_path_buf(); // already absolute (tempdir)
+        assert!(eval_dir.is_absolute());
+
+        let suite_dir = eval_dir.join("fixtures");
+        std::fs::create_dir_all(&suite_dir).unwrap();
+
+        let json_path = suite_dir.join("shard-0.json");
+        let log_path = suite_dir.join("shard-0.log");
+        let stderr_path = suite_dir.join("shard-0.stderr.log");
+
+        assert!(json_path.is_absolute(), "shard JSON path must be absolute");
+        assert!(log_path.is_absolute(), "shard log path must be absolute");
+        assert!(
+            stderr_path.is_absolute(),
+            "shard stderr path must be absolute"
+        );
     }
 }
