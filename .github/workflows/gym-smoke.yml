@@ -1,14 +1,20 @@
 name: Gym Smoke
 on: [pull_request]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   # Minimum F1 score (0.0-1.0) required to pass the benchmark gate.
-  # Adjust as detection improves. Current baseline: 0.10 (10%).
   GYM_F1_THRESHOLD: "0.10"
+  GYM_SMOKE_MAX_CASES: "5"
+  GYM_JULIET_MAX_CASES: "20"
 
 jobs:
   gym-smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -19,7 +25,7 @@ jobs:
 
       - name: Gym smoke test (fixtures, pattern mode)
         run: |
-          ./target/debug/skwaq gym run fixtures --max-cases 5 --quick
+          ./target/debug/skwaq gym run fixtures --max-cases "$GYM_SMOKE_MAX_CASES" --quick
           echo "Gym smoke test passed"
 
       - name: Gym report (JSON)
@@ -28,12 +34,14 @@ jobs:
           cat gym-smoke-results.json
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: gym-smoke-results
           path: gym-smoke-results.json
 
   ci-benchmark:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -47,42 +55,52 @@ jobs:
           ./target/debug/skwaq gym run fixtures --quick
           echo "Fixtures benchmark completed"
 
-      - name: Run juliet subset benchmark (20 cases, pattern mode)
+      - name: Run juliet subset benchmark (pattern mode)
         run: |
-          ./target/debug/skwaq gym run juliet --max-cases 20 --quick || true
-          echo "Juliet subset benchmark completed (may skip if data not available)"
+          if [ -d data/juliet ]; then
+            ./target/debug/skwaq gym run juliet --max-cases "$GYM_JULIET_MAX_CASES" --quick
+            echo "Juliet subset benchmark completed"
+          else
+            echo "Juliet data not available; skipping juliet benchmark"
+          fi
 
       - name: Generate benchmark report
         run: |
           ./target/debug/skwaq gym report --format json > ci-benchmark-results.json
           cat ci-benchmark-results.json
 
+      - name: Assert suite coverage
+        run: |
+          python3 - <<'EOF'
+          import json, sys
+          with open('ci-benchmark-results.json') as f:
+              data = json.load(f)
+          suites = data.get('suites', [])
+          names = [s.get('name', '') for s in suites] if isinstance(suites, list) else list(suites.keys())
+          if not any('fixture' in n.lower() for n in names):
+              print("ERROR: fixtures suite missing from benchmark results", file=sys.stderr)
+              sys.exit(1)
+          print(f"Suite coverage OK: {names}")
+          EOF
+
       - name: Check F1 threshold
         run: |
-          F1=$(python3 -c "
-          import json, sys
-          try:
-              data = json.load(open('ci-benchmark-results.json'))
-              f1 = float(data.get('f1', data.get('F1', 0)))
-              print(f'{f1:.4f}')
-          except Exception as e:
-              print(f'Warning: could not parse results: {e}', file=sys.stderr)
-              print('0.0')
-          ")
-          echo "F1 score: $F1"
-          echo "Threshold: $GYM_F1_THRESHOLD"
-          python3 -c "
-          import sys
-          f1 = float('$F1')
-          threshold = float('$GYM_F1_THRESHOLD')
+          python3 - <<'EOF'
+          import json, sys, os
+          threshold = float(os.environ['GYM_F1_THRESHOLD'])
+          with open('ci-benchmark-results.json') as f:
+              data = json.load(f)
+          f1 = float(data.get('f1', data.get('F1', 0)))
+          print(f"F1 score: {f1:.4f}")
+          print(f"Threshold: {threshold:.4f}")
           if f1 < threshold:
-              print(f'FAIL: F1 {f1:.4f} is below threshold {threshold:.4f}')
+              print(f"FAIL: F1 {f1:.4f} is below threshold {threshold:.4f}", file=sys.stderr)
               sys.exit(1)
-          else:
-              print(f'PASS: F1 {f1:.4f} >= threshold {threshold:.4f}')
-          "
+          print(f"PASS: F1 {f1:.4f} >= threshold {threshold:.4f}")
+          EOF
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: ci-benchmark-results
           path: ci-benchmark-results.json
