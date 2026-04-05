@@ -33,12 +33,14 @@ pub struct Gym {
     pub history_db: HistoryDb,
     adapters: Vec<Box<dyn BenchmarkAdapter>>,
     config: BenchmarkConfig,
+    llm_config: skwaq_core::config::LlmConfig,
     skwaq_root: PathBuf,
     profile_name: Option<String>,
 }
 
 impl Gym {
     pub fn new(skwaq_root: PathBuf) -> anyhow::Result<Self> {
+        let llm_config = skwaq_core::config::Config::load_from_dir(&skwaq_root)?.llm;
         let gym_dir = dirs::data_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("skwaq")
@@ -136,6 +138,7 @@ impl Gym {
             history_db,
             adapters,
             config,
+            llm_config,
             skwaq_root,
             profile_name: None,
         })
@@ -150,6 +153,8 @@ impl Gym {
         profile_paths: &profiles::ProfilePaths,
         profile_name: &str,
     ) -> anyhow::Result<Self> {
+        let base_config = skwaq_core::config::Config::load_from_dir(&skwaq_root)?;
+        let llm_config = profile_paths.load_merged_config(&base_config)?.llm;
         let history_db = HistoryDb::open(&profile_paths.results_db_path())?;
 
         let gym_dir = dirs::data_dir()
@@ -243,6 +248,7 @@ impl Gym {
             history_db,
             adapters: adapter_list,
             config,
+            llm_config,
             skwaq_root,
             profile_name: Some(profile_name.to_string()),
         })
@@ -331,8 +337,12 @@ impl Gym {
             let suite_name = adapter.name().to_string();
             tracing::info!("Running {} benchmark...", suite_name);
 
-            let run_metadata =
-                build_run_metadata(&self.skwaq_root, &config, self.profile_name.as_deref());
+            let run_metadata = build_run_metadata(
+                &self.skwaq_root,
+                &config,
+                &self.llm_config,
+                self.profile_name.as_deref(),
+            );
             adapter.validate_config(&config)?;
             let gt = adapter.ground_truth()?;
             let data_dir = adapter.setup(&config).await?;
@@ -1049,12 +1059,12 @@ fn get_git_dirty(repo: &std::path::Path) -> anyhow::Result<bool> {
 fn build_run_metadata(
     repo: &std::path::Path,
     config: &BenchmarkConfig,
+    llm: &skwaq_core::config::LlmConfig,
     profile_name: Option<&str>,
 ) -> history::RunMetadata {
-    let llm = skwaq_core::config::Config::load().unwrap_or_default().llm;
     history::RunMetadata {
         llm_backend: llm.reasoning.trim().to_string(),
-        llm_model: llm.copilot.model,
+        llm_model: llm.copilot.model.clone(),
         run_mode: if config.quick_mode {
             "pattern-only".to_string()
         } else if config.llm_only {
