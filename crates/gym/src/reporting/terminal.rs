@@ -4,7 +4,19 @@ use crate::history::{BenchmarkRun, CaseRegression};
 use crate::scoring::{self, AggregateScore};
 
 /// Print a summary of benchmark results.
+///
+/// `content_filtered` is the number of cases blocked by Azure content filters
+/// and excluded from scoring. Pass 0 when not applicable (e.g. historical runs).
 pub fn print_summary(score: &AggregateScore, suite: &str) {
+    print_summary_with_content_filtered(score, suite, 0);
+}
+
+/// Print a summary with explicit content-filtered count.
+pub fn print_summary_with_content_filtered(
+    score: &AggregateScore,
+    suite: &str,
+    content_filtered: u32,
+) {
     println!("\n{}", "=".repeat(70));
     println!("  SKWAQ GYM RESULTS: {}", suite.to_uppercase());
     println!("{}", "=".repeat(70));
@@ -13,10 +25,24 @@ pub fn print_summary(score: &AggregateScore, suite: &str) {
     println!("  Recall:     {:.1}%", score.recall * 100.0);
     println!("  F1 Score:   {:.1}%", score.f1 * 100.0);
     println!();
-    println!(
-        "  TP: {}  FP: {}  FN: {}  TN: {}",
-        score.true_positives, score.false_positives, score.false_negatives, score.true_negatives
-    );
+    if content_filtered > 0 {
+        println!(
+            "  TP: {}  FP: {}  FN: {}  TN: {}  Content-Filtered: {}",
+            score.true_positives,
+            score.false_positives,
+            score.false_negatives,
+            score.true_negatives,
+            content_filtered
+        );
+    } else {
+        println!(
+            "  TP: {}  FP: {}  FN: {}  TN: {}",
+            score.true_positives,
+            score.false_positives,
+            score.false_negatives,
+            score.true_negatives
+        );
+    }
     println!();
 
     let mut cwes: Vec<_> = score.per_cwe.values().collect();
