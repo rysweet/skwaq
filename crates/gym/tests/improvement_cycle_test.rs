@@ -52,6 +52,7 @@ fn make_cycle_with_proposals(proposals: Vec<Improvement>) -> ImprovementCycle {
         holdout_case_count: 0,
         training_case_count: 0,
         cross_validation_pending: vec![],
+        run_metadata: None,
     }
 }
 
@@ -89,7 +90,10 @@ fn make_new_pattern_proposal(regex: &str, cwes: Vec<u32>, target: PathBuf) -> Im
 fn test_apply_empty_cycle_returns_zero() {
     let cycle = make_cycle_with_proposals(vec![]);
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
-    assert_eq!(applied, 0, "Empty cycle should apply zero proposals");
+    assert_eq!(
+        applied.applied, 0,
+        "Empty cycle should apply zero proposals"
+    );
 }
 
 #[test]
@@ -110,7 +114,10 @@ fn test_apply_skips_non_pattern_proposals() {
     }]);
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
-    assert_eq!(applied, 0, "AgentPrompt proposals should be skipped");
+    assert_eq!(
+        applied.applied, 0,
+        "AgentPrompt proposals should be skipped"
+    );
 }
 
 #[test]
@@ -131,7 +138,10 @@ fn test_apply_skips_empty_replace_proposals() {
     }]);
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
-    assert_eq!(applied, 0, "Empty-replace proposals should be skipped");
+    assert_eq!(
+        applied.applied, 0,
+        "Empty-replace proposals should be skipped"
+    );
 }
 
 #[test]
@@ -143,7 +153,10 @@ fn test_apply_skips_nonexistent_target_file() {
     )]);
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
-    assert_eq!(applied, 0, "Non-existent target file should be skipped");
+    assert_eq!(
+        applied.applied, 0,
+        "Non-existent target file should be skipped"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -173,7 +186,7 @@ fn test_apply_inserts_structured_source_pattern() {
     )]);
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
-    assert_eq!(applied, 1, "Should apply one proposal");
+    assert_eq!(applied.applied, 1, "Should apply one proposal");
 
     let result = std::fs::read_to_string(tmp.path()).unwrap();
 
@@ -266,7 +279,7 @@ fn test_apply_replace_mode() {
     }]);
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
-    assert_eq!(applied, 1);
+    assert_eq!(applied.applied, 1);
 
     let result = std::fs::read_to_string(tmp.path()).unwrap();
     assert_eq!(result, "NEW_PATTERN_HERE");
@@ -293,7 +306,10 @@ fn test_apply_replace_mode_skips_when_find_text_missing() {
     }]);
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
-    assert_eq!(applied, 0, "Should skip when find text is not present");
+    assert_eq!(
+        applied.applied, 0,
+        "Should skip when find text is not present"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -694,6 +710,7 @@ fn test_cycle_tracks_holdout_and_training_counts() {
         holdout_case_count: 4,
         training_case_count: 16,
         cross_validation_pending: vec!["juliet".to_string(), "owasp".to_string()],
+        run_metadata: None,
     };
 
     assert_eq!(cycle.holdout_case_count, 4);

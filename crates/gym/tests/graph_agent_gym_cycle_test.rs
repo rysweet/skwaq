@@ -59,6 +59,7 @@ fn make_cycle_with_proposals(proposals: Vec<Improvement>) -> ImprovementCycle {
         holdout_case_count: 0,
         training_case_count: 0,
         cross_validation_pending: vec![],
+        run_metadata: None,
     }
 }
 
@@ -148,7 +149,7 @@ fn test_agent_prompt_append_mode() {
     )]);
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
-    assert_eq!(applied, 1, "AgentPrompt append should succeed");
+    assert_eq!(applied.applied, 1, "AgentPrompt append should succeed");
 
     let result = std::fs::read_to_string(tmp.path()).unwrap();
     assert!(
@@ -182,7 +183,7 @@ fn test_agent_prompt_replace_mode() {
     }]);
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
-    assert_eq!(applied, 1, "AgentPrompt replace should succeed");
+    assert_eq!(applied.applied, 1, "AgentPrompt replace should succeed");
 
     let result = std::fs::read_to_string(tmp.path()).unwrap();
     assert!(
@@ -217,7 +218,7 @@ fn test_agent_prompt_rejects_path_traversal() {
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
     assert_eq!(
-        applied, 0,
+        applied.applied, 0,
         "AgentPrompt targeting /etc/passwd must be rejected"
     );
 }
@@ -240,7 +241,7 @@ fn test_agent_prompt_allows_agents_directory() {
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
     assert_eq!(
-        applied, 1,
+        applied.applied, 1,
         "AgentPrompt targeting .md file should be allowed"
     );
 }
@@ -267,7 +268,7 @@ fn test_agent_prompt_skips_when_find_text_missing() {
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
     assert_eq!(
-        applied, 0,
+        applied.applied, 0,
         "AgentPrompt replace should skip when find text is missing"
     );
 }
@@ -285,7 +286,7 @@ fn test_taint_rule_skipped_without_db() {
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
     assert_eq!(
-        applied, 0,
+        applied.applied, 0,
         "TaintRule requires DB connection — should skip with db=None"
     );
 }
@@ -300,7 +301,7 @@ fn test_taint_rule_rejects_wrong_field_count() {
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
     assert_eq!(
-        applied, 0,
+        applied.applied, 0,
         "TaintRule with wrong field count should be rejected"
     );
 }
@@ -313,7 +314,7 @@ fn test_taint_rule_rejects_oversized_fields() {
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
     assert_eq!(
-        applied, 0,
+        applied.applied, 0,
         "TaintRule with field > 256 chars should be rejected"
     );
 }
@@ -327,7 +328,7 @@ fn test_taint_rule_rejects_five_fields() {
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
     assert_eq!(
-        applied, 0,
+        applied.applied, 0,
         "TaintRule with 5 pipe-delimited fields should be rejected"
     );
 }
@@ -354,7 +355,10 @@ fn test_cwe_mapping_append_at_insertion_point() {
     )]);
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
-    assert_eq!(applied, 1, "CweMapping should insert before _ => None");
+    assert_eq!(
+        applied.applied, 1,
+        "CweMapping should insert before _ => None"
+    );
 
     let result = std::fs::read_to_string(tmp.path()).unwrap();
     assert!(
@@ -396,7 +400,7 @@ fn test_cwe_mapping_replace_mode() {
     }]);
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
-    assert_eq!(applied, 1);
+    assert_eq!(applied.applied, 1);
 
     let result = std::fs::read_to_string(tmp.path()).unwrap();
     assert_eq!(result, "NEW_CWE_MAPPING");
@@ -424,7 +428,7 @@ fn test_cwe_mapping_skips_when_find_text_missing() {
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
     assert_eq!(
-        applied, 0,
+        applied.applied, 0,
         "CweMapping should skip when find text is missing"
     );
 }
@@ -442,7 +446,7 @@ fn test_cwe_mapping_fallback_append_when_no_insertion_point() {
     )]);
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
-    assert_eq!(applied, 1, "CweMapping should fallback to append");
+    assert_eq!(applied.applied, 1, "CweMapping should fallback to append");
 
     let result = std::fs::read_to_string(tmp.path()).unwrap();
     assert!(
@@ -509,7 +513,7 @@ fn test_mixed_proposal_types_apply_independently() {
 
     // NewPattern + AgentPrompt + CweMapping = 3 applied, TaintRule skipped (no DB)
     assert_eq!(
-        applied, 3,
+        applied.applied, 3,
         "Should apply NewPattern + AgentPrompt + CweMapping, skip TaintRule without DB"
     );
 }
@@ -1123,7 +1127,7 @@ fn test_new_pattern_rejects_regex_with_double_quotes() {
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
     assert_eq!(
-        applied, 0,
+        applied.applied, 0,
         "Regex containing double quotes must be rejected to prevent code injection"
     );
 }
@@ -1151,7 +1155,7 @@ fn test_ground_truth_fix_skipped() {
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
     assert_eq!(
-        applied, 0,
+        applied.applied, 0,
         "GroundTruthFix proposals should not be automatically applied"
     );
 }
@@ -1236,6 +1240,7 @@ fn test_cycle_proposals_and_reviewed_proposals_are_disjoint() {
         holdout_case_count: 4,
         training_case_count: 16,
         cross_validation_pending: vec![],
+        run_metadata: None,
     };
 
     // proposals should only contain accepted/modified proposals
@@ -1386,7 +1391,8 @@ fn test_pattern_ceiling_guard() {
     // This test documents the EXPECTED behavior — it may fail until
     // the pattern ceiling guard is implemented
     assert!(
-        applied <= 2,
-        "Pattern ceiling (~500) should limit insertions: applied {applied} when 498 exist"
+        applied.applied <= 2,
+        "Pattern ceiling (~500) should limit insertions: applied {:?} when 498 exist",
+        applied
     );
 }

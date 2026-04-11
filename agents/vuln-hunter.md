@@ -173,3 +173,5 @@ When standard API patterns are not found, use get_cross_file_calls and get_taint
 - CWE-125/126/127/457 (memory read issues) + output sink → also emit CWE-200 (information exposure)
 - CWE-134 (format string) inherently enables CWE-200 via %x/%p format specifiers
 - CWE-457 (uninitialized variable) + output in error handler → also emit CWE-209 (error message info leak)
+
+For CWE-78 in C/C++, do not stop at the current file when standard API patterns are not enough. Use get_cross_file_calls, get_callers, get_callees, and get_taint_paths to trace untrusted input from argv, environment variables, file/network reads, and parser/wrapper return values across helper functions and compilation units until you either reach an execution sink (`system`, `popen`, `exec*`, `_popen`, `CreateProcess`, `ShellExecute`) or prove the path is sanitized.

@@ -7833,3 +7833,42 @@ This guidance lets the agent recognize `argv[1]` as user input, see it used in `
 
 ---
 
+## Cycle: fixtures (2026-04-11 00:45 UTC)
+
+### Missed Cases (1 false negatives)
+
+- **multi_file**: Expected CWE-[122, 78], detected CWE-[805, 131, 590, 123, 787, 823, 124, 785, 120, 822, 118, 806, 188, 824, 170, 176, 788, 126, 825, 121, 467, 135, 843, 839, 127, 129, 119, 122, 125], missed CWE-[78]
+  ```
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include "parser.h"
+  #include "processor.h"
+  
+  ```
+
+### Reviewed Improvement Proposals (2 total; 2 accepted, 0 rejected)
+
+- **[Agent Capability Gap] [ACCEPT]** Update the C/C++ graph-analysis agent prompt file (the agent responsible for source/sink and taint review in C code, e.g. the main C/C++ vulnerability triage prompt) with this instruction: "When analyzing C/C++ for injection CWEs (especially CWE-78), do not stop at the current file. If untrusted input enters through `argv`, environment variables, file/network reads, or wrapper/parser functions, explicitly use `get_cross_file_calls`, `get_callers`, `get_callees`, and `get_taint_paths` to trace the value across helper functions and compilation units until you either reach an execution sink (`system`, `popen`, `exec*`, `_popen`, `CreateProcess`, `ShellExecute`) or prove the path is sanitized. Treat parser/transformer functions that return strings as taint-preserving by default unless sanitization is evident. In multi-file cases, inspect both the source-side wrapper and downstream processor/sink files before concluding no command injection exists."
+  CWEs: [78] | From case: multi_file
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection') — The CWE definition and detection signals explicitly frame this as externally influenced input flowing into command-execution APIs such as `system`, `popen`, and `exec*`, which matches the fixture’s described source-to-sink pattern.
+  - [KB] knowledge-pack/codeql-variant-analysis/codeql-variant-analysis — This guidance explicitly recommends taint tracking from untrusted sources like `argv` to dangerous sinks like system calls and emphasizes checking for sanitizers, supporting an agent prompt focused on cross-file taint traversal rather than regex matching.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The recalled accepted lessons show a recurring agent capability gap when functions are absent from the graph or when multi-file flows are not followed, which is consistent with this miss and supports strengthening graph-driven interprocedural analysis instructions.
+  - [MEMORY] failure :: Missed CWE-[22] vulnerability in code with characteristics similar to the target [cwe-22] — Although for a different CWE, this memory reflects a generalized pattern of missed expected CWEs due to insufficient attention to the target vulnerability family; it supports prioritizing explicit agent instructions for missed semantic classes when graph evidence is sparse.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal targets a broadly applicable analysis gap for command injection: cross-file taint tracing from realistic untrusted sources to execution sinks. It is not narrowly coupled to a single fixture artifact; instead it encodes a general review methodology for CWE-78 in C/C++ codebases where input often flows through wrappers, parsers, and helper functions before reaching sinks. The guidance is aligned with CWE-78 semantics and improves real-world detection without hardcoding benchmark-specific function names. The only mildly case-shaped aspect is the explicit listing of graph APIs, but that is an agent-capability instruction rather than fixture overfitting.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection') — CWE-78 is fundamentally about externally influenced input reaching an OS command without proper neutralization, which directly supports cross-file source-to-sink tracing through helper functions and wrappers.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology grounding supports using a structured end-to-end vulnerability analysis process rather than stopping at superficial local-file inspection, which justifies the proposal's deeper graph and taint traversal guidance.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[122, 78] detection — case multi_file has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [122, 78] | From case: multi_file
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[122, 78].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The cross-file traversal recommendation is generally useful for CWE-78, but the combined mapping to CWE-122 is too imprecise and risks overgeneralization. Heap-based buffer overflow analysis usually depends on memory object sizes, allocation/use relationships, index/length propagation, and write operations—not merely 'dangerous sinks' or indirect wrapper paths. As written, the proposal appears benchmark-driven by a single multi_file case and blends two distinct vulnerability classes under one generic traversal heuristic. The result is weaker CWE specificity and a partially inaccurate methodology for CWE-122.
+  Suggested modification: Split the guidance by CWE family. Keep the cross-file taint/source-to-sink traversal language for CWE-78. For CWE-122, replace 'dangerous sinks' with memory-safety-specific guidance such as tracing allocation sizes, buffer lengths, pointer propagation, and write sites across files, and require evidence of out-of-bounds heap write/read conditions rather than generic taint flow alone.
+  - [KB] cwe/CWE-122/CWE-122 Heap-based Buffer Overflow — CWE-122 concerns heap-allocated buffers and out-of-bounds overwrite conditions, which are not accurately captured by generic source-to-sink dangerous-sink tracing language.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection') — For CWE-78, tracing through wrappers to execution sinks is appropriate, showing the proposal is partially valid but should be scoped specifically to injection rather than merged with heap overflow logic.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The family reference distinguishes memory-safety weaknesses from other classes, supporting the need to avoid collapsing CWE-122 and CWE-78 into one generic detection heuristic.
+  - [MEMORY] failure :: Function-not-found graph gaps can justify deeper graph construction/traversal, but missing coverage alone does not establish a specific CWE without class-appropriate evidence. [cwe-121] — The recalled lesson from prior analysis failures supports improving graph traversal generally, while also illustrating that capability gaps must still be mapped to the correct weakness-specific analysis rather than reused wholesale across unrelated CWEs.
+
+---
+

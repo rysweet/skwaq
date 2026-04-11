@@ -1284,6 +1284,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 holdout_fraction: *holdout_fraction,
                 max_improvements_per_cycle: *max_improvements,
             };
+            let runtime_config = load_runtime_config(&skwaq_root, profile.as_deref())?;
 
             // Find the matching adapter
             let adapters = gym.get_adapters();
@@ -1299,20 +1300,41 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 })?;
 
             let data_dir = adapter.setup(&config).await?;
-            let cycle =
-                skwaq_gym::improve::run_improvement_cycle(adapter.as_ref(), &config, &data_dir)
-                    .await?;
+            let cycle = skwaq_gym::improve::run_improvement_cycle(
+                adapter.as_ref(),
+                &config,
+                &data_dir,
+                &runtime_config,
+                profile.as_deref(),
+            )
+            .await?;
             skwaq_gym::improve::store_improvement_lessons(&cycle)?;
             skwaq_gym::improve::append_learned_patterns(&cycle);
 
-            // Apply accepted NewPattern proposals to the codebase
-            let applied = skwaq_gym::improve::apply_accepted_proposals(&cycle, None)?;
-            if applied > 0 {
+            // Apply accepted proposals to the codebase
+            let report = skwaq_gym::improve::apply_accepted_proposals(&cycle, None)?;
+            if report.applied > 0 {
                 println!(
                     "\n  {} proposal(s) applied to source code. Run `cargo test` to validate.",
-                    applied
+                    report.applied
                 );
             }
+            if report.blocked > 0 {
+                println!("  {} proposal(s) blocked. Reasons:", report.blocked);
+                for reason in &report.blocked_reasons {
+                    println!("    - {reason}");
+                }
+            }
+            if report.skipped > 0 {
+                println!(
+                    "  {} proposal(s) skipped (non-accepted review or unsupported kind).",
+                    report.skipped
+                );
+            }
+            println!(
+                "  Apply summary: {}/{} applied, {} blocked, {} skipped",
+                report.applied, report.total, report.blocked, report.skipped
+            );
 
             skwaq_gym::improve::print_proposals(&cycle);
         }

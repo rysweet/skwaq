@@ -60,6 +60,7 @@ impl BenchmarkAdapter for FixturesAdapter {
         case: &TestCase,
         data_dir: &Path,
         config: &BenchmarkConfig,
+        runtime_config: &skwaq_core::config::Config,
     ) -> anyhow::Result<Vec<DetectedFinding>> {
         // Binary mode: analyze compiled binary instead of source
         if config.binary_mode {
@@ -75,9 +76,19 @@ impl BenchmarkAdapter for FixturesAdapter {
                 return if config.quick_mode {
                     run_binary_pattern_detection(&binary)
                 } else if config.llm_only {
-                    crate::agentic::run_llm_only_binary_analysis(&binary, config.timeout_secs).await
+                    crate::agentic::run_llm_only_binary_analysis_with_runtime_config(
+                        &binary,
+                        config.timeout_secs,
+                        runtime_config,
+                    )
+                    .await
                 } else {
-                    crate::agentic::run_agentic_binary_analysis(&binary, config.timeout_secs).await
+                    crate::agentic::run_agentic_binary_analysis_with_runtime_config(
+                        &binary,
+                        config.timeout_secs,
+                        runtime_config,
+                    )
+                    .await
                 };
             }
             // No binary_path for this case — non-C cases (python, js) analyzed as source
@@ -87,10 +98,20 @@ impl BenchmarkAdapter for FixturesAdapter {
         if config.quick_mode {
             run_source_pattern_detection(&path)
         } else if config.llm_only {
-            crate::agentic::run_llm_only_source_analysis(&path, config.timeout_secs).await
+            crate::agentic::run_llm_only_source_analysis_with_runtime_config(
+                &path,
+                config.timeout_secs,
+                runtime_config,
+            )
+            .await
         } else {
             // Full agentic analysis: ingest → multi-agent pipeline → findings
-            crate::agentic::run_agentic_source_analysis(&path, config.timeout_secs).await
+            crate::agentic::run_agentic_source_analysis_with_runtime_config(
+                &path,
+                config.timeout_secs,
+                runtime_config,
+            )
+            .await
         }
     }
 
@@ -177,7 +198,12 @@ mod tests {
             language: "c".to_string(),
         };
         let findings = adapter
-            .run_case(&case, &test_fixtures_dir(), &test_config())
+            .run_case(
+                &case,
+                &test_fixtures_dir(),
+                &test_config(),
+                &skwaq_core::config::Config::default(),
+            )
             .await
             .unwrap();
         assert!(
@@ -206,7 +232,12 @@ mod tests {
             language: "c".to_string(),
         };
         let findings = adapter
-            .run_case(&case, &test_fixtures_dir(), &test_config())
+            .run_case(
+                &case,
+                &test_fixtures_dir(),
+                &test_config(),
+                &skwaq_core::config::Config::default(),
+            )
             .await
             .unwrap();
         assert!(
@@ -257,7 +288,12 @@ mod tests {
             return; // Skip if fixtures not compiled
         }
         let findings = adapter
-            .run_case(&case, &test_fixtures_dir(), &binary_test_config())
+            .run_case(
+                &case,
+                &test_fixtures_dir(),
+                &binary_test_config(),
+                &skwaq_core::config::Config::default(),
+            )
             .await
             .unwrap();
         assert!(
@@ -279,7 +315,12 @@ mod tests {
             language: "python".to_string(),
         };
         let findings = adapter
-            .run_case(&case, &test_fixtures_dir(), &binary_test_config())
+            .run_case(
+                &case,
+                &test_fixtures_dir(),
+                &binary_test_config(),
+                &skwaq_core::config::Config::default(),
+            )
             .await
             .unwrap();
         // Non-C cases without binary_path are analyzed as source

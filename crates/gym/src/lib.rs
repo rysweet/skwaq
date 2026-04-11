@@ -33,6 +33,7 @@ pub struct Gym {
     pub history_db: HistoryDb,
     adapters: Vec<Box<dyn BenchmarkAdapter>>,
     config: BenchmarkConfig,
+    runtime_config: skwaq_core::config::Config,
     llm_config: skwaq_core::config::LlmConfig,
     skwaq_root: PathBuf,
     profile_name: Option<String>,
@@ -40,7 +41,8 @@ pub struct Gym {
 
 impl Gym {
     pub fn new(skwaq_root: PathBuf) -> anyhow::Result<Self> {
-        let llm_config = skwaq_core::config::Config::load_from_dir(&skwaq_root)?.llm;
+        let runtime_config = skwaq_core::config::Config::load_from_dir(&skwaq_root)?;
+        let llm_config = runtime_config.llm.clone();
         let gym_dir = dirs::data_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("skwaq")
@@ -138,6 +140,7 @@ impl Gym {
             history_db,
             adapters,
             config,
+            runtime_config,
             llm_config,
             skwaq_root,
             profile_name: None,
@@ -154,7 +157,8 @@ impl Gym {
         profile_name: &str,
     ) -> anyhow::Result<Self> {
         let base_config = skwaq_core::config::Config::load_from_dir(&skwaq_root)?;
-        let llm_config = profile_paths.load_merged_config(&base_config)?.llm;
+        let runtime_config = profile_paths.load_merged_config(&base_config)?;
+        let llm_config = runtime_config.llm.clone();
         let history_db = HistoryDb::open(&profile_paths.results_db_path())?;
 
         let gym_dir = dirs::data_dir()
@@ -248,6 +252,7 @@ impl Gym {
             history_db,
             adapters: adapter_list,
             config,
+            runtime_config,
             llm_config,
             skwaq_root,
             profile_name: Some(profile_name.to_string()),
@@ -472,7 +477,7 @@ impl Gym {
                     let case_start = std::time::Instant::now();
                     match tokio::time::timeout(
                         std::time::Duration::from_secs(timeout_secs),
-                        adapter.run_case(case, &data_dir, &config),
+                        adapter.run_case(case, &data_dir, &config, &self.runtime_config),
                     )
                     .await
                     {
@@ -527,6 +532,7 @@ impl Gym {
 
                 let data_dir = &data_dir;
                 let config = &config;
+                let runtime_config = &self.runtime_config;
                 const MAX_RETRIES: u32 = 3;
 
                 let mut pending: FuturesUnordered<
@@ -549,7 +555,7 @@ impl Gym {
                                 .await;
                             let result = tokio::time::timeout(
                                 std::time::Duration::from_secs(timeout_secs),
-                                adapter.run_case(case, data_dir, config),
+                                adapter.run_case(case, data_dir, config, runtime_config),
                             )
                             .await;
                             (i, case, suite, result)
@@ -731,7 +737,7 @@ impl Gym {
                                 tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                                 let result = tokio::time::timeout(
                                     std::time::Duration::from_secs(timeout_secs),
-                                    adapter.run_case(retry_case, data_dir, config),
+                                    adapter.run_case(retry_case, data_dir, config, runtime_config),
                                 )
                                 .await;
                                 (retry_i, retry_case, suite, result)
@@ -742,7 +748,7 @@ impl Gym {
                             pending.push(Box::pin(async move {
                                 let result = tokio::time::timeout(
                                     std::time::Duration::from_secs(timeout_secs),
-                                    adapter.run_case(next_case, data_dir, config),
+                                    adapter.run_case(next_case, data_dir, config, runtime_config),
                                 )
                                 .await;
                                 (next_i, next_case, suite, result)

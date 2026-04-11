@@ -13,6 +13,8 @@ pub async fn run_improvement_cycle(
     adapter: &dyn BenchmarkAdapter,
     config: &BenchmarkConfig,
     data_dir: &Path,
+    runtime_config: &skwaq_core::config::Config,
+    profile_name: Option<&str>,
 ) -> Result<ImprovementCycle>
 ```
 
@@ -28,7 +30,7 @@ negative cases, and all proposals (both reviewed and accepted).
 pub fn apply_accepted_proposals(
     cycle: &ImprovementCycle,
     db: Option<&GraphDb>,
-) -> Result<usize>
+) -> Result<ApplyReport>
 ```
 
 Applies accepted proposals from a completed improvement cycle. Handles all
@@ -62,6 +64,24 @@ pub struct ImprovementCycle {
     pub holdout_case_count: usize,
     pub training_case_count: usize,
     pub cross_validation_pending: Vec<String>,
+    pub run_metadata: Option<ImproveRunMetadata>,
+}
+
+pub struct ImproveRunMetadata {
+    pub llm_backend: String,
+    pub llm_model: String,
+    pub run_mode: String,
+    pub binary_mode: bool,
+    pub profile: Option<String>,
+    pub timestamp_utc: String,
+}
+
+pub struct ApplyReport {
+    pub applied: usize,
+    pub skipped: usize,
+    pub blocked: usize,
+    pub total: usize,
+    pub blocked_reasons: Vec<String>,
 }
 ```
 

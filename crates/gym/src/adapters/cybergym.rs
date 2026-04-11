@@ -139,6 +139,7 @@ impl BenchmarkAdapter for CyberGymAdapter {
         case: &TestCase,
         data_dir: &Path,
         config: &BenchmarkConfig,
+        runtime_config: &skwaq_core::config::Config,
     ) -> anyhow::Result<Vec<DetectedFinding>> {
         let case_dir = match ensure_case_extracted(data_dir, &case.id, case.is_negative) {
             Ok(case_dir) => case_dir,
@@ -189,12 +190,18 @@ impl BenchmarkAdapter for CyberGymAdapter {
         let mut all_findings = Vec::new();
         for path in &source_files {
             let findings = if config.llm_only {
-                crate::agentic::run_llm_only_source_analysis(path, config.timeout_secs).await
+                crate::agentic::run_llm_only_source_analysis_with_runtime_config(
+                    path,
+                    config.timeout_secs,
+                    runtime_config,
+                )
+                .await
             } else {
-                crate::agentic::run_agentic_source_analysis_with_hints(
+                crate::agentic::run_agentic_source_analysis_with_hints_and_runtime_config(
                     path,
                     config.timeout_secs,
                     &hints,
+                    runtime_config,
                 )
                 .await
             };

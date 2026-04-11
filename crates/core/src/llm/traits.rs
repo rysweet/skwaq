@@ -130,7 +130,20 @@ where
         "LLM request complete"
     );
 
+    if is_content_filter_stop_reason(response.stop_reason.as_deref()) {
+        tracing::warn!("LLM response blocked by content_filter safety policy");
+        return Err(anyhow::anyhow!(
+            "LLM content_filter: response blocked by safety policy"
+        ));
+    }
+
     Ok(text_content(&response))
+}
+
+fn is_content_filter_stop_reason(stop_reason: Option<&str>) -> bool {
+    stop_reason
+        .map(|reason| reason.eq_ignore_ascii_case("content_filter"))
+        .unwrap_or(false)
 }
 
 /// Normalize a model name for the active backend.
@@ -290,5 +303,13 @@ mod tests {
         span.record("input_tokens", usage.input_tokens);
         span.record("output_tokens", usage.output_tokens);
         // No panic = fields are correctly declared and recordable.
+    }
+
+    #[test]
+    fn test_is_content_filter_stop_reason() {
+        assert!(is_content_filter_stop_reason(Some("content_filter")));
+        assert!(is_content_filter_stop_reason(Some("CONTENT_FILTER")));
+        assert!(!is_content_filter_stop_reason(Some("end_turn")));
+        assert!(!is_content_filter_stop_reason(None));
     }
 }

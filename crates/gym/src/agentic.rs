@@ -205,7 +205,23 @@ pub async fn run_agentic_source_analysis(
     path: &Path,
     timeout_secs: u64,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
-    run_agentic_source_analysis_with_hints(path, timeout_secs, &AnalysisHints::default()).await
+    let runtime_config = Config::load()
+        .context("Failed to load skwaq configuration for hybrid benchmark analysis")?;
+    run_agentic_source_analysis_with_runtime_config(path, timeout_secs, &runtime_config).await
+}
+
+pub async fn run_agentic_source_analysis_with_runtime_config(
+    path: &Path,
+    timeout_secs: u64,
+    runtime_config: &Config,
+) -> anyhow::Result<Vec<DetectedFinding>> {
+    run_agentic_source_analysis_with_hints_and_runtime_config(
+        path,
+        timeout_secs,
+        &AnalysisHints::default(),
+        runtime_config,
+    )
+    .await
 }
 
 /// Run full agentic analysis with additional companion files ingested into
@@ -466,6 +482,23 @@ pub async fn run_agentic_source_analysis_with_hints(
     timeout_secs: u64,
     hints: &AnalysisHints,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
+    let runtime_config = Config::load()
+        .context("Failed to load skwaq configuration for hybrid benchmark analysis")?;
+    run_agentic_source_analysis_with_hints_and_runtime_config(
+        path,
+        timeout_secs,
+        hints,
+        &runtime_config,
+    )
+    .await
+}
+
+pub async fn run_agentic_source_analysis_with_hints_and_runtime_config(
+    path: &Path,
+    timeout_secs: u64,
+    hints: &AnalysisHints,
+    runtime_config: &Config,
+) -> anyhow::Result<Vec<DetectedFinding>> {
     let db = GraphDb::in_memory()?;
     let parsed = parse_file(path)?;
 
@@ -676,7 +709,8 @@ pub async fn run_agentic_source_analysis_with_hints(
             file_str,
         );
     } else {
-        let agent_results = run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+        let agent_results =
+            run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs, runtime_config).await?;
 
         // Extract confidence from structured agent outputs and enrich findings.
         let confidence_map = extract_confidence_from_agent_results(&agent_results);
@@ -689,19 +723,24 @@ pub async fn run_agentic_source_analysis_with_hints(
 
         // --- Layer 5: Synthesis — weigh all evidence ---
         let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
-        let synthesized =
-            synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await?;
+        let synthesized = synthesize_findings(
+            all_findings,
+            &pattern_categories,
+            &db,
+            timeout_secs,
+            runtime_config,
+        )
+        .await?;
         let mut deduped = dedup_findings_by_best_severity(synthesized);
 
         // Enrich findings with confidence from debate results.
         enrich_findings_with_confidence(&mut deduped, &confidence_map);
 
         // Apply confidence thresholds to reject/downgrade low-confidence findings.
-        let config = Config::load().unwrap_or_default();
         let filtered = apply_confidence_thresholds(
             deduped,
-            config.analysis.confidence_reject_threshold,
-            config.analysis.confidence_downgrade_threshold,
+            runtime_config.analysis.confidence_reject_threshold,
+            runtime_config.analysis.confidence_downgrade_threshold,
         );
 
         return Ok(filtered);
@@ -721,6 +760,16 @@ pub async fn run_agentic_source_analysis_with_hints(
 pub async fn run_agentic_binary_analysis(
     path: &Path,
     timeout_secs: u64,
+) -> anyhow::Result<Vec<DetectedFinding>> {
+    let runtime_config = Config::load()
+        .context("Failed to load skwaq configuration for hybrid benchmark analysis")?;
+    run_agentic_binary_analysis_with_runtime_config(path, timeout_secs, &runtime_config).await
+}
+
+pub async fn run_agentic_binary_analysis_with_runtime_config(
+    path: &Path,
+    timeout_secs: u64,
+    runtime_config: &Config,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
     use skwaq_core::binary::native::parse_binary;
 
@@ -808,7 +857,8 @@ pub async fn run_agentic_binary_analysis(
             file_str,
         );
     } else {
-        let _agent_results = run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+        let _agent_results =
+            run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs, runtime_config).await?;
     }
 
     // Synthesis — weigh all evidence
@@ -817,7 +867,14 @@ pub async fn run_agentic_binary_analysis(
     let synthesized = if skip_llm_pipeline {
         all_findings
     } else {
-        synthesize_findings(all_findings, &pattern_categories, &db, timeout_secs).await?
+        synthesize_findings(
+            all_findings,
+            &pattern_categories,
+            &db,
+            timeout_secs,
+            runtime_config,
+        )
+        .await?
     };
 
     let deduped = dedup_findings_by_best_severity(synthesized);
@@ -833,6 +890,16 @@ pub async fn run_agentic_binary_analysis(
 pub async fn run_llm_only_source_analysis(
     path: &Path,
     timeout_secs: u64,
+) -> anyhow::Result<Vec<DetectedFinding>> {
+    let runtime_config = Config::load()
+        .context("Failed to load skwaq configuration for hybrid benchmark analysis")?;
+    run_llm_only_source_analysis_with_runtime_config(path, timeout_secs, &runtime_config).await
+}
+
+pub async fn run_llm_only_source_analysis_with_runtime_config(
+    path: &Path,
+    timeout_secs: u64,
+    runtime_config: &Config,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
     let db = GraphDb::in_memory()?;
     let parsed = parse_file(path)?;
@@ -857,7 +924,8 @@ pub async fn run_llm_only_source_analysis(
     builder.build_from_source(std::slice::from_ref(&parsed), &inv_id)?;
 
     // Skip pattern detection — go straight to LLM pipeline
-    let agent_results = run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+    let agent_results =
+        run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs, runtime_config).await?;
     let confidence_map = extract_confidence_from_agent_results(&agent_results);
 
     // Return all LLM findings directly (no intersection filter)
@@ -873,6 +941,16 @@ pub async fn run_llm_only_source_analysis(
 pub async fn run_llm_only_binary_analysis(
     path: &Path,
     timeout_secs: u64,
+) -> anyhow::Result<Vec<DetectedFinding>> {
+    let runtime_config = Config::load()
+        .context("Failed to load skwaq configuration for hybrid benchmark analysis")?;
+    run_llm_only_binary_analysis_with_runtime_config(path, timeout_secs, &runtime_config).await
+}
+
+pub async fn run_llm_only_binary_analysis_with_runtime_config(
+    path: &Path,
+    timeout_secs: u64,
+    runtime_config: &Config,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
     use skwaq_core::binary::native::parse_binary;
 
@@ -900,7 +978,8 @@ pub async fn run_llm_only_binary_analysis(
     enrich_binary_graph_with_ghidra(path, &builder, &inv_id).await?;
 
     // Skip pattern detection — go straight to LLM pipeline
-    let agent_results = run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs).await?;
+    let agent_results =
+        run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs, runtime_config).await?;
     let confidence_map = extract_confidence_from_agent_results(&agent_results);
 
     let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
@@ -1366,6 +1445,7 @@ async fn synthesize_findings(
     _pattern_categories: &HashSet<String>,
     _db: &GraphDb,
     timeout_secs: u64,
+    runtime_config: &Config,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
     if all_findings.is_empty() {
         return Ok(all_findings);
@@ -1419,7 +1499,15 @@ async fn synthesize_findings(
                 pattern_findings.len(),
                 llm_findings.len(),
             );
-            llm_synthesize_with_limits(&pattern_findings, &llm_findings, timeout_secs, None).await
+            llm_synthesize_with_limits(
+                &pattern_findings,
+                &llm_findings,
+                timeout_secs,
+                &runtime_config.llm,
+                &runtime_config.analysis,
+                None,
+            )
+            .await
         }
         SynthesisRoute::ExpertRouted(domain) => {
             SYNTHESIS_STATS.record_expert_routed();
@@ -1429,10 +1517,25 @@ async fn synthesize_findings(
                 pattern_findings.len(),
                 llm_findings.len(),
             );
-            llm_synthesize_expert(&pattern_findings, &llm_findings, timeout_secs, domain).await
+            llm_synthesize_expert(
+                &pattern_findings,
+                &llm_findings,
+                timeout_secs,
+                domain,
+                &runtime_config.llm,
+                &runtime_config.analysis,
+            )
+            .await
         }
         SynthesisRoute::FullSynthesis => {
-            llm_synthesize(&pattern_findings, &llm_findings, timeout_secs).await
+            llm_synthesize(
+                &pattern_findings,
+                &llm_findings,
+                timeout_secs,
+                &runtime_config.llm,
+                &runtime_config.analysis,
+            )
+            .await
         }
     };
 
@@ -1464,8 +1567,18 @@ async fn llm_synthesize(
     pattern_findings: &[DetectedFinding],
     llm_findings: &[DetectedFinding],
     timeout_secs: u64,
+    llm_config: &skwaq_core::config::LlmConfig,
+    analysis_config: &skwaq_core::config::AnalysisConfig,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
-    llm_synthesize_with_limits(pattern_findings, llm_findings, timeout_secs, None).await
+    llm_synthesize_with_limits(
+        pattern_findings,
+        llm_findings,
+        timeout_secs,
+        llm_config,
+        analysis_config,
+        None,
+    )
+    .await
 }
 
 /// Call the LLM with a domain-expert synthesis prompt.
@@ -1479,12 +1592,13 @@ async fn llm_synthesize_expert(
     llm_findings: &[DetectedFinding],
     timeout_secs: u64,
     domain: ExpertDomain,
+    llm_config: &skwaq_core::config::LlmConfig,
+    analysis_config: &skwaq_core::config::AnalysisConfig,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
-    let config = Config::load().context("LLM synthesis requires a valid skwaq configuration")?;
-    skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm)
+    skwaq_core::llm::ensure_benchmark_copilot_ready(llm_config)
         .await
         .context("LLM synthesis requires explicit Copilot benchmark readiness")?;
-    let client = skwaq_core::llm::create_client(&config.llm)
+    let client = skwaq_core::llm::create_client(llm_config)
         .await
         .context("LLM synthesis requires a working LLM client")?;
 
@@ -1510,9 +1624,9 @@ async fn llm_synthesize_expert(
     append_findings_for_prompt(&mut prompt, "\n=== LLM AGENT FINDINGS ===\n", llm_findings);
     prompt.push_str("\nEvaluate each finding. Respond with CONFIRM or REJECT for each ID.\n");
 
-    let budget_amount = config.analysis.default_token_budget;
+    let budget_amount = analysis_config.default_token_budget;
     let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
-    let model = &config.llm.copilot.model;
+    let model = &llm_config.copilot.model;
 
     let response_text = execute_synthesis_completion(
         &client,
@@ -1537,13 +1651,14 @@ async fn llm_synthesize_with_limits(
     pattern_findings: &[DetectedFinding],
     llm_findings: &[DetectedFinding],
     timeout_secs: u64,
+    llm_config: &skwaq_core::config::LlmConfig,
+    analysis_config: &skwaq_core::config::AnalysisConfig,
     max_budget_override: Option<u64>,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
-    let config = Config::load().context("LLM synthesis requires a valid skwaq configuration")?;
-    skwaq_core::llm::ensure_benchmark_copilot_ready(&config.llm)
+    skwaq_core::llm::ensure_benchmark_copilot_ready(llm_config)
         .await
         .context("LLM synthesis requires explicit Copilot benchmark readiness")?;
-    let client = skwaq_core::llm::create_client(&config.llm)
+    let client = skwaq_core::llm::create_client(llm_config)
         .await
         .context("LLM synthesis requires a working LLM client")?;
 
@@ -1580,9 +1695,9 @@ async fn llm_synthesize_with_limits(
     prompt.push_str("\nEvaluate each finding. Respond with CONFIRM or REJECT for each ID.\n");
 
     // Use full budget or override if specified
-    let budget_amount = max_budget_override.unwrap_or(config.analysis.default_token_budget);
+    let budget_amount = max_budget_override.unwrap_or(analysis_config.default_token_budget);
     let mut budget = skwaq_core::llm::TokenBudget::new(budget_amount);
-    let model = &config.llm.copilot.model;
+    let model = &llm_config.copilot.model;
     let synthesis_started = Instant::now();
 
     let response_text = execute_synthesis_completion(
@@ -1890,15 +2005,14 @@ async fn run_llm_pipeline(
     inv_id: &str,
     file_str: &str,
     timeout_secs: u64,
+    runtime_config: &Config,
 ) -> anyhow::Result<Vec<skwaq_core::agents::AgentResult>> {
-    let config = Config::load()
-        .context("Failed to load skwaq configuration for hybrid benchmark analysis")?;
     let pipeline = pipeline_for_target(file_str);
 
     // Create or reuse cached LLM clients. Source-only pipelines cache the
     // reasoning lane independently so they do not force decompilation auth;
     // binary/decompile pipelines still cache the full pair together.
-    let pipeline_clients = cached_pipeline_clients(&config, &pipeline, file_str).await?;
+    let pipeline_clients = cached_pipeline_clients(runtime_config, &pipeline, file_str).await?;
     // Use unlimited budget: each agent call is independently bounded by the
     // model's max output tokens (128K). A shared budget across pipeline stages
     // causes the deep pipeline (5+ stages + debate) to exhaust before later
@@ -2832,7 +2946,10 @@ mod tests {
     async fn test_synthesize_findings_empty() {
         let db = GraphDb::in_memory().unwrap();
         let cats = HashSet::new();
-        let result = synthesize_findings(vec![], &cats, &db, 30).await.unwrap();
+        let runtime_config = Config::default();
+        let result = synthesize_findings(vec![], &cats, &db, 30, &runtime_config)
+            .await
+            .unwrap();
         assert!(result.is_empty());
     }
 
@@ -3081,7 +3198,8 @@ mod tests {
             title: "Dangerous pattern: strcpy".into(),
             confidence: None,
         }];
-        let result = synthesize_findings(findings.clone(), &cats, &db, 30)
+        let runtime_config = Config::default();
+        let result = synthesize_findings(findings.clone(), &cats, &db, 30, &runtime_config)
             .await
             .unwrap();
         assert_eq!(
@@ -3159,7 +3277,8 @@ mod tests {
         let before_fallback = stats.fallback_count.load(Ordering::Relaxed);
         let before_failed = stats.failed_count.load(Ordering::Relaxed);
 
-        let result = synthesize_findings(findings, &cats, &db, 30).await;
+        let runtime_config = Config::default();
+        let result = synthesize_findings(findings, &cats, &db, 30, &runtime_config).await;
         // With graceful fallback, synthesis always returns Ok — either via
         // LLM synthesis, consensus, or fallback (keeping all findings).
         let findings = result.expect("synthesize_findings should not fail with graceful fallback");
@@ -3341,7 +3460,10 @@ mod tests {
         let stats = synthesis_stats();
         let before = stats.consensus_early_exit_count.load(Ordering::Relaxed);
 
-        let result = synthesize_findings(findings, &cats, &db, 30).await.unwrap();
+        let runtime_config = Config::default();
+        let result = synthesize_findings(findings, &cats, &db, 30, &runtime_config)
+            .await
+            .unwrap();
 
         let after = stats.consensus_early_exit_count.load(Ordering::Relaxed);
 
