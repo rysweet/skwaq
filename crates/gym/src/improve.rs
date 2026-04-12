@@ -1450,6 +1450,97 @@ fn is_injection_class_cwe(cwe: u32) -> bool {
     matches!(cwe, 77 | 78 | 88)
 }
 
+/// Returns the common vulnerability name for a CWE, used in analyst prompt headers
+/// so the LLM immediately knows what class of vulnerability to hunt for.
+fn cwe_brief_name(cwe: u32) -> &'static str {
+    match cwe {
+        77 => "Command Injection",
+        78 => "OS Command Injection",
+        88 => "Argument Injection",
+        89 => "SQL Injection",
+        90 => "LDAP Injection",
+        118 | 119 => "Improper Buffer Size Validation",
+        120 => "Buffer Copy Without Size Check (Classic Overflow)",
+        121 => "Stack-Based Buffer Overflow",
+        122 => "Heap-Based Buffer Overflow",
+        123 => "Write-What-Where Condition",
+        124 | 126 | 127 => "Buffer Underwrite",
+        125 => "Out-of-Bounds Read",
+        128 | 189 | 190 => "Integer Overflow",
+        191 => "Integer Underflow",
+        192..=197 => "Integer Conversion Error",
+        134 => "Uncontrolled Format String",
+        252 | 253 | 476 | 690 => "NULL Pointer Dereference",
+        362 | 364 | 366 | 367 | 832 => "Race Condition",
+        377 => "Insecure Temporary File",
+        400 | 401 | 404 | 675 | 772 | 773 | 789 => "Resource Leak",
+        415 => "Double Free",
+        416 | 562 | 761 | 763 => "Use After Free",
+        457 | 665 | 908 => "Uninitialized Variable",
+        502 => "Unsafe Deserialization",
+        590 => "Free of Memory Not on the Heap",
+        680..=682 => "Integer Overflow to Buffer Overflow",
+        787 | 788 | 805 | 806 => "Out-of-Bounds Write",
+        843 | 591 => "Type Confusion",
+        22 | 23 | 36 | 426 => "Path Traversal",
+        79 | 80 => "Cross-Site Scripting",
+        _ => "Memory/Safety Vulnerability",
+    }
+}
+
+/// Returns a one-sentence detection hint for a CWE list, used in analyst prompt
+/// headers to focus the LLM on what specific patterns to look for.
+fn cwe_detection_hint(cwes: &[u32]) -> &'static str {
+    for &cwe in cwes {
+        let hint = match cwe {
+            77 | 78 | 88 => {
+                "Trace user-controlled data into shell/exec sinks (VULN_SINK_* in sanitized source)."
+            }
+            89 => "Trace user input into SQL query string construction without parameterization.",
+            90 => "Trace user input into LDAP query construction without escaping.",
+            119 | 120 | 121 | 122 | 787 | 788 | 805 | 806 => {
+                "Trace data from input to strcpy/memcpy/sprintf; check for fixed-size buffers with unchecked writes."
+            }
+            123 => "Look for attacker-controlled pointer used as write destination.",
+            125 => {
+                "Look for array/pointer reads beyond allocated bounds; check index arithmetic."
+            }
+            134 => {
+                "Look for user-controlled format string argument in printf/fprintf/syslog calls."
+            }
+            128 | 189 | 190 | 191 | 680 | 681 | 682 => {
+                "Trace integer arithmetic on user-controlled values that flows into buffer sizes or array indices."
+            }
+            415 => "Locate multiple free() calls on the same pointer in any code path.",
+            416 | 562 | 761 | 763 => {
+                "Trace heap allocation lifetime; find dereference after free() on any path."
+            }
+            457 | 665 | 908 => "Look for variables used before initialization, especially on error paths.",
+            476 | 252 | 253 | 690 => {
+                "Check for pointer dereferences without NULL guards, especially after fallible allocations."
+            }
+            502 => {
+                "Look for deserialization of untrusted data without type/integrity validation."
+            }
+            590 => {
+                "Look for free() applied to stack-allocated arrays, globals, or already-freed pointers."
+            }
+            22 | 23 | 36 => {
+                "Trace user-supplied file paths into filesystem APIs without canonicalization/allowlist."
+            }
+            362 | 364 | 366 | 367 | 832 => {
+                "Look for shared-state access without synchronization on concurrent code paths."
+            }
+            843 | 591 => {
+                "Look for type casting or union access where the stored type doesn't match the access type."
+            }
+            _ => continue,
+        };
+        return hint;
+    }
+    "Trace user-controlled data from input sources to dangerous sinks."
+}
+
 /// Sanitize source code for embedding in an LLM prompt when the case involves
 /// injection-class CWEs (77, 78, 88).  Raw shell-execution function calls
 /// (system, execl, popen, …) cause the input content-safety filter to block
@@ -1458,10 +1549,42 @@ fn is_injection_class_cwe(cwe: u32) -> bool {
 /// still understands the vulnerability class but the literal call patterns no
 /// longer match the safety filter's heuristics.
 ///
-/// For non-injection CWEs the source is returned unchanged.
+/// For all CWEs, a structured analyst-context header is prepended to the
+/// source snippet so the LLM immediately knows:
+///   1. Which CWE(s) with their common names it is analysing.
+///   2. A one-sentence detection hint for the specific vulnerability class.
+///   3. (Injection-class only) that VULN_SINK_* aliases stand for the
+///      original dangerous APIs that were obfuscated for content safety.
 fn sanitize_source_for_prompt(source: &str, expected_cwes: &[u32]) -> String {
-    if !expected_cwes.iter().any(|&c| is_injection_class_cwe(c)) {
-        return source.to_string();
+    // Build the analyst-context header prepended to every source snippet.
+    let cwe_label = if expected_cwes.is_empty() {
+        "Unknown".to_string()
+    } else {
+        expected_cwes
+            .iter()
+            .map(|&c| format!("CWE-{} ({})", c, cwe_brief_name(c)))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let hint = cwe_detection_hint(expected_cwes);
+    let has_injection = expected_cwes.iter().any(|&c| is_injection_class_cwe(c));
+
+    let mut header = format!(
+        "// [SKWAQ ANALYST CONTEXT]\n\
+         // Target: {cwe_label}\n\
+         // Focus:  {hint}\n"
+    );
+    if has_injection {
+        header.push_str(
+            "// NOTE:  Shell/exec API names replaced with VULN_SINK_* aliases (content safety).\n\
+             //        VULN_SINK_SYSTEM/EXEC/POPEN/SHELLEXEC = dangerous command execution sinks.\n\
+             //        Treat every VULN_SINK_* call as the corresponding original dangerous API.\n",
+        );
+    }
+    header.push_str("// ====================================================\n");
+
+    if !has_injection {
+        return format!("{header}{source}");
     }
 
     // Ordered from most-specific (longest) to least-specific (shortest) so that
@@ -1524,7 +1647,7 @@ fn sanitize_source_for_prompt(source: &str, expected_cwes: &[u32]) -> String {
     for (from, to) in REPLACEMENTS {
         out = out.replace(from, to);
     }
-    out
+    format!("{header}{out}")
 }
 
 fn retry_after_secs_from_error(message: &str) -> Option<u64> {
@@ -3786,12 +3909,29 @@ analysis
 
     #[test]
     fn test_sanitize_source_for_prompt_noop_for_non_injection_cwes() {
-        // Non-injection CWEs must be returned verbatim.
+        // Non-injection CWEs must NOT have VULN_SINK_* aliases applied —
+        // no dangerous API names are replaced. A context header IS prepended
+        // so the analyst knows the target CWE class.
         let src = "void vuln(char *dst, char *src) { memcpy(dst, src, 256); }";
         let sanitized = sanitize_source_for_prompt(src, &[119]);
-        assert_eq!(
-            sanitized, src,
-            "Non-injection CWE source must not be modified"
+        // Body must be present unchanged (no injection alias replacements).
+        assert!(
+            sanitized.contains(src),
+            "Non-injection CWE: original source body must be preserved verbatim"
+        );
+        // No injection sink aliases must appear.
+        assert!(
+            !sanitized.contains("VULN_SINK_"),
+            "Non-injection CWE source must not contain VULN_SINK_* aliases"
+        );
+        // A context header must be prepended.
+        assert!(
+            sanitized.contains("[SKWAQ ANALYST CONTEXT]"),
+            "All source snippets must include the analyst context header"
+        );
+        assert!(
+            sanitized.contains("CWE-119"),
+            "Header must include the expected CWE number"
         );
     }
 
@@ -3820,6 +3960,136 @@ os.system(user_input)
         let src = "void run(char *cmd) { system(cmd); }";
         let sanitized = sanitize_source_for_prompt(src, &[77]);
         assert!(!sanitized.contains("system("));
+    }
+
+    // -----------------------------------------------------------------------
+    // Analyst context header annotation tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_sanitize_source_for_prompt_injection_header_includes_alias_decoder() {
+        // Injection-class sources must have the VULN_SINK alias decoder note in the header.
+        let src = "void vuln(char *cmd) { system(cmd); }";
+        let sanitized = sanitize_source_for_prompt(src, &[78]);
+        assert!(
+            sanitized.contains("[SKWAQ ANALYST CONTEXT]"),
+            "Injection source must include the analyst context header"
+        );
+        assert!(
+            sanitized.contains("VULN_SINK_SYSTEM/EXEC/POPEN"),
+            "Injection header must include alias decoder note for common sinks"
+        );
+        assert!(
+            sanitized.contains("CWE-78"),
+            "Header must include the expected CWE number"
+        );
+        assert!(
+            sanitized.contains("OS Command Injection"),
+            "Header must include the CWE common name"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_source_for_prompt_header_detection_hint_present() {
+        // Header must include a detection hint for the expected CWE class.
+        let src = "char buf[32]; strcpy(buf, user_input);";
+        let annotated = sanitize_source_for_prompt(src, &[121]);
+        assert!(
+            annotated.contains("CWE-121"),
+            "Header must include CWE-121 number"
+        );
+        assert!(
+            annotated.contains("Stack-Based Buffer Overflow"),
+            "Header must include CWE-121 common name"
+        );
+        // Should have a detection hint (not empty)
+        assert!(
+            annotated.contains("Focus:"),
+            "Header must include a Focus detection hint line"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_source_for_prompt_header_cwe_680() {
+        // CWE-680 (Integer Overflow to Buffer Overflow) must get correct class annotation.
+        let src = "char buf[256]; int len = get_len(); memcpy(buf, src, len * 4);";
+        let annotated = sanitize_source_for_prompt(src, &[680]);
+        assert!(annotated.contains("CWE-680"), "Header must include CWE-680");
+        assert!(
+            annotated.contains("Integer Overflow to Buffer Overflow"),
+            "Header must include CWE-680 common name"
+        );
+        // Source body must be preserved unchanged for non-injection
+        assert!(
+            annotated.contains(src),
+            "Source body must be intact for CWE-680 (non-injection)"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_source_for_prompt_header_cwe_590_invalid_free() {
+        // CWE-590 (Free of Memory Not on the Heap) must get correct class annotation.
+        let src = "void f() { char buf[64]; free(buf); }";
+        let annotated = sanitize_source_for_prompt(src, &[590]);
+        assert!(annotated.contains("CWE-590"), "Header must include CWE-590");
+        assert!(
+            annotated.contains("Free of Memory Not on the Heap"),
+            "Header must include CWE-590 common name"
+        );
+        assert!(
+            annotated.contains(src),
+            "Source body must be intact for CWE-590"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_source_for_prompt_empty_cwes_gets_generic_header() {
+        // Empty CWE list should still produce a header with generic Unknown label.
+        let src = "void f() {}";
+        let annotated = sanitize_source_for_prompt(src, &[]);
+        assert!(
+            annotated.contains("[SKWAQ ANALYST CONTEXT]"),
+            "Empty CWE list must still get a context header"
+        );
+        assert!(
+            annotated.contains("Unknown"),
+            "Empty CWE list header should show Unknown as target"
+        );
+        assert!(
+            annotated.contains(src),
+            "Source body must still be present for empty CWE list"
+        );
+    }
+
+    #[test]
+    fn test_cwe_brief_name_key_cwes() {
+        assert_eq!(cwe_brief_name(78), "OS Command Injection");
+        assert_eq!(cwe_brief_name(121), "Stack-Based Buffer Overflow");
+        assert_eq!(cwe_brief_name(122), "Heap-Based Buffer Overflow");
+        assert_eq!(cwe_brief_name(590), "Free of Memory Not on the Heap");
+        assert_eq!(cwe_brief_name(680), "Integer Overflow to Buffer Overflow");
+        assert_eq!(cwe_brief_name(416), "Use After Free");
+        assert_eq!(cwe_brief_name(476), "NULL Pointer Dereference");
+    }
+
+    #[test]
+    fn test_cwe_detection_hint_returns_non_empty() {
+        // All FN-pattern CWEs must return a non-empty, non-generic hint.
+        let fn_cwes = [
+            77u32, 78, 88, 119, 120, 121, 122, 125, 134, 190, 191, 415, 416, 476, 590, 680, 787,
+        ];
+        for cwe in fn_cwes {
+            let hint = cwe_detection_hint(&[cwe]);
+            assert!(
+                !hint.is_empty(),
+                "CWE-{cwe} must return a non-empty detection hint"
+            );
+            // Specific CWEs should NOT fall through to the generic hint
+            assert_ne!(
+                hint, "Trace user-controlled data from input sources to dangerous sinks.",
+                "CWE-{cwe} should have a specific hint, not the generic fallback"
+            );
+        }
     }
 
     #[test]
