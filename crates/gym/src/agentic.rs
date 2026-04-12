@@ -234,9 +234,31 @@ pub async fn run_agentic_multi_file_source_analysis(
     companions: &[PathBuf],
     timeout_secs: u64,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
+    let runtime_config = Config::load()
+        .context("Failed to load skwaq configuration for multi-file benchmark analysis")?;
+    run_agentic_multi_file_source_analysis_with_runtime_config(
+        primary,
+        companions,
+        timeout_secs,
+        &runtime_config,
+    )
+    .await
+}
+
+pub async fn run_agentic_multi_file_source_analysis_with_runtime_config(
+    primary: &Path,
+    companions: &[PathBuf],
+    timeout_secs: u64,
+    runtime_config: &Config,
+) -> anyhow::Result<Vec<DetectedFinding>> {
     if companions.len() <= 1 {
         // No companions — fall back to single-file analysis
-        return run_agentic_source_analysis(primary, timeout_secs).await;
+        return run_agentic_source_analysis_with_runtime_config(
+            primary,
+            timeout_secs,
+            runtime_config,
+        )
+        .await;
     }
 
     // Ingest all files into a shared graph, then run the agent pipeline

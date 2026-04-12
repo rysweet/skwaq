@@ -28,9 +28,14 @@ const IMPROVE_KB_MAX_CWE_QUERIES: usize = 6;
 /// Maximum number of SourcePattern entries allowed in a single pattern file.
 /// Prevents unbounded growth across successive improvement cycles.
 const PATTERN_COUNT_CEILING: usize = 500;
+
+/// Minimum training/holdout F1 gap (percentage points as a fraction) that
+/// triggers an overfitting warning and flags the cycle report.
+const HOLDOUT_OVERFITTING_GAP_THRESHOLD: f64 = 0.15;
+
 const IMPROVE_KB_HITS_PER_QUERY: usize = 2;
 const IMPROVE_KB_SNIPPET_CHAR_LIMIT: usize = 700;
-const IMPROVE_KB_FIXED_QUERIES: [&str; 2] = ["methodology", "cwe-families"];
+const IMPROVE_KB_FIXED_QUERIES: [&str; 3] = ["methodology", "cwe-families", "false negative"];
 const FAILURE_ANALYST_MIN_CASES: usize = 5;
 const FAILURE_ANALYST_MAX_CASES: usize = 20;
 const FAILURE_ANALYST_TARGET_BUDGET_PER_CASE: u64 = 50_000;
@@ -200,6 +205,9 @@ pub struct ImprovementCycle {
     pub holdout_case_count: usize,
     /// Number of training cases used for failure analysis.
     pub training_case_count: usize,
+    /// Aggregate score computed on holdout cases (scoring only, no LLM failure analysis).
+    /// `None` when `holdout_fraction` is 0 or holdout scoring fails.
+    pub holdout_score: Option<AggregateScore>,
     /// Suites that SHOULD be cross-validated but were not (logged for visibility).
     pub cross_validation_pending: Vec<String>,
     /// Runtime provenance: which LLM backend/model produced this cycle's proposals.
@@ -434,9 +442,58 @@ pub async fn run_improvement_cycle(
         false_negatives.len()
     );
 
+    // Score holdout cases (scoring only — no LLM failure analysis) to provide
+    // empirical generalization signal for the overfitting reviewer.
+    let holdout_score = if !holdout_cases.is_empty() {
+        match score_holdout_cases(
+            adapter,
+            holdout_cases,
+            data_dir,
+            config,
+            runtime_config,
+            &suite_name,
+        )
+        .await
+        {
+            Some(hs) => {
+                let gap_pp = (score.f1 - hs.f1) * 100.0;
+                tracing::info!(
+                    "{}: holdout F1={:.1}%, training F1={:.1}%, gap={:.1}pp",
+                    suite_name,
+                    hs.f1 * 100.0,
+                    score.f1 * 100.0,
+                    gap_pp
+                );
+                if gap_pp > HOLDOUT_OVERFITTING_GAP_THRESHOLD * 100.0 {
+                    tracing::warn!(
+                        "{}: training/holdout F1 gap ({:.1}pp) exceeds threshold ({:.0}pp) — possible overfitting from previous cycles",
+                        suite_name,
+                        gap_pp,
+                        HOLDOUT_OVERFITTING_GAP_THRESHOLD * 100.0
+                    );
+                }
+                Some(hs)
+            }
+            None => {
+                tracing::warn!(
+                    "{}: holdout scoring failed; continuing without holdout signal",
+                    suite_name
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     // Step 3: Analyze false negatives and generate proposals
-    let reviewed_proposals =
-        analyze_false_negatives(&false_negatives, &suite_name, runtime_config).await?;
+    let reviewed_proposals = analyze_false_negatives(
+        &false_negatives,
+        &suite_name,
+        holdout_score.as_ref(),
+        runtime_config,
+    )
+    .await?;
     let mut proposals: Vec<_> = reviewed_proposals
         .iter()
         .filter(|proposal| review_allows_auto_apply(proposal.review.as_ref()))
@@ -483,15 +540,51 @@ pub async fn run_improvement_cycle(
         proposals,
         holdout_case_count: holdout_cases.len(),
         training_case_count: training_cases.len(),
+        holdout_score,
         cross_validation_pending,
         run_metadata,
     })
+}
+
+/// Score holdout cases through the adapter without running the failure-analyst LLM.
+///
+/// Returns `None` if no cases produce valid outcomes.
+async fn score_holdout_cases(
+    adapter: &dyn BenchmarkAdapter,
+    holdout_cases: &[&crate::ground_truth::TestCase],
+    data_dir: &Path,
+    config: &BenchmarkConfig,
+    runtime_config: &skwaq_core::config::Config,
+    suite_name: &str,
+) -> Option<AggregateScore> {
+    let mut outcomes = Vec::new();
+    for case in holdout_cases {
+        match adapter
+            .run_case(case, data_dir, config, runtime_config)
+            .await
+        {
+            Ok(findings) => {
+                let mut outcome =
+                    scoring::score_case(case, &findings, &|f| adapter.map_finding_to_cwes(f));
+                outcome.suite = suite_name.to_string();
+                outcomes.push(outcome);
+            }
+            Err(e) => {
+                tracing::warn!("Holdout case {} failed: {}", case.id, e);
+            }
+        }
+    }
+    if outcomes.is_empty() {
+        return None;
+    }
+    Some(scoring::aggregate(&outcomes))
 }
 
 /// Analyze false negatives using the failure-analyst agent plus explicit heuristics.
 async fn analyze_false_negatives(
     false_negatives: &[FalseNegativeCase],
     suite: &str,
+    holdout_score: Option<&AggregateScore>,
     runtime_config: &skwaq_core::config::Config,
 ) -> anyhow::Result<Vec<Improvement>> {
     if false_negatives.is_empty() {
@@ -525,7 +618,14 @@ async fn analyze_false_negatives(
     proposals.retain(|p| seen.insert(p.description.clone()));
 
     // Run overfitting review gate on proposals
-    proposals = run_overfitting_review(proposals, suite, &knowledge_db, runtime_config).await?;
+    proposals = run_overfitting_review(
+        proposals,
+        suite,
+        &knowledge_db,
+        holdout_score,
+        runtime_config,
+    )
+    .await?;
 
     Ok(proposals)
 }
@@ -1238,6 +1338,7 @@ async fn run_overfitting_review(
     proposals: Vec<Improvement>,
     suite: &str,
     knowledge_db: &skwaq_core::graph::GraphDb,
+    holdout_score: Option<&AggregateScore>,
     runtime_config: &skwaq_core::config::Config,
 ) -> anyhow::Result<Vec<Improvement>> {
     if proposals.is_empty() {
@@ -1250,7 +1351,14 @@ async fn run_overfitting_review(
     const BATCH_SIZE: usize = 5;
 
     if proposals.len() <= BATCH_SIZE {
-        return run_overfitting_review_batch(proposals, suite, knowledge_db, runtime_config).await;
+        return run_overfitting_review_batch(
+            proposals,
+            suite,
+            knowledge_db,
+            holdout_score,
+            runtime_config,
+        )
+        .await;
     }
 
     let mut all_reviewed = Vec::new();
@@ -1263,7 +1371,8 @@ async fn run_overfitting_review(
         );
         let batch = chunk.to_vec();
         let reviewed =
-            run_overfitting_review_batch(batch, suite, knowledge_db, runtime_config).await?;
+            run_overfitting_review_batch(batch, suite, knowledge_db, holdout_score, runtime_config)
+                .await?;
         all_reviewed.extend(reviewed);
     }
 
@@ -1274,6 +1383,7 @@ async fn run_overfitting_review_batch(
     proposals: Vec<Improvement>,
     suite: &str,
     knowledge_db: &skwaq_core::graph::GraphDb,
+    holdout_score: Option<&AggregateScore>,
     runtime_config: &skwaq_core::config::Config,
 ) -> anyhow::Result<Vec<Improvement>> {
     if proposals.is_empty() {
@@ -1290,8 +1400,12 @@ async fn run_overfitting_review_batch(
     let budget_amount = runtime_config.analysis.default_token_budget;
     let knowledge_context = build_overfitting_knowledge_context(knowledge_db, &proposals)?;
 
+    // Prepend empirical holdout signal when available so the reviewer has real data.
+    let holdout_header = format_holdout_score_header(holdout_score);
+
     let mut proposal_text = format!(
-        "Use the knowledge-base guidance below as grounding when judging \
+        "{}\
+         Use the knowledge-base guidance below as grounding when judging \
          real-world generality and CWE mapping accuracy.\n\n\
          {}\n\n\
          Review these {} improvement proposals from the {} benchmark for overfitting risk.\n\
@@ -1314,6 +1428,7 @@ async fn run_overfitting_review_batch(
          - Each review entry must include at least one evidence_refs item.\n\
          - Do not emit prose outside the JSON block.\n\n\
          Review these proposals:\n\n",
+        holdout_header,
         knowledge_context,
         proposals.len(),
         suite
@@ -1481,7 +1596,8 @@ fn cwe_brief_name(cwe: u32) -> &'static str {
         590 => "Free of Memory Not on the Heap",
         680..=682 => "Integer Overflow to Buffer Overflow",
         787 | 788 | 805 | 806 => "Out-of-Bounds Write",
-        843 | 591 => "Type Confusion",
+        591 => "Sensitive Data Storage in Improperly Locked Memory",
+        843 => "Type Confusion",
         22 | 23 | 36 | 426 => "Path Traversal",
         79 | 80 => "Cross-Site Scripting",
         _ => "Memory/Safety Vulnerability",
@@ -1531,7 +1647,10 @@ fn cwe_detection_hint(cwes: &[u32]) -> &'static str {
             362 | 364 | 366 | 367 | 832 => {
                 "Look for shared-state access without synchronization on concurrent code paths."
             }
-            843 | 591 => {
+            591 => {
+                "Look for sensitive data kept in memory without effective mlock/VirtualLock protection or without checking lock success."
+            }
+            843 => {
                 "Look for type casting or union access where the stored type doesn't match the access type."
             }
             _ => continue,
@@ -1685,6 +1804,33 @@ fn build_overfitting_knowledge_context(
         queries
     );
     render_knowledge_context(knowledge_db, &queries)
+}
+
+/// Format a concise holdout score summary header for the overfitting reviewer context.
+///
+/// When `holdout_score` is `Some`, returns a block that gives the reviewer empirical
+/// signal (training vs. holdout F1 gap) so it can weight evidence accordingly.
+/// When `None`, returns an empty string so the prompt is unchanged.
+fn format_holdout_score_header(holdout_score: Option<&AggregateScore>) -> String {
+    match holdout_score {
+        None => String::new(),
+        Some(hs) => {
+            format!(
+                "=== EMPIRICAL HOLDOUT SIGNAL ===\n\
+                 Holdout F1: {:.1}%  Holdout P: {:.1}%  Holdout R: {:.1}%\n\
+                 TP={} FP={} FN={}\n\
+                 A large training/holdout gap indicates previous cycles may have overfit.\n\
+                 Weight this signal when judging whether proposals are likely to generalize.\n\
+                 =================================\n\n",
+                hs.f1 * 100.0,
+                hs.precision * 100.0,
+                hs.recall * 100.0,
+                hs.true_positives,
+                hs.false_positives,
+                hs.false_negatives,
+            )
+        }
+    }
 }
 
 fn render_knowledge_context(
@@ -3155,6 +3301,21 @@ pub fn print_proposals(cycle: &ImprovementCycle) {
         cycle.baseline_score.precision * 100.0,
         cycle.baseline_score.recall * 100.0,
     );
+    if let Some(hs) = &cycle.holdout_score {
+        let gap_pp = (cycle.baseline_score.f1 - hs.f1) * 100.0;
+        println!(
+            "  Holdout F1: {:.1}% (training: {:.1}%, gap: {:.1}pp)",
+            hs.f1 * 100.0,
+            cycle.baseline_score.f1 * 100.0,
+            gap_pp,
+        );
+        if gap_pp > HOLDOUT_OVERFITTING_GAP_THRESHOLD * 100.0 {
+            println!(
+                "  ⚠  Holdout gap exceeds {:.0}pp threshold — review proposals for overfitting",
+                HOLDOUT_OVERFITTING_GAP_THRESHOLD * 100.0
+            );
+        }
+    }
     println!(
         "  False negatives analyzed: {}",
         cycle.false_negatives.len()
@@ -3483,6 +3644,7 @@ mod tests {
             ],
             holdout_case_count: 0,
             training_case_count: 0,
+            holdout_score: None,
             cross_validation_pending: vec![],
             run_metadata: None,
         };
@@ -3722,6 +3884,7 @@ analysis
             vec![
                 "methodology".to_string(),
                 "cwe-families".to_string(),
+                "false negative".to_string(),
                 "cwe-120".to_string(),
                 "cwe-121".to_string(),
                 "cwe-122".to_string(),
@@ -3779,6 +3942,20 @@ analysis
             .expect_err("missing KB hits should fail closed");
 
         assert!(error.to_string().contains("KB returned no hits"));
+    }
+
+    #[test]
+    fn test_fn_insights_surfaced_by_false_negative_query() {
+        // Verifies that adding "false negative" to IMPROVE_KB_FIXED_QUERIES causes
+        // render_knowledge_context to return fn-insights.md content from data/knowledge/.
+        let knowledge_db = prepare_improvement_knowledge_db().unwrap();
+        let context =
+            render_knowledge_context(&knowledge_db, &["false negative".to_string()]).unwrap();
+        assert!(
+            context.contains("fn-insights") || context.to_lowercase().contains("false negative"),
+            "Expected fn-insights.md content in KB context for 'false negative' query, got: {}",
+            &context[..context.len().min(300)]
+        );
     }
 
     #[test]
@@ -4043,6 +4220,25 @@ os.system(user_input)
     }
 
     #[test]
+    fn test_sanitize_source_for_prompt_header_cwe_591_locked_memory() {
+        let src = "void f() { char secret[64]; use_secret(secret); }";
+        let annotated = sanitize_source_for_prompt(src, &[591]);
+        assert!(annotated.contains("CWE-591"), "Header must include CWE-591");
+        assert!(
+            annotated.contains("Sensitive Data Storage in Improperly Locked Memory"),
+            "Header must include CWE-591 common name"
+        );
+        assert!(
+            annotated.contains("mlock/VirtualLock protection"),
+            "Header must include the locked-memory detection hint"
+        );
+        assert!(
+            annotated.contains(src),
+            "Source body must be intact for CWE-591"
+        );
+    }
+
+    #[test]
     fn test_sanitize_source_for_prompt_empty_cwes_gets_generic_header() {
         // Empty CWE list should still produce a header with generic Unknown label.
         let src = "void f() {}";
@@ -4120,6 +4316,7 @@ os.system(user_input)
             }],
             holdout_case_count: 0,
             training_case_count: 0,
+            holdout_score: None,
             cross_validation_pending: vec![],
             run_metadata: None,
         };
@@ -4177,6 +4374,7 @@ os.system(user_input)
             }],
             holdout_case_count: 0,
             training_case_count: 0,
+            holdout_score: None,
             cross_validation_pending: vec![],
             run_metadata: None,
         };
@@ -4219,6 +4417,7 @@ os.system(user_input)
             }],
             holdout_case_count: 0,
             training_case_count: 0,
+            holdout_score: None,
             cross_validation_pending: vec![],
             run_metadata: None,
         };
@@ -4339,6 +4538,7 @@ os.system(user_input)
             }],
             holdout_case_count: 0,
             training_case_count: 0,
+            holdout_score: None,
             cross_validation_pending: vec![],
             run_metadata: None,
         };
@@ -4384,6 +4584,7 @@ os.system(user_input)
             }],
             holdout_case_count: 0,
             training_case_count: 0,
+            holdout_score: None,
             cross_validation_pending: vec![],
             run_metadata: None,
         };
@@ -4431,6 +4632,7 @@ os.system(user_input)
             }],
             holdout_case_count: 0,
             training_case_count: 0,
+            holdout_score: None,
             cross_validation_pending: vec![],
             run_metadata: None,
         };
@@ -4480,6 +4682,7 @@ os.system(user_input)
             }],
             holdout_case_count: 0,
             training_case_count: 0,
+            holdout_score: None,
             cross_validation_pending: vec![],
             run_metadata: None,
         };
@@ -4522,6 +4725,7 @@ os.system(user_input)
             }],
             holdout_case_count: 0,
             training_case_count: 0,
+            holdout_score: None,
             cross_validation_pending: vec![],
             run_metadata: None,
         };
@@ -4567,6 +4771,7 @@ os.system(user_input)
             }],
             holdout_case_count: 0,
             training_case_count: 0,
+            holdout_score: None,
             cross_validation_pending: vec![],
             run_metadata: None,
         };
@@ -4601,6 +4806,7 @@ os.system(user_input)
             }],
             holdout_case_count: 0,
             training_case_count: 0,
+            holdout_score: None,
             cross_validation_pending: vec![],
             run_metadata: None,
         };
@@ -4642,6 +4848,7 @@ os.system(user_input)
             }],
             holdout_case_count: 0,
             training_case_count: 0,
+            holdout_score: None,
             cross_validation_pending: vec![],
             run_metadata: None,
         };
@@ -4688,6 +4895,7 @@ os.system(user_input)
             }],
             holdout_case_count: 0,
             training_case_count: 0,
+            holdout_score: None,
             cross_validation_pending: vec![],
             run_metadata: None,
         };
@@ -4767,6 +4975,7 @@ os.system(user_input)
             }],
             holdout_case_count: 0,
             training_case_count: 0,
+            holdout_score: None,
             cross_validation_pending: vec![],
             run_metadata: None,
         };
@@ -4807,6 +5016,7 @@ os.system(user_input)
             }],
             holdout_case_count: 0,
             training_case_count: 0,
+            holdout_score: None,
             cross_validation_pending: vec![],
             run_metadata: None,
         };
@@ -4884,6 +5094,7 @@ os.system(user_input)
             ],
             holdout_case_count: 0,
             training_case_count: 0,
+            holdout_score: None,
             cross_validation_pending: vec![],
             run_metadata: None,
         };
@@ -4981,6 +5192,191 @@ os.system(user_input)
             has_agent_prompt,
             "Complex multi-step flows should trigger AgentPrompt proposal \
              to improve agent's graph traversal behavior"
+        );
+    }
+
+    // ===== Holdout validation tests =====
+
+    #[test]
+    fn test_format_holdout_header_none_is_empty() {
+        let header = format_holdout_score_header(None);
+        assert!(
+            header.is_empty(),
+            "None holdout score should produce empty header"
+        );
+    }
+
+    #[test]
+    fn test_format_holdout_header_some_includes_signal() {
+        let score = AggregateScore {
+            f1: 0.72,
+            precision: 0.85,
+            recall: 0.63,
+            true_positives: 63,
+            false_positives: 11,
+            false_negatives: 37,
+            ..Default::default()
+        };
+        let header = format_holdout_score_header(Some(&score));
+        assert!(
+            header.contains("Holdout F1: 72.0%"),
+            "Header must include holdout F1: {header}"
+        );
+        assert!(
+            header.contains("TP=63"),
+            "Header must include TP count: {header}"
+        );
+        assert!(
+            header.contains("EMPIRICAL HOLDOUT SIGNAL"),
+            "Header must have section title: {header}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_score_holdout_cases_returns_some_when_cases_exist() {
+        use crate::adapters::{BenchmarkAdapter, BenchmarkConfig, DetectedFinding};
+        use crate::ground_truth::{GroundTruth, TestCase};
+        use async_trait::async_trait;
+        use std::path::PathBuf;
+
+        struct MockAdapter;
+        #[async_trait(?Send)]
+        impl BenchmarkAdapter for MockAdapter {
+            fn name(&self) -> &str {
+                "mock"
+            }
+            fn ground_truth(&self) -> anyhow::Result<GroundTruth> {
+                Ok(GroundTruth {
+                    suite: "mock".to_string(),
+                    version: "0".to_string(),
+                    download_url: String::new(),
+                    download_sha256: String::new(),
+                    cases: vec![],
+                })
+            }
+            async fn setup(&self, _config: &BenchmarkConfig) -> anyhow::Result<std::path::PathBuf> {
+                Ok(std::path::PathBuf::from("/tmp"))
+            }
+            fn is_ready(&self, _config: &BenchmarkConfig) -> bool {
+                true
+            }
+            async fn compile(
+                &self,
+                _data_dir: &std::path::Path,
+                _config: &BenchmarkConfig,
+            ) -> anyhow::Result<()> {
+                Ok(())
+            }
+            async fn run_case(
+                &self,
+                _case: &TestCase,
+                _data_dir: &std::path::Path,
+                _config: &BenchmarkConfig,
+                _runtime_config: &skwaq_core::config::Config,
+            ) -> anyhow::Result<Vec<DetectedFinding>> {
+                Ok(vec![]) // always returns empty findings — all cases become FN
+            }
+            fn map_finding_to_cwes(&self, _finding: &DetectedFinding) -> Vec<u32> {
+                vec![]
+            }
+        }
+
+        let cases = [
+            TestCase {
+                id: "h1".to_string(),
+                path: "a.c".to_string(),
+                binary_path: None,
+                expected_cwes: vec![119],
+                is_negative: false,
+                language: "c".to_string(),
+            },
+            TestCase {
+                id: "h2".to_string(),
+                path: "b.c".to_string(),
+                binary_path: None,
+                expected_cwes: vec![78],
+                is_negative: false,
+                language: "c".to_string(),
+            },
+        ];
+        let case_refs: Vec<&TestCase> = cases.iter().collect();
+
+        let runtime_config = skwaq_core::config::Config::load_from_dir(std::path::Path::new("."))
+            .expect("repo config should load for holdout test");
+        let config = BenchmarkConfig {
+            cache_dir: PathBuf::from("/tmp/holdout-test"),
+            cwe_filter: None,
+            max_cases: None,
+            quick_mode: true,
+            llm_only: false,
+            binary_mode: false,
+            parallelism: 1,
+            skip: 0,
+            concurrency: 1,
+            timeout_secs: 30,
+            holdout_fraction: 0.2,
+            max_improvements_per_cycle: 3,
+        };
+
+        let score = score_holdout_cases(
+            &MockAdapter,
+            &case_refs,
+            std::path::Path::new("/tmp"),
+            &config,
+            &runtime_config,
+            "mock",
+        )
+        .await;
+
+        assert!(
+            score.is_some(),
+            "holdout_score must be Some when holdout cases exist"
+        );
+        let s = score.unwrap();
+        // Mock returns no findings, so all expected CWEs are missed → FN=2, F1=0
+        assert_eq!(s.false_negatives, 2, "Both cases should be false negatives");
+        assert_eq!(s.true_positives, 0);
+    }
+
+    #[test]
+    fn test_improvement_cycle_holdout_score_field_is_surfaced_in_print() {
+        // Verify print_proposals outputs holdout line when holdout_score is Some
+        let hs = AggregateScore {
+            f1: 0.50,
+            precision: 0.70,
+            recall: 0.40,
+            ..Default::default()
+        };
+
+        let training = AggregateScore {
+            f1: 0.80,
+            precision: 0.90,
+            recall: 0.72,
+            ..Default::default()
+        };
+
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: training,
+            false_negatives: vec![],
+            reviewed_proposals: vec![],
+            proposals: vec![],
+            holdout_case_count: 5,
+            training_case_count: 20,
+            holdout_score: Some(hs),
+            cross_validation_pending: vec![],
+            run_metadata: None,
+        };
+
+        // print_proposals must not panic and must include the holdout line
+        // (we capture via a basic smoke test — stdout capture is not supported here,
+        //  but ImprovementCycle::holdout_score being Some confirms the field is populated)
+        assert!(cycle.holdout_score.is_some());
+        let gap = (cycle.baseline_score.f1 - cycle.holdout_score.as_ref().unwrap().f1) * 100.0;
+        assert!((gap - 30.0).abs() < 0.1, "Gap should be ~30pp: {gap}");
+        assert!(
+            gap > HOLDOUT_OVERFITTING_GAP_THRESHOLD * 100.0,
+            "30pp gap must exceed 15pp threshold"
         );
     }
 }

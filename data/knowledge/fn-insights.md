@@ -7872,3 +7872,40 @@ This guidance lets the agent recognize `argv[1]` as user input, see it used in `
 
 ---
 
+## Infrastructure Fix: Multi-File Case Detection (2026-04-11)
+
+### Root Cause: Adapter Single-File Blindness
+
+The `fixtures` adapter registered the `multi_file` case with `path = "multi_file/main.c"` and
+passed only that single file to `run_source_pattern_detection` (quick mode) and
+`run_agentic_source_analysis` (full mode). Since `main.c` contains no dangerous patterns itself
+(it only calls `parse_input(argv[1])` → `process_data(parsed)`), neither the pattern detector
+nor the agent context received the companion files where the actual vulnerabilities live.
+
+**Vulnerability chain:**
+- `main.c`: receives `argv[1]`, calls `parse_input()` and `process_data()` — no sinks
+- `parser.c`: `parse_input()` calls `strcpy(malloc(128), raw_input)` — **CWE-122** heap overflow
+- `processor.c`: `process_data()` calls `system("echo %s | process_tool", parsed)` — **CWE-78** command injection
+
+### Fix Applied
+
+`crates/gym/src/adapters/fixtures.rs` now detects multi-file cases by checking whether the target
+path is inside a subdirectory of `data_dir`. When it is, the adapter:
+1. Collects all C/C++ source and header files in that subdirectory via `collect_companion_files`.
+2. In **quick mode**: calls `run_multi_file_pattern_analysis(&companions)` to run per-file and
+   cross-file pattern detection across all files simultaneously.
+3. In **full agentic mode**: calls `run_agentic_multi_file_source_analysis(&primary, &companions)`
+   to ingest all companion files into a shared Code Property Graph before running the agent pipeline.
+
+### Lesson for Agent Analysis
+
+When the entry-point file has no dangerous patterns but calls helper functions, the helpers MUST be
+read via cross-file tools. `get_callees("<entry>")` → `read_function("<helper>")` chain is the
+minimum required for entry-point-style multi-file cases. Do not conclude "no vulnerability" from
+a pattern scan of main.c alone when it dispatches to separate compilation units.
+
+- **[Infrastructure Fix] [DONE]** Multi-file case detection fixed in `crates/gym/src/adapters/fixtures.rs`
+  — adapter now uses `collect_companion_files` + `run_multi_file_pattern_analysis` for subdirectory cases
+  CWEs: [122, 78] | Case: multi_file
+
+

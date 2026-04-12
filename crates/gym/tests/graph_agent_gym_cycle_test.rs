@@ -58,6 +58,7 @@ fn make_cycle_with_proposals(proposals: Vec<Improvement>) -> ImprovementCycle {
         proposals,
         holdout_case_count: 0,
         training_case_count: 0,
+        holdout_score: None,
         cross_validation_pending: vec![],
         run_metadata: None,
     }
@@ -1238,6 +1239,7 @@ fn test_cycle_proposals_and_reviewed_proposals_are_disjoint() {
             }),
         }],
         holdout_case_count: 4,
+        holdout_score: None,
         training_case_count: 16,
         cross_validation_pending: vec![],
         run_metadata: None,

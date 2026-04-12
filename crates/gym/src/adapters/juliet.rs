@@ -176,10 +176,11 @@ impl BenchmarkAdapter for JulietAdapter {
                 )
                 .await
             } else {
-                crate::agentic::run_agentic_multi_file_source_analysis(
+                crate::agentic::run_agentic_multi_file_source_analysis_with_runtime_config(
                     &source_path,
                     &companion_files,
                     config.timeout_secs,
+                    runtime_config,
                 )
                 .await
             }

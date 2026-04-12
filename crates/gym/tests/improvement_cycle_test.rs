@@ -51,6 +51,7 @@ fn make_cycle_with_proposals(proposals: Vec<Improvement>) -> ImprovementCycle {
         proposals,
         holdout_case_count: 0,
         training_case_count: 0,
+        holdout_score: None,
         cross_validation_pending: vec![],
         run_metadata: None,
     }
@@ -708,6 +709,7 @@ fn test_cycle_tracks_holdout_and_training_counts() {
         reviewed_proposals: vec![],
         proposals: vec![],
         holdout_case_count: 4,
+        holdout_score: None,
         training_case_count: 16,
         cross_validation_pending: vec!["juliet".to_string(), "owasp".to_string()],
         run_metadata: None,
