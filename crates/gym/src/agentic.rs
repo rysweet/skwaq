@@ -732,7 +732,19 @@ pub async fn run_agentic_source_analysis_with_hints_and_runtime_config(
         );
     } else {
         let agent_results =
-            run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs, runtime_config).await?;
+            match run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs, runtime_config).await {
+                Ok(results) => results,
+                Err(e) => {
+                    tracing::warn!(
+                        "LLM pipeline failed for {}, falling back to pattern-only findings: {}",
+                        file_str,
+                        e
+                    );
+                    // Gracefully degrade to pattern-detected findings already in the graph.
+                    let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
+                    return Ok(dedup_findings_by_best_severity(all_findings));
+                }
+            };
 
         // Extract confidence from structured agent outputs and enrich findings.
         let confidence_map = extract_confidence_from_agent_results(&agent_results);
@@ -878,9 +890,16 @@ pub async fn run_agentic_binary_analysis_with_runtime_config(
             orchestrator_findings.len(),
             file_str,
         );
-    } else {
-        let _agent_results =
-            run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs, runtime_config).await?;
+    } else if let Err(e) =
+        run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs, runtime_config).await
+    {
+        tracing::warn!(
+            "LLM pipeline failed for binary {}, falling back to pattern-only findings: {}",
+            file_str,
+            e
+        );
+        let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
+        return Ok(dedup_findings_by_best_severity(all_findings));
     }
 
     // Synthesis — weigh all evidence

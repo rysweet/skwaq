@@ -1374,6 +1374,19 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::Critical,
             reason: "_execl (MSVC) executes a program; validate all arguments",
         },
+        // Unicode/wide-char conversion patterns (CWE-176) — gym cycle 20260412
+        SourcePattern {
+            regex: r"\bWideCharToMultiByte\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "WideCharToMultiByte without adequate destination-buffer size check may overflow the output buffer (CWE-176/CWE-119); always query required size first and verify the destination buffer is large enough",
+        },
+        SourcePattern {
+            regex: r"\bMultiByteToWideChar\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "MultiByteToWideChar without destination-buffer size check may overflow the wide-char output buffer (CWE-119); validate required size before conversion",
+        },
         // Integer truncation/cast patterns (CWE-190/195/197) — from self-improvement iteration 8
         SourcePattern {
             regex: r"\(\s*(?:unsigned\s+)?(?:short|char)\s*\)\s*\w",
