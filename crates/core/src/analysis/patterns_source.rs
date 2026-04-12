@@ -1933,12 +1933,14 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::Medium,
             reason: "Thread created; ensure shared data is protected with mutexes or atomic operations",
         },
-        // Uncontrolled search path: putenv with data (CWE-427)
+        // Uncontrolled search path: putenv/setenv/PUTENV with data (CWE-427)
+        // Juliet test suite defines PUTENV as a macro for putenv/_putenv, so we match both
+        // the lowercase function names and the uppercase PUTENV macro form.
         SourcePattern {
-            regex: r"\b(?:putenv|_putenv|_wputenv)\s*\(",
+            regex: r"\b(?:PUTENV|putenv|_putenv|_wputenv|setenv)\s*\(",
             category: DangerCategory::PathTraversal,
             severity: Severity::High,
-            reason: "putenv modifies search path; validate input to prevent PATH hijacking (CWE-427)",
+            reason: "putenv/setenv modifies environment search path with uncontrolled input; validate to prevent PATH hijacking (CWE-427 uncontrolled search path element)",
         },
         // Pointer subtraction on potentially different objects (CWE-469)
         SourcePattern {
@@ -2940,6 +2942,34 @@ ctypes.memmove(buf, data, len(data))
             hits.iter()
                 .map(|h| (&h.function_name, &h.danger_category))
                 .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_detect_c_putenv_search_path_patterns() {
+        // Juliet CWE-427 uses #define PUTENV putenv / PUTENV(data) — test both forms.
+        let src = r#"
+#define PUTENV putenv
+void bad(char *data) {
+    PUTENV(data);
+}
+void bad2(char *data) {
+    putenv(data);
+}
+void bad3(char *data) {
+    setenv("PATH", data, 1);
+}
+"#;
+        let hits = detect_in_source_content(src, "c", "cwe427.c").unwrap();
+        let categories: Vec<_> = hits.iter().map(|h| &h.danger_category).collect();
+        assert!(
+            hits.iter()
+                .any(|h| h.danger_category == DangerCategory::PathTraversal
+                    && (h.function_name.contains("PUTENV")
+                        || h.function_name.contains("putenv")
+                        || h.function_name.contains("setenv"))),
+            "Should detect PUTENV/putenv/setenv as CWE-427 search path manipulation, got: {:?}",
+            categories
         );
     }
 }

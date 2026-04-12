@@ -459,7 +459,16 @@ fn is_path_traversal(category: &str, title: &str, function_name: &str) -> bool {
 }
 
 fn is_untrusted_search_path(category: &str, title: &str, function_name: &str) -> bool {
-    const SEARCH_PATH_APIS: &[&str] = &["dlopen", "loadlibrary", "loadlibraryex"];
+    const SEARCH_PATH_APIS: &[&str] = &[
+        "dlopen",
+        "loadlibrary",
+        "loadlibraryex",
+        // Environment variable / PATH manipulation (CWE-427)
+        "putenv",
+        "_putenv",
+        "_wputenv",
+        "setenv",
+    ];
     const SEARCH_PATH_TERMS: &[&str] = &[
         "untrusted search path",
         "uncontrolled search path",
@@ -468,6 +477,10 @@ fn is_untrusted_search_path(category: &str, title: &str, function_name: &str) ->
         "dll search path",
         "loadlibrary",
         "dlopen",
+        // env-path mutation APIs (CWE-427): matched via title "Dangerous API: putenv(" or "Dangerous API: PUTENV("
+        "putenv",
+        "PUTENV",
+        "setenv",
     ];
 
     is_function(function_name, SEARCH_PATH_APIS)
@@ -1079,6 +1092,49 @@ mod tests {
 
         assert!(classes.contains(&SemanticPatternClass::UntrustedSearchPath));
         assert!(!classes.contains(&SemanticPatternClass::PathTraversal));
+    }
+
+    #[test]
+    fn classifies_putenv_as_untrusted_search_path_cwe427() {
+        // Production title when source pattern fires: "Dangerous API: putenv("
+        let classes = SemanticPatternClassifier::new().classify(
+            "path_traversal",
+            "Dangerous API: putenv(",
+            "putenv(",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UntrustedSearchPath),
+            "putenv should be CWE-427 UntrustedSearchPath"
+        );
+        assert!(!classes.contains(&SemanticPatternClass::PathTraversal));
+    }
+
+    #[test]
+    fn classifies_putenv_macro_uppercase_as_untrusted_search_path_cwe427() {
+        // Juliet uses #define PUTENV putenv, so matched text is "PUTENV("
+        let classes = SemanticPatternClassifier::new().classify(
+            "path_traversal",
+            "Dangerous API: PUTENV(",
+            "PUTENV(",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UntrustedSearchPath),
+            "PUTENV macro should be CWE-427 UntrustedSearchPath"
+        );
+        assert!(!classes.contains(&SemanticPatternClass::PathTraversal));
+    }
+
+    #[test]
+    fn classifies_setenv_as_untrusted_search_path_cwe427() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "path_traversal",
+            "Dangerous API: setenv(",
+            "setenv(",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UntrustedSearchPath),
+            "setenv should be CWE-427 UntrustedSearchPath"
+        );
     }
 
     #[test]
