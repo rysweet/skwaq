@@ -2936,13 +2936,14 @@ pub fn apply_accepted_proposals(
             continue;
         }
         if proposal.patch.replace.is_empty() {
-            let reason = format!(
-                "Accepted proposal '{}' has empty patch content and cannot be auto-applied",
+            // Empty patch means the proposal is guidance only (e.g., architectural
+            // improvements) and cannot be auto-applied regardless of review status.
+            // Count as skipped — not blocked — so the cycle completes cleanly.
+            tracing::info!(
+                "Accepted proposal '{}' has no auto-apply patch; counting as skipped",
                 proposal.description
             );
-            report.blocked += 1;
-            report.blocked_reasons.push(reason.clone());
-            warn_or_bail(strict_mode, reason)?;
+            report.skipped += 1;
             continue;
         }
         applicable.push(proposal);

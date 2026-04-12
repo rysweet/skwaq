@@ -143,6 +143,67 @@ fn test_apply_skips_empty_replace_proposals() {
         applied.applied, 0,
         "Empty-replace proposals should be skipped"
     );
+    assert_eq!(
+        applied.skipped, 1,
+        "Empty-replace proposal should be counted as skipped"
+    );
+    assert_eq!(
+        applied.blocked, 0,
+        "Empty-replace proposal should not be blocked"
+    );
+}
+
+/// When the overfitting reviewer has accepted a proposal (strict_mode = true) but the
+/// proposal carries no patch (architectural guidance only), `apply_accepted_proposals`
+/// must still complete successfully, counting the proposal as skipped.
+#[test]
+fn test_apply_reviewed_empty_patch_proposal_is_skipped_not_error() {
+    let reviewed_proposal = Improvement {
+        kind: ImprovementKind::NewPattern,
+        description: "Improve CPG ingestion for better coverage".to_string(),
+        target_cwes: vec![22],
+        target_file: PathBuf::from("crates/core/src/analysis/patterns_source.rs"),
+        patch: Patch {
+            find: String::new(),
+            replace: String::new(), // no auto-apply patch
+        },
+        source_case: "cse_path_traversal".to_string(),
+        priority: Priority::High,
+        supporting_evidence: vec![],
+        review: Some(ReviewDecision {
+            verdict: ReviewVerdict::Accept,
+            reason: "Valid architectural guidance.".to_string(),
+            overfitting_risk: ReviewRating::Low,
+            real_world_applicability: ReviewRating::High,
+            suggested_modification: None,
+            evidence_refs: vec![],
+        }),
+    };
+    // Use reviewed_proposals so strict_mode = true
+    let cycle = ImprovementCycle {
+        suite: "fixtures".to_string(),
+        baseline_score: make_score(vec![(22, 0.5)]),
+        false_negatives: vec![],
+        reviewed_proposals: vec![reviewed_proposal],
+        proposals: vec![],
+        holdout_case_count: 0,
+        training_case_count: 0,
+        holdout_score: None,
+        cross_validation_pending: vec![],
+        run_metadata: None,
+    };
+
+    let report = apply_accepted_proposals(&cycle, None)
+        .expect("Empty-patch reviewed proposal must not cause an error");
+    assert_eq!(report.applied, 0, "Nothing should be applied");
+    assert_eq!(
+        report.skipped, 1,
+        "Empty-patch reviewed proposal should be counted as skipped"
+    );
+    assert_eq!(
+        report.blocked, 0,
+        "Empty-patch reviewed proposal should not be blocked"
+    );
 }
 
 #[test]
