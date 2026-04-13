@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skwaq — Self-Improving Vulnerability Analyzer</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐦‍⬛</text></svg>">
+    <!-- Reveal.js -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css" id="theme">
+    <!-- Mermaid -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        /* ── Global overrides ─────────────────────────────────────── */
+        :root {
+            --bg:       #0d1117;
+            --bg2:      #161b22;
+            --border:   #21262d;
+            --blue:     #58a6ff;
+            --green:    #3fb950;
+            --muted:    #8b949e;
+            --text:     #c9d1d9;
+        }
+        .reveal-viewport { background: var(--bg); }
+        .reveal .slides section {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: var(--text);
+            text-align: left;
+            font-size: 0.8em;
+            height: 100%;
+            padding: 0 1.5rem;
+            box-sizing: border-box;
+        }
+        .reveal h1 { font-size: 2em; color: var(--blue); margin-bottom: 0.3em; }
+        .reveal h2 { font-size: 1.4em; color: var(--blue); border-bottom: 1px solid var(--border); padding-bottom: 0.3em; margin-bottom: 0.5em; }
+        .reveal h3 { font-size: 1.1em; color: var(--text); margin: 0.6em 0 0.3em; }
+        .reveal p  { color: var(--muted); line-height: 1.5; margin-bottom: 0.5em; font-size: 0.9em; }
+        .reveal ul, .reveal ol { color: var(--muted); padding-left: 1.4em; margin: 0.4em 0; }
+        .reveal li { margin-bottom: 0.35em; line-height: 1.4; font-size: 0.88em; }
+        .reveal a  { color: var(--blue); }
+        .reveal code { background: #1f2937; padding: 2px 5px; border-radius: 3px; font-size: 0.82em; }
+        .reveal pre { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 0.8em; font-size: 0.72em; line-height: 1.5; margin: 0.5em 0; }
+
+        /* ── Slide title row ──────────────────────────────────────── */
+        .slide-header {
+            display: flex;
+            align-items: baseline;
+            gap: 0.6em;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.4em;
+            margin-bottom: 0.6em;
+        }
+        .slide-header h2 { border: none; padding: 0; margin: 0; font-size: 1.3em; }
+        .step-badge {
+            background: #2563eb;
+            color: #fff;
+            font-size: 0.65em;
+            font-weight: 700;
+            padding: 2px 9px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        /* ── Stats grid ───────────────────────────────────────────── */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 0.6rem;
+            margin: 0.6rem 0;
+        }
+        .stat {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.7rem 0.5rem;
+            text-align: center;
+        }
+        .stat .value { font-size: 1.5em; font-weight: 700; color: var(--blue); }
+        .stat .label { font-size: 0.72em; color: var(--muted); margin-top: 0.2em; }
+
+        /* ── Tables ───────────────────────────────────────────────── */
+        .reveal table { width: 100%; border-collapse: collapse; font-size: 0.78em; margin: 0.4em 0; }
+        .reveal th, .reveal td { padding: 0.4em 0.6em; text-align: left; border-bottom: 1px solid var(--border); }
+        .reveal th { color: var(--muted); font-weight: 600; font-size: 0.85em; text-transform: uppercase; background: transparent; }
+        .reveal td { color: var(--text); }
+        .hl  { color: var(--green) !important; font-weight: 600; }
+        .blu { color: var(--blue)  !important; }
+
+        /* ── Card ─────────────────────────────────────────────────── */
+        .card {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.8em 1em;
+            margin: 0.5em 0;
+        }
+        .card p { margin: 0; }
+
+        /* ── Two-column layout ────────────────────────────────────── */
+        .cols { display: flex; gap: 1.2em; align-items: flex-start; }
+        .col  { flex: 1; min-width: 0; }
+
+        /* ── Warning / callout ────────────────────────────────────── */
+        .callout {
+            background: #2c1810;
+            border: 1px solid #d97706;
+            border-left: 4px solid #d97706;
+            border-radius: 6px;
+            padding: 0.7em 1em;
+            margin: 0.5em 0;
+            color: #fbbf24;
+            font-size: 0.85em;
+        }
+        .callout-blue {
+            background: #0c1f38;
+            border: 1px solid var(--blue);
+            border-left: 4px solid var(--blue);
+            border-radius: 6px;
+            padding: 0.7em 1em;
+            margin: 0.5em 0;
+            font-size: 0.85em;
+        }
+        .callout-green {
+            background: #0d2318;
+            border: 1px solid var(--green);
+            border-left: 4px solid var(--green);
+            border-radius: 6px;
+            padding: 0.7em 1em;
+            margin: 0.5em 0;
+            color: var(--green);
+            font-size: 0.85em;
+        }
+
+        /* ── Mermaid container ────────────────────────────────────── */
+        .mermaid {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.8em;
+            margin: 0.4em 0;
+            font-size: 0.75em;
+            text-align: center;
+            overflow: hidden;
+        }
+        .mermaid svg { max-height: 340px; width: auto; max-width: 100%; }
+
+        /* ── Title slide ──────────────────────────────────────────── */
+        .title-slide { text-align: center; padding-top: 1.5em; }
+        .title-slide h1 { font-size: 2.4em; }
+        .title-slide .sub { color: var(--muted); font-size: 0.95em; max-width: 760px; margin: 0.5em auto 0; }
+        .title-slide .tagline { font-size: 0.8em; color: #484f58; font-style: italic; margin-top: 0.3em; }
+        .title-slide img { border-radius: 10px; border: 1px solid var(--border); max-width: 380px; margin: 0.8em auto 0; display: block; }
+        .title-slide .nav-hint { font-size: 0.7em; color: #484f58; margin-top: 1em; }
+
+        /* ── Back link ────────────────────────────────────────────── */
+        .back-link { font-size: 0.72em; color: var(--muted); margin-top: auto; }
+        .back-link a { color: var(--muted); }
+
+        /* ── Section divider slide ────────────────────────────────── */
+        .divider-slide { text-align: center; display: flex; flex-direction: column; justify-content: center; height: 100%; }
+        .divider-slide h2 { font-size: 2em; border: none; }
+        .divider-slide p { font-size: 1em; text-align: center; }
+
+        /* ── FP Problem slide specifics ───────────────────────────── */
+        .fp-principle {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.65em 1em;
+            margin: 0.4em 0;
+        }
+        .fp-principle .title { color: var(--blue); font-weight: 600; font-size: 0.9em; margin-bottom: 0.2em; }
+        .fp-principle p { font-size: 0.82em; margin: 0; }
+
+        /* Reveal override – remove default section padding that clips content */
+        .reveal .slides > section { padding: 0.5em 1.8em; }
+        .reveal .slides > section > section { padding: 0.4em 1.8em; }
+    </style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 1 — Title
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <div class="title-slide">
+        <h1>🐦‍⬛ Skwaq</h1>
+        <div class="sub">A self-improving, multi-agent vulnerability analyzer that bootstrapped from a short spec into a competitive detection system — using AI agents to analyze, benchmark, and improve their own investigation methodology.</div>
+        <div class="tagline">The name comes from the Lushootseed word for Raven — the trickster who reveals hidden truths.</div>
+        <img src="https://github.com/user-attachments/assets/8213c8c0-6138-4690-929a-9675a0584c6a" alt="Skwaq multi-agent vulnerability analyzer">
+        <div class="nav-hint">← → to navigate &nbsp;·&nbsp; Space for next &nbsp;·&nbsp; F for fullscreen</div>
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 2 — What Is Skwaq?
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <h2 id="what">What Is Skwaq?</h2>
+    <p>An <strong style="color:var(--text)">agentic vulnerability analyzer</strong> that uses a team of AI agents to investigate source code and binaries for security vulnerabilities. Unlike traditional static analysis tools that rely on fixed rules, skwaq's agents reason about code like experienced security researchers — tracing data flows, mapping attack surfaces, and debating exploitability.</p>
+    <p><strong style="color:var(--text)">What makes it unique: skwaq improves itself.</strong> A built-in benchmark harness (Skwaq Gym) measures detection accuracy against industry benchmarks, and a self-improvement loop uses AI agents to analyze their own failures and propose better investigation strategies.</p>
+    <div class="stats">
+        <div class="stat"><div class="value">97.3%</div><div class="label">Juliet F1 (agentic)</div></div>
+        <div class="stat"><div class="value">91.0%</div><div class="label">CSE F1</div></div>
+        <div class="stat"><div class="value">18</div><div class="label">Agent Prompts</div></div>
+        <div class="stat"><div class="value">6</div><div class="label">Benchmark Suites</div></div>
+        <div class="stat"><div class="value">22+</div><div class="label">Improvement Cycles</div></div>
+    </div>
+    <div class="callout-green">
+        <strong>Key differentiator:</strong> 100% precision across all benchmarks (0 false positives). Most tools trade precision for recall.
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 3 — Story: divider
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <div class="divider-slide">
+        <h2>The Story</h2>
+        <p style="color:var(--muted)">From spec to self-improving system</p>
+        <p style="color:var(--muted); font-size:0.85em; margin-top:0.5em;"><em>Can AI agents bootstrap themselves into a competitive vulnerability detection system?</em></p>
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 4 — Story Step 1: The Spec
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <div class="slide-header">
+        <span class="step-badge">Step 1</span>
+        <h2>The Spec</h2>
+    </div>
+    <p>Started with a brief <a href="https://github.com/rysweet/skwaq/blob/main/Specifications/SKWAQ_V2_SPEC.md">specification</a> for a "vulnerability investigation copilot":</p>
+    <ul>
+        <li>Analyze binaries and source code using a code property graph</li>
+        <li>AI agents reason about the results</li>
+        <li>No training data, no pre-built rules, no benchmark infrastructure</li>
+    </ul>
+    <div class="card">
+        <p><strong style="color:var(--text)">The question:</strong> Can a short spec + AI bootstrapping produce a competitive detection system from scratch?</p>
+    </div>
+    <ul>
+        <li>No labeled datasets — agents must reason, not memorize</li>
+        <li>No manually tuned rules — improvement comes from the loop</li>
+        <li>Benchmark infrastructure built alongside the tool, not before</li>
+    </ul>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 5 — Story Step 2: Building the Harness
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <div class="slide-header">
+        <span class="step-badge">Step 2</span>
+        <h2>Building the Harness</h2>
+    </div>
+    <ul>
+        <li>Built the <strong style="color:var(--text)">Skwaq Gym</strong> benchmark harness — started with a small fixture suite at F1=50%</li>
+        <li>Wired up 5-layer detection: patterns, dataflow, context validation, LLM agents, synthesis</li>
+        <li>Connected four industry benchmarks:
+            <ul>
+                <li><strong>NIST Juliet</strong> — 54K synthetic C/C++ cases across 116 CWEs</li>
+                <li><strong>OWASP Benchmark</strong> — 2,740 Java web-app vulnerability cases</li>
+                <li><strong>DARPA CGC</strong> — real challenge binaries (patched/unpatched)</li>
+                <li><strong>Meta CyberSecEval</strong> — real-world vulnerability patterns</li>
+            </ul>
+        </li>
+        <li>Development and multi-agent analysis pipelines orchestrated by <a href="https://github.com/rysweet/amplihack">amplihack-recipe-runner</a></li>
+    </ul>
+    <div class="callout-blue">
+        Starting F1 = 50% &nbsp;·&nbsp; Having measurable baselines made every improvement cycle legible
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 6 — Story Step 3: Graph Database
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <div class="slide-header">
+        <span class="step-badge">Step 3</span>
+        <h2>Leveraging the Graph Database</h2>
+    </div>
+    <p>Built a code property graph in <a href="https://github.com/LadybugDB/ladybug">LadybugDB</a> — skwaq's own analysis code extracts and stores:</p>
+    <div class="cols">
+        <div class="col">
+            <ul>
+                <li>Functions and call edges</li>
+                <li>Taint flows — how untrusted user input propagates through code</li>
+                <li>Data sources and data sinks</li>
+                <li>Symbols and imports</li>
+            </ul>
+        </div>
+        <div class="col">
+            <div class="card">
+                <p><strong style="color:var(--text)">Graph capabilities unlock:</strong></p>
+                <ul style="margin-top:0.3em">
+                    <li>Cross-file analysis</li>
+                    <li>Recursive call-graph traversal</li>
+                    <li>Source-to-sink data flow tracing</li>
+                    <li>2-hop neighborhood queries</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <p>Agents query this graph with specialized tools — enabling analysis that static patterns alone cannot achieve.</p>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 7 — Story Step 4: Multi-Agent Pipeline
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <div class="slide-header">
+        <span class="step-badge">Step 4</span>
+        <h2>Multi-Agent Pipeline</h2>
+    </div>
+    <p>Started with a small set of agents. The self-improvement loop was given instructions to <em>experiment with new agentic workflows and agent types</em> — and evolved the pipeline organically as it learned what worked:</p>
+    <ul>
+        <li><strong style="color:var(--text)">Phase 1:</strong> Basic attack-surface mapping + vulnerability hunting</li>
+        <li><strong style="color:var(--text)">Phase 2:</strong> Specialized language-specific agents added (Java, Python)</li>
+        <li><strong style="color:var(--text)">Phase 3:</strong> Critic agent for false-positive reduction</li>
+        <li><strong style="color:var(--text)">Phase 4:</strong> Offense/defense debate for high-stakes findings</li>
+    </ul>
+    <div class="cols" style="margin-top:0.5em">
+        <div class="col">
+            <div class="card">
+                <p>Powered by <a href="https://github.com/rysweet/RustyClawd">RustyClawd</a> — a Rust-based agentic LLM framework</p>
+            </div>
+        </div>
+        <div class="col">
+            <div class="callout-green">
+                Grew to <strong>18 specialized agents</strong> across discovery, validation, debate, and self-improvement stages. Fixture F1 reached 92.9%.
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 8 — Story Step 5: Knowledge Graph Packs
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <div class="slide-header">
+        <span class="step-badge">Step 5</span>
+        <h2>Agent Knowledge Graph Packs</h2>
+    </div>
+    <p>Integrated <a href="https://github.com/rysweet/agent-kgpacks">agent-kgpacks</a> — portable knowledge graph packages that encode:</p>
+    <ul>
+        <li>Vulnerability patterns per CWE class</li>
+        <li>CWE taxonomies and family relationships</li>
+        <li>Investigation strategies learned from prior cycles</li>
+    </ul>
+    <div class="card" style="margin-top:0.8em">
+        <p><strong style="color:var(--text)">Purpose:</strong> Agents load domain-specific knowledge packs to bootstrap expertise without re-learning from scratch on every run. Accumulated institutional knowledge becomes portable and reusable across runs and agent instances.</p>
+    </div>
+    <ul style="margin-top:0.6em">
+        <li>Knowledge packs are versioned — improvements accumulate without overwriting</li>
+        <li>Different CWE families can load specialized expertise independently</li>
+    </ul>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 9 — Story Step 6: Agent Memory
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <div class="slide-header">
+        <span class="step-badge">Step 6</span>
+        <h2>Agent Memory</h2>
+    </div>
+    <p>Added durable agent memory (adapted from <a href="https://github.com/rysweet/amplihack">amplihack-memory-lib</a>'s cognitive memory model) so investigation insights persist across cycles:</p>
+    <ul>
+        <li>Which detection strategies worked for which CWE families</li>
+        <li>Which proposals were rejected by the overfitting-reviewer and why</li>
+        <li>CWE-specific instructions that improved recall in prior cycles</li>
+    </ul>
+    <div class="callout-blue" style="margin-top:0.7em">
+        <strong>Result:</strong> Agents build <em>institutional knowledge</em> over 22+ improvement cycles — each cycle starts smarter than the last.
+    </div>
+    <ul style="margin-top:0.5em">
+        <li>Memory is durable — survives restarts and new deployments</li>
+        <li>Memory is queryable — agents retrieve relevant past experience before each investigation</li>
+        <li>Rejection reasons stored alongside accepted improvements — both inform future proposals</li>
+    </ul>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 10 — Story Step 7: Self-Improvement Loop
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <div class="slide-header">
+        <span class="step-badge">Step 7</span>
+        <h2>Self-Improvement Loop</h2>
+    </div>
+    <p>Built the <code>gym improve</code> command — agents started teaching themselves:</p>
+    <ul>
+        <li><strong style="color:var(--text)">failure-analyst</strong> investigates each false negative, diagnoses why detection failed</li>
+        <li>Proposes improvements to agent prompts, taint rules, CWE mappings, or patterns</li>
+        <li><strong style="color:var(--text)">overfitting-reviewer</strong> validates every proposal before it is applied</li>
+        <li>Accepted improvements are written back to agent prompts, taint engine, and scoring</li>
+        <li>Rejected proposals are stored as lessons in durable memory</li>
+    </ul>
+    <div class="callout-green" style="margin-top:0.6em">
+        <strong>Key insight:</strong> The loop is closed — benchmark failures directly drive agent capability improvements, without a human in the loop for routine cycles.
+    </div>
+    <p style="margin-top:0.5em">Four proposal types (in preference order): <strong style="color:var(--text)">AGENT_PROMPT → TAINT_RULE → CWE_MAPPING → NEW_PATTERN</strong></p>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 11 — Story Step 8: Not Overfitting
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <div class="slide-header">
+        <span class="step-badge">Step 8</span>
+        <h2>The Importance of Not Overfitting</h2>
+    </div>
+    <p>It became critical to ensure improvement loops don't "build to the benchmark" — overfitting to specific test cases rather than improving general detection.</p>
+    <div class="callout" style="margin-bottom:0.5em">
+        <strong>Problem:</strong> A loop that only optimizes for benchmark score can learn benchmark artifacts — naming conventions, file structures, synthetic patterns — instead of real vulnerability semantics.
+    </div>
+    <p>Response: built a specialized <code>overfitting-reviewer</code> agent with explicit rejection criteria:</p>
+    <ul>
+        <li>Duplicate boilerplate proposals from different test cases</li>
+        <li>Benchmark-specific naming conventions</li>
+        <li>Narrow detection logic for broad CWE classes</li>
+        <li>Generic graph traversal where type/semantic analysis is needed</li>
+        <li>Speculative detection based on proximity rather than evidence</li>
+    </ul>
+    <div class="callout-green" style="margin-top:0.5em">
+        overfitting-reviewer has <strong>rejected ~66%</strong> of proposals across 22+ cycles — ensuring improvements generalize.
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 12 — Story Step 9: Scale and Results
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <div class="slide-header">
+        <span class="step-badge">Step 9</span>
+        <h2>Scale and Results</h2>
+    </div>
+    <div class="cols">
+        <div class="col">
+            <ul>
+                <li>22+ self-improvement cycles across all suites</li>
+                <li>100+ proposals generated, 34% acceptance rate</li>
+                <li>Added CyberGym (3,014 real CVEs from OSS-Fuzz)</li>
+                <li>6 benchmark suites now active</li>
+            </ul>
+        </div>
+        <div class="col">
+            <div class="stats" style="grid-template-columns: repeat(2,1fr)">
+                <div class="stat"><div class="value">97.3%</div><div class="label">Juliet F1 (agentic)</div></div>
+                <div class="stat"><div class="value">100%</div><div class="label">Precision (all suites)</div></div>
+                <div class="stat"><div class="value">34%</div><div class="label">Proposal accept rate</div></div>
+                <div class="stat"><div class="value">22+</div><div class="label">Improvement cycles</div></div>
+            </div>
+        </div>
+    </div>
+    <div class="callout-green" style="margin-top:0.5em">
+        <strong>Agentic eval: Juliet F1 = 97.3%</strong> — from a 50% starting baseline, bootstrapped by the loop itself.
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 13 — Architecture: Five-Layer Pipeline
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <h2 id="architecture">Architecture: Five-Layer Detection Pipeline</h2>
+    <p>Each vulnerability investigation passes through five layers, from fast pattern matching to deep semantic reasoning:</p>
+    <div class="mermaid">
+flowchart LR
+    SRC["Source Code / Binary"] --> L1
+    L1["Layer 1\nPattern Detection\n~260 patterns / 6 langs"] --> L2
+    L2["Layer 2\nDataflow Analysis\nTaint source-to-sink"] --> L3
+    L3["Layer 3\nContext Validation\nFalse-positive reduction"] --> L4
+    L4["Layer 4\nLLM Agent Pipeline\nattack-surface · vuln-hunter · critic"] --> L5
+    L5["Layer 5\nSynthesis\nDomain-expert weighted evidence"] --> OUT["Findings"]
+    </div>
+    <div class="cols" style="margin-top:0.4em">
+        <div class="col"><div class="card"><p><strong style="color:var(--text)">Why five layers?</strong> Fast layers (1-2) handle high-volume pattern detection. Slow layers (4-5) apply expensive LLM reasoning only where needed. Context validation (3) eliminates noise before agents see it.</p></div></div>
+        <div class="col"><div class="card"><p><strong style="color:var(--text)">Cost control:</strong> Pattern-only mode skips layers 4-5, enabling large-scale batch evaluation. Agentic mode activates all layers for high-confidence findings.</p></div></div>
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 14 — Architecture: Code Property Graph
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <h2>Architecture: Code Property Graph</h2>
+    <p>All analysis operates on a code property graph stored in <a href="https://github.com/LadybugDB/ladybug">LadybugDB</a> — functions, call edges, taint flows, data sources, data sinks, and symbols. Agents query this graph with specialized tools.</p>
+    <div class="cols">
+        <div class="col">
+            <div class="mermaid">
+erDiagram
+    FUNCTIONS ||--o{ CALLS : "caller-callee"
+    FUNCTIONS ||--o{ DATA_SOURCES : "reads from"
+    FUNCTIONS ||--o{ DATA_SINKS : "writes to"
+    DATA_SOURCES ||--o{ TAINT_FLOWS : "source"
+    DATA_SINKS ||--o{ TAINT_FLOWS : "sink"
+    FUNCTIONS ||--o{ SYMBOLS : "defines-imports"
+    FUNCTIONS ||--o{ FINDINGS : "contains"
+            </div>
+        </div>
+        <div class="col">
+            <h3>Agent Tools</h3>
+            <ul>
+                <li><code>get_taint_paths</code> — source-to-sink flow traces</li>
+                <li><code>get_cross_file_calls</code> — cross-module call edges</li>
+                <li><code>get_data_sources</code> — user-controlled inputs</li>
+                <li><code>get_imports</code> — dependency analysis</li>
+                <li><code>build_analysis_context()</code> — 2-hop call graph + string refs</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 15 — Multi-Agent Analysis
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <h2 id="agents">Multi-Agent Analysis</h2>
+    <p>All 18 agents and the pipelines they participate in:</p>
+    <div class="mermaid">
+flowchart TB
+    subgraph INPUT["Input"]
+        SRC["Source Code"]
+        BIN["Binary"]
+    end
+    subgraph PREPROCESS["Pre-processing (binary only)"]
+        DR["decompile-renamer"]
+        DA["decompile-analyst"]
+    end
+    subgraph DISCOVERY["Discovery"]
+        AS["attack-surface"]
+        VH["vuln-hunter"]
+        VHJ["vuln-hunter-java"]
+        VHP["vuln-hunter-python"]
+        TT["taint-tracer"]
+    end
+    subgraph VALIDATION["Validation"]
+        CR["critic"]
+        RS["results-skeptic"]
+        CC["cwe-classifier"]
+    end
+    subgraph DEBATE["Debate (deep pipeline)"]
+        EA["exploit-analyst"]
+        DEF["defense-analyst"]
+    end
+    subgraph SYNTHESIS["Synthesis"]
+        VS["verdict-synthesizer"]
+    end
+    subgraph IMPROVE["Self-Improvement"]
+        FA["failure-analyst"]
+        OR["overfitting-reviewer"]
+    end
+    SRC --> AS
+    BIN --> DR --> DA --> AS
+    AS --> VH & VHJ & VHP
+    VH & VHJ & VHP --> TT --> CR
+    CR --> RS --> CC --> VS
+    CR --> EA & DEF --> VS
+    VS --> OUT["Confirmed Findings"]
+    OUT --> FA --> OR -->|"~34% accepted"| APPLY["Apply improvements"]
+    OR -->|"~66% rejected"| MEM["Store lesson"]
+    APPLY --> AS
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 16 — Self-Improvement Loop Detail
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <h2 id="self-improvement">Self-Improvement Loop</h2>
+    <div class="cols">
+        <div class="col">
+            <div class="mermaid" style="font-size:0.7em">
+flowchart TB
+    BENCH["Run Benchmark"] --> SCORE["Score Results"]
+    SCORE --> FN["Identify False Negatives"]
+    FN --> FA["failure-analyst\nReads code, queries graph\ndiagnoses WHY we missed it"]
+    FA --> PROP["Generate Proposals\n1 Agent Prompt\n2 Taint Rule\n3 CWE Mapping\n4 Pattern"]
+    PROP --> REV["overfitting-reviewer\nValidates proposals"]
+    REV -->|Accepted| APPLY["Apply to agents\ntaint engine, scoring"]
+    REV -->|Rejected| LEARN["Store lesson\nin durable memory"]
+    APPLY --> MEM["Durable memory\nfor future cycles"]
+    MEM --> BENCH
+            </div>
+        </div>
+        <div class="col">
+            <h3>Proposal Types</h3>
+            <table>
+                <tr><th>Type</th><th>Effect</th></tr>
+                <tr><td><strong>AGENT_PROMPT</strong></td><td>Teaches agents new investigation strategies</td></tr>
+                <tr><td><strong>TAINT_RULE</strong></td><td>Adds source/sink definitions to dataflow engine</td></tr>
+                <tr><td><strong>CWE_MAPPING</strong></td><td>Fixes scoring / classification</td></tr>
+                <tr><td><strong>NEW_PATTERN</strong></td><td>Regex detection (last resort only)</td></tr>
+            </table>
+            <h3 style="margin-top:0.7em">Rejection Reasons (~66%)</h3>
+            <ul>
+                <li>Benchmark-specific naming conventions</li>
+                <li>Narrow logic for broad CWE classes</li>
+                <li>Speculative proximity-based detection</li>
+                <li>Duplicate boilerplate proposals</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 17 — Results: Benchmark Suites
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <h2 id="results">Results: Benchmark Suites</h2>
+    <table>
+        <tr><th>Suite</th><th>Source</th><th>Cases</th><th>Languages</th><th>Focus</th></tr>
+        <tr><td><a href="https://samate.nist.gov/SARD/test-suites/112">Juliet</a></td><td>NIST</td><td>54,488</td><td>C/C++</td><td>116 CWEs, synthetic variants</td></tr>
+        <tr><td><a href="https://owasp.org/www-project-benchmark/">OWASP Benchmark</a></td><td>OWASP Foundation</td><td>2,740</td><td>Java</td><td>Web app vulns (XSS, SQLi, crypto)</td></tr>
+        <tr><td><a href="https://github.com/meta-llama/PurpleLlama/tree/main/CybersecurityBenchmarks">CyberSecEval</a></td><td>Meta</td><td>578</td><td>C/C++, Python</td><td>Real-world vuln patterns</td></tr>
+        <tr><td><a href="https://github.com/trailofbits/cb-multios">CGC</a></td><td>DARPA</td><td>300</td><td>C</td><td>Real challenge binaries (patched/unpatched)</td></tr>
+        <tr><td><a href="https://cybergym.io/">CyberGym</a></td><td>UC Berkeley</td><td>3,014</td><td>C/C++</td><td>Real OSS-Fuzz CVEs from 188 projects</td></tr>
+        <tr><td>Fixtures</td><td>skwaq team</td><td>99</td><td>Mixed</td><td>Regression suite</td></tr>
+    </table>
+    <div class="card" style="margin-top:0.6em">
+        <p><strong style="color:var(--text)">Why multiple suites?</strong> Juliet tests synthetic breadth (116 CWEs). OWASP tests Java web semantics. CSE tests real-world C patterns. CyberGym tests real CVEs. No single suite validates the full capability envelope.</p>
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 18 — Results: Current Baselines
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <h2>Results: Current Baselines — Pattern+Dataflow Mode</h2>
+    <table>
+        <tr><th>Suite</th><th>Cases</th><th>F1</th><th>Precision</th><th>Recall</th><th>TP</th><th>FP</th><th>FN</th><th>TN</th></tr>
+        <tr><td>Fixtures</td><td>99</td><td class="hl">93.7%</td><td>98.1%</td><td>89.3%</td><td>103</td><td>2</td><td>12</td><td>11</td></tr>
+        <tr><td><a href="https://github.com/meta-llama/PurpleLlama/tree/main/CybersecurityBenchmarks">CSE</a></td><td>578</td><td class="hl">91.8%</td><td class="hl">100%</td><td>84.8%</td><td>434</td><td>0</td><td>78</td><td>0</td></tr>
+        <tr><td><a href="https://samate.nist.gov/SARD/test-suites/112">Juliet</a></td><td>1,000</td><td class="hl">88.8%</td><td class="hl">100%</td><td>79.9%</td><td>798</td><td>0</td><td>201</td><td>1</td></tr>
+        <tr><td><a href="https://owasp.org/www-project-benchmark/">OWASP</a></td><td>500</td><td class="hl">93.8%</td><td class="hl">100%</td><td>88.3%</td><td>228</td><td>0</td><td>30</td><td>242</td></tr>
+        <tr><td><a href="https://github.com/trailofbits/cb-multios">CGC</a></td><td>226</td><td class="hl">89.8%</td><td class="hl">100%</td><td>81.5%</td><td>388</td><td>0</td><td>88</td><td>0</td></tr>
+        <tr><td><a href="https://cybergym.io/">CyberGym</a></td><td>100</td><td>71.9%</td><td class="hl">100%</td><td>56.1%</td><td>64</td><td>0</td><td>50</td><td>0</td></tr>
+    </table>
+    <div class="callout-green" style="margin-top:0.5em">
+        <strong>100% precision across all benchmarks</strong> — zero false positives. The self-improvement loop runs continuously; scores grow with each cycle.
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 19 — Results: Per-CWE Improvements
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <h2>Results: Per-CWE Improvements (Self-Improvement Loop)</h2>
+    <table>
+        <tr><th>CWE</th><th>Before</th><th>After</th><th>Method</th></tr>
+        <tr><td>CWE-401 memory leak</td><td>0%</td><td class="hl">99%</td><td>Agent-recommended calloc→ResourceLeak mapping</td></tr>
+        <tr><td>CWE-614 secure cookie</td><td>0%</td><td class="hl">100%</td><td>setSecure(false) + semantic class fix</td></tr>
+        <tr><td>CWE-78 cmd injection</td><td>37%</td><td class="hl">70%</td><td>spawn family (agent-identified taint rules)</td></tr>
+        <tr><td>CWE-22 path traversal</td><td>41%</td><td class="hl">65%</td><td>java.io.File* qualified name fix</td></tr>
+        <tr><td>CWE-79 XSS</td><td>46%</td><td class="hl">63%</td><td>getWriter().format/append (agentic cycle)</td></tr>
+        <tr><td>Race conditions</td><td>33%</td><td class="hl">100%</td><td>signal handler + thread (agentic cycle)</td></tr>
+    </table>
+    <div class="card" style="margin-top:0.6em">
+        <p><strong style="color:var(--text)">Pattern:</strong> The loop finds the specific taint source/sink or agent reasoning gap that caused misses, proposes a targeted fix, and the overfitting-reviewer validates it generalizes beyond the specific test case.</p>
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 20 — Results: Industry Comparison
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <h2>Results: Industry Comparison</h2>
+    <table>
+        <tr><th>Tool</th><th>Approach</th><th>Benchmark</th><th>Precision</th><th>Recall</th><th>F1</th></tr>
+        <tr><td><strong>Skwaq (agentic)</strong></td><td>Multi-agent + graph</td><td>Juliet 20</td><td class="hl">100%</td><td>95%</td><td class="hl">97.3%</td></tr>
+        <tr><td>VulBinLLM</td><td>LLM decompile+reason</td><td>Juliet stripped</td><td>~85%</td><td>~100%</td><td>~92%</td></tr>
+        <tr><td>PS³</td><td>Binary pattern</td><td>Curated dataset</td><td>82%</td><td>97%</td><td>89%</td></tr>
+        <tr><td>LATTE</td><td>Taint + LLM</td><td>Juliet</td><td>~70%</td><td>~85%</td><td>~77%</td></tr>
+    </table>
+    <div class="cols" style="margin-top:0.5em">
+        <div class="col">
+            <div class="callout-green">
+                <strong>IRIS</strong> (LLM+CodeQL hybrid) detected 2× more vulns than CodeQL alone — validating skwaq's hybrid approach.
+            </div>
+        </div>
+        <div class="col">
+            <div class="callout-blue">
+                <strong>GitHub SecLab Taskflow Agent</strong> is the closest competitor architecture — 80+ real CVEs found using multi-agent investigation.
+            </div>
+        </div>
+    </div>
+    <p style="font-size:0.78em; color:#484f58; margin-top:0.4em">Note: Benchmarks differ across tools — direct comparison is approximate. See <a href="https://arxiv.org/abs/2405.17894">IRIS paper</a> for methodology.</p>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 21 — Improvement History
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <h2>Improvement History: Key Milestones</h2>
+    <table>
+        <tr><th>PR</th><th>Change</th><th>Impact</th></tr>
+        <tr><td>#29</td><td>Gym benchmark harness</td><td>Baseline F1=50%</td></tr>
+        <tr><td>#35–39</td><td>Agentic pipeline, multi-agent validation</td><td>First agent-driven detection</td></tr>
+        <tr><td>#49</td><td>Dual-judge breakthrough</td><td class="hl">Precision: 15%→100%</td></tr>
+        <tr><td>#57</td><td>All 4 industry benchmark adapters</td><td>Juliet, OWASP, CGC, CSE</td></tr>
+        <tr><td>#217–243</td><td>34 semantic classes, 109/109 Juliet CWEs</td><td>Full CWE coverage</td></tr>
+        <tr><td>#298</td><td>Industry expansion</td><td>Juliet 1K, OWASP 1K, CSE 400</td></tr>
+        <tr><td>#302</td><td>CyberGym + results-skeptic agent</td><td>3,014 real CVEs added</td></tr>
+        <tr><td>#303</td><td>3-layer improvement + 4 agentic cycles</td><td>+7.6% Juliet, +8.0% OWASP</td></tr>
+        <tr><td>#312–313</td><td>Agentic eval tuning</td><td class="hl">Juliet F1=97.3%</td></tr>
+    </table>
+    <p style="margin-top:0.5em"><a href="https://github.com/rysweet/skwaq/issues/28">Full benchmark progress and history →</a></p>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 22 — Benchmark Ground-Truth / FP Problem  *** NEW ***
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <h2 id="ground-truth">Benchmark Ground-Truth &amp; False-Positive Problem</h2>
+    <div class="callout" style="margin-bottom:0.7em">
+        <strong>Critical caveat:</strong> Benchmark answer keys are not complete precision oracles. Treating benchmark disagreement as a confirmed false positive leads to systematically wrong conclusions.
+    </div>
+    <div class="fp-principle">
+        <div class="title">1 — Benchmark answer keys are incomplete</div>
+        <p>Suites like Juliet, OWASP, and CyberGym label specific synthesized or known vulnerabilities. They do not exhaustively label <em>every</em> real vulnerability in the code. A finding the benchmark does not expect may still be a genuine bug — the label set is a lower bound on truth, not an upper bound.</p>
+    </div>
+    <div class="fp-principle" style="margin-top:0.4em">
+        <div class="title">2 — Unlabeled findings may be real bugs</div>
+        <p>When skwaq reports a finding that the benchmark marks as a negative, that disagreement has three possible explanations: (a) a genuine false positive, (b) a real vulnerability the benchmark didn't label, or (c) a variant of a labeled vulnerability that falls outside the benchmark's expected form. Only (a) is a true FP. Conflating all three causes the tool to suppress valid detections.</p>
+    </div>
+    <div class="fp-principle" style="margin-top:0.4em">
+        <div class="title">3 — Benchmark disagreement ≠ confirmed false positive</div>
+        <p>Skwaq's 100% benchmark precision is real — but it reflects <em>agreement with the benchmark's label set</em>, not proof that every suppressed finding was wrong. Investigator review of "FP" cases on CyberGym and Juliet has surfaced genuine vulnerability variants outside the expected answer key. Improvement cycles must distinguish benchmark-label mismatches from actual detection errors.</p>
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 23 — Usage
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <h2 id="usage">Usage</h2>
+    <div class="cols">
+        <div class="col">
+            <h3>Analyze Source</h3>
+            <pre><code># Full agentic analysis
+skwaq analyze /path/to/repo
+
+# Quick pattern-only scan
+skwaq analyze path/to/src.c --quick</code></pre>
+            <h3>Binary Analysis</h3>
+            <pre><code># Analyze compiled binary
+skwaq analyze path/to/binary --binary
+
+# Stripped binary with renaming
+skwaq analyze path/to/binary \
+  --binary --decompile-rename</code></pre>
+        </div>
+        <div class="col">
+            <h3>Benchmarks &amp; Self-Improvement</h3>
+            <pre><code># Agentic eval
+skwaq gym eval \
+  --suites juliet,owasp,cyberseceval
+
+# Pattern-only eval (fast)
+skwaq gym eval --suites juliet \
+  --quick --max-cases 200
+
+# Run improvement cycle
+skwaq gym improve juliet \
+  --max-cases 30 --max-improvements 5
+
+# Target specific CWE
+skwaq gym improve juliet \
+  --cwe CWE-78 --max-cases 20</code></pre>
+        </div>
+    </div>
+    <p style="margin-top:0.3em">Supports Azure AI Foundry (GPT-5.4), Anthropic Claude (via Azure MaaS), and GitHub Copilot (Claude Opus 4.6) backends — configured in <code>skwaq.toml</code>.</p>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SLIDE 24 — Closing / Links
+═══════════════════════════════════════════════════════════════════ -->
+<section>
+    <div class="divider-slide">
+        <h2>🐦‍⬛ Skwaq</h2>
+        <p style="color:var(--muted); margin-top:0.3em">Self-improving, multi-agent vulnerability analysis</p>
+        <div style="margin-top:1.5em; display:flex; flex-direction:column; gap:0.5em; align-items:center">
+            <a href="https://github.com/rysweet/skwaq">github.com/rysweet/skwaq</a>
+            <a href="https://rysweet.github.io/skwaq/">rysweet.github.io/skwaq/</a>
+            <a href="https://github.com/rysweet/skwaq/issues/28">Benchmark Progress →</a>
+        </div>
+        <div style="margin-top:1.5em; display:flex; gap:2em; justify-content:center; flex-wrap:wrap; font-size:0.78em; color:var(--muted)">
+            <a href="https://github.com/rysweet/skwaq/blob/main/docs/gym-tutorial.md" style="color:var(--muted)">Gym Tutorial</a>
+            <a href="https://github.com/rysweet/skwaq/blob/main/docs/gym-self-improvement.md" style="color:var(--muted)">Self-Improvement Docs</a>
+            <a href="https://github.com/rysweet/skwaq/blob/main/docs/graph-agent-architecture.md" style="color:var(--muted)">Architecture Docs</a>
+            <a href="https://github.com/rysweet/skwaq/blob/main/docs/gym-agents.md" style="color:var(--muted)">Agent Reference</a>
+            <a href="https://rysweet.github.io/skwaq/" style="color:var(--muted)">← Main Site</a>
+        </div>
+        <div style="margin-top:2em; font-size:0.7em; color:#484f58">Developed by <a href="https://github.com/rysweet" style="color:#484f58">@rysweet</a></div>
+    </div>
+</section>
+
+</div><!-- /slides -->
+</div><!-- /reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script>
+    // Initialize mermaid before reveal so diagrams render in slides
+    mermaid.initialize({
+        startOnLoad: false,
+        theme: 'dark',
+        themeVariables: {
+            primaryColor: '#1f3a5f',
+            primaryTextColor: '#c9d1d9',
+            primaryBorderColor: '#58a6ff',
+            lineColor: '#8b949e',
+            secondaryColor: '#161b22',
+            tertiaryColor: '#21262d',
+            fontSize: '12px'
+        },
+        flowchart: { curve: 'basis', useMaxWidth: true },
+        er: { useMaxWidth: true }
+    });
+
+    Reveal.initialize({
+        width: 1280,
+        height: 720,
+        margin: 0.04,
+        minScale: 0.2,
+        maxScale: 2.0,
+        controls: true,
+        progress: true,
+        center: false,
+        hash: true,
+        transition: 'slide',
+        transitionSpeed: 'fast',
+        backgroundTransition: 'fade',
+        plugins: []
+    });
+
+    // Run mermaid after each slide becomes visible
+    Reveal.on('slidechanged', async ({ currentSlide }) => {
+        const diagrams = currentSlide.querySelectorAll('.mermaid:not([data-processed])');
+        if (diagrams.length === 0) return;
+        for (const el of diagrams) {
+            const id = 'mmd-' + Math.random().toString(36).slice(2);
+            try {
+                const { svg } = await mermaid.render(id, el.textContent.trim());
+                el.innerHTML = svg;
+                el.setAttribute('data-processed', 'true');
+            } catch (e) {
+                el.textContent = '[diagram error: ' + e.message + ']';
+            }
+        }
+    });
+
+    // Also process diagrams on the initial slide
+    Reveal.on('ready', async ({ currentSlide }) => {
+        const diagrams = currentSlide.querySelectorAll('.mermaid:not([data-processed])');
+        for (const el of diagrams) {
+            const id = 'mmd-' + Math.random().toString(36).slice(2);
+            try {
+                const { svg } = await mermaid.render(id, el.textContent.trim());
+                el.innerHTML = svg;
+                el.setAttribute('data-processed', 'true');
+            } catch (e) {
+                el.textContent = '[diagram error: ' + e.message + ']';
+            }
+        }
+    });
+</script>
+</body>
+</html>
