@@ -12,6 +12,7 @@ pub mod ground_truth;
 pub mod history;
 pub mod improve;
 pub mod metrics;
+pub mod poc;
 pub mod profiles;
 pub mod reporting;
 pub mod scoring;
@@ -934,6 +935,12 @@ impl Gym {
             final_metadata.total_prompt_tokens = total_prompt_tokens;
             final_metadata.total_completion_tokens = total_completion_tokens;
             final_metadata.estimated_cost_usd = estimated_cost;
+            final_metadata.scheduled_cases = total as u32;
+            final_metadata.scored_cases = score.total_cases_scored;
+            final_metadata.unscored_cases = final_metadata
+                .scheduled_cases
+                .saturating_sub(score.total_cases_scored);
+            final_metadata.scored_negative_cases = score.scored_negative_cases;
 
             let run = history::BenchmarkRun {
                 id: run_id.clone(),
@@ -1125,6 +1132,10 @@ fn build_run_metadata(
         is_capped,
         sampling_strategy,
         suite_name: String::new(), // filled in at run time per-suite
+        scheduled_cases: 0,
+        scored_cases: 0,
+        unscored_cases: 0,
+        scored_negative_cases: 0,
     }
 }
 
@@ -1230,6 +1241,12 @@ fn reconstruct_score(
         benchmark_precision: run.precision,
         benchmark_disagreements: run.benchmark_disagreements,
         adjudicated_precision: None,
+        total_cases_scored: run.metadata.scored_cases,
+        scored_positive_cases: run
+            .metadata
+            .scored_cases
+            .saturating_sub(run.metadata.scored_negative_cases),
+        scored_negative_cases: run.metadata.scored_negative_cases,
         per_cwe,
         per_original_cwe: Default::default(),
         per_semantic,

@@ -217,6 +217,37 @@ pub enum GymSub {
     /// Preflight check: verify Copilot backend, auth, model, and no-fallback readiness.
     /// Run this before hybrid benchmark runs to ensure the LLM pipeline will work.
     Preflight,
+
+    /// Prove benchmark disagreements by gathering evidence for/against findings.
+    ///
+    /// Uses an adversarial disproof-first protocol: searches for mitigations first,
+    /// then for proof evidence. Verdicts are scored deterministically from evidence,
+    /// not from LLM confidence. High-confidence results are auto-adjudicated.
+    Prove {
+        /// Prove BD cases from a specific run ID
+        #[arg(long)]
+        run_id: Option<String>,
+
+        /// Prove a single BD case by ID
+        #[arg(long)]
+        case_id: Option<String>,
+
+        /// Maximum BD cases to prove (default: all pending)
+        #[arg(long)]
+        max_cases: Option<usize>,
+
+        /// Minimum evidence score for auto-adjudication (1-4, default: 3)
+        #[arg(long, default_value = "3")]
+        min_score: u32,
+
+        /// Show what would be proved without running
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Use a named model profile
+        #[arg(long)]
+        profile: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -308,6 +339,10 @@ struct EvalSuiteSummary {
     shard_reports: u32,
     expected_shards: u32,
     target_cases: u32,
+    scheduled_cases: u32,
+    scored_cases: u32,
+    unscored_cases: u32,
+    scored_negative_cases: u32,
     partial: bool,
 }
 
@@ -1053,6 +1088,10 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                     is_capped: true,
                     sampling_strategy: "stratified".to_string(),
                     suite_name: summary.suite.clone(),
+                    scheduled_cases: summary.scheduled_cases,
+                    scored_cases: summary.scored_cases,
+                    unscored_cases: summary.unscored_cases,
+                    scored_negative_cases: summary.scored_negative_cases,
                 };
                 let run_id = gym.history_db.start_run(
                     &summary.suite,
@@ -1119,36 +1158,58 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 eprintln!("Partial results were still written from available shard reports.");
             }
 
-            // Results Skeptic: validate coverage and flag suspicious results
+            // Results Skeptic: validate scored coverage and flag suspicious results
             for summary in &summaries {
-                let evaluated = summary.true_positives
-                    + summary.false_positives
-                    + summary.false_negatives
-                    + summary.true_negatives;
-                let target = summary.target_cases;
-                let coverage_pct = if target > 0 {
-                    evaluated as f64 / target as f64 * 100.0
+                let scored = if summary.scored_cases > 0 {
+                    summary.scored_cases
+                } else {
+                    summary.true_positives
+                        + summary.false_positives
+                        + summary.false_negatives
+                        + summary.true_negatives
+                };
+                let scheduled = if summary.scheduled_cases > 0 {
+                    summary.scheduled_cases
+                } else {
+                    summary.target_cases
+                };
+                let coverage_pct = if scheduled > 0 {
+                    scored as f64 / scheduled as f64 * 100.0
                 } else {
                     0.0
                 };
 
-                if coverage_pct < 80.0 {
+                if scheduled > 0 && coverage_pct < 80.0 {
                     eprintln!(
-                        "WARNING [results-skeptic]: {} — only {}/{} cases evaluated ({:.0}% coverage). Results are UNRELIABLE.",
-                        summary.suite, evaluated, target, coverage_pct
+                        "WARNING [results-skeptic]: {} — only {}/{} scheduled cases produced scored outcomes ({} unscored, {:.0}% scored coverage). Results are UNRELIABLE.",
+                        summary.suite,
+                        scored,
+                        scheduled,
+                        summary.unscored_cases,
+                        coverage_pct
                     );
                 }
-                if summary.f1 > 0.95 && evaluated > 50 {
+                if summary.target_cases > 0 && scheduled < summary.target_cases {
                     eprintln!(
-                        "WARNING [results-skeptic]: {} — F1={:.1}% with {} cases evaluated. Verify no silent case skipping.",
+                        "WARNING [results-skeptic]: {} — requested {} target cases but only {} were scheduled after filtering/sampling.",
+                        summary.suite, summary.target_cases, scheduled
+                    );
+                }
+                if summary.f1 > 0.95 && scored > 50 {
+                    eprintln!(
+                        "WARNING [results-skeptic]: {} — F1={:.1}% with {} scored cases. Verify no silent case skipping.",
                         summary.suite,
                         summary.f1 * 100.0,
-                        evaluated
+                        scored
                     );
                 }
-                if summary.precision >= 1.0 && summary.true_negatives == 0 && target > 100 {
+                if summary.precision >= 1.0
+                    && summary.true_negatives == 0
+                    && summary.scored_negative_cases == 0
+                    && scheduled > 100
+                {
                     eprintln!(
-                        "WARNING [results-skeptic]: {} — 100% precision but 0 TN. Are negative cases being evaluated?",
+                        "WARNING [results-skeptic]: {} — 100% precision but no negative cases were scored. Precision is not calibrated against safe inputs.",
                         summary.suite
                     );
                 }
@@ -1165,6 +1226,9 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                     eval_dir.join("partial-summary.json").display()
                 );
             }
+            println!(
+                "Next step: `skwaq gym eval` stops at reporting. Run `skwaq gym improve <suite> --max-cases <n>` to continue the self-improvement loop."
+            );
 
             if *tag {
                 println!();
@@ -1471,6 +1535,66 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
         GymSub::Preflight => {
             run_preflight().await?;
         }
+        GymSub::Prove {
+            run_id,
+            case_id: _case_id,
+            max_cases,
+            min_score,
+            dry_run,
+            profile,
+        } => {
+            let gym = resolve_gym(&skwaq_root, profile.as_deref())?;
+
+            // Determine which run to prove against
+            let target_run_id = if let Some(id) = run_id {
+                id.clone()
+            } else {
+                // Use the most recent finished run
+                let runs = gym.history_db.recent_runs(1)?;
+                if runs.is_empty() {
+                    anyhow::bail!("No benchmark runs found. Run `skwaq gym run` first.");
+                }
+                let run = &runs[0];
+                println!(
+                    "Using most recent run: {} (suite: {}, {})",
+                    &run.id[..8.min(run.id.len())],
+                    run.suite,
+                    run.started_at.format("%Y-%m-%d %H:%M")
+                );
+                run.id.clone()
+            };
+
+            let min_evidence_score = match min_score {
+                4.. => skwaq_gym::poc::EvidenceScore::Strong,
+                3 => skwaq_gym::poc::EvidenceScore::Moderate,
+                _ => skwaq_gym::poc::EvidenceScore::Insufficient,
+            };
+
+            let config = skwaq_gym::poc::ProveConfig {
+                min_score_for_auto: min_evidence_score,
+                max_cases: *max_cases,
+                dry_run: *dry_run,
+            };
+
+            println!(
+                "Proving benchmark disagreements for run {}...",
+                &target_run_id[..8.min(target_run_id.len())]
+            );
+            if *dry_run {
+                println!("  (dry run — no adjudication will be written)");
+            }
+
+            let summary = skwaq_gym::poc::prove_pending(&gym.history_db, &target_run_id, &config)?;
+            summary.print_summary();
+
+            // Print auto-adjudication summary
+            if !*dry_run && summary.auto_adjudicated > 0 {
+                println!(
+                    "\n  {} BD cases auto-adjudicated (run `skwaq gym report` to see updated metrics)",
+                    summary.auto_adjudicated
+                );
+            }
+        }
     };
 
     Ok(())
@@ -1598,6 +1722,10 @@ fn summarize_eval_suite(
     let mut false_positives = 0u32;
     let mut false_negatives = 0u32;
     let mut true_negatives = 0u32;
+    let mut scheduled_cases = 0u32;
+    let mut scored_cases = 0u32;
+    let mut unscored_cases = 0u32;
+    let mut scored_negative_cases = 0u32;
     let mut per_cwe: std::collections::BTreeMap<u32, AggregatedCwe> =
         std::collections::BTreeMap::new();
 
@@ -1606,6 +1734,10 @@ fn summarize_eval_suite(
         false_positives += report.false_positives;
         false_negatives += report.false_negatives;
         true_negatives += report.true_negatives;
+        scheduled_cases += report.metadata.scheduled_cases;
+        scored_cases += report.metadata.scored_cases;
+        unscored_cases += report.metadata.unscored_cases;
+        scored_negative_cases += report.metadata.scored_negative_cases;
 
         for cwe in &report.per_cwe {
             let entry = per_cwe.entry(cwe.cwe_id).or_default();
@@ -1654,6 +1786,10 @@ fn summarize_eval_suite(
             shard_reports: loaded_reports,
             expected_shards: shard_count as u32,
             target_cases,
+            scheduled_cases,
+            scored_cases,
+            unscored_cases,
+            scored_negative_cases,
             partial: loaded_reports < shard_count as u32,
         },
         cwe_results,
@@ -1771,15 +1907,15 @@ fn render_eval_summary_markdown(
         metadata.llm_model,
     ));
     output.push_str(
-        "| Suite | F1 | Precision | Recall | TP | FP | FN | TN | Shards | Status | Target cases |\n",
+        "| Suite | F1 | Precision | Recall | TP | FP | FN | TN | Shards | Status | Target | Scheduled | Scored | Unscored |\n",
     );
     output.push_str(
-        "|-------|----|-----------|--------|----|----|----|----|--------|--------|--------------|\n",
+        "|-------|----|-----------|--------|----|----|----|----|--------|--------|--------|-----------|--------|----------|\n",
     );
 
     for summary in summaries {
         output.push_str(&format!(
-            "| {} | {:.1}% | {:.1}% | {:.1}% | {} | {} | {} | {} | {}/{} | {} | {} |\n",
+            "| {} | {:.1}% | {:.1}% | {:.1}% | {} | {} | {} | {} | {}/{} | {} | {} | {} | {} | {} |\n",
             summary.suite,
             summary.f1 * 100.0,
             summary.precision * 100.0,
@@ -1795,7 +1931,10 @@ fn render_eval_summary_markdown(
             } else {
                 "complete"
             },
-            summary.target_cases
+            summary.target_cases,
+            summary.scheduled_cases,
+            summary.scored_cases,
+            summary.unscored_cases
         ));
     }
 
@@ -2282,7 +2421,13 @@ deployment = "gpt-54-test"
             suite: "fixtures".to_string(),
             timestamp: "2026-01-01T00:00:00Z".to_string(),
             skwaq_commit: "abc123".to_string(),
-            metadata: RunMetadata::default(),
+            metadata: RunMetadata {
+                scheduled_cases: 4,
+                scored_cases: 4,
+                unscored_cases: 0,
+                scored_negative_cases: 2,
+                ..RunMetadata::default()
+            },
             precision: 0.0,
             recall: 0.0,
             f1: 0.0,
@@ -2309,7 +2454,13 @@ deployment = "gpt-54-test"
             suite: "fixtures".to_string(),
             timestamp: "2026-01-01T00:00:01Z".to_string(),
             skwaq_commit: "abc123".to_string(),
-            metadata: RunMetadata::default(),
+            metadata: RunMetadata {
+                scheduled_cases: 3,
+                scored_cases: 3,
+                unscored_cases: 0,
+                scored_negative_cases: 2,
+                ..RunMetadata::default()
+            },
             precision: 0.0,
             recall: 0.0,
             f1: 0.0,
@@ -2353,6 +2504,10 @@ deployment = "gpt-54-test"
         assert_eq!(summary.true_negatives, 7);
         assert_eq!(summary.shard_reports, 2);
         assert_eq!(summary.expected_shards, 2);
+        assert_eq!(summary.scheduled_cases, 7);
+        assert_eq!(summary.scored_cases, 7);
+        assert_eq!(summary.unscored_cases, 0);
+        assert_eq!(summary.scored_negative_cases, 4);
         assert!(!summary.partial);
         assert!((summary.precision - 0.75).abs() < f64::EPSILON);
         assert!((summary.recall - 0.5).abs() < f64::EPSILON);
@@ -2393,6 +2548,10 @@ deployment = "gpt-54-test"
                 shard_reports: 2,
                 expected_shards: 2,
                 target_cases: 7,
+                scheduled_cases: 7,
+                scored_cases: 6,
+                unscored_cases: 1,
+                scored_negative_cases: 2,
                 partial: false,
             }],
         );
@@ -2400,8 +2559,9 @@ deployment = "gpt-54-test"
         assert!(markdown.contains("# Skwaq Gym Evaluation Summary"));
         assert!(markdown.contains("pattern-only"));
         assert!(markdown.contains("claude-opus-4.6"));
-        assert!(markdown
-            .contains("| fixtures | 60.0% | 75.0% | 50.0% | 3 | 1 | 3 | 7 | 2/2 | complete | 7 |"));
+        assert!(markdown.contains(
+            "| fixtures | 60.0% | 75.0% | 50.0% | 3 | 1 | 3 | 7 | 2/2 | complete | 7 | 7 | 6 | 1 |"
+        ));
     }
 
     #[test]
@@ -2412,7 +2572,13 @@ deployment = "gpt-54-test"
             suite: "fixtures".to_string(),
             timestamp: "2026-01-01T00:00:00Z".to_string(),
             skwaq_commit: "abc123".to_string(),
-            metadata: RunMetadata::default(),
+            metadata: RunMetadata {
+                scheduled_cases: 4,
+                scored_cases: 3,
+                unscored_cases: 1,
+                scored_negative_cases: 1,
+                ..RunMetadata::default()
+            },
             precision: 0.0,
             recall: 0.0,
             f1: 0.0,

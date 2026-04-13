@@ -65,6 +65,18 @@ pub struct RunMetadata {
     /// Explicit suite name recorded at run time.
     #[serde(default)]
     pub suite_name: String,
+    /// Number of cases scheduled for this run/shard.
+    #[serde(default)]
+    pub scheduled_cases: u32,
+    /// Number of cases that produced scoreable outcomes.
+    #[serde(default)]
+    pub scored_cases: u32,
+    /// Number of scheduled cases that did not produce scoreable outcomes.
+    #[serde(default)]
+    pub unscored_cases: u32,
+    /// Number of scored negative/safe cases.
+    #[serde(default)]
+    pub scored_negative_cases: u32,
 }
 
 /// Per-CWE result within a run.
@@ -313,6 +325,26 @@ impl HistoryDb {
             CREATE INDEX IF NOT EXISTS idx_runs_started ON runs(started_at);
             CREATE INDEX IF NOT EXISTS idx_disagreements_run ON disagreements(run_id);
             CREATE INDEX IF NOT EXISTS idx_disagreements_adjudication ON disagreements(adjudication);
+
+            CREATE TABLE IF NOT EXISTS poc_results (
+                id TEXT PRIMARY KEY,
+                disagreement_id TEXT NOT NULL REFERENCES disagreements(id),
+                case_id TEXT NOT NULL,
+                cwe TEXT NOT NULL,
+                strategy TEXT NOT NULL,
+                verdict TEXT NOT NULL,
+                evidence_score TEXT NOT NULL,
+                disproof_evidence_json TEXT NOT NULL DEFAULT '[]',
+                proof_evidence_json TEXT NOT NULL DEFAULT '[]',
+                exploit_sketch TEXT,
+                reasoning TEXT NOT NULL DEFAULT '',
+                tools_used_json TEXT NOT NULL DEFAULT '[]',
+                duration_ms INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_poc_results_disagreement ON poc_results(disagreement_id);
+            CREATE INDEX IF NOT EXISTS idx_poc_results_verdict ON poc_results(verdict);
             ",
         )?;
         self.ensure_run_metadata_column()?;
@@ -691,6 +723,135 @@ impl HistoryDb {
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 
+    /// Insert a proof-of-compromise result.
+    pub fn insert_poc_result(&self, result: &crate::poc::ProofOfCompromise) -> anyhow::Result<()> {
+        let id = format!("poc-{}-{}", result.case_id, result.cwe);
+        let disproof_json = serde_json::to_string(&result.disproof_evidence)?;
+        let proof_json = serde_json::to_string(&result.proof_evidence)?;
+        let tools_json = serde_json::to_string(&result.tools_used)?;
+
+        self.conn.execute(
+            "INSERT OR REPLACE INTO poc_results
+             (id, disagreement_id, case_id, cwe, strategy, verdict,
+              evidence_score, disproof_evidence_json, proof_evidence_json,
+              exploit_sketch, reasoning, tools_used_json, duration_ms)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            rusqlite::params![
+                id,
+                format!("bd-{}-{}", result.case_id, result.cwe),
+                result.case_id,
+                result.cwe,
+                result.strategy,
+                result.verdict.to_string(),
+                result.evidence_score.to_string(),
+                disproof_json,
+                proof_json,
+                result.exploit_sketch,
+                result.reasoning,
+                tools_json,
+                result.duration_ms as i64,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Adjudicate a disagreement record (set verdict to TP or FP).
+    pub fn adjudicate_disagreement(
+        &self,
+        disagreement_id: &str,
+        adjudication: &str,
+        adjudicated_by: &str,
+    ) -> anyhow::Result<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.conn.execute(
+            "UPDATE disagreements SET adjudication = ?1, adjudicated_at = ?2, adjudicated_by = ?3
+             WHERE id = ?4",
+            rusqlite::params![adjudication, now, adjudicated_by, disagreement_id],
+        )?;
+        Ok(())
+    }
+
+    /// Load PoC results for a specific run (via disagreement join).
+    pub fn poc_results_for_run(
+        &self,
+        run_id: &str,
+    ) -> anyhow::Result<Vec<crate::poc::ProofOfCompromise>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT p.case_id, p.cwe, p.strategy, p.verdict, p.evidence_score,
+                    p.disproof_evidence_json, p.proof_evidence_json,
+                    p.exploit_sketch, p.reasoning, p.tools_used_json, p.duration_ms
+             FROM poc_results p
+             JOIN disagreements d ON p.disagreement_id = d.id
+             WHERE d.run_id = ?1
+             ORDER BY p.case_id",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![run_id], |row| {
+            let verdict_str: String = row.get(3)?;
+            let score_str: String = row.get(4)?;
+            let disproof_json: String = row.get(5)?;
+            let proof_json: String = row.get(6)?;
+            let tools_json: String = row.get(9)?;
+
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                verdict_str,
+                score_str,
+                disproof_json,
+                proof_json,
+                row.get::<_, Option<String>>(7)?,
+                row.get::<_, String>(8)?,
+                tools_json,
+                row.get::<_, i64>(10)?,
+            ))
+        })?;
+
+        let mut results = Vec::new();
+        for row in rows {
+            let (
+                case_id,
+                cwe,
+                strategy,
+                verdict_str,
+                score_str,
+                disproof_json,
+                proof_json,
+                exploit_sketch,
+                reasoning,
+                tools_json,
+                duration_ms,
+            ) = row?;
+
+            let verdict = match verdict_str.as_str() {
+                "PROVEN" => crate::poc::PocVerdict::Proven,
+                "DISPROVEN" => crate::poc::PocVerdict::Disproven,
+                _ => crate::poc::PocVerdict::Inconclusive,
+            };
+            let evidence_score = match score_str.as_str() {
+                "strong" => crate::poc::EvidenceScore::Strong,
+                "moderate" => crate::poc::EvidenceScore::Moderate,
+                "disproven" => crate::poc::EvidenceScore::Disproven,
+                _ => crate::poc::EvidenceScore::Insufficient,
+            };
+
+            results.push(crate::poc::ProofOfCompromise {
+                case_id,
+                cwe,
+                strategy,
+                verdict,
+                evidence_score,
+                disproof_evidence: serde_json::from_str(&disproof_json).unwrap_or_default(),
+                proof_evidence: serde_json::from_str(&proof_json).unwrap_or_default(),
+                exploit_sketch,
+                reasoning,
+                tools_used: serde_json::from_str(&tools_json).unwrap_or_default(),
+                duration_ms: duration_ms as u64,
+            });
+        }
+        Ok(results)
+    }
+
     /// Load per-case results for a run.
     pub fn case_results_for_run(&self, run_id: &str) -> anyhow::Result<Vec<CaseResult>> {
         let mut stmt = self.conn.prepare(
@@ -946,6 +1107,10 @@ mod tests {
             is_capped: true,
             sampling_strategy: "stratified".to_string(),
             suite_name: "fixtures".to_string(),
+            scheduled_cases: 5,
+            scored_cases: 5,
+            unscored_cases: 0,
+            scored_negative_cases: 0,
         };
 
         // Start a run.
