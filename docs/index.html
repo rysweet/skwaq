@@ -67,7 +67,9 @@
             <a href="#agents">Multi-Agent Analysis</a>
             <a href="#self-improvement">Self-Improvement Loop</a>
             <a href="#results">Results</a>
+            <a href="#ground-truth">Benchmark Ground-Truth</a>
             <a href="#usage">Usage</a>
+            <a href="presentation/">Slide Deck &rarr;</a>
             <a href="https://github.com/rysweet/skwaq/issues/28">Benchmark Progress &rarr;</a>
         </div>
 
@@ -324,6 +326,41 @@ flowchart TB
         </div>
 
         <p><a href="https://github.com/rysweet/skwaq/issues/28">Full benchmark progress and history &rarr;</a></p>
+
+        <h2 id="ground-truth">Benchmark Ground-Truth &amp; False-Positive Problem</h2>
+        <p>Skwaq maintains 100% precision across all benchmarks &mdash; but interpreting that number requires understanding a fundamental limitation of benchmark-based evaluation: <strong>benchmark answer keys are not complete precision oracles.</strong></p>
+
+        <div class="card" style="border-left: 3px solid #d97706; background: #1a130a;">
+            <h3 style="color: #d97706; margin-top: 0;">Critical Caveat</h3>
+            <p>Treating benchmark disagreement as a confirmed false positive leads to systematically wrong conclusions about tool quality and can cause the self-improvement loop to suppress genuinely correct detections.</p>
+        </div>
+
+        <h3>1 &mdash; Benchmark Answer Keys Are Incomplete</h3>
+        <p>Suites like Juliet, OWASP, and CyberGym label specific synthesized or known vulnerabilities. They do not exhaustively label <em>every</em> real vulnerability present in the code. A finding that the benchmark does not expect may still be a genuine bug &mdash; the label set is a <strong>lower bound on truth</strong>, not an upper bound.</p>
+        <p>For example, CyberGym fixtures are real OSS-Fuzz CVE cases, but the expected findings cover only the reported CVE, not other latent vulnerabilities that may exist in the same code. A skwaq finding on a CyberGym negative case could be a real vulnerability that was never reported &mdash; or a false positive. The benchmark cannot distinguish these.</p>
+
+        <h3>2 &mdash; Unlabeled Findings May Be Real Bugs</h3>
+        <p>When skwaq reports a finding that a benchmark marks as a negative, that disagreement has three possible explanations:</p>
+        <ul>
+            <li><strong>(a) Genuine false positive</strong> &mdash; skwaq incorrectly flagged safe code</li>
+            <li><strong>(b) Real vulnerability the benchmark didn't label</strong> &mdash; the bug exists, but wasn't in scope for the answer key</li>
+            <li><strong>(c) Variant of a labeled vulnerability</strong> &mdash; a real finding that falls outside the benchmark's expected form or location</li>
+        </ul>
+        <p>Only case (a) is a true false positive in the security sense. Conflating all three cases during self-improvement causes the loop to suppress valid detections &mdash; reducing real-world recall in exchange for better benchmark scores.</p>
+
+        <h3>3 &mdash; Benchmark Disagreement &ne; Confirmed False Positive</h3>
+        <p>Skwaq's 100% benchmark precision is real, but it reflects <em>agreement with the benchmark's label set</em> &mdash; not proof that every suppressed finding was wrong. Investigator review of disagreement cases on CyberGym and Juliet has surfaced genuine vulnerability variants outside the expected answer key.</p>
+        <p>The self-improvement loop must distinguish <strong>benchmark-label mismatches</strong> (where the answer key is incomplete) from <strong>actual detection errors</strong> (where the agent reasoned incorrectly). Proposals that improve benchmark scores by narrowing detection to only expected patterns are exactly what the overfitting-reviewer is designed to reject.</p>
+
+        <div class="card">
+            <h3 style="margin-top: 0;">Practical Implications</h3>
+            <ul style="margin-bottom: 0;">
+                <li>Report benchmark scores alongside their limitations &mdash; they measure agreement with a label set, not ground truth</li>
+                <li>Manually review disagreement cases before treating them as FPs during improvement cycles</li>
+                <li>Prefer improvements that increase detection breadth over improvements that match specific expected findings</li>
+                <li>The overfitting-reviewer agent's ~66% rejection rate exists partly to catch this failure mode</li>
+            </ul>
+        </div>
 
         <h2 id="usage">Usage</h2>
         <h3>Analyze a Source Repository</h3>
