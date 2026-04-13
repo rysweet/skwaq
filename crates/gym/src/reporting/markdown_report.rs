@@ -16,15 +16,26 @@ pub fn generate(score: &AggregateScore, suite: &str, commit: &str) -> String {
     md.push_str("| Metric | Value |\n");
     md.push_str("|--------|-------|\n");
     md.push_str(&format!(
-        "| Precision | {:.1}% |\n",
-        score.precision * 100.0
+        "| Precision (benchmark) | {:.1}% |\n",
+        score.benchmark_precision * 100.0
+    ));
+    md.push_str(&format!(
+        "| Precision (adjudicated) | {} |\n",
+        score
+            .adjudicated_precision
+            .map(|p| format!("{:.1}%", p * 100.0))
+            .unwrap_or_else(|| "_pending adjudication_".to_string())
     ));
     md.push_str(&format!("| Recall | {:.1}% |\n", score.recall * 100.0));
     md.push_str(&format!("| F1 Score | {:.1}% |\n", score.f1 * 100.0));
     md.push_str(&format!("| True Positives | {} |\n", score.true_positives));
     md.push_str(&format!(
-        "| False Positives | {} |\n",
+        "| False Positives (by benchmark label) | {} |\n",
         score.false_positives
+    ));
+    md.push_str(&format!(
+        "| Benchmark Disagreements (pending adjudication) | {} |\n",
+        score.benchmark_disagreements
     ));
     md.push_str(&format!(
         "| False Negatives | {} |\n",

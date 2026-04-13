@@ -1050,6 +1050,9 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                     total_prompt_tokens: 0,
                     total_completion_tokens: 0,
                     estimated_cost_usd: 0.0,
+                    is_capped: true,
+                    sampling_strategy: "stratified".to_string(),
+                    suite_name: summary.suite.clone(),
                 };
                 let run_id = gym.history_db.start_run(
                     &summary.suite,
@@ -1071,6 +1074,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                         false_positives: summary.false_positives,
                         false_negatives: summary.false_negatives,
                         true_negatives: summary.true_negatives,
+                        benchmark_disagreements: summary.false_positives,
                     })?;
                 for cwe_result in cwe_results {
                     gym.history_db
@@ -2286,6 +2290,9 @@ deployment = "gpt-54-test"
             false_positives: 1,
             false_negatives: 1,
             true_negatives: 3,
+            benchmark_disagreements: 1,
+            benchmark_precision: 0.0,
+            adjudicated_precision: None,
             per_cwe: vec![JsonCweResult {
                 cwe_id: 121,
                 total_cases: 3,
@@ -2310,6 +2317,9 @@ deployment = "gpt-54-test"
             false_positives: 0,
             false_negatives: 2,
             true_negatives: 4,
+            benchmark_disagreements: 0,
+            benchmark_precision: 0.0,
+            adjudicated_precision: None,
             per_cwe: vec![JsonCweResult {
                 cwe_id: 121,
                 total_cases: 3,
@@ -2410,6 +2420,9 @@ deployment = "gpt-54-test"
             false_positives: 1,
             false_negatives: 1,
             true_negatives: 3,
+            benchmark_disagreements: 1,
+            benchmark_precision: 0.0,
+            adjudicated_precision: None,
             per_cwe: vec![],
             per_original_cwe: vec![],
             per_semantic: vec![],

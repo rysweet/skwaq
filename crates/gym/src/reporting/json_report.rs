@@ -17,6 +17,20 @@ pub struct JsonReport {
     pub false_positives: u32,
     pub false_negatives: u32,
     pub true_negatives: u32,
+    /// Number of findings that disagree with the benchmark label.
+    ///
+    /// These are findings on cases the benchmark does not confirm as
+    /// vulnerable.  They are pending adjudication, not confirmed-wrong.
+    /// Equals `false_positives` until an adjudication pass reclassifies them.
+    #[serde(default)]
+    pub benchmark_disagreements: u32,
+    /// Concordance with the benchmark answer key.
+    /// Identical to `precision` until adjudication differentiates them.
+    #[serde(default)]
+    pub benchmark_precision: f64,
+    /// Analyst-verified precision.  `null` until an adjudication pass has run.
+    #[serde(default)]
+    pub adjudicated_precision: Option<f64>,
     pub per_cwe: Vec<JsonCweResult>,
     #[serde(default)]
     pub per_original_cwe: Vec<JsonCweResult>,
@@ -73,6 +87,9 @@ pub fn generate(
         false_positives: score.false_positives,
         false_negatives: score.false_negatives,
         true_negatives: score.true_negatives,
+        benchmark_disagreements: score.benchmark_disagreements,
+        benchmark_precision: score.benchmark_precision,
+        adjudicated_precision: score.adjudicated_precision,
         per_cwe: per_cwe
             .into_iter()
             .map(|c| JsonCweResult {

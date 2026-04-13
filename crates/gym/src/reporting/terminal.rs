@@ -351,6 +351,7 @@ mod tests {
             false_positives: 0,
             false_negatives: 0,
             true_negatives: 0,
+            benchmark_disagreements: 0,
         }
     }
 

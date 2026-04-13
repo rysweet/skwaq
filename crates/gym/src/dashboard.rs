@@ -206,6 +206,7 @@ mod tests {
             false_positives: 1,
             false_negatives: 3,
             true_negatives: 0,
+            benchmark_disagreements: 0,
         })
         .unwrap();
 
@@ -224,6 +225,7 @@ mod tests {
             false_positives: 0,
             false_negatives: 2,
             true_negatives: 0,
+            benchmark_disagreements: 0,
         })
         .unwrap();
 

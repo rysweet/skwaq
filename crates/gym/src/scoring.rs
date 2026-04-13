@@ -24,12 +24,35 @@ pub struct CaseOutcome {
 #[derive(Debug, Clone, Default)]
 pub struct AggregateScore {
     pub true_positives: u32,
+    /// Findings where the tool's output disagrees with the benchmark label
+    /// (benchmark says no-vuln, tool says vuln — or vice versa).
+    ///
+    /// This equals `false_positives` until an adjudication pass runs and
+    /// reclassifies some disagreements as confirmed TPs or confirmed FPs.
+    /// Benchmark answer keys are not complete precision oracles: a finding
+    /// on an unlabeled case is a *disagreement pending adjudication*, not a
+    /// confirmed wrong detection.
     pub false_positives: u32,
     pub false_negatives: u32,
     pub true_negatives: u32,
     pub precision: f64,
     pub recall: f64,
     pub f1: f64,
+    /// Concordance with the benchmark answer key.
+    ///
+    /// Computed as TP / (TP + benchmark_disagreements).  Identical to
+    /// `precision` until adjudication reclassifies some disagreements.
+    pub benchmark_precision: f64,
+    /// Analyst-verified precision.  `None` until an adjudication pass
+    /// has been run and promoted disagreements to confirmed TP or FP.
+    pub adjudicated_precision: Option<f64>,
+    /// Number of findings that disagree with the benchmark label.
+    ///
+    /// Includes both (a) findings on cases the benchmark marks as
+    /// negative/patched and (b) findings on positive cases with a CWE
+    /// family not in the expected set.  These disagreements may be real
+    /// bugs the benchmark missed; adjudication is required to decide.
+    pub benchmark_disagreements: u32,
     pub per_cwe: HashMap<u32, CweScore>,
     /// Per-original-CWE breakdown (not collapsed to family roots).
     /// Gives visibility into individual CWE performance (e.g. CWE-121 vs CWE-122).
@@ -636,6 +659,15 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
     } else {
         0.0
     };
+
+    // benchmark_disagreements mirrors false_positives until an adjudication
+    // pass reclassifies some as confirmed TPs or confirmed FPs.
+    score.benchmark_disagreements = score.false_positives;
+    // benchmark_precision is the same as precision (both use benchmark labels)
+    // until adjudication differentiates them.
+    score.benchmark_precision = score.precision;
+    // adjudicated_precision starts as None — requires an explicit adjudication run.
+    score.adjudicated_precision = None;
 
     // Compute negative case calibration rate
     let neg_total = score.negative_calibration.total_negative_cases as f64;

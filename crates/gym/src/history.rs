@@ -20,6 +20,12 @@ pub struct BenchmarkRun {
     pub false_positives: u32,
     pub false_negatives: u32,
     pub true_negatives: u32,
+    /// Number of findings that disagree with the benchmark label.
+    ///
+    /// These are findings on cases the benchmark does not confirm as
+    /// vulnerable.  They are *pending adjudication*, not confirmed-wrong.
+    #[serde(default)]
+    pub benchmark_disagreements: u32,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -48,6 +54,17 @@ pub struct RunMetadata {
     pub total_completion_tokens: u64,
     #[serde(default)]
     pub estimated_cost_usd: f64,
+    /// Whether max_cases was applied (truncated run).
+    /// When true, results may not represent the full suite.
+    #[serde(default)]
+    pub is_capped: bool,
+    /// Sampling strategy used when is_capped is true.
+    /// One of: "stratified", "sequential", "all".
+    #[serde(default)]
+    pub sampling_strategy: String,
+    /// Explicit suite name recorded at run time.
+    #[serde(default)]
+    pub suite_name: String,
 }
 
 /// Per-CWE result within a run.
@@ -95,6 +112,13 @@ pub enum CaseOutcomeKind {
     TruePositive,
     FalsePositive,
     FalseNegative,
+    /// The tool produced a finding on a case the benchmark does not label
+    /// as vulnerable (or failed to find one the benchmark confirms).
+    ///
+    /// This is distinct from `FalsePositive` because the benchmark answer
+    /// key may be incomplete: the finding may be a real bug the benchmark
+    /// missed.  Adjudication is required before reclassifying as TP or FP.
+    BenchmarkDisagreement,
 }
 
 impl std::fmt::Display for CaseOutcomeKind {
@@ -103,6 +127,7 @@ impl std::fmt::Display for CaseOutcomeKind {
             CaseOutcomeKind::TruePositive => write!(f, "TP"),
             CaseOutcomeKind::FalsePositive => write!(f, "FP"),
             CaseOutcomeKind::FalseNegative => write!(f, "FN"),
+            CaseOutcomeKind::BenchmarkDisagreement => write!(f, "BD"),
         }
     }
 }
@@ -115,6 +140,7 @@ impl std::str::FromStr for CaseOutcomeKind {
             "TP" => Ok(CaseOutcomeKind::TruePositive),
             "FP" => Ok(CaseOutcomeKind::FalsePositive),
             "FN" => Ok(CaseOutcomeKind::FalseNegative),
+            "BD" | "BenchmarkDisagreement" => Ok(CaseOutcomeKind::BenchmarkDisagreement),
             _ => anyhow::bail!("Unknown outcome kind: {}", s),
         }
     }
@@ -127,6 +153,28 @@ pub struct CaseOutcome {
     pub case_id: String,
     pub outcome: CaseOutcomeKind,
     pub cwe: u32,
+}
+
+/// A benchmark-disagreement record persisted for future adjudication.
+///
+/// When the tool produces a finding on a case the benchmark does not confirm
+/// as vulnerable, a `DisagreementRecord` is stored.  A future adjudication
+/// pass can promote the record to a confirmed TP or confirmed FP by setting
+/// `adjudication` to `"TP"` or `"FP"`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DisagreementRecord {
+    pub id: String,
+    pub run_id: String,
+    pub suite: String,
+    pub case_id: String,
+    /// JSON-encoded list of CWE IDs reported by the tool.
+    pub detected_cwes: String,
+    pub finding_id: String,
+    /// `None` = pending, `Some("TP")` = analyst confirmed real bug,
+    /// `Some("FP")` = analyst confirmed wrong detection.
+    pub adjudication: Option<String>,
+    pub adjudicated_at: Option<String>,
+    pub adjudicated_by: Option<String>,
 }
 
 /// Describes how a specific case changed between two runs.
@@ -198,7 +246,8 @@ impl HistoryDb {
                 true_positives INTEGER DEFAULT 0,
                 false_positives INTEGER DEFAULT 0,
                 false_negatives INTEGER DEFAULT 0,
-                true_negatives INTEGER DEFAULT 0
+                true_negatives INTEGER DEFAULT 0,
+                benchmark_disagreements INTEGER DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS cwe_results (
@@ -245,14 +294,29 @@ impl HistoryDb {
                 PRIMARY KEY (run_id, case_id, cwe)
             );
 
+            CREATE TABLE IF NOT EXISTS disagreements (
+                id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL REFERENCES runs(id),
+                suite TEXT NOT NULL,
+                case_id TEXT NOT NULL,
+                detected_cwes TEXT NOT NULL,
+                finding_id TEXT NOT NULL,
+                adjudication TEXT,
+                adjudicated_at TEXT,
+                adjudicated_by TEXT
+            );
+
             CREATE INDEX IF NOT EXISTS idx_cwe_results_cwe ON cwe_results(cwe_id);
             CREATE INDEX IF NOT EXISTS idx_semantic_results_class ON semantic_results(class_name);
             CREATE INDEX IF NOT EXISTS idx_case_results_suite ON case_results(suite);
             CREATE INDEX IF NOT EXISTS idx_case_outcomes_run ON case_outcomes(run_id);
             CREATE INDEX IF NOT EXISTS idx_runs_started ON runs(started_at);
+            CREATE INDEX IF NOT EXISTS idx_disagreements_run ON disagreements(run_id);
+            CREATE INDEX IF NOT EXISTS idx_disagreements_adjudication ON disagreements(adjudication);
             ",
         )?;
         self.ensure_run_metadata_column()?;
+        self.ensure_benchmark_disagreements_column()?;
         Ok(())
     }
 
@@ -285,8 +349,8 @@ impl HistoryDb {
         self.conn.execute(
             "UPDATE runs SET finished_at=?1, precision=?2, recall=?3, f1=?4,
              true_positives=?5, false_positives=?6, false_negatives=?7, true_negatives=?8,
-             run_metadata_json=?9
-             WHERE id=?10",
+             run_metadata_json=?9, benchmark_disagreements=?10
+             WHERE id=?11",
             rusqlite::params![
                 finished,
                 run.precision,
@@ -297,6 +361,7 @@ impl HistoryDb {
                 run.false_negatives,
                 run.true_negatives,
                 serde_json::to_string(&run.metadata)?,
+                run.benchmark_disagreements,
                 run.id
             ],
         )?;
@@ -406,7 +471,8 @@ impl HistoryDb {
         let mut stmt = self.conn.prepare(
             "SELECT id, started_at, finished_at, suite, skwaq_commit, run_metadata_json,
                     precision, recall, f1, true_positives, false_positives,
-                    false_negatives, true_negatives
+                    false_negatives, true_negatives,
+                    COALESCE(benchmark_disagreements, 0)
               FROM runs ORDER BY started_at DESC LIMIT ?1",
         )?;
         let rows = stmt.query_map(rusqlite::params![limit], |row| {
@@ -435,6 +501,7 @@ impl HistoryDb {
                 false_positives: row.get(10)?,
                 false_negatives: row.get(11)?,
                 true_negatives: row.get(12)?,
+                benchmark_disagreements: row.get(13)?,
             })
         })?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
@@ -445,7 +512,8 @@ impl HistoryDb {
         let mut stmt = self.conn.prepare(
             "SELECT id, started_at, finished_at, suite, skwaq_commit, run_metadata_json,
                     precision, recall, f1, true_positives, false_positives,
-                    false_negatives, true_negatives
+                    false_negatives, true_negatives,
+                    COALESCE(benchmark_disagreements, 0)
               FROM runs
               WHERE finished_at IS NOT NULL
               ORDER BY started_at DESC LIMIT ?1",
@@ -476,6 +544,7 @@ impl HistoryDb {
                 false_positives: row.get(10)?,
                 false_negatives: row.get(11)?,
                 true_negatives: row.get(12)?,
+                benchmark_disagreements: row.get(13)?,
             })
         })?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
@@ -490,7 +559,8 @@ impl HistoryDb {
         let mut stmt = self.conn.prepare(
             "SELECT id, started_at, finished_at, suite, skwaq_commit, run_metadata_json,
                     precision, recall, f1, true_positives, false_positives,
-                    false_negatives, true_negatives
+                    false_negatives, true_negatives,
+                    COALESCE(benchmark_disagreements, 0)
               FROM runs
               WHERE finished_at IS NOT NULL AND suite = ?1
               ORDER BY started_at DESC LIMIT ?2",
@@ -521,6 +591,7 @@ impl HistoryDb {
                 false_positives: row.get(10)?,
                 false_negatives: row.get(11)?,
                 true_negatives: row.get(12)?,
+                benchmark_disagreements: row.get(13)?,
             })
         })?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
@@ -555,6 +626,69 @@ impl HistoryDb {
             }
             Err(err) => Err(err.into()),
         }
+    }
+
+    /// Add `benchmark_disagreements` column to existing runs tables (schema migration).
+    fn ensure_benchmark_disagreements_column(&self) -> anyhow::Result<()> {
+        match self.conn.execute(
+            "ALTER TABLE runs ADD COLUMN benchmark_disagreements INTEGER DEFAULT 0",
+            [],
+        ) {
+            Ok(_) => Ok(()),
+            Err(rusqlite::Error::SqliteFailure(_, Some(ref message)))
+                if message.contains("duplicate column name: benchmark_disagreements") =>
+            {
+                Ok(())
+            }
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    /// Insert a disagreement record for adjudication.
+    pub fn insert_disagreement(&self, record: &DisagreementRecord) -> anyhow::Result<()> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO disagreements
+             (id, run_id, suite, case_id, detected_cwes, finding_id,
+              adjudication, adjudicated_at, adjudicated_by)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            rusqlite::params![
+                record.id,
+                record.run_id,
+                record.suite,
+                record.case_id,
+                record.detected_cwes,
+                record.finding_id,
+                record.adjudication,
+                record.adjudicated_at,
+                record.adjudicated_by,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Load pending (unadjudicated) disagreement records for a run.
+    pub fn pending_disagreements(&self, run_id: &str) -> anyhow::Result<Vec<DisagreementRecord>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, run_id, suite, case_id, detected_cwes, finding_id,
+                    adjudication, adjudicated_at, adjudicated_by
+             FROM disagreements
+             WHERE run_id = ?1 AND adjudication IS NULL
+             ORDER BY case_id",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![run_id], |row| {
+            Ok(DisagreementRecord {
+                id: row.get(0)?,
+                run_id: row.get(1)?,
+                suite: row.get(2)?,
+                case_id: row.get(3)?,
+                detected_cwes: row.get(4)?,
+                finding_id: row.get(5)?,
+                adjudication: row.get(6)?,
+                adjudicated_at: row.get(7)?,
+                adjudicated_by: row.get(8)?,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 
     /// Load per-case results for a run.
@@ -809,6 +943,9 @@ mod tests {
             total_prompt_tokens: 1000,
             total_completion_tokens: 500,
             estimated_cost_usd: 0.0525,
+            is_capped: true,
+            sampling_strategy: "stratified".to_string(),
+            suite_name: "fixtures".to_string(),
         };
 
         // Start a run.
@@ -829,6 +966,7 @@ mod tests {
             false_positives: 1,
             false_negatives: 2,
             true_negatives: 1,
+            benchmark_disagreements: 1,
         };
         db.finish_run(&run).unwrap();
 
@@ -926,7 +1064,8 @@ mod tests {
                     true_positives INTEGER DEFAULT 0,
                     false_positives INTEGER DEFAULT 0,
                     false_negatives INTEGER DEFAULT 0,
-                    true_negatives INTEGER DEFAULT 0
+                    true_negatives INTEGER DEFAULT 0,
+                    benchmark_disagreements INTEGER DEFAULT 0
                 );
                 ",
             )
@@ -1195,6 +1334,7 @@ mod tests {
             false_positives: 0,
             false_negatives: 0,
             true_negatives: 0,
+            benchmark_disagreements: 0,
         })
         .unwrap();
 
@@ -1234,6 +1374,7 @@ mod tests {
             false_positives: 1,
             false_negatives: 1,
             true_negatives: 0,
+            benchmark_disagreements: 1,
         })
         .unwrap();
 
@@ -1252,6 +1393,7 @@ mod tests {
             false_positives: 1,
             false_negatives: 1,
             true_negatives: 0,
+            benchmark_disagreements: 1,
         })
         .unwrap();
 
@@ -1270,6 +1412,7 @@ mod tests {
             false_positives: 1,
             false_negatives: 1,
             true_negatives: 0,
+            benchmark_disagreements: 1,
         })
         .unwrap();
 

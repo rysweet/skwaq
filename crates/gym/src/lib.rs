@@ -342,12 +342,13 @@ impl Gym {
             let suite_name = adapter.name().to_string();
             tracing::info!("Running {} benchmark...", suite_name);
 
-            let run_metadata = build_run_metadata(
+            let mut run_metadata = build_run_metadata(
                 &self.skwaq_root,
                 &config,
                 &self.llm_config,
                 self.profile_name.as_deref(),
             );
+            run_metadata.suite_name = suite_name.clone();
             adapter.validate_config(&config)?;
             let gt = adapter.ground_truth()?;
             let data_dir = adapter.setup(&config).await?;
@@ -821,6 +822,33 @@ impl Gym {
                         }
                         return Err(err);
                     }
+                    // Persist disagreement records for future adjudication.
+                    if case_outcome.outcome == history::CaseOutcomeKind::BenchmarkDisagreement {
+                        let disagreement = history::DisagreementRecord {
+                            id: uuid::Uuid::new_v4().to_string(),
+                            run_id: run_id.clone(),
+                            suite: suite_name.clone(),
+                            case_id: outcome.case_id.clone(),
+                            detected_cwes: serde_json::to_string(&outcome.detected_cwes)
+                                .unwrap_or_else(|_| "[]".to_string()),
+                            finding_id: outcome
+                                .unmatched_finding_ids
+                                .first()
+                                .cloned()
+                                .unwrap_or_default(),
+                            adjudication: None,
+                            adjudicated_at: None,
+                            adjudicated_by: None,
+                        };
+                        // Non-fatal: disagreement storage failure should not abort the run.
+                        if let Err(e) = self.history_db.insert_disagreement(&disagreement) {
+                            tracing::warn!(
+                                "Failed to store disagreement record for case {}: {}",
+                                outcome.case_id,
+                                e
+                            );
+                        }
+                    }
                 }
             }
 
@@ -921,6 +949,7 @@ impl Gym {
                 false_positives: score.false_positives,
                 false_negatives: score.false_negatives,
                 true_negatives: score.true_negatives,
+                benchmark_disagreements: score.benchmark_disagreements,
             };
             self.history_db.finish_run(&run)?;
 
@@ -1068,6 +1097,12 @@ fn build_run_metadata(
     llm: &skwaq_core::config::LlmConfig,
     profile_name: Option<&str>,
 ) -> history::RunMetadata {
+    let is_capped = config.max_cases.is_some();
+    let sampling_strategy = if is_capped {
+        "stratified".to_string()
+    } else {
+        "all".to_string()
+    };
     history::RunMetadata {
         llm_backend: llm.reasoning.trim().to_string(),
         llm_model: llm.copilot.model.clone(),
@@ -1087,6 +1122,9 @@ fn build_run_metadata(
         total_prompt_tokens: 0,
         total_completion_tokens: 0,
         estimated_cost_usd: 0.0,
+        is_capped,
+        sampling_strategy,
+        suite_name: String::new(), // filled in at run time per-suite
     }
 }
 
@@ -1111,6 +1149,9 @@ fn case_outcomes_for_history(
     outcome: &scoring::CaseOutcome,
 ) -> Vec<history::CaseOutcome> {
     if outcome.expected_cwes.is_empty() {
+        // Negative case: findings disagree with the benchmark's negative label.
+        // Use BenchmarkDisagreement rather than FalsePositive to signal that
+        // the benchmark may be incomplete — these require adjudication.
         return outcome
             .detected_cwes
             .iter()
@@ -1120,7 +1161,7 @@ fn case_outcomes_for_history(
             .map(|cwe| history::CaseOutcome {
                 run_id: run_id.to_string(),
                 case_id: outcome.case_id.clone(),
-                outcome: history::CaseOutcomeKind::FalsePositive,
+                outcome: history::CaseOutcomeKind::BenchmarkDisagreement,
                 cwe,
             })
             .collect();
@@ -1186,6 +1227,9 @@ fn reconstruct_score(
         precision: run.precision,
         recall: run.recall,
         f1: run.f1,
+        benchmark_precision: run.precision,
+        benchmark_disagreements: run.benchmark_disagreements,
+        adjudicated_precision: None,
         per_cwe,
         per_original_cwe: Default::default(),
         per_semantic,
@@ -1283,6 +1327,7 @@ language = "c"
             false_positives: 0,
             false_negatives: 0,
             true_negatives: 0,
+            benchmark_disagreements: 0,
         };
 
         let score = reconstruct_score(
@@ -1363,8 +1408,10 @@ language = "c"
         };
         let negative_rows = case_outcomes_for_history("run-1", &negative);
         assert_eq!(negative_rows.len(), 2);
+        // Negative cases now produce BenchmarkDisagreement outcomes, not FalsePositive,
+        // because the benchmark may be incomplete — these require adjudication.
         assert!(negative_rows
             .iter()
-            .all(|row| { row.outcome == history::CaseOutcomeKind::FalsePositive }));
+            .all(|row| { row.outcome == history::CaseOutcomeKind::BenchmarkDisagreement }));
     }
 }
