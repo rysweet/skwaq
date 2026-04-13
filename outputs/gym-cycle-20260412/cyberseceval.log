@@ -1,0 +1,188 @@
+=== Skwaq Gym Evaluation (hybrid) ===
+  Suites:      cyberseceval
+  Procs/suite: 2
+  Concurrency: 2
+  Adaptive:    true
+  Output:      /home/azureuser/src/skwaq/outputs/gym-cycle-20260412
+
+WARNING: working tree is dirty — the binary may not reflect the latest code.
+Consider running `cargo build --release -p skwaq` before eval.
+
+[cyberseceval] Launching 2 processes (30 cases)...
+
+=== Monitoring ===
+
+  cyberseceval: ~5/30 (16%) | 2 procs | 0 retries
+
+  cyberseceval: ~5/30 (16%) | 2 procs | 0 retries
+
+  cyberseceval: ~5/30 (16%) | 2 procs | 0 retries
+
+  cyberseceval: ~5/30 (16%) | 2 procs | 0 retries
+
+  cyberseceval: ~5/30 (16%) | 2 procs | 0 retries
+
+  cyberseceval: ~5/30 (16%) | 2 procs | 0 retries
+
+  cyberseceval: ~5/30 (16%) | 2 procs | 0 retries
+
+  cyberseceval: ~5/30 (16%) | 2 procs | 0 retries
+
+  cyberseceval: ~5/30 (16%) | 2 procs | 0 retries
+
+  cyberseceval: ~5/30 (16%) | 2 procs | 0 retries
+
+  cyberseceval: ~5/30 (16%) | 2 procs | 0 retries
+
+  cyberseceval: ~5/30 (16%) | 2 procs | 0 retries
+
+  cyberseceval: ~5/30 (16%) | 2 procs | 0 retries
+
+  cyberseceval: ~5/30 (16%) | 2 procs | 0 retries
+
+  cyberseceval: ~5/30 (16%) | 2 procs | 0 retries
+
+  cyberseceval: ~5/30 (16%) | 2 procs | 0 retries
+
+  cyberseceval: ~6/30 (20%) | 2 procs | 0 retries
+
+  cyberseceval: ~6/30 (20%) | 2 procs | 0 retries
+
+  cyberseceval: ~6/30 (20%) | 2 procs | 0 retries
+
+  cyberseceval: ~6/30 (20%) | 2 procs | 0 retries
+
+  cyberseceval: ~7/30 (23%) | 2 procs | 0 retries
+
+  cyberseceval: ~10/30 (33%) | 2 procs | 0 retries
+
+  cyberseceval: ~10/30 (33%) | 2 procs | 0 retries
+
+  cyberseceval: ~11/30 (36%) | 2 procs | 0 retries
+
+  cyberseceval: ~11/30 (36%) | 2 procs | 0 retries
+
+  cyberseceval: ~11/30 (36%) | 2 procs | 0 retries
+
+  cyberseceval: ~11/30 (36%) | 2 procs | 0 retries
+
+  cyberseceval: ~11/30 (36%) | 2 procs | 0 retries
+
+  cyberseceval: ~11/30 (36%) | 2 procs | 0 retries
+
+  cyberseceval: ~11/30 (36%) | 2 procs | 0 retries
+
+  cyberseceval: ~11/30 (36%) | 2 procs | 0 retries
+
+  cyberseceval: ~11/30 (36%) | 2 procs | 0 retries
+
+  cyberseceval: ~11/30 (36%) | 2 procs | 0 retries
+
+  cyberseceval: ~11/30 (36%) | 2 procs | 0 retries
+
+  cyberseceval: ~12/30 (40%) | 2 procs | 0 retries
+
+  cyberseceval: ~12/30 (40%) | 2 procs | 0 retries
+
+  cyberseceval: ~12/30 (40%) | 2 procs | 0 retries
+
+  cyberseceval: ~13/30 (43%) | 2 procs | 0 retries
+
+  cyberseceval: ~14/30 (46%) | 2 procs | 0 retries
+
+  cyberseceval: ~14/30 (46%) | 2 procs | 0 retries
+
+  cyberseceval: ~14/30 (46%) | 2 procs | 0 retries
+
+  cyberseceval: ~14/30 (46%) | 2 procs | 0 retries
+
+  cyberseceval: ~16/30 (53%) | 2 procs | 0 retries
+
+  cyberseceval: ~19/30 (63%) | 2 procs | 0 retries
+
+  cyberseceval: ~19/30 (63%) | 2 procs | 0 retries
+
+  cyberseceval: ~20/30 (66%) | 2 procs | 0 retries
+
+  cyberseceval: ~20/30 (66%) | 2 procs | 0 retries
+
+  cyberseceval: ~20/30 (66%) | 2 procs | 0 retries
+
+  cyberseceval: ~20/30 (66%) | 2 procs | 0 retries
+
+  cyberseceval: ~20/30 (66%) | 2 procs | 0 retries
+
+  cyberseceval: ~20/30 (66%) | 2 procs | 0 retries
+
+  cyberseceval: ~20/30 (66%) | 2 procs | 0 retries
+
+  cyberseceval: ~20/30 (66%) | 2 procs | 0 retries
+
+  cyberseceval: ~21/30 (70%) | 2 procs | 0 retries
+
+  cyberseceval: ~21/30 (70%) | 2 procs | 0 retries
+
+  cyberseceval: ~21/30 (70%) | 2 procs | 0 retries
+
+  cyberseceval: ~21/30 (70%) | 2 procs | 0 retries
+
+  cyberseceval: ~22/30 (73%) | 2 procs | 0 retries
+
+  cyberseceval: ~22/30 (73%) | 2 procs | 0 retries
+
+  cyberseceval: ~22/30 (73%) | 2 procs | 0 retries
+
+  cyberseceval: ~23/30 (76%) | 2 procs | 0 retries
+
+  cyberseceval: ~24/30 (80%) | 2 procs | 0 retries
+
+  cyberseceval: ~25/30 (83%) | 2 procs | 0 retries
+
+  cyberseceval: ~26/30 (86%) | 2 procs | 0 retries
+
+  cyberseceval: ~26/30 (86%) | 2 procs | 0 retries
+
+  cyberseceval: ~26/30 (86%) | 2 procs | 0 retries
+
+  cyberseceval: ~26/30 (86%) | 2 procs | 0 retries
+
+  cyberseceval: ~27/30 (90%) | 2 procs | 0 retries
+
+  cyberseceval: ~27/30 (90%) | 2 procs | 0 retries
+
+  cyberseceval: ~27/30 (90%) | 2 procs | 0 retries
+
+  cyberseceval: ~28/30 (93%) | 1 procs | 0 retries
+
+  cyberseceval: ~28/30 (93%) | 1 procs | 0 retries
+
+  cyberseceval: ~28/30 (93%) | 1 procs | 0 retries
+
+  cyberseceval: ~29/30 (96%) | 1 procs | 0 retries
+
+  cyberseceval: ~29/30 (96%) | 1 procs | 0 retries
+
+  cyberseceval: ~29/30 (96%) | 1 procs | 0 retries
+
+  cyberseceval: ~29/30 (96%) | 1 procs | 0 retries
+
+  cyberseceval: ~29/30 (96%) | 1 procs | 0 retries
+
+  cyberseceval: ~29/30 (96%) | 1 procs | 0 retries
+
+  cyberseceval: ~29/30 (96%) | 1 procs | 0 retries
+
+  cyberseceval: ~29/30 (96%) | 1 procs | 0 retries
+
+  cyberseceval: ~30/30 (100%) | 0 procs | 0 retries
+
+=== Results ===
+Suite                F1%    Prec%     Rec%     TP     FP     FN     TN
+----------------------------------------------------------------------
+cyberseceval       87.5   100.0    77.8     21      0      6      0
+
+Results saved to: /home/azureuser/src/skwaq/outputs/gym-cycle-20260412
+Metadata: /home/azureuser/src/skwaq/outputs/gym-cycle-20260412/metadata.json
+Summary: /home/azureuser/src/skwaq/outputs/gym-cycle-20260412/summary.md
+Dashboard: /home/azureuser/src/skwaq/outputs/gym-cycle-20260412/dashboard.md
+Partial summary: /home/azureuser/src/skwaq/outputs/gym-cycle-20260412/partial-summary.json

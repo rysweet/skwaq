@@ -1,0 +1,26 @@
+=== Skwaq Gym Evaluation (pattern-only) ===
+  Suites:      cgc
+  Procs/suite: 2
+  Concurrency: 2
+  Adaptive:    false
+  Output:      /home/azureuser/src/skwaq/outputs/gym-cycle-20260412
+
+WARNING: working tree is dirty — the binary may not reflect the latest code.
+Consider running `cargo build --release -p skwaq` before eval.
+
+[cgc] Launching 2 processes (10 cases)...
+
+=== Monitoring ===
+
+  cgc: ~10/10 (100%) | 0 procs | 0 retries
+
+=== Results ===
+Suite                F1%    Prec%     Rec%     TP     FP     FN     TN
+----------------------------------------------------------------------
+cgc                94.7   100.0    90.0     18      0      2      0
+
+Results saved to: /home/azureuser/src/skwaq/outputs/gym-cycle-20260412
+Metadata: /home/azureuser/src/skwaq/outputs/gym-cycle-20260412/metadata.json
+Summary: /home/azureuser/src/skwaq/outputs/gym-cycle-20260412/summary.md
+Dashboard: /home/azureuser/src/skwaq/outputs/gym-cycle-20260412/dashboard.md
+Partial summary: /home/azureuser/src/skwaq/outputs/gym-cycle-20260412/partial-summary.json

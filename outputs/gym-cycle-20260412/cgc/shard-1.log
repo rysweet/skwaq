@@ -1,0 +1,43 @@
+CASE_DONE Barcoder
+CASE_DONE Bloomy_Sunday
+CASE_DONE Audio_Visualizer
+CASE_DONE vFilter
+CASE_DONE Shortest_Path_Tree_Calculator
+
+======================================================================
+  SKWAQ GYM RESULTS: CGC
+======================================================================
+
+  Precision:  100.0%
+  Recall:     90.0%
+  F1 Score:   94.7%
+
+  TP: 9  FP: 0  FN: 1  TN: 0
+
+       CWE    Cases       TP       FN    Detect%      Prec%
+  --------------------------------------------------------------
+       465        1        0        1 [31m      0.0%[0m       0.0%
+       134        1        1        0 [32m    100.0%[0m     100.0%
+       119        8        8        0 [32m    100.0%[0m     100.0%
+
+       CWE    Cases       TP       FN    Detect%      Prec%  (original CWE IDs)
+  --------------------------------------------------------------
+       465        1        0        1 [31m      0.0%[0m       0.0%
+       131        1        1        0 [32m    100.0%[0m     100.0%
+       122        1        1        0 [32m    100.0%[0m     100.0%
+       134        1        1        0 [32m    100.0%[0m     100.0%
+       123        1        1        0 [32m    100.0%[0m     100.0%
+       121        2        2        0 [32m    100.0%[0m     100.0%
+       839        1        1        0 [32m    100.0%[0m     100.0%
+       125        1        1        0 [32m    100.0%[0m     100.0%
+       124        1        1        0 [32m    100.0%[0m     100.0%
+
+                Semantic    Cases       TP       FN    Detect%      Prec%
+  --------------------------------------------------------------------------------------
+          type_confusion        0        0        0 [31m      0.0%[0m       0.0%
+            invalid_free        0        0        0 [31m      0.0%[0m       0.0%
+         buffer_overflow        5        5        0 [32m    100.0%[0m     100.0%
+           format_string        1        1        0 [32m    100.0%[0m     100.0%
+
+  SEMANTIC COVERAGE: 4/4 classes exercised, 2 with detections
+

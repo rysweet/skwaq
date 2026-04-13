@@ -1,0 +1,24 @@
+{
+  "started_at": "2026-04-12T22:29:59.972006278+00:00",
+  "completed_at": "2026-04-13T00:47:45.981297763+00:00",
+  "git_commits": [
+    "1c2c341b03ceb8823bf22e0108bd247d0208b235",
+    "24ad851c97e63a42de7ca42f97f75634f3c0a248"
+  ],
+  "git_dirty": true,
+  "mode": "mixed",
+  "suites": [
+    "juliet",
+    "owasp",
+    "cyberseceval",
+    "cgc"
+  ],
+  "llm_backend": "copilot",
+  "llm_model": "claude-opus-4.6",
+  "binary_mode": true,
+  "skwaq_version": "0.5.0",
+  "notes": [
+    "This directory combines the completed suite artifacts from one broader local gym cycle.",
+    "CGC completed in pattern-only mode with 10 cases after the hybrid 30-case path was throughput-bound."
+  ]
+}

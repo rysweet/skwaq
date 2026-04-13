@@ -1,0 +1,514 @@
+  Running agent: attack-surface (Attack surface mapper)
+  Running agent: attack-surface (Attack surface mapper)
+  Running agent: attack-surface (Attack surface mapper)
+  Running agent: attack-surface (Attack surface mapper)
+  Agent attack-surface completed (56014 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Agent attack-surface completed (61094 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Agent attack-surface completed (49453 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Agent attack-surface completed (69164 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Agent taint-tracer completed (38664 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent taint-tracer completed (49554 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent taint-tracer completed (47975 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent vuln-hunter completed (22735 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent vuln-hunter completed (21875 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent vuln-hunter completed (20921 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent taint-tracer completed (54292 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Debate agent exploit-analyst completed (31137 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Debate agent exploit-analyst completed (31273 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Debate agent exploit-analyst completed (33893 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Debate agent defense-analyst completed (52636 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Debate agent defense-analyst completed (54512 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent vuln-hunter completed (24258 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Debate agent defense-analyst completed (49463 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent verdict-synthesizer completed (31940 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent verdict-synthesizer completed (28776 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent verdict-synthesizer completed (31286 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent cwe-classifier completed (78203 tokens used)
+  Debate agent exploit-analyst completed (54112 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent cwe-classifier completed (66663 tokens used)
+CASE_DONE CWE78_OS_Command_Injection__char_connect_socket_execl_01
+  Running agent: attack-surface (Attack surface mapper)
+  Agent cwe-classifier completed (50789 tokens used)
+CASE_DONE CWE78_OS_Command_Injection__char_connect_socket_execl_02
+  Running agent: attack-surface (Attack surface mapper)
+CASE_DONE CWE15_External_Control_of_System_or_Configuration_Setting__w32_01
+  Running agent: attack-surface (Attack surface mapper)
+  Debate agent defense-analyst completed (41595 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent attack-surface completed (39897 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Agent attack-surface completed (72051 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Agent attack-surface completed (58363 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Agent verdict-synthesizer completed (30230 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent taint-tracer completed (46245 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent cwe-classifier completed (49791 tokens used)
+  Agent taint-tracer completed (49619 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent taint-tracer completed (53194 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+CASE_DONE juliet_safe_io_c
+  Running agent: attack-surface (Attack surface mapper)
+  Agent vuln-hunter completed (23085 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent vuln-hunter completed (40902 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent vuln-hunter completed (23636 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent attack-surface completed (46016 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Debate agent exploit-analyst completed (43836 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Debate agent exploit-analyst completed (52853 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Debate agent exploit-analyst completed (32130 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+[2m2026-04-12T21:27:41.311435Z[0m [33m WARN[0m [2mskwaq_core::agents::tool_executor[0m[2m:[0m Unknown tool: read_function" parameter_name="name
+[2m2026-04-12T21:27:41.311512Z[0m [33m WARN[0m [2mskwaq_core::agents::tool_executor[0m[2m:[0m Unknown tool: lookup_knowledge" parameter_name="query
+[2m2026-04-12T21:27:41.311550Z[0m [33m WARN[0m [2mskwaq_core::agents::tool_executor[0m[2m:[0m Unknown tool: recall_memory" parameter_name="query
+CASE_DONE CWE114_Process_Control__w32_char_connect_socket_01
+[2m2026-04-12T21:27:41.796955Z[0m [33m WARN[0m [2mskwaq_gym[0m[2m:[0m [6/30] Case CWE114_Process_Control__w32_char_connect_socket_01 failed (not retryable or max retries): LLM pipeline failed for /home/azureuser/.local/share/skwaq/gym/cache/juliet/testcases/CWE114_Process_Control/CWE114_Process_Control__w32_char_connect_socket_01.c: LLM tool loop failed: Bad Request: Bad Request
+
+The request was invalid. Please check your parameters.
+  Running agent: attack-surface (Attack surface mapper)
+  Debate agent defense-analyst completed (56039 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Debate agent defense-analyst completed (52074 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent taint-tracer completed (40741 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent attack-surface completed (46805 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Agent verdict-synthesizer completed (30874 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent vuln-hunter completed (22222 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent verdict-synthesizer completed (30502 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent cwe-classifier completed (52617 tokens used)
+  Agent taint-tracer completed (40299 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+CASE_DONE CWE78_OS_Command_Injection__char_connect_socket_execl_03
+  Running agent: attack-surface (Attack surface mapper)
+  Agent cwe-classifier completed (71316 tokens used)
+CASE_DONE CWE90_LDAP_Injection__w32_char_connect_socket_01
+  Running agent: attack-surface (Attack surface mapper)
+  Debate agent exploit-analyst completed (25957 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent vuln-hunter completed (24532 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent attack-surface completed (47975 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Debate agent defense-analyst completed (35367 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent attack-surface completed (46139 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Debate agent exploit-analyst completed (24332 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent verdict-synthesizer completed (22857 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent taint-tracer completed (41470 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Debate agent defense-analyst completed (35689 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent cwe-classifier completed (37764 tokens used)
+CASE_DONE CWE121_Stack_Based_Buffer_Overflow__CWE129_connect_socket_01
+  Running agent: attack-surface (Attack surface mapper)
+  Agent vuln-hunter completed (24289 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent taint-tracer completed (37579 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent verdict-synthesizer completed (21194 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent vuln-hunter completed (17520 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent cwe-classifier completed (77208 tokens used)
+CASE_DONE CWE121_Stack_Based_Buffer_Overflow__CWE129_connect_socket_02
+  Running agent: attack-surface (Attack surface mapper)
+  Debate agent exploit-analyst completed (38657 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent attack-surface completed (47281 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Debate agent defense-analyst completed (23361 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent attack-surface completed (50597 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Debate agent exploit-analyst completed (23789 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent verdict-synthesizer completed (21924 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent taint-tracer completed (46716 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Debate agent defense-analyst completed (21385 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent cwe-classifier completed (49204 tokens used)
+CASE_DONE CWE121_Stack_Based_Buffer_Overflow__CWE129_connect_socket_03
+  Running agent: attack-surface (Attack surface mapper)
+  Agent taint-tracer completed (58612 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent vuln-hunter completed (17285 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent verdict-synthesizer completed (23416 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent vuln-hunter completed (42018 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Debate agent exploit-analyst completed (31504 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent cwe-classifier completed (49037 tokens used)
+  Agent attack-surface completed (61195 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Debate agent defense-analyst completed (43579 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Debate agent exploit-analyst completed (58914 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+CASE_DONE CWE122_Heap_Based_Buffer_Overflow__char_type_overrun_memcpy_01
+  Running agent: attack-surface (Attack surface mapper)
+  Debate agent defense-analyst completed (53045 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent taint-tracer completed (27093 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent verdict-synthesizer completed (31462 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent attack-surface completed (65530 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Agent verdict-synthesizer completed (34629 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent cwe-classifier completed (31615 tokens used)
+  Agent vuln-hunter completed (22138 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+CASE_DONE CWE122_Heap_Based_Buffer_Overflow__char_type_overrun_memcpy_02
+  Running agent: attack-surface (Attack surface mapper)
+  Agent cwe-classifier completed (54263 tokens used)
+CASE_DONE CWE123_Write_What_Where_Condition__connect_socket_01
+  Running agent: attack-surface (Attack surface mapper)
+  Debate agent exploit-analyst completed (14555 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent taint-tracer completed (49232 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent attack-surface completed (60928 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Debate agent defense-analyst completed (10420 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent vuln-hunter completed (23984 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent attack-surface completed (38905 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Agent verdict-synthesizer completed (13633 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent taint-tracer completed (19801 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Debate agent exploit-analyst completed (26566 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent cwe-classifier completed (68695 tokens used)
+CASE_DONE CWE124_Buffer_Underwrite__CWE839_connect_socket_01
+  Running agent: attack-surface (Attack surface mapper)
+  Agent vuln-hunter completed (25694 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Debate agent defense-analyst completed (37298 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent taint-tracer completed (62719 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent attack-surface completed (76000 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Agent verdict-synthesizer completed (24429 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Debate agent exploit-analyst completed (30893 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent vuln-hunter completed (24249 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Debate agent defense-analyst completed (9801 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent cwe-classifier completed (58407 tokens used)
+CASE_DONE CWE126_Buffer_Overread__CWE129_connect_socket_01
+  Running agent: attack-surface (Attack surface mapper)
+  Agent taint-tracer completed (46498 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Debate agent exploit-analyst completed (31566 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent verdict-synthesizer completed (30154 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent attack-surface completed (49412 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Agent vuln-hunter completed (43683 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Debate agent defense-analyst completed (47391 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent cwe-classifier completed (30045 tokens used)
+CASE_DONE CWE127_Buffer_Underread__CWE839_connect_socket_01
+  Running agent: attack-surface (Attack surface mapper)
+  Agent taint-tracer completed (32789 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent verdict-synthesizer completed (28426 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Debate agent exploit-analyst completed (31622 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+[2m2026-04-12T21:57:01.265253Z[0m [33m WARN[0m [2mskwaq_core::agents::tool_executor[0m[2m:[0m Unknown tool: read_function" parameter_name="name
+CASE_DONE CWE176_Improper_Handling_of_Unicode_Encoding__w32_01
+[2m2026-04-12T21:57:01.973520Z[0m [33m WARN[0m [2mskwaq_gym[0m[2m:[0m [17/30] Case CWE176_Improper_Handling_of_Unicode_Encoding__w32_01 failed (not retryable or max retries): LLM pipeline failed for /home/azureuser/.local/share/skwaq/gym/cache/juliet/testcases/CWE176_Improper_Handling_of_Unicode_Encoding/CWE176_Improper_Handling_of_Unicode_Encoding__w32_01.c: LLM tool loop failed: Bad Request: Bad Request
+
+The request was invalid. Please check your parameters.
+  Running agent: attack-surface (Attack surface mapper)
+  Agent attack-surface completed (45186 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Agent vuln-hunter completed (38293 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent cwe-classifier completed (44333 tokens used)
+CASE_DONE CWE134_Uncontrolled_Format_String__char_connect_socket_fprintf_01
+  Running agent: attack-surface (Attack surface mapper)
+  Agent attack-surface completed (47451 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Debate agent exploit-analyst completed (33197 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent taint-tracer completed (46491 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent attack-surface completed (47113 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Debate agent defense-analyst completed (46413 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent vuln-hunter completed (36961 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent taint-tracer completed (44635 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent verdict-synthesizer completed (47883 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Debate agent exploit-analyst completed (22813 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent taint-tracer completed (34031 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent vuln-hunter completed (39183 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Debate agent defense-analyst completed (21522 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent cwe-classifier completed (46434 tokens used)
+CASE_DONE CWE188_Reliance_on_Data_Memory_Layout__modify_local_01
+  Running agent: attack-surface (Attack surface mapper)
+  Agent vuln-hunter completed (39415 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Debate agent exploit-analyst completed (22937 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent verdict-synthesizer completed (29810 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Debate agent exploit-analyst completed (32079 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent attack-surface completed (47880 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Debate agent defense-analyst completed (30673 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent cwe-classifier completed (40634 tokens used)
+  Debate agent defense-analyst completed (39940 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+CASE_DONE CWE190_Integer_Overflow__char_fscanf_add_01
+  Running agent: attack-surface (Attack surface mapper)
+  Agent verdict-synthesizer completed (30471 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent verdict-synthesizer completed (42066 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent cwe-classifier completed (28411 tokens used)
+  Agent taint-tracer completed (53064 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+CASE_DONE CWE190_Integer_Overflow__char_fscanf_add_02
+  Running agent: attack-surface (Attack surface mapper)
+  Agent attack-surface completed (46114 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Agent cwe-classifier completed (52033 tokens used)
+CASE_DONE CWE191_Integer_Underflow__char_fscanf_multiply_01
+  Running agent: attack-surface (Attack surface mapper)
+  Agent vuln-hunter completed (40607 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent attack-surface completed (65399 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Debate agent exploit-analyst completed (25681 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent taint-tracer completed (37183 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Debate agent defense-analyst completed (23670 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent attack-surface completed (37435 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Agent vuln-hunter completed (32935 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent verdict-synthesizer completed (31944 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent taint-tracer completed (62650 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Debate agent exploit-analyst completed (23446 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent taint-tracer completed (35686 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent vuln-hunter completed (36410 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent cwe-classifier completed (73963 tokens used)
+  Agent vuln-hunter completed (32739 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+CASE_DONE CWE191_Integer_Underflow__char_fscanf_multiply_02
+  Running agent: attack-surface (Attack surface mapper)
+  Debate agent defense-analyst completed (20047 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Debate agent exploit-analyst completed (19070 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent verdict-synthesizer completed (22231 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Debate agent exploit-analyst completed (44787 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Debate agent defense-analyst completed (18190 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent attack-surface completed (53700 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Agent cwe-classifier completed (32895 tokens used)
+CASE_DONE CWE194_Unexpected_Sign_Extension__connect_socket_malloc_01
+  Running agent: attack-surface (Attack surface mapper)
+  Debate agent defense-analyst completed (20151 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent verdict-synthesizer completed (18373 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent taint-tracer completed (48843 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent attack-surface completed (57753 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Agent cwe-classifier completed (25365 tokens used)
+CASE_DONE CWE196_Unsigned_to_Signed_Conversion_Error__basic_01
+  Running agent: attack-surface (Attack surface mapper)
+  Agent verdict-synthesizer completed (42742 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent vuln-hunter completed (19787 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent attack-surface completed (70368 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Agent cwe-classifier completed (76113 tokens used)
+CASE_DONE CWE195_Signed_to_Unsigned_Conversion_Error__connect_socket_malloc_01
+  Running agent: attack-surface (Attack surface mapper)
+  Debate agent exploit-analyst completed (46983 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent taint-tracer completed (52829 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent attack-surface completed (58414 tokens used)
+  Running agent: taint-tracer (Data flow analysis specialist)
+  Debate agent defense-analyst completed (53859 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent vuln-hunter completed (41183 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent taint-tracer completed (90482 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent verdict-synthesizer completed (30563 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent taint-tracer completed (52187 tokens used)
+  Running agent: vuln-hunter (Primary vulnerability discovery agent)
+  Agent cwe-classifier completed (41467 tokens used)
+CASE_DONE CWE197_Numeric_Truncation_Error__int_connect_socket_to_char_01
+  Debate agent exploit-analyst completed (68343 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent vuln-hunter completed (44095 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Agent vuln-hunter completed (20703 tokens used)
+  Running debate agent A: exploit-analyst (Validates exploitability of vulnerability findings)
+  Debate agent defense-analyst completed (62257 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Debate agent exploit-analyst completed (54073 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Debate agent exploit-analyst completed (84291 tokens used)
+  Running debate agent B: defense-analyst (Identifies mitigations and defensive controls)
+  Agent verdict-synthesizer completed (42405 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Debate agent defense-analyst completed (50995 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Debate agent defense-analyst completed (57287 tokens used)
+  Running agent: verdict-synthesizer (Synthesizes multi-agent validation into final verdicts)
+  Agent cwe-classifier completed (70619 tokens used)
+CASE_DONE CWE222_Truncation_of_Security_Relevant_Information__w32_01
+  Agent verdict-synthesizer completed (29683 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent verdict-synthesizer completed (94449 tokens used)
+  Running agent: cwe-classifier (Precise CWE classification and severity validation)
+  Agent cwe-classifier completed (69394 tokens used)
+CASE_DONE CWE226_Sensitive_Information_Uncleared_Before_Release__w32_char_alloca_01
+  Agent cwe-classifier completed (74170 tokens used)
+CASE_DONE CWE223_Omission_of_Security_Relevant_Information__w32_01
+
+======================================================================
+  SKWAQ GYM RESULTS: JULIET
+======================================================================
+
+  Precision:  100.0%
+  Recall:     85.2%
+  F1 Score:   92.0%
+
+  TP: 23  FP: 0  FN: 4  TN: 1
+
+       CWE    Cases       TP       FN    Detect%      Prec%
+  --------------------------------------------------------------
+       200        1        0        1 [31m      0.0%[0m       0.0%
+       676        2        1        1 [33m     50.0%[0m     100.0%
+       190        8        7        1 [32m     87.5%[0m     100.0%
+       119       10        9        1 [32m     90.0%[0m     100.0%
+        74        5        5        0 [32m    100.0%[0m     100.0%
+       134        1        1        0 [32m    100.0%[0m     100.0%
+
+       CWE    Cases       TP       FN    Detect%      Prec%  (original CWE IDs)
+  --------------------------------------------------------------
+       188        1        0        1 [31m      0.0%[0m       0.0%
+       196        1        0        1 [31m      0.0%[0m       0.0%
+       223        1        0        1 [31m      0.0%[0m       0.0%
+       226        1        0        1 [31m      0.0%[0m       0.0%
+       197        1        1        0 [32m    100.0%[0m     100.0%
+       124        1        1        0 [32m    100.0%[0m     100.0%
+       122        2        2        0 [32m    100.0%[0m     100.0%
+       134        1        1        0 [32m    100.0%[0m     100.0%
+       195        1        1        0 [32m    100.0%[0m     100.0%
+        15        1        1        0 [32m    100.0%[0m     100.0%
+        90        1        1        0 [32m    100.0%[0m     100.0%
+       194        1        1        0 [32m    100.0%[0m     100.0%
+       121        3        3        0 [32m    100.0%[0m     100.0%
+       190        2        2        0 [32m    100.0%[0m     100.0%
+       191        2        2        0 [32m    100.0%[0m     100.0%
+       127        1        1        0 [32m    100.0%[0m     100.0%
+       123        1        1        0 [32m    100.0%[0m     100.0%
+        78        3        3        0 [32m    100.0%[0m     100.0%
+       222        1        1        0 [32m    100.0%[0m     100.0%
+       126        1        1        0 [32m    100.0%[0m     100.0%
+
+                Semantic    Cases       TP       FN    Detect%      Prec%
+  --------------------------------------------------------------------------------------
+           sql_injection        0        0        0 [31m      0.0%[0m       0.0%
+   untrusted_search_path        0        0        0 [31m      0.0%[0m       0.0%
+          type_confusion        0        0        0 [31m      0.0%[0m       0.0%
+            invalid_free        0        0        0 [31m      0.0%[0m       0.0%
+    information_exposure        1        0        1 [31m      0.0%[0m       0.0%
+        unsafe_api_usage        2        1        1 [33m     50.0%[0m     100.0%
+        integer_overflow        8        7        1 [32m     87.5%[0m     100.0%
+         buffer_overflow       10        9        1 [32m     90.0%[0m     100.0%
+          ldap_injection        1        1        0 [32m    100.0%[0m      50.0%
+         operator_misuse        1        1        0 [32m    100.0%[0m      50.0%
+       command_injection        3        3        0 [32m    100.0%[0m      60.0%
+           format_string        1        1        0 [32m    100.0%[0m     100.0%
+
+  NEGATIVE CASE CALIBRATION (patched/safe code):
+  Negative cases: 1  TN: 1  FP: 0  FP rate: [32m0.0%[0m
+
+  SEMANTIC COVERAGE: 12/12 classes exercised, 7 with detections
+  Detection gaps (cases exist but 0 TP): information_exposure
+

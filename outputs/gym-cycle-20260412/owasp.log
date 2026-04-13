@@ -1,0 +1,180 @@
+=== Skwaq Gym Evaluation (hybrid) ===
+  Suites:      owasp
+  Procs/suite: 2
+  Concurrency: 2
+  Adaptive:    true
+  Output:      /home/azureuser/src/skwaq/outputs/gym-cycle-20260412
+
+WARNING: working tree is dirty — the binary may not reflect the latest code.
+Consider running `cargo build --release -p skwaq` before eval.
+
+[owasp] Launching 2 processes (30 cases)...
+
+=== Monitoring ===
+
+  owasp: ~1/30 (3%) | 2 procs | 0 retries
+
+  owasp: ~1/30 (3%) | 2 procs | 0 retries
+
+  owasp: ~1/30 (3%) | 2 procs | 0 retries
+
+  owasp: ~1/30 (3%) | 2 procs | 0 retries
+
+  owasp: ~1/30 (3%) | 2 procs | 0 retries
+
+  owasp: ~1/30 (3%) | 2 procs | 0 retries
+
+  owasp: ~1/30 (3%) | 2 procs | 0 retries
+
+  owasp: ~1/30 (3%) | 2 procs | 0 retries
+
+  owasp: ~1/30 (3%) | 2 procs | 0 retries
+
+  owasp: ~1/30 (3%) | 2 procs | 0 retries
+
+  owasp: ~1/30 (3%) | 2 procs | 0 retries
+
+  owasp: ~1/30 (3%) | 2 procs | 0 retries
+
+  owasp: ~1/30 (3%) | 2 procs | 0 retries
+
+  owasp: ~1/30 (3%) | 2 procs | 0 retries
+
+  owasp: ~1/30 (3%) | 2 procs | 0 retries
+
+  owasp: ~1/30 (3%) | 2 procs | 0 retries
+
+  owasp: ~1/30 (3%) | 2 procs | 0 retries
+
+  owasp: ~2/30 (6%) | 2 procs | 0 retries
+
+  owasp: ~7/30 (23%) | 2 procs | 0 retries
+
+  owasp: ~7/30 (23%) | 2 procs | 0 retries
+
+  owasp: ~7/30 (23%) | 2 procs | 0 retries
+
+  owasp: ~7/30 (23%) | 2 procs | 0 retries
+
+  owasp: ~7/30 (23%) | 2 procs | 0 retries
+
+  owasp: ~7/30 (23%) | 2 procs | 0 retries
+
+  owasp: ~7/30 (23%) | 2 procs | 0 retries
+
+  owasp: ~7/30 (23%) | 2 procs | 0 retries
+
+  owasp: ~7/30 (23%) | 2 procs | 0 retries
+
+  owasp: ~7/30 (23%) | 2 procs | 0 retries
+
+  owasp: ~7/30 (23%) | 2 procs | 0 retries
+
+  owasp: ~7/30 (23%) | 2 procs | 0 retries
+
+  owasp: ~7/30 (23%) | 2 procs | 0 retries
+
+  owasp: ~7/30 (23%) | 2 procs | 0 retries
+
+  owasp: ~9/30 (30%) | 2 procs | 0 retries
+
+  owasp: ~9/30 (30%) | 2 procs | 0 retries
+
+  owasp: ~10/30 (33%) | 2 procs | 0 retries
+
+  owasp: ~12/30 (40%) | 2 procs | 0 retries
+
+  owasp: ~12/30 (40%) | 2 procs | 0 retries
+
+  owasp: ~12/30 (40%) | 2 procs | 0 retries
+
+  owasp: ~14/30 (46%) | 2 procs | 0 retries
+
+  owasp: ~14/30 (46%) | 2 procs | 0 retries
+
+  owasp: ~15/30 (50%) | 2 procs | 0 retries
+
+  owasp: ~15/30 (50%) | 2 procs | 0 retries
+
+  owasp: ~15/30 (50%) | 2 procs | 0 retries
+
+  owasp: ~15/30 (50%) | 2 procs | 0 retries
+
+  owasp: ~16/30 (53%) | 2 procs | 0 retries
+
+  owasp: ~18/30 (60%) | 2 procs | 0 retries
+
+  owasp: ~19/30 (63%) | 2 procs | 0 retries
+
+  owasp: ~19/30 (63%) | 2 procs | 0 retries
+
+  owasp: ~19/30 (63%) | 2 procs | 0 retries
+
+  owasp: ~19/30 (63%) | 2 procs | 0 retries
+
+  owasp: ~19/30 (63%) | 2 procs | 0 retries
+
+  owasp: ~20/30 (66%) | 2 procs | 0 retries
+
+  owasp: ~20/30 (66%) | 2 procs | 0 retries
+
+  owasp: ~20/30 (66%) | 2 procs | 0 retries
+
+  owasp: ~21/30 (70%) | 2 procs | 0 retries
+
+  owasp: ~21/30 (70%) | 2 procs | 0 retries
+
+  owasp: ~21/30 (70%) | 2 procs | 0 retries
+
+  owasp: ~22/30 (73%) | 2 procs | 0 retries
+
+  owasp: ~22/30 (73%) | 2 procs | 0 retries
+
+  owasp: ~23/30 (76%) | 2 procs | 0 retries
+
+  owasp: ~24/30 (80%) | 2 procs | 0 retries
+
+  owasp: ~24/30 (80%) | 2 procs | 0 retries
+
+  owasp: ~26/30 (86%) | 1 procs | 0 retries
+
+  owasp: ~26/30 (86%) | 1 procs | 0 retries
+
+  owasp: ~26/30 (86%) | 1 procs | 0 retries
+
+  owasp: ~26/30 (86%) | 1 procs | 0 retries
+
+  owasp: ~26/30 (86%) | 1 procs | 0 retries
+
+  owasp: ~27/30 (90%) | 1 procs | 0 retries
+
+  owasp: ~27/30 (90%) | 1 procs | 0 retries
+
+  owasp: ~27/30 (90%) | 1 procs | 0 retries
+
+  owasp: ~27/30 (90%) | 1 procs | 0 retries
+
+  owasp: ~28/30 (93%) | 1 procs | 0 retries
+
+  owasp: ~28/30 (93%) | 1 procs | 0 retries
+
+  owasp: ~28/30 (93%) | 1 procs | 0 retries
+
+  owasp: ~28/30 (93%) | 1 procs | 0 retries
+
+  owasp: ~28/30 (93%) | 1 procs | 0 retries
+
+  owasp: ~29/30 (96%) | 1 procs | 0 retries
+
+  owasp: ~30/30 (100%) | 0 procs | 0 retries
+
+=== Results ===
+Suite                F1%    Prec%     Rec%     TP     FP     FN     TN
+----------------------------------------------------------------------
+owasp             100.0   100.0   100.0     16      0      0     14
+
+Results saved to: /home/azureuser/src/skwaq/outputs/gym-cycle-20260412
+Metadata: /home/azureuser/src/skwaq/outputs/gym-cycle-20260412/metadata.json
+Summary: /home/azureuser/src/skwaq/outputs/gym-cycle-20260412/summary.md
+Dashboard: /home/azureuser/src/skwaq/outputs/gym-cycle-20260412/dashboard.md
+Partial summary: /home/azureuser/src/skwaq/outputs/gym-cycle-20260412/partial-summary.json

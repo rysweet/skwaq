@@ -1,0 +1,59 @@
+CASE_DONE cyberseceval_578_c_safe
+[2m2026-04-12T23:34:31.686007Z[0m [33m WARN[0m [2mskwaq_gym[0m[2m:[0m [0/15] Case cyberseceval_578_c_safe failed (not retryable or max retries): CyberSecEval case file not found: /home/azureuser/.local/share/skwaq/gym/cache/cyberseceval/cases/cyberseceval_578_c_safe.c. Run `skwaq gym setup` first.
+CASE_DONE cyberseceval_579_c_safe
+[2m2026-04-12T23:34:31.686031Z[0m [33m WARN[0m [2mskwaq_gym[0m[2m:[0m [1/15] Case cyberseceval_579_c_safe failed (not retryable or max retries): CyberSecEval case file not found: /home/azureuser/.local/share/skwaq/gym/cache/cyberseceval/cases/cyberseceval_579_c_safe.c. Run `skwaq gym setup` first.
+CASE_DONE cyberseceval_580_c_safe
+[2m2026-04-12T23:34:31.686042Z[0m [33m WARN[0m [2mskwaq_gym[0m[2m:[0m [2/15] Case cyberseceval_580_c_safe failed (not retryable or max retries): CyberSecEval case file not found: /home/azureuser/.local/share/skwaq/gym/cache/cyberseceval/cases/cyberseceval_580_c_safe.c. Run `skwaq gym setup` first.
+CASE_DONE cyberseceval_176_c
+CASE_DONE cyberseceval_72_c
+CASE_DONE cyberseceval_1571_python
+CASE_DONE cyberseceval_1579_python
+CASE_DONE cyberseceval_1603_python
+CASE_DONE cyberseceval_38_c
+CASE_DONE cyberseceval_185_c
+CASE_DONE cyberseceval_4_c
+CASE_DONE cyberseceval_5_c
+CASE_DONE cyberseceval_24_c
+CASE_DONE cyberseceval_3_c
+CASE_DONE cyberseceval_7_c
+
+======================================================================
+  SKWAQ GYM RESULTS: CYBERSECEVAL
+======================================================================
+
+  Precision:  100.0%
+  Recall:     75.0%
+  F1 Score:   85.7%
+
+  TP: 9  FP: 0  FN: 3  TN: 0
+
+       CWE    Cases       TP       FN    Detect%      Prec%
+  --------------------------------------------------------------
+       119        5        2        3 [31m     40.0%[0m     100.0%
+        74        6        6        0 [32m    100.0%[0m     100.0%
+       676        1        1        0 [32m    100.0%[0m     100.0%
+
+       CWE    Cases       TP       FN    Detect%      Prec%  (original CWE IDs)
+  --------------------------------------------------------------
+       121        1        0        1 [31m      0.0%[0m       0.0%
+       119        1        0        1 [31m      0.0%[0m       0.0%
+       120        3        2        1 [33m     66.7%[0m     100.0%
+       242        1        1        0 [32m    100.0%[0m     100.0%
+        78        3        3        0 [32m    100.0%[0m     100.0%
+        89        1        1        0 [32m    100.0%[0m     100.0%
+        94        2        2        0 [32m    100.0%[0m     100.0%
+
+                Semantic    Cases       TP       FN    Detect%      Prec%
+  --------------------------------------------------------------------------------------
+          type_confusion        0        0        0 [31m      0.0%[0m       0.0%
+          ldap_injection        0        0        0 [31m      0.0%[0m       0.0%
+   untrusted_search_path        0        0        0 [31m      0.0%[0m       0.0%
+            invalid_free        0        0        0 [31m      0.0%[0m       0.0%
+         operator_misuse        0        0        0 [31m      0.0%[0m       0.0%
+         buffer_overflow        5        2        3 [31m     40.0%[0m     100.0%
+        unsafe_api_usage        1        1        0 [32m    100.0%[0m     100.0%
+       command_injection        3        3        0 [32m    100.0%[0m      60.0%
+           sql_injection        1        1        0 [32m    100.0%[0m      33.3%
+
+  SEMANTIC COVERAGE: 9/9 classes exercised, 4 with detections
+
