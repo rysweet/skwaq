@@ -16,7 +16,8 @@
 
 use skwaq_gym::history::{DisagreementRecord, HistoryDb, RunMetadata};
 use skwaq_gym::poc::{
-    prove_pending, score_evidence, Evidence, EvidenceKind, EvidenceScore, PocVerdict, ProveConfig,
+    prove_pending, score_evidence, Evidence, EvidenceKind, EvidenceScore, ExecutionMode,
+    PocVerdict, ProveConfig,
 };
 use std::time::Duration;
 use tempfile::NamedTempFile;
@@ -486,5 +487,223 @@ fn m4_timeout_stops_batch() {
     assert_eq!(
         summary.total_cases, 0,
         "zero timeout should process no cases"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// N3: Semantic assertion tests for evidence kinds and template content
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_injection_strategy_produces_correct_evidence_kinds() {
+    use skwaq_gym::poc::strategies::{select_strategy, ProofContext};
+
+    let ctx = ProofContext {
+        case_id: "sem-test-89".into(),
+        suite: "test-suite".into(),
+        cwe: 89,
+        detected_cwes: vec![89],
+        finding_id: "f-89".into(),
+    };
+
+    let strategy = select_strategy(89);
+    let (disproof, proof, _) = strategy.execute(&ctx).unwrap();
+
+    // Proof evidence should contain TaintPath and PatternMatch kinds
+    let proof_kinds: Vec<_> = proof.iter().map(|e| &e.kind).collect();
+    assert!(
+        proof_kinds.contains(&&EvidenceKind::TaintPath),
+        "Injection strategy proof should contain TaintPath evidence"
+    );
+    assert!(
+        proof_kinds.contains(&&EvidenceKind::PatternMatch),
+        "Injection strategy proof should contain PatternMatch evidence"
+    );
+    assert!(
+        proof_kinds.contains(&&EvidenceKind::DataFlowSource),
+        "Injection strategy proof should contain DataFlowSource evidence"
+    );
+    assert!(
+        proof_kinds.contains(&&EvidenceKind::CallChain),
+        "Injection strategy proof should contain CallChain evidence"
+    );
+
+    // Disproof evidence should all be MitigationFound
+    assert!(
+        !disproof.is_empty(),
+        "Injection strategy should produce disproof evidence"
+    );
+    for ev in &disproof {
+        assert_eq!(
+            ev.kind,
+            EvidenceKind::MitigationFound,
+            "Disproof evidence should be MitigationFound kind"
+        );
+    }
+}
+
+#[test]
+fn test_disproof_evidence_contains_mitigation_checks() {
+    use skwaq_gym::poc::strategies::{select_strategy, ProofContext};
+
+    // Test all 5 strategy families produce MitigationFound disproof evidence
+    let test_cases: &[(u32, &str)] = &[
+        (89, "injection"),
+        (22, "path_traversal"),
+        (121, "memory"),
+        (614, "config"),
+        (999, "generic"),
+    ];
+
+    for (cwe, family) in test_cases {
+        let ctx = ProofContext {
+            case_id: format!("sem-test-{}", cwe),
+            suite: "test-suite".into(),
+            cwe: *cwe,
+            detected_cwes: vec![*cwe],
+            finding_id: format!("f-{}", cwe),
+        };
+
+        let strategy = select_strategy(*cwe);
+        let (disproof, _, _) = strategy.execute(&ctx).unwrap();
+
+        assert!(
+            !disproof.is_empty(),
+            "{} strategy (CWE-{}) should produce non-empty disproof evidence",
+            family,
+            cwe,
+        );
+
+        for ev in &disproof {
+            assert_eq!(
+                ev.kind,
+                EvidenceKind::MitigationFound,
+                "{} strategy (CWE-{}): all disproof evidence must be MitigationFound, got {:?}",
+                family,
+                cwe,
+                ev.kind,
+            );
+            assert!(
+                ev.kind.is_disproof(),
+                "{} strategy (CWE-{}): MitigationFound should be classified as disproof",
+                family,
+                cwe,
+            );
+        }
+    }
+}
+
+#[test]
+fn test_scoring_produces_correct_verdict() {
+    // Given only proof evidence (no disproof) with 4 items → Strong/Proven
+    let proof_strong = vec![
+        Evidence {
+            kind: EvidenceKind::TaintPath,
+            description: "taint".into(),
+            location: "a:1".into(),
+            tool_output: "TEMPLATE: taint data".into(),
+        },
+        Evidence {
+            kind: EvidenceKind::DataFlowSource,
+            description: "source".into(),
+            location: "a:2".into(),
+            tool_output: "TEMPLATE: source data".into(),
+        },
+        Evidence {
+            kind: EvidenceKind::PatternMatch,
+            description: "pattern".into(),
+            location: "a:3".into(),
+            tool_output: "TEMPLATE: pattern data".into(),
+        },
+        Evidence {
+            kind: EvidenceKind::CallChain,
+            description: "chain".into(),
+            location: "a:4".into(),
+            tool_output: "TEMPLATE: chain data".into(),
+        },
+    ];
+    let (score, verdict) = score_evidence(&[], &proof_strong);
+    assert_eq!(score, EvidenceScore::Strong, "4 proof items → Strong");
+    assert_eq!(verdict, PocVerdict::Proven, "Strong score → Proven");
+
+    // Given disproof evidence present → always Disproven
+    let disproof = vec![Evidence {
+        kind: EvidenceKind::MitigationFound,
+        description: "mitigation found".into(),
+        location: "b:1".into(),
+        tool_output: "TEMPLATE: mitigation".into(),
+    }];
+    let (score, verdict) = score_evidence(&disproof, &proof_strong);
+    assert_eq!(
+        score,
+        EvidenceScore::Disproven,
+        "Any disproof → Disproven score"
+    );
+    assert_eq!(
+        verdict,
+        PocVerdict::Disproven,
+        "Any disproof → Disproven verdict"
+    );
+
+    // Given empty evidence → Inconclusive
+    let (score, verdict) = score_evidence(&[], &[]);
+    assert_eq!(
+        score,
+        EvidenceScore::Insufficient,
+        "No evidence → Insufficient"
+    );
+    assert_eq!(
+        verdict,
+        PocVerdict::Inconclusive,
+        "No evidence → Inconclusive"
+    );
+}
+
+#[test]
+fn test_strategy_evidence_has_template_prefix() {
+    use skwaq_gym::poc::strategies::{select_strategy, ProofContext};
+
+    // Test all 5 strategy families prefix tool_output with "TEMPLATE: "
+    let test_cwes: &[u32] = &[89, 22, 121, 614, 999];
+
+    for cwe in test_cwes {
+        let ctx = ProofContext {
+            case_id: format!("tmpl-test-{}", cwe),
+            suite: "test-suite".into(),
+            cwe: *cwe,
+            detected_cwes: vec![*cwe],
+            finding_id: format!("f-{}", cwe),
+        };
+
+        let strategy = select_strategy(*cwe);
+        let (disproof, proof, _) = strategy.execute(&ctx).unwrap();
+
+        // Verify all proof evidence tool_output starts with "TEMPLATE: "
+        for ev in &proof {
+            assert!(
+                ev.tool_output.starts_with("TEMPLATE: "),
+                "CWE-{} proof evidence tool_output should start with 'TEMPLATE: ', got: {}",
+                cwe,
+                &ev.tool_output[..ev.tool_output.len().min(60)],
+            );
+        }
+
+        // Verify all disproof evidence tool_output starts with "TEMPLATE: "
+        for ev in &disproof {
+            assert!(
+                ev.tool_output.starts_with("TEMPLATE: "),
+                "CWE-{} disproof evidence tool_output should start with 'TEMPLATE: ', got: {}",
+                cwe,
+                &ev.tool_output[..ev.tool_output.len().min(60)],
+            );
+        }
+    }
+
+    // Also verify that ExecutionMode::Template is the default
+    let strategy = select_strategy(89);
+    assert_eq!(
+        strategy.execution_mode(),
+        ExecutionMode::Template,
+        "Default execution mode should be Template"
     );
 }
