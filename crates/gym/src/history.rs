@@ -724,21 +724,44 @@ impl HistoryDb {
     }
 
     /// Insert a proof-of-compromise result.
-    pub fn insert_poc_result(&self, result: &crate::poc::ProofOfCompromise) -> anyhow::Result<()> {
-        let id = format!("poc-{}-{}", result.case_id, result.cwe);
+    ///
+    /// `disagreement_id` must be the real ID from the `disagreements` table
+    /// (i.e. `DisagreementRecord::id`).
+    pub fn insert_poc_result(
+        &self,
+        result: &crate::poc::ProofOfCompromise,
+        disagreement_id: &str,
+    ) -> anyhow::Result<()> {
+        // Validate that the disagreement actually exists (FK would catch this,
+        // but a clear error message is more helpful than a raw constraint violation).
+        let exists: bool = self.conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM disagreements WHERE id = ?1)",
+            rusqlite::params![disagreement_id],
+            |row| row.get(0),
+        )?;
+        if !exists {
+            anyhow::bail!(
+                "no disagreement with id '{}' exists (case_id={}, cwe={})",
+                disagreement_id,
+                result.case_id,
+                result.cwe
+            );
+        }
+
+        let id = format!("poc-{}", uuid::Uuid::new_v4());
         let disproof_json = serde_json::to_string(&result.disproof_evidence)?;
         let proof_json = serde_json::to_string(&result.proof_evidence)?;
         let tools_json = serde_json::to_string(&result.tools_used)?;
 
         self.conn.execute(
-            "INSERT OR REPLACE INTO poc_results
+            "INSERT INTO poc_results
              (id, disagreement_id, case_id, cwe, strategy, verdict,
               evidence_score, disproof_evidence_json, proof_evidence_json,
               exploit_sketch, reasoning, tools_used_json, duration_ms)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             rusqlite::params![
                 id,
-                format!("bd-{}-{}", result.case_id, result.cwe),
+                disagreement_id,
                 result.case_id,
                 result.cwe,
                 result.strategy,
@@ -835,17 +858,29 @@ impl HistoryDb {
                 _ => crate::poc::EvidenceScore::Insufficient,
             };
 
+            let disproof_evidence: Vec<crate::poc::Evidence> = serde_json::from_str(&disproof_json)
+                .map_err(|e| {
+                    anyhow::anyhow!("corrupt disproof_evidence_json for case {}: {}", case_id, e)
+                })?;
+            let proof_evidence: Vec<crate::poc::Evidence> = serde_json::from_str(&proof_json)
+                .map_err(|e| {
+                    anyhow::anyhow!("corrupt proof_evidence_json for case {}: {}", case_id, e)
+                })?;
+            let tools_used: Vec<String> = serde_json::from_str(&tools_json).map_err(|e| {
+                anyhow::anyhow!("corrupt tools_used_json for case {}: {}", case_id, e)
+            })?;
+
             results.push(crate::poc::ProofOfCompromise {
                 case_id,
                 cwe,
                 strategy,
                 verdict,
                 evidence_score,
-                disproof_evidence: serde_json::from_str(&disproof_json).unwrap_or_default(),
-                proof_evidence: serde_json::from_str(&proof_json).unwrap_or_default(),
+                disproof_evidence,
+                proof_evidence,
                 exploit_sketch,
                 reasoning,
-                tools_used: serde_json::from_str(&tools_json).unwrap_or_default(),
+                tools_used,
                 duration_ms: duration_ms as u64,
             });
         }
@@ -868,10 +903,34 @@ impl HistoryDb {
                 run_id: row.get(0)?,
                 suite: row.get(1)?,
                 case_id: row.get(2)?,
-                expected_cwes: serde_json::from_str(&expected_json).unwrap_or_default(),
-                detected_cwes: serde_json::from_str(&detected_json).unwrap_or_default(),
-                matched_finding_ids: serde_json::from_str(&matched_json).unwrap_or_default(),
-                unmatched_finding_ids: serde_json::from_str(&unmatched_json).unwrap_or_default(),
+                expected_cwes: serde_json::from_str(&expected_json).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        3,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?,
+                detected_cwes: serde_json::from_str(&detected_json).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        4,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?,
+                matched_finding_ids: serde_json::from_str(&matched_json).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        5,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?,
+                unmatched_finding_ids: serde_json::from_str(&unmatched_json).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        6,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?,
                 classification: row.get(7)?,
             })
         })?;

@@ -117,11 +117,33 @@ pub struct DefenseAnalystStructuredOutput {
     pub assessments: Vec<DefenseAnalystAssessment>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PocProverEvidenceItem {
+    pub kind: String,
+    pub description: String,
+    pub location: String,
+    pub tool_output: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PocProverStructuredOutput {
+    pub summary: String,
+    #[serde(default)]
+    pub phase1_disproof: Vec<PocProverEvidenceItem>,
+    #[serde(default)]
+    pub phase2_proof: Vec<PocProverEvidenceItem>,
+    pub exploit_sketch: Option<String>,
+    pub reasoning: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParsedAgentOutput {
     VulnHunterV1(VulnHunterStructuredOutput),
     ExploitAnalystV1(ExploitAnalystStructuredOutput),
     DefenseAnalystV1(DefenseAnalystStructuredOutput),
+    PocProverV1(PocProverStructuredOutput),
 }
 
 impl ParsedAgentOutput {
@@ -130,6 +152,7 @@ impl ParsedAgentOutput {
             Self::VulnHunterV1(_) => VULN_HUNTER_V1_SCHEMA,
             Self::ExploitAnalystV1(_) => EXPLOIT_ANALYST_V1_SCHEMA,
             Self::DefenseAnalystV1(_) => DEFENSE_ANALYST_V1_SCHEMA,
+            Self::PocProverV1(_) => POC_PROVER_V1_SCHEMA,
         }
     }
 
@@ -143,6 +166,13 @@ impl ParsedAgentOutput {
     pub fn as_defense_analyst_v1(&self) -> Option<&DefenseAnalystStructuredOutput> {
         match self {
             Self::DefenseAnalystV1(output) => Some(output),
+            _ => None,
+        }
+    }
+
+    pub fn as_poc_prover_v1(&self) -> Option<&PocProverStructuredOutput> {
+        match self {
+            Self::PocProverV1(output) => Some(output),
             _ => None,
         }
     }
@@ -186,6 +216,26 @@ impl ParsedAgentOutput {
                         format_evidence_list(&assessment.evidence)
                     ));
                 }
+                points
+            }
+            Self::PocProverV1(output) => {
+                let mut points = Vec::with_capacity(
+                    output.phase1_disproof.len() + output.phase2_proof.len() + 2,
+                );
+                points.push(format!("summary: {}", output.summary));
+                for item in &output.phase1_disproof {
+                    points.push(format!(
+                        "disproof: [{}] {} @ {}",
+                        item.kind, item.description, item.location
+                    ));
+                }
+                for item in &output.phase2_proof {
+                    points.push(format!(
+                        "proof: [{}] {} @ {}",
+                        item.kind, item.description, item.location
+                    ));
+                }
+                points.push(format!("reasoning: {}", output.reasoning));
                 points
             }
         }
@@ -321,6 +371,14 @@ pub fn parse_structured_output(
             validate_defense_analyst_output(&parsed)?;
             Ok(ParsedAgentOutput::DefenseAnalystV1(parsed))
         }
+        POC_PROVER_V1_SCHEMA => {
+            let parsed: PocProverStructuredOutput =
+                serde_json::from_str(&json_block).map_err(|e| {
+                    anyhow::anyhow!("Failed to parse poc-prover structured output: {e}")
+                })?;
+            validate_poc_prover_output(&parsed)?;
+            Ok(ParsedAgentOutput::PocProverV1(parsed))
+        }
         _ => anyhow::bail!("Unknown agent output schema '{schema_name}'"),
     }
 }
@@ -354,6 +412,29 @@ fn validate_defense_analyst_output(output: &DefenseAnalystStructuredOutput) -> a
             "defense assessment",
         )?;
         validate_assessment_evidence(&assessment.evidence, assessment.finding_title.as_str())?;
+    }
+    Ok(())
+}
+
+fn validate_poc_prover_output(output: &PocProverStructuredOutput) -> anyhow::Result<()> {
+    for (phase_name, items) in [
+        ("phase1_disproof", &output.phase1_disproof),
+        ("phase2_proof", &output.phase2_proof),
+    ] {
+        for item in items {
+            if item.location.trim().is_empty() {
+                anyhow::bail!(
+                    "{phase_name} evidence item '{}' must have a non-empty location",
+                    item.description
+                );
+            }
+            if item.tool_output.trim().is_empty() {
+                anyhow::bail!(
+                    "{phase_name} evidence item '{}' must have non-empty tool_output",
+                    item.description
+                );
+            }
+        }
     }
     Ok(())
 }
@@ -679,5 +760,134 @@ mod tests {
     fn output_contract_includes_info_severity() {
         let contract = output_schema_contract(VULN_HUNTER_V1_SCHEMA).unwrap();
         assert!(contract.contains("info"));
+    }
+
+    #[test]
+    fn parses_poc_prover_structured_output() {
+        let output = r#"Analysis complete.
+
+```json
+{
+  "summary": "Vulnerability disproven - input is sanitized",
+  "phase1_disproof": [
+    {
+      "kind": "Sanitizer",
+      "description": "Input sanitized via html_escape",
+      "location": "src/handler.rs:42",
+      "tool_output": "grep found html_escape call at line 42"
+    }
+  ],
+  "phase2_proof": [],
+  "exploit_sketch": null,
+  "reasoning": "Phase 1 found sanitizer, no need for phase 2"
+}
+```"#;
+
+        let parsed = parse_structured_output(POC_PROVER_V1_SCHEMA, output).unwrap();
+        assert_eq!(parsed.schema_name(), POC_PROVER_V1_SCHEMA);
+        let data = parsed.as_poc_prover_v1().unwrap();
+        assert_eq!(data.phase1_disproof.len(), 1);
+        assert!(data.phase2_proof.is_empty());
+        assert!(data.exploit_sketch.is_none());
+        assert!(parsed.context_summary().contains("disproven"));
+    }
+
+    #[test]
+    fn parses_poc_prover_with_proof_and_exploit_sketch() {
+        let output = r#"```json
+{
+  "summary": "Vulnerability confirmed via taint path",
+  "phase1_disproof": [],
+  "phase2_proof": [
+    {
+      "kind": "TaintPath",
+      "description": "User input flows to SQL query unsanitized",
+      "location": "src/db.rs:88",
+      "tool_output": "taint analysis: param -> query_str -> execute"
+    }
+  ],
+  "exploit_sketch": "UNTESTED HYPOTHESIS: inject via search param",
+  "reasoning": "No sanitizers found in phase 1; taint path confirmed in phase 2"
+}
+```"#;
+
+        let parsed = parse_structured_output(POC_PROVER_V1_SCHEMA, output).unwrap();
+        let data = parsed.as_poc_prover_v1().unwrap();
+        assert!(data.phase1_disproof.is_empty());
+        assert_eq!(data.phase2_proof.len(), 1);
+        assert_eq!(
+            data.exploit_sketch.as_deref(),
+            Some("UNTESTED HYPOTHESIS: inject via search param")
+        );
+    }
+
+    #[test]
+    fn rejects_poc_prover_empty_location() {
+        let output = r#"```json
+{
+  "summary": "bad evidence",
+  "phase1_disproof": [
+    {
+      "kind": "Sanitizer",
+      "description": "Found sanitizer",
+      "location": "",
+      "tool_output": "some output"
+    }
+  ],
+  "phase2_proof": [],
+  "exploit_sketch": null,
+  "reasoning": "testing"
+}
+```"#;
+
+        let error = parse_structured_output(POC_PROVER_V1_SCHEMA, output).unwrap_err();
+        assert!(error.to_string().contains("non-empty location"));
+    }
+
+    #[test]
+    fn rejects_poc_prover_empty_tool_output() {
+        let output = r#"```json
+{
+  "summary": "bad evidence",
+  "phase1_disproof": [],
+  "phase2_proof": [
+    {
+      "kind": "TaintPath",
+      "description": "Found taint",
+      "location": "src/main.rs:10",
+      "tool_output": "  "
+    }
+  ],
+  "exploit_sketch": null,
+  "reasoning": "testing"
+}
+```"#;
+
+        let error = parse_structured_output(POC_PROVER_V1_SCHEMA, output).unwrap_err();
+        assert!(error.to_string().contains("non-empty tool_output"));
+    }
+
+    #[test]
+    fn rejects_poc_prover_unknown_fields() {
+        let output = r#"```json
+{
+  "summary": "injected",
+  "phase1_disproof": [],
+  "phase2_proof": [],
+  "exploit_sketch": null,
+  "reasoning": "legit",
+  "injected_field": "malicious"
+}
+```"#;
+
+        let error = parse_structured_output(POC_PROVER_V1_SCHEMA, output).unwrap_err();
+        assert!(error.to_string().contains("unknown field"));
+    }
+
+    #[test]
+    fn poc_prover_contract_exists() {
+        let contract = output_schema_contract(POC_PROVER_V1_SCHEMA);
+        assert!(contract.is_some());
+        assert!(contract.unwrap().contains("phase1_disproof"));
     }
 }

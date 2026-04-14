@@ -237,7 +237,7 @@ pub enum GymSub {
         max_cases: Option<usize>,
 
         /// Minimum evidence score for auto-adjudication (1-4, default: 3)
-        #[arg(long, default_value = "3")]
+        #[arg(long, default_value = "3", value_parser = clap::value_parser!(u32).range(1..=4))]
         min_score: u32,
 
         /// Show what would be proved without running
@@ -1537,7 +1537,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
         }
         GymSub::Prove {
             run_id,
-            case_id: _case_id,
+            case_id,
             max_cases,
             min_score,
             dry_run,
@@ -1574,6 +1574,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 min_score_for_auto: min_evidence_score,
                 max_cases: *max_cases,
                 dry_run: *dry_run,
+                case_id: case_id.clone(),
             };
 
             println!(
