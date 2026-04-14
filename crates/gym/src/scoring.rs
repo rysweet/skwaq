@@ -53,6 +53,12 @@ pub struct AggregateScore {
     /// family not in the expected set.  These disagreements may be real
     /// bugs the benchmark missed; adjudication is required to decide.
     pub benchmark_disagreements: u32,
+    /// Number of unique cases that produced scoreable outcomes.
+    pub total_cases_scored: u32,
+    /// Number of scored positive cases.
+    pub scored_positive_cases: u32,
+    /// Number of scored negative cases.
+    pub scored_negative_cases: u32,
     pub per_cwe: HashMap<u32, CweScore>,
     /// Per-original-CWE breakdown (not collapsed to family roots).
     /// Gives visibility into individual CWE performance (e.g. CWE-121 vs CWE-122).
@@ -518,7 +524,10 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
     // Deduplicate by case_id to handle cross-shard merging
     let deduped = deduplicate_outcomes(outcomes.to_vec());
 
-    let mut score = AggregateScore::default();
+    let mut score = AggregateScore {
+        total_cases_scored: deduped.len() as u32,
+        ..Default::default()
+    };
     let mut per_cwe: HashMap<u32, CweScore> = HashMap::new();
     let mut per_original_cwe: HashMap<u32, CweScore> = HashMap::new();
     let mut per_semantic: HashMap<String, SemanticScore> = HashMap::new();
@@ -526,6 +535,7 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
     for outcome in &deduped {
         if outcome.expected_cwes.is_empty() {
             // Negative test case — track calibration metrics.
+            score.scored_negative_cases += 1;
             score.negative_calibration.total_negative_cases += 1;
             if outcome.detected_cwes.is_empty() {
                 score.true_negatives += 1;
@@ -557,6 +567,7 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
             }
         } else {
             // Positive test case.
+            score.scored_positive_cases += 1;
             for (&cwe, &hit) in &outcome.cwe_hits {
                 let entry = per_cwe.entry(cwe_family(cwe)).or_insert_with(|| CweScore {
                     cwe_id: cwe_family(cwe),

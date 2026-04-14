@@ -245,8 +245,8 @@ pub fn prove_pending(
 
     for record in &cases {
         let start = Instant::now();
-        let result = prove_single_case(record)?;
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let mut result = prove_single_case(record)?;
+        result.duration_ms = start.elapsed().as_millis() as u64;
 
         // Store result
         if !config.dry_run {
@@ -280,7 +280,7 @@ pub fn prove_pending(
             result.cwe,
             result.verdict,
             result.evidence_score,
-            duration_ms as f64 / 1000.0,
+            result.duration_ms as f64 / 1000.0,
         );
 
         summary.results.push(result);
