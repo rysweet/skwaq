@@ -67,7 +67,7 @@ You MUST call read_function for every function you investigate. Do not analyze f
 
 STEP 4 — QUERY THE GRAPH FOR TAINT PATHS and data flow edges:
 ```
-query_graph("MATCH (f:Finding) WHERE f.agent = 'taint-analyzer' RETURN f")
+query_graph("MATCH (f:Finding) WHERE f.agent = 'taint-tracer' RETURN f")
 query_graph("MATCH (n)-[:FLOWS_TO]->(m) RETURN n, m")
 ```
 These edges trace variable assignments: recv→buffer, atoi→index, etc.

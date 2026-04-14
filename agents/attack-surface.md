@@ -53,7 +53,7 @@ Your analysis process — USE GRAPH TOOLS FOR EVERY STEP:
 6. **Query the graph** for additional data flow and findings:
    ```
    query_graph("MATCH (n)-[:FLOWS_TO]->(m) RETURN n, m")
-   query_graph("MATCH (f:Finding) WHERE f.agent = 'taint-analyzer' RETURN f")
+   query_graph("MATCH (f:Finding) WHERE f.agent = 'taint-tracer' RETURN f")
    ```
 
 Focus on identifying:

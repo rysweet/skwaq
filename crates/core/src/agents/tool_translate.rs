@@ -354,6 +354,7 @@ pub(super) fn execute_create_finding(
     db: &GraphDb,
     investigation_id: &str,
     args: &serde_json::Value,
+    agent_name: Option<&str>,
 ) -> anyhow::Result<serde_json::Value> {
     let title = args
         .get("title")
@@ -378,13 +379,16 @@ pub(super) fn execute_create_finding(
         "description": description, "function": function, "cwe_id": cwe_id,
     });
 
+    let agent = agent_name.unwrap_or("vuln_hunter");
+
     let cypher = format!(
         "CREATE (f:Finding {{id: '{id}', title: '{title}', evidence: '{ev}', \
-         agent: 'vuln_hunter', timestamp: '{ts}', investigation_id: '{inv}', \
+         agent: '{agent}', timestamp: '{ts}', investigation_id: '{inv}', \
          status: 'new', severity: '{sev}', category: '{cat}'}})",
         id = esc(&finding_id),
         title = esc(title),
         ev = esc(&evidence.to_string()),
+        agent = esc(agent),
         ts = esc(&timestamp),
         inv = esc(investigation_id),
         sev = esc(severity),
@@ -585,7 +589,7 @@ mod tests {
             "cwe_id": "CWE-120"
         });
 
-        let result = execute_create_finding(&db, inv_id, &args).unwrap();
+        let result = execute_create_finding(&db, inv_id, &args, None).unwrap();
         assert_eq!(result["status"], "ok");
         assert_eq!(result["title"], "Buffer Overflow");
         assert_eq!(result["severity"], "critical");
@@ -920,7 +924,7 @@ mod tests {
         let db = GraphDb::in_memory().unwrap();
         // Only required field missing — should use defaults
         let args = serde_json::json!({});
-        let result = execute_create_finding(&db, "inv1", &args).unwrap();
+        let result = execute_create_finding(&db, "inv1", &args, None).unwrap();
         assert_eq!(result["status"], "ok");
         assert_eq!(result["title"], "Untitled");
         assert_eq!(result["severity"], "medium");
@@ -933,7 +937,7 @@ mod tests {
             "title": "Buffer overflow in func('user_input')",
             "severity": "high"
         });
-        let result = execute_create_finding(&db, "inv1", &args).unwrap();
+        let result = execute_create_finding(&db, "inv1", &args, None).unwrap();
         assert_eq!(result["status"], "ok");
         // Verify the finding can be retrieved (escaping worked)
         let finding_id = result["finding_id"].as_str().unwrap();
@@ -1167,7 +1171,7 @@ mod tests {
             "description": "File path: C:\\Windows\\System32\\cmd.exe",
             "severity": "high"
         });
-        let result = execute_create_finding(&db, "inv1", &args).unwrap();
+        let result = execute_create_finding(&db, "inv1", &args, None).unwrap();
         assert_eq!(result["status"], "ok");
 
         // Verify finding was stored (backslashes escaped correctly for Cypher)
@@ -1179,6 +1183,61 @@ mod tests {
             ))
             .unwrap();
         assert_eq!(rows.len(), 1, "Finding must be retrievable after storage");
+    }
+
+    // ===== P2: create_finding uses parameterized agent name =====
+
+    #[test]
+    fn test_create_finding_uses_explicit_agent_name() {
+        let db = GraphDb::in_memory().unwrap();
+        let args = serde_json::json!({
+            "title": "Taint flow detected",
+            "severity": "high",
+            "description": "Unsanitized input flows to sink",
+            "function": "process_request",
+            "cwe_id": "CWE-89"
+        });
+        let result = execute_create_finding(&db, "inv1", &args, Some("taint-tracer")).unwrap();
+        assert_eq!(result["status"], "ok");
+
+        let finding_id = result["finding_id"].as_str().unwrap();
+        let rows = db
+            .cypher_query(&format!(
+                "MATCH (f:Finding {{id: '{}'}}) RETURN f.agent",
+                finding_id
+            ))
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            LadybugGraphDb::as_str(&rows[0][0]),
+            Some("taint-tracer"),
+            "Finding agent should match the explicit agent_name parameter"
+        );
+    }
+
+    #[test]
+    fn test_create_finding_defaults_to_vuln_hunter_when_no_agent() {
+        let db = GraphDb::in_memory().unwrap();
+        let args = serde_json::json!({
+            "title": "Buffer overflow",
+            "severity": "critical"
+        });
+        let result = execute_create_finding(&db, "inv1", &args, None).unwrap();
+        assert_eq!(result["status"], "ok");
+
+        let finding_id = result["finding_id"].as_str().unwrap();
+        let rows = db
+            .cypher_query(&format!(
+                "MATCH (f:Finding {{id: '{}'}}) RETURN f.agent",
+                finding_id
+            ))
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            LadybugGraphDb::as_str(&rows[0][0]),
+            Some("vuln_hunter"),
+            "Finding agent should default to vuln_hunter when agent_name is None"
+        );
     }
 
     // ===== TDD: search_similar with Cypher injection =====
