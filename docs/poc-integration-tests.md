@@ -116,14 +116,15 @@ Deterministic scoring function. Disproof-first protocol:
 3. If 3 proof items → `(Moderate, Proven)`
 4. Otherwise → `(Insufficient, Inconclusive)`
 
-### `prove_pending(db: &HistoryDb, run_id: &str, config: &ProveConfig) -> Result<ProveSummary>`
+### `prove_pending(history: &HistoryDb, run_id: &str, config: &ProveConfig) -> Result<ProveSummary>`
 
 Iterates all pending disagreements for `run_id`, runs CWE-specific proof
 strategies, scores evidence, and optionally writes results to the database.
 
-**Config fields:**
+**`ProveConfig` fields:**
 - `dry_run: bool` — When true, skips `insert_poc_result()` and `adjudicate_disagreement()`.
-- Remaining fields use `Default::default()`.
+- `min_score_for_auto: EvidenceScore` — Minimum evidence score for auto-adjudication (default: `Moderate`).
+- `max_cases: Option<usize>` — Maximum BD cases to prove in one batch (default: `None` = all).
 
 ### `HistoryDb::in_memory() -> Result<HistoryDb>`
 
