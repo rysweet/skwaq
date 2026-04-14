@@ -18,6 +18,7 @@ use skwaq_gym::history::{DisagreementRecord, HistoryDb, RunMetadata};
 use skwaq_gym::poc::{
     prove_pending, score_evidence, Evidence, EvidenceKind, EvidenceScore, PocVerdict, ProveConfig,
 };
+use std::time::Duration;
 use tempfile::NamedTempFile;
 
 /// Helper: create a HistoryDb backed by a temp file (FK enforcement ON).
@@ -161,6 +162,7 @@ fn happy_path_adjudication_dry_run() {
         min_score_for_auto: EvidenceScore::Moderate,
         max_cases: None,
         case_id: None,
+        timeout: None,
     };
 
     let summary = prove_pending(&db, &run_id, &config).expect("prove_pending failed");
@@ -314,5 +316,175 @@ fn c1_fixed_also_in_memory() {
         result.is_ok(),
         "C1 fix: should succeed with real disagreement_id in in_memory DB, got: {:?}",
         result.err()
+    );
+}
+
+// ---------------------------------------------------------------------------
+// H3: Validation failure paths — malformed and empty CWE data
+// ---------------------------------------------------------------------------
+
+#[test]
+fn h3_malformed_cwe_json_fails() {
+    let (db, _tmp) = open_temp_db();
+    let run_id = insert_run(&db);
+
+    // Insert a disagreement with malformed detected_cwes JSON
+    let record = DisagreementRecord {
+        id: "disagree-malformed".to_string(),
+        run_id: run_id.clone(),
+        suite: "test-suite".to_string(),
+        case_id: "case-malformed".to_string(),
+        detected_cwes: "not-valid-json".to_string(),
+        finding_id: "finding-001".to_string(),
+        adjudication: None,
+        adjudicated_at: None,
+        adjudicated_by: None,
+    };
+    db.insert_disagreement(&record)
+        .expect("insert_disagreement failed");
+
+    let config = ProveConfig {
+        dry_run: true,
+        ..ProveConfig::default()
+    };
+
+    let summary = prove_pending(&db, &run_id, &config).expect("prove_pending should not abort");
+    // The malformed case should fail (not crash the batch)
+    assert_eq!(
+        summary.failed, 1,
+        "malformed CWE JSON should cause case failure"
+    );
+}
+
+#[test]
+fn h3_empty_cwe_list_fails() {
+    let (db, _tmp) = open_temp_db();
+    let run_id = insert_run(&db);
+
+    // Insert a disagreement with empty CWE list
+    let record = DisagreementRecord {
+        id: "disagree-empty-cwe".to_string(),
+        run_id: run_id.clone(),
+        suite: "test-suite".to_string(),
+        case_id: "case-empty-cwe".to_string(),
+        detected_cwes: "[]".to_string(),
+        finding_id: "finding-001".to_string(),
+        adjudication: None,
+        adjudicated_at: None,
+        adjudicated_by: None,
+    };
+    db.insert_disagreement(&record)
+        .expect("insert_disagreement failed");
+
+    let config = ProveConfig {
+        dry_run: true,
+        ..ProveConfig::default()
+    };
+
+    let summary = prove_pending(&db, &run_id, &config).expect("prove_pending should not abort");
+    assert_eq!(
+        summary.failed, 1,
+        "empty CWE list should cause case failure"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// M1: Evidence deduplication — duplicate evidence should not inflate score
+// ---------------------------------------------------------------------------
+
+#[test]
+fn m1_duplicate_evidence_not_double_counted() {
+    let dup_proof = vec![
+        Evidence {
+            kind: EvidenceKind::TaintPath,
+            description: "same taint".into(),
+            location: "a.rs:1".into(),
+            tool_output: "".into(),
+        },
+        Evidence {
+            kind: EvidenceKind::TaintPath,
+            description: "same taint".into(),
+            location: "a.rs:1".into(),
+            tool_output: "".into(),
+        },
+        Evidence {
+            kind: EvidenceKind::DataFlowSource,
+            description: "same source".into(),
+            location: "a.rs:2".into(),
+            tool_output: "".into(),
+        },
+        Evidence {
+            kind: EvidenceKind::DataFlowSource,
+            description: "same source".into(),
+            location: "a.rs:2".into(),
+            tool_output: "".into(),
+        },
+    ];
+
+    let (score, verdict) = score_evidence(&[], &dup_proof);
+    // Only 2 unique evidence items → score=2 → Insufficient/Inconclusive
+    assert_eq!(score, EvidenceScore::Insufficient);
+    assert_eq!(verdict, PocVerdict::Inconclusive);
+}
+
+#[test]
+fn m1_unique_evidence_still_scored() {
+    let unique_proof = vec![
+        Evidence {
+            kind: EvidenceKind::TaintPath,
+            description: "taint A".into(),
+            location: "a.rs:1".into(),
+            tool_output: "".into(),
+        },
+        Evidence {
+            kind: EvidenceKind::TaintPath,
+            description: "taint B".into(),
+            location: "b.rs:1".into(),
+            tool_output: "".into(),
+        },
+        Evidence {
+            kind: EvidenceKind::DataFlowSource,
+            description: "source".into(),
+            location: "c.rs:1".into(),
+            tool_output: "".into(),
+        },
+    ];
+
+    let (score, verdict) = score_evidence(&[], &unique_proof);
+    // 3 unique items → score=3 → Moderate/Proven
+    assert_eq!(score, EvidenceScore::Moderate);
+    assert_eq!(verdict, PocVerdict::Proven);
+}
+
+// ---------------------------------------------------------------------------
+// M4: Timeout stops batch before all cases processed
+// ---------------------------------------------------------------------------
+
+#[test]
+fn m4_timeout_stops_batch() {
+    let (db, _tmp) = open_temp_db();
+    let run_id = insert_run(&db);
+    // Insert many cases
+    for i in 0..10 {
+        insert_disagreement(
+            &db,
+            &run_id,
+            &format!("d-timeout-{i}"),
+            &format!("case-timeout-{i}"),
+            89,
+        );
+    }
+
+    let config = ProveConfig {
+        dry_run: true,
+        timeout: Some(Duration::ZERO), // Immediate timeout
+        ..ProveConfig::default()
+    };
+
+    let summary = prove_pending(&db, &run_id, &config).expect("prove_pending should not abort");
+    // With zero timeout, no cases should be processed
+    assert_eq!(
+        summary.total_cases, 0,
+        "zero timeout should process no cases"
     );
 }

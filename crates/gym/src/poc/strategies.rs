@@ -6,7 +6,7 @@
 //! - What tools to use for evidence gathering
 //! - How to generate an exploit sketch (labeled UNTESTED HYPOTHESIS)
 
-use super::{Evidence, EvidenceKind};
+use super::{Evidence, EvidenceKind, ExecutionMode};
 
 // ---------------------------------------------------------------------------
 // Strategy trait + registry
@@ -22,7 +22,22 @@ pub struct ProofContext {
     pub finding_id: String,
 }
 
-/// A CWE-specific proof strategy.
+/// A CWE-specific proof strategy implementing the disproof-first protocol.
+///
+/// Strategies operate in two execution modes (see [`ExecutionMode`]):
+///
+/// - **Template mode** (default): The strategy produces structured evidence templates —
+///   checklists describing what defensive patterns to search for (disproof phase) and
+///   what vulnerability indicators to look for (proof phase). The `tool_output` fields
+///   contain template descriptions prefixed with `"TEMPLATE: "`, not raw tool output.
+///   The poc-prover agent uses these templates to drive actual tool-grounded analysis.
+///
+/// - **Direct mode** (future): The strategy invokes tools directly and populates evidence
+///   with real tool output. No built-in strategies currently use this mode.
+///
+/// Both modes follow the two-phase disproof-first protocol:
+/// 1. Search for mitigations, guards, and defensive patterns (disproof evidence)
+/// 2. Search for vulnerability indicators and exploit paths (proof evidence)
 pub trait ProofStrategy: Send + Sync {
     /// Human-readable strategy name.
     fn name(&self) -> &str;
@@ -32,6 +47,14 @@ pub trait ProofStrategy: Send + Sync {
 
     /// Tools needed for this strategy.
     fn required_tools(&self) -> &[&str];
+
+    /// Returns the execution mode for this strategy.
+    ///
+    /// Template-mode strategies produce structured checklists; direct-mode strategies
+    /// perform actual tool-grounded analysis. Default is [`ExecutionMode::Template`].
+    fn execution_mode(&self) -> ExecutionMode {
+        ExecutionMode::Template
+    }
 
     /// Execute the strategy: returns (disproof_evidence, proof_evidence, reasoning).
     ///
@@ -92,14 +115,18 @@ fn cwe_family(cwe: u32) -> CweFamily {
 
 /// Proves injection vulnerabilities via taint analysis.
 ///
-/// Disproof checks:
+/// **Template-mode strategy**: Produces structured evidence templates for the poc-prover
+/// agent. The `tool_output` fields contain template descriptions (prefixed with
+/// `"TEMPLATE: "`), not raw tool output.
+///
+/// Disproof checks (Phase 1 — search for mitigations):
 /// - Parameterized query / prepared statement usage
 /// - ORM usage (no raw SQL)
 /// - Input validation / sanitization on taint path
 /// - Template auto-escape enabled
 /// - Content Security Policy headers
 ///
-/// Proof predicates:
+/// Proof predicates (Phase 2 — search for exploitability):
 /// - Source→sink taint path exists
 /// - No sanitizer/escape on the path
 /// - Sink is string-concat into dangerous context (SQL/HTML/shell)
@@ -133,6 +160,52 @@ impl ProofStrategy for InjectionProofStrategy {
         let ctx_type = injection_context_type(context.cwe);
         let (source_desc, sink_desc, pattern_desc) = injection_evidence_details(context.cwe);
 
+        // Phase 1: Disproof — checklist of defensive patterns to search for
+        let disproof_evidence = vec![
+            Evidence {
+                kind: EvidenceKind::MitigationFound,
+                description: format!(
+                    "Check for parameterized queries or prepared statements protecting {} sink (CWE-{})",
+                    ctx_type, context.cwe,
+                ),
+                location: format!("{}:finding:{}", context.suite, context.finding_id),
+                tool_output: format!(
+                    "TEMPLATE: Search for parameterized query bindings, prepared statement APIs, \
+                     or ORM query builders on the path to {} sink. Tools: get_taint_paths, read_function.",
+                    ctx_type,
+                ),
+            },
+            Evidence {
+                kind: EvidenceKind::MitigationFound,
+                description: format!(
+                    "Check for input validation or output encoding on taint path for CWE-{}",
+                    context.cwe,
+                ),
+                location: format!("{}:finding:{}", context.suite, context.finding_id),
+                tool_output: format!(
+                    "TEMPLATE: Search for input validation (allowlist, regex, type checks), \
+                     output encoding (htmlspecialchars, encodeURIComponent), or template \
+                     auto-escape on the data flow path to {} sink. Tools: get_taint_paths, read_function.",
+                    ctx_type,
+                ),
+            },
+            Evidence {
+                kind: EvidenceKind::MitigationFound,
+                description: format!(
+                    "Check for ORM usage or Content Security Policy headers for CWE-{}",
+                    context.cwe,
+                ),
+                location: format!("{}:case:{}", context.suite, context.case_id),
+                tool_output: format!(
+                    "TEMPLATE: Search for ORM framework usage (no raw SQL), CSP headers, \
+                     or framework-level auto-escaping that would mitigate {} vulnerabilities. \
+                     Tools: read_function, query_graph.",
+                    ctx_type,
+                ),
+            },
+        ];
+
+        // Phase 2: Proof — vulnerability indicators to search for
         let proof_evidence = vec![
             Evidence {
                 kind: EvidenceKind::TaintPath,
@@ -142,7 +215,7 @@ impl ProofStrategy for InjectionProofStrategy {
                 ),
                 location: format!("{}:finding:{}", context.suite, context.finding_id),
                 tool_output: format!(
-                    "{{\"source\": \"user_input\", \"sink\": \"{}\", \"cwe\": {}, \"sanitizers\": []}}",
+                    "TEMPLATE: {{\"source\": \"user_input\", \"sink\": \"{}\", \"cwe\": {}, \"sanitizers\": []}}",
                     ctx_type, context.cwe,
                 ),
             },
@@ -151,7 +224,7 @@ impl ProofStrategy for InjectionProofStrategy {
                 description: source_desc.to_string(),
                 location: format!("{}:finding:{}", context.suite, context.finding_id),
                 tool_output: format!(
-                    "{{\"source_type\": \"attacker_controlled\", \"context\": \"{}\", \"cwe\": {}}}",
+                    "TEMPLATE: {{\"source_type\": \"attacker_controlled\", \"context\": \"{}\", \"cwe\": {}}}",
                     ctx_type, context.cwe,
                 ),
             },
@@ -160,7 +233,7 @@ impl ProofStrategy for InjectionProofStrategy {
                 description: pattern_desc.to_string(),
                 location: format!("{}:case:{}", context.suite, context.case_id),
                 tool_output: format!(
-                    "{{\"pattern\": \"{}\", \"sink_type\": \"{}\", \"cwe\": {}}}",
+                    "TEMPLATE: {{\"pattern\": \"{}\", \"sink_type\": \"{}\", \"cwe\": {}}}",
                     sink_desc, ctx_type, context.cwe,
                 ),
             },
@@ -172,7 +245,7 @@ impl ProofStrategy for InjectionProofStrategy {
                 ),
                 location: format!("{}:finding:{}", context.suite, context.finding_id),
                 tool_output: format!(
-                    "{{\"chain\": [\"entry_point\", \"handler\", \"{}_sink\"], \"reachable\": true}}",
+                    "TEMPLATE: {{\"chain\": [\"entry_point\", \"handler\", \"{}_sink\"], \"reachable\": true}}",
                     ctx_type.replace('/', "_"),
                 ),
             },
@@ -180,36 +253,52 @@ impl ProofStrategy for InjectionProofStrategy {
 
         let reasoning = format!(
             "Injection proof strategy for CWE-{cwe} on case {case}:\n\
-             Phase 1 (Disproof): Searched for parameterized queries, ORM usage, \
-             input validation, template auto-escape, CSP headers — none found.\n\
-             Phase 2 (Proof): Traced taint from attacker-controlled source to \
-             {context_type} sink. No sanitization on path. String concatenation \
-             into {context_type} confirmed.\n\
-             Evidence: TaintPath + DataFlowSource + PatternMatch + CallChain (score=4, Strong).",
+             Phase 1 (Disproof): Generated checklist for parameterized queries, ORM usage, \
+             input validation, template auto-escape, CSP headers.\n\
+             Phase 2 (Proof): Generated templates for taint path from attacker-controlled \
+             source to {context_type} sink, pattern match, and call chain reachability.\n\
+             Evidence: 3 disproof templates + TaintPath + DataFlowSource + PatternMatch + CallChain.",
             cwe = context.cwe,
             case = context.case_id,
             context_type = ctx_type,
         );
 
-        Ok((vec![], proof_evidence, reasoning))
+        Ok((disproof_evidence, proof_evidence, reasoning))
     }
 
     fn generate_exploit_sketch(
         &self,
         context: &ProofContext,
-        _proof_evidence: &[Evidence],
+        proof_evidence: &[Evidence],
     ) -> Option<String> {
-        let sketch = match context.cwe {
-            89 => "UNTESTED HYPOTHESIS: Input \"' OR 1=1 --\" through identified taint path may bypass SQL query logic",
-            79 => "UNTESTED HYPOTHESIS: Input \"<script>alert(1)</script>\" through identified taint path may execute in browser context",
-            78 => "UNTESTED HYPOTHESIS: Input \"; cat /etc/passwd\" through identified taint path may execute as OS command",
-            94 => "UNTESTED HYPOTHESIS: Input \"eval(malicious_code)\" through identified taint path may achieve arbitrary code execution",
-            90 => "UNTESTED HYPOTHESIS: Input \"*)(uid=*))(|(uid=*\" through identified taint path may bypass LDAP authentication",
-            77 => "UNTESTED HYPOTHESIS: Input \"; malicious_command\" through identified taint path may execute as OS command via indirect invocation",
-            917 => "UNTESTED HYPOTHESIS: Input \"${T(java.lang.Runtime).getRuntime().exec('cmd')}\" through identified taint path may achieve expression language injection",
+        let payload = match context.cwe {
+            89 => "' OR 1=1 --",
+            79 => "<script>alert(1)</script>",
+            78 => "; cat /etc/passwd",
+            94 => "eval(malicious_code)",
+            90 => "*)(uid=*))(|(uid=*",
+            77 => "; malicious_command",
+            917 => "${T(java.lang.Runtime).getRuntime().exec('cmd')}",
             _ => return None,
         };
-        Some(sketch.to_string())
+        // M3: Reference actual proof evidence locations instead of generic text
+        let evidence_refs: Vec<String> = proof_evidence
+            .iter()
+            .filter(|e| e.kind == EvidenceKind::TaintPath || e.kind == EvidenceKind::DataFlowSource)
+            .map(|e| format!("{} ({})", e.location, e.description))
+            .collect();
+        let ref_text = if evidence_refs.is_empty() {
+            "no taint path identified".to_string()
+        } else {
+            evidence_refs.join("; ")
+        };
+        Some(format!(
+            "UNTESTED HYPOTHESIS: Input \"{payload}\" through [{ref_text}] may exploit CWE-{cwe} {ctx}",
+            payload = payload,
+            ref_text = ref_text,
+            cwe = context.cwe,
+            ctx = injection_context_type(context.cwe),
+        ))
     }
 }
 
@@ -275,6 +364,13 @@ fn injection_evidence_details(cwe: u32) -> (&'static str, &'static str, &'static
 // Path traversal proof strategy (CWE-22)
 // ---------------------------------------------------------------------------
 
+/// Proves path traversal vulnerabilities via file path taint analysis.
+///
+/// **Template-mode strategy**: Produces structured evidence templates for the poc-prover
+/// agent.
+///
+/// Disproof checks (Phase 1): path canonicalization, allowlist validation, chroot/jail usage.
+/// Proof predicates (Phase 2): user-controlled path to file operation, no normalization.
 struct PathTraversalProofStrategy;
 
 impl ProofStrategy for PathTraversalProofStrategy {
@@ -377,15 +473,31 @@ impl ProofStrategy for PathTraversalProofStrategy {
     fn generate_exploit_sketch(
         &self,
         context: &ProofContext,
-        _proof_evidence: &[Evidence],
+        proof_evidence: &[Evidence],
     ) -> Option<String> {
-        let sketch = match context.cwe {
-            22 => "UNTESTED HYPOTHESIS: Input \"../../../etc/passwd\" through identified path may escape intended directory via relative traversal",
-            23 => "UNTESTED HYPOTHESIS: Input \"..\\..\\..\\etc\\passwd\" through identified path may escape directory using alternate separators",
-            36 => "UNTESTED HYPOTHESIS: Input \"/etc/passwd\" through identified path may access arbitrary files via absolute path",
-            _ => "UNTESTED HYPOTHESIS: Input \"../../../etc/passwd\" through identified path may escape intended directory",
+        let payload = match context.cwe {
+            22 => "../../../etc/passwd",
+            23 => "..\\..\\..\\etc\\passwd",
+            36 => "/etc/passwd",
+            _ => "../../../etc/passwd",
         };
-        Some(sketch.to_string())
+        // M3: Reference actual proof evidence locations
+        let evidence_refs: Vec<String> = proof_evidence
+            .iter()
+            .filter(|e| e.kind == EvidenceKind::TaintPath || e.kind == EvidenceKind::DataFlowSource)
+            .map(|e| format!("{} ({})", e.location, e.description))
+            .collect();
+        let ref_text = if evidence_refs.is_empty() {
+            "no taint path identified".to_string()
+        } else {
+            evidence_refs.join("; ")
+        };
+        Some(format!(
+            "UNTESTED HYPOTHESIS: Input \"{payload}\" through [{ref_text}] may exploit CWE-{cwe} path traversal",
+            payload = payload,
+            ref_text = ref_text,
+            cwe = context.cwe,
+        ))
     }
 }
 
@@ -481,21 +593,30 @@ impl ProofStrategy for MemoryProofStrategy {
     fn generate_exploit_sketch(
         &self,
         context: &ProofContext,
-        _proof_evidence: &[Evidence],
+        proof_evidence: &[Evidence],
     ) -> Option<String> {
         let desc = match context.cwe {
-            119..=122 => {
-                "UNTESTED HYPOTHESIS: Input exceeding buffer allocation at identified location may cause stack/heap corruption"
-            }
-            190 | 191 => {
-                "UNTESTED HYPOTHESIS: Arithmetic on attacker-controlled value at identified location may overflow/underflow"
-            }
-            416 => {
-                "UNTESTED HYPOTHESIS: Use of freed memory at identified location may be triggerable via identified path"
-            }
+            119..=122 => "buffer corruption via oversized input",
+            190 | 191 => "integer overflow/underflow on attacker-controlled value",
+            416 => "use-after-free via identified allocation path",
             _ => return None,
         };
-        Some(desc.to_string())
+        // M3: Reference actual proof evidence locations
+        let evidence_refs: Vec<String> = proof_evidence
+            .iter()
+            .map(|e| format!("{} ({})", e.location, e.description))
+            .collect();
+        let ref_text = if evidence_refs.is_empty() {
+            "no evidence path identified".to_string()
+        } else {
+            evidence_refs.join("; ")
+        };
+        Some(format!(
+            "UNTESTED HYPOTHESIS: {desc} at [{ref_text}] may be exploitable (CWE-{cwe})",
+            desc = desc,
+            ref_text = ref_text,
+            cwe = context.cwe,
+        ))
     }
 }
 
