@@ -12,7 +12,8 @@
 pub mod strategies;
 
 use serde::{Deserialize, Serialize};
-use std::time::Instant;
+use std::collections::HashSet;
+use std::time::{Duration, Instant};
 
 use crate::history::{DisagreementRecord, HistoryDb};
 
@@ -63,6 +64,23 @@ impl std::fmt::Display for EvidenceScore {
             EvidenceScore::Strong => write!(f, "strong"),
         }
     }
+}
+
+/// Execution mode for a proof strategy.
+///
+/// Strategies can operate in two modes:
+/// - **Template**: The strategy produces structured evidence templates — checklists of
+///   what to look for and which tools to invoke. The actual analysis is performed by
+///   the poc-prover agent, which fills in real tool output. This is the default mode
+///   for all built-in strategies.
+/// - **Direct**: The strategy performs actual tool-grounded analysis itself, producing
+///   evidence backed by real tool output. Reserved for future agent-integrated strategies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ExecutionMode {
+    /// Strategy produces structured templates/checklists for agent execution.
+    Template,
+    /// Strategy performs direct tool-grounded analysis (future).
+    Direct,
 }
 
 /// Classification of a single piece of evidence.
@@ -151,21 +169,29 @@ pub struct ProofOfCompromise {
 ///
 /// Protocol:
 /// 1. If any disproof evidence exists → Disproven
-/// 2. Count proof evidence points:
+/// 2. Deduplicate proof evidence by (kind, location, description)
+/// 3. Count proof evidence points:
 ///    - TaintPath found → +1
 ///    - No sanitizer found (searched but absent) → +1
 ///    - Dangerous sink confirmed → +1
 ///    - Attacker-controlled source identified → +1
-/// 3. Score >= 4 → Strong/Proven, 3 → Moderate/Proven, <3 → Inconclusive
+/// 4. Score >= 4 → Strong/Proven, 3 → Moderate/Proven, <3 → Inconclusive
 pub fn score_evidence(disproof: &[Evidence], proof: &[Evidence]) -> (EvidenceScore, PocVerdict) {
     // Any disproof evidence immediately wins.
     if !disproof.is_empty() {
         return (EvidenceScore::Disproven, PocVerdict::Disproven);
     }
 
+    // M1: Deduplicate proof evidence by (kind, location, description) so
+    // duplicate entries don't inflate the score.
+    let mut seen = HashSet::new();
     let mut score: u32 = 0;
 
     for ev in proof {
+        let fingerprint = format!("{:?}|{}|{}", ev.kind, ev.location, ev.description);
+        if !seen.insert(fingerprint) {
+            continue; // skip duplicate
+        }
         match ev.kind {
             EvidenceKind::TaintPath => score += 1,
             EvidenceKind::DataFlowSource => score += 1,
@@ -203,6 +229,9 @@ pub struct ProveConfig {
     pub dry_run: bool,
     /// If set, only prove this specific case ID.
     pub case_id: Option<String>,
+    /// M4: Maximum wall-clock time for the entire batch. Cases in progress when
+    /// the deadline is reached finish, but no new cases start.
+    pub timeout: Option<Duration>,
 }
 
 impl Default for ProveConfig {
@@ -212,6 +241,7 @@ impl Default for ProveConfig {
             max_cases: None,
             dry_run: false,
             case_id: None,
+            timeout: None,
         }
     }
 }
@@ -260,7 +290,25 @@ pub fn prove_pending(
         ..Default::default()
     };
 
+    let batch_start = Instant::now();
+
     for record in &cases {
+        // M4: Check batch deadline before starting a new case.
+        if let Some(timeout) = config.timeout {
+            if batch_start.elapsed() >= timeout {
+                eprintln!(
+                    "  Batch timeout ({:.1}s) reached after {}/{} cases — stopping",
+                    timeout.as_secs_f64(),
+                    summary.proven + summary.disproven + summary.inconclusive + summary.failed,
+                    summary.total_cases,
+                );
+                // Adjust total to reflect actually processed count
+                summary.total_cases =
+                    summary.proven + summary.disproven + summary.inconclusive + summary.failed;
+                break;
+            }
+        }
+
         let start = Instant::now();
 
         // M4: Catch per-case errors instead of aborting the entire batch.

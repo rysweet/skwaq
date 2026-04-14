@@ -1575,6 +1575,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                 max_cases: *max_cases,
                 dry_run: *dry_run,
                 case_id: case_id.clone(),
+                timeout: None,
             };
 
             println!(
