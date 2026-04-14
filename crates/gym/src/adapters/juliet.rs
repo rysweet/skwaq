@@ -95,6 +95,7 @@ impl BenchmarkAdapter for JulietAdapter {
         case: &TestCase,
         data_dir: &Path,
         config: &BenchmarkConfig,
+        runtime_config: &skwaq_core::config::Config,
     ) -> anyhow::Result<Vec<DetectedFinding>> {
         // Binary mode: analyze compiled binary
         if config.binary_mode {
@@ -108,9 +109,19 @@ impl BenchmarkAdapter for JulietAdapter {
                 return if config.quick_mode {
                     run_binary_pattern_detection(&binary)
                 } else if config.llm_only {
-                    crate::agentic::run_llm_only_binary_analysis(&binary, config.timeout_secs).await
+                    crate::agentic::run_llm_only_binary_analysis_with_runtime_config(
+                        &binary,
+                        config.timeout_secs,
+                        runtime_config,
+                    )
+                    .await
                 } else {
-                    crate::agentic::run_agentic_binary_analysis(&binary, config.timeout_secs).await
+                    crate::agentic::run_agentic_binary_analysis_with_runtime_config(
+                        &binary,
+                        config.timeout_secs,
+                        runtime_config,
+                    )
+                    .await
                 };
             }
             // Binary not compiled yet — compile it on the fly
@@ -123,11 +134,19 @@ impl BenchmarkAdapter for JulietAdapter {
                     return if config.quick_mode {
                         run_binary_pattern_detection(&binary)
                     } else if config.llm_only {
-                        crate::agentic::run_llm_only_binary_analysis(&binary, config.timeout_secs)
-                            .await
+                        crate::agentic::run_llm_only_binary_analysis_with_runtime_config(
+                            &binary,
+                            config.timeout_secs,
+                            runtime_config,
+                        )
+                        .await
                     } else {
-                        crate::agentic::run_agentic_binary_analysis(&binary, config.timeout_secs)
-                            .await
+                        crate::agentic::run_agentic_binary_analysis_with_runtime_config(
+                            &binary,
+                            config.timeout_secs,
+                            runtime_config,
+                        )
+                        .await
                     };
                 }
             }
@@ -150,22 +169,37 @@ impl BenchmarkAdapter for JulietAdapter {
             if config.quick_mode {
                 crate::agentic::run_multi_file_pattern_analysis(&companion_files)
             } else if config.llm_only {
-                crate::agentic::run_llm_only_source_analysis(&source_path, config.timeout_secs)
-                    .await
+                crate::agentic::run_llm_only_source_analysis_with_runtime_config(
+                    &source_path,
+                    config.timeout_secs,
+                    runtime_config,
+                )
+                .await
             } else {
-                crate::agentic::run_agentic_multi_file_source_analysis(
+                crate::agentic::run_agentic_multi_file_source_analysis_with_runtime_config(
                     &source_path,
                     &companion_files,
                     config.timeout_secs,
+                    runtime_config,
                 )
                 .await
             }
         } else if config.quick_mode {
             run_source_pattern_detection(&source_path)
         } else if config.llm_only {
-            crate::agentic::run_llm_only_source_analysis(&source_path, config.timeout_secs).await
+            crate::agentic::run_llm_only_source_analysis_with_runtime_config(
+                &source_path,
+                config.timeout_secs,
+                runtime_config,
+            )
+            .await
         } else {
-            crate::agentic::run_agentic_source_analysis(&source_path, config.timeout_secs).await
+            crate::agentic::run_agentic_source_analysis_with_runtime_config(
+                &source_path,
+                config.timeout_secs,
+                runtime_config,
+            )
+            .await
         }
     }
 

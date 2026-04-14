@@ -1,0 +1,193 @@
+{
+  "suite": "juliet",
+  "timestamp": "2026-04-12T22:29:59.972006278+00:00",
+  "skwaq_commit": "1c2c341b03ceb8823bf22e0108bd247d0208b235",
+  "metadata": {
+    "llm_backend": "copilot",
+    "llm_model": "claude-opus-4.6",
+    "run_mode": "hybrid",
+    "binary_mode": true,
+    "git_dirty": true,
+    "concurrency": 4,
+    "skip": 0,
+    "max_cases": 30,
+    "profile": null,
+    "total_prompt_tokens": 0,
+    "total_completion_tokens": 0,
+    "estimated_cost_usd": 0.0
+  },
+  "precision": 1.0,
+  "recall": 0.8518518518518519,
+  "f1": 0.92,
+  "true_positives": 23,
+  "false_positives": 0,
+  "false_negatives": 4,
+  "true_negatives": 1,
+  "per_cwe": [
+    {
+      "cwe_id": 74,
+      "total_cases": 5,
+      "true_positives": 5,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "detection_rate": 1.0,
+      "precision": 1.0
+    },
+    {
+      "cwe_id": 119,
+      "total_cases": 10,
+      "true_positives": 9,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "detection_rate": 0.9,
+      "precision": 1.0
+    },
+    {
+      "cwe_id": 134,
+      "total_cases": 1,
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "detection_rate": 1.0,
+      "precision": 1.0
+    },
+    {
+      "cwe_id": 190,
+      "total_cases": 8,
+      "true_positives": 7,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "detection_rate": 0.875,
+      "precision": 1.0
+    },
+    {
+      "cwe_id": 200,
+      "total_cases": 1,
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "detection_rate": 0.0,
+      "precision": 0.0
+    },
+    {
+      "cwe_id": 676,
+      "total_cases": 2,
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "detection_rate": 0.5,
+      "precision": 1.0
+    }
+  ],
+  "per_original_cwe": [],
+  "per_semantic": [
+    {
+      "class_name": "buffer_overflow",
+      "total_cases": 10,
+      "true_positives": 9,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "detection_rate": 0.9,
+      "precision": 1.0
+    },
+    {
+      "class_name": "command_injection",
+      "total_cases": 3,
+      "true_positives": 3,
+      "false_positives": 2,
+      "false_negatives": 0,
+      "detection_rate": 1.0,
+      "precision": 0.6
+    },
+    {
+      "class_name": "format_string",
+      "total_cases": 1,
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "detection_rate": 1.0,
+      "precision": 1.0
+    },
+    {
+      "class_name": "information_exposure",
+      "total_cases": 1,
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "detection_rate": 0.0,
+      "precision": 0.0
+    },
+    {
+      "class_name": "integer_overflow",
+      "total_cases": 8,
+      "true_positives": 7,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "detection_rate": 0.875,
+      "precision": 1.0
+    },
+    {
+      "class_name": "invalid_free",
+      "total_cases": 0,
+      "true_positives": 0,
+      "false_positives": 7,
+      "false_negatives": 0,
+      "detection_rate": 0.0,
+      "precision": 0.0
+    },
+    {
+      "class_name": "ldap_injection",
+      "total_cases": 1,
+      "true_positives": 1,
+      "false_positives": 1,
+      "false_negatives": 0,
+      "detection_rate": 1.0,
+      "precision": 0.5
+    },
+    {
+      "class_name": "operator_misuse",
+      "total_cases": 1,
+      "true_positives": 1,
+      "false_positives": 1,
+      "false_negatives": 0,
+      "detection_rate": 1.0,
+      "precision": 0.5
+    },
+    {
+      "class_name": "sql_injection",
+      "total_cases": 0,
+      "true_positives": 0,
+      "false_positives": 2,
+      "false_negatives": 0,
+      "detection_rate": 0.0,
+      "precision": 0.0
+    },
+    {
+      "class_name": "type_confusion",
+      "total_cases": 0,
+      "true_positives": 0,
+      "false_positives": 7,
+      "false_negatives": 0,
+      "detection_rate": 0.0,
+      "precision": 0.0
+    },
+    {
+      "class_name": "unsafe_api_usage",
+      "total_cases": 2,
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "detection_rate": 0.5,
+      "precision": 1.0
+    },
+    {
+      "class_name": "untrusted_search_path",
+      "total_cases": 0,
+      "true_positives": 0,
+      "false_positives": 2,
+      "false_negatives": 0,
+      "detection_rate": 0.0,
+      "precision": 0.0
+    }
+  ]
+}

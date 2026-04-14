@@ -1,0 +1,39 @@
+CASE_DONE BenchmarkTest00010
+CASE_DONE BenchmarkTest00009
+CASE_DONE BenchmarkTest00051
+CASE_DONE BenchmarkTest00052
+CASE_DONE BenchmarkTest00016
+CASE_DONE BenchmarkTest00022
+CASE_DONE BenchmarkTest00054
+CASE_DONE BenchmarkTest00042
+CASE_DONE BenchmarkTest00058
+CASE_DONE BenchmarkTest00064
+CASE_DONE BenchmarkTest00063
+CASE_DONE BenchmarkTest00059
+CASE_DONE BenchmarkTest00072
+CASE_DONE BenchmarkTest00069
+CASE_DONE BenchmarkTest00001
+
+======================================================================
+  SKWAQ GYM RESULTS: OWASP
+======================================================================
+
+  Precision:  100.0%
+  Recall:     100.0%
+  F1 Score:   100.0%
+
+  TP: 1  FP: 0  FN: 0  TN: 14
+
+       CWE    Cases       TP       FN    Detect%      Prec%
+  --------------------------------------------------------------
+        22        1        1        0 [32m    100.0%[0m     100.0%
+
+                Semantic    Cases       TP       FN    Detect%      Prec%
+  --------------------------------------------------------------------------------------
+          path_traversal        1        1        0 [32m    100.0%[0m     100.0%
+
+  NEGATIVE CASE CALIBRATION (patched/safe code):
+  Negative cases: 14  TN: 14  FP: 0  FP rate: [32m0.0%[0m
+
+  SEMANTIC COVERAGE: 1/1 classes exercised, 1 with detections
+

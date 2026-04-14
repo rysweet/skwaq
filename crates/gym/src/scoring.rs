@@ -24,12 +24,41 @@ pub struct CaseOutcome {
 #[derive(Debug, Clone, Default)]
 pub struct AggregateScore {
     pub true_positives: u32,
+    /// Findings where the tool's output disagrees with the benchmark label
+    /// (benchmark says no-vuln, tool says vuln — or vice versa).
+    ///
+    /// This equals `false_positives` until an adjudication pass runs and
+    /// reclassifies some disagreements as confirmed TPs or confirmed FPs.
+    /// Benchmark answer keys are not complete precision oracles: a finding
+    /// on an unlabeled case is a *disagreement pending adjudication*, not a
+    /// confirmed wrong detection.
     pub false_positives: u32,
     pub false_negatives: u32,
     pub true_negatives: u32,
     pub precision: f64,
     pub recall: f64,
     pub f1: f64,
+    /// Concordance with the benchmark answer key.
+    ///
+    /// Computed as TP / (TP + benchmark_disagreements).  Identical to
+    /// `precision` until adjudication reclassifies some disagreements.
+    pub benchmark_precision: f64,
+    /// Analyst-verified precision.  `None` until an adjudication pass
+    /// has been run and promoted disagreements to confirmed TP or FP.
+    pub adjudicated_precision: Option<f64>,
+    /// Number of findings that disagree with the benchmark label.
+    ///
+    /// Includes both (a) findings on cases the benchmark marks as
+    /// negative/patched and (b) findings on positive cases with a CWE
+    /// family not in the expected set.  These disagreements may be real
+    /// bugs the benchmark missed; adjudication is required to decide.
+    pub benchmark_disagreements: u32,
+    /// Number of unique cases that produced scoreable outcomes.
+    pub total_cases_scored: u32,
+    /// Number of scored positive cases.
+    pub scored_positive_cases: u32,
+    /// Number of scored negative cases.
+    pub scored_negative_cases: u32,
     pub per_cwe: HashMap<u32, CweScore>,
     /// Per-original-CWE breakdown (not collapsed to family roots).
     /// Gives visibility into individual CWE performance (e.g. CWE-121 vs CWE-122).
@@ -297,7 +326,7 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
     match class {
         SemanticPatternClass::BufferOverflow => &[
             118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 129, 131, 135, 170, 176, 188, 467,
-            676, 785, 787, 788, 805, 806, 824, 839, 843,
+            676, 785, 787, 788, 805, 806, 824, 839,
         ],
         SemanticPatternClass::CommandInjection => &[77, 78, 643, 918],
         SemanticPatternClass::CrossSiteScripting => &[79, 80],
@@ -316,6 +345,7 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         SemanticPatternClass::InsecureTempFile => &[377, 676],
         SemanticPatternClass::InvalidFree => &[590],
         SemanticPatternClass::LdapInjection => &[90],
+        SemanticPatternClass::SqlInjection => &[89],
         SemanticPatternClass::OperatorMisuse => &[15, 478, 479, 480, 481, 482, 483, 484, 685, 688],
         SemanticPatternClass::PathTraversal => &[22, 23, 36, 426],
         SemanticPatternClass::PointerArithmetic => &[464, 468, 469, 475, 587, 588],
@@ -325,7 +355,7 @@ pub fn semantic_class_to_cwes(class: SemanticPatternClass) -> &'static [u32] {
         SemanticPatternClass::PrototypePollution => &[1321],
         SemanticPatternClass::RaceCondition => &[362, 364, 366, 367, 832],
         SemanticPatternClass::ReachableAssertion => &[],
-        SemanticPatternClass::TypeConfusion => &[591],
+        SemanticPatternClass::TypeConfusion => &[591, 843],
         SemanticPatternClass::UndefinedBehavior => &[758, 398],
         SemanticPatternClass::UnsafeApiUsage => &[222, 223, 242, 244, 247, 617, 676],
         SemanticPatternClass::UseAfterFree => &[415, 416, 562, 761, 763],
@@ -394,6 +424,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
         226 | 534 | 535 | 526 => Some(SemanticPatternClass::InformationExposure),
         590 => Some(SemanticPatternClass::InvalidFree),
         90 => Some(SemanticPatternClass::LdapInjection),
+        89 => Some(SemanticPatternClass::SqlInjection),
         22 | 23 | 36 | 426 => Some(SemanticPatternClass::PathTraversal),
         114 | 427 => Some(SemanticPatternClass::UntrustedSearchPath),
         606 => Some(SemanticPatternClass::UncheckedLoopCondition),
@@ -409,7 +440,7 @@ fn cwe_to_semantic_class(cwe: u32) -> Option<SemanticPatternClass> {
             Some(SemanticPatternClass::SuspiciousCodeConstruct)
         }
         758 | 398 => Some(SemanticPatternClass::UndefinedBehavior),
-        843 => Some(SemanticPatternClass::BufferOverflow),
+        843 => Some(SemanticPatternClass::TypeConfusion),
         591 => Some(SemanticPatternClass::TypeConfusion),
         377 => Some(SemanticPatternClass::InsecureTempFile),
         222 | 223 | 242 | 244 | 247 | 676 => Some(SemanticPatternClass::UnsafeApiUsage),
@@ -493,7 +524,10 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
     // Deduplicate by case_id to handle cross-shard merging
     let deduped = deduplicate_outcomes(outcomes.to_vec());
 
-    let mut score = AggregateScore::default();
+    let mut score = AggregateScore {
+        total_cases_scored: deduped.len() as u32,
+        ..Default::default()
+    };
     let mut per_cwe: HashMap<u32, CweScore> = HashMap::new();
     let mut per_original_cwe: HashMap<u32, CweScore> = HashMap::new();
     let mut per_semantic: HashMap<String, SemanticScore> = HashMap::new();
@@ -501,6 +535,7 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
     for outcome in &deduped {
         if outcome.expected_cwes.is_empty() {
             // Negative test case — track calibration metrics.
+            score.scored_negative_cases += 1;
             score.negative_calibration.total_negative_cases += 1;
             if outcome.detected_cwes.is_empty() {
                 score.true_negatives += 1;
@@ -532,6 +567,7 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
             }
         } else {
             // Positive test case.
+            score.scored_positive_cases += 1;
             for (&cwe, &hit) in &outcome.cwe_hits {
                 let entry = per_cwe.entry(cwe_family(cwe)).or_insert_with(|| CweScore {
                     cwe_id: cwe_family(cwe),
@@ -634,6 +670,15 @@ pub fn aggregate(outcomes: &[CaseOutcome]) -> AggregateScore {
     } else {
         0.0
     };
+
+    // benchmark_disagreements mirrors false_positives until an adjudication
+    // pass reclassifies some as confirmed TPs or confirmed FPs.
+    score.benchmark_disagreements = score.false_positives;
+    // benchmark_precision is the same as precision (both use benchmark labels)
+    // until adjudication differentiates them.
+    score.benchmark_precision = score.precision;
+    // adjudicated_precision starts as None — requires an explicit adjudication run.
+    score.adjudicated_precision = None;
 
     // Compute negative case calibration rate
     let neg_total = score.negative_calibration.total_negative_cases as f64;
@@ -1279,6 +1324,11 @@ mod tests {
         assert!(injection.contains(&116));
         assert!(injection.contains(&501));
         assert!(injection.contains(&643));
+        assert!(!injection.contains(&79));
+
+        let xss = category_to_cwes("xss");
+        assert!(xss.contains(&79));
+        assert!(xss.contains(&80));
 
         let integer = category_to_cwes("integer_overflow");
         assert!(integer.contains(&189));
@@ -1485,6 +1535,13 @@ mod tests {
         let invalid_free = semantic_class_to_cwes(SemanticPatternClass::InvalidFree);
         assert_eq!(invalid_free, &[590]);
 
+        let sql_injection = semantic_class_to_cwes(SemanticPatternClass::SqlInjection);
+        assert_eq!(sql_injection, &[89]);
+
+        let type_confusion = semantic_class_to_cwes(SemanticPatternClass::TypeConfusion);
+        assert!(type_confusion.contains(&591));
+        assert!(type_confusion.contains(&843));
+
         let buffer_overflow = semantic_class_to_cwes(SemanticPatternClass::BufferOverflow);
         assert!(buffer_overflow.contains(&118));
         assert!(buffer_overflow.contains(&135));
@@ -1495,6 +1552,7 @@ mod tests {
         assert!(buffer_overflow.contains(&806));
         assert!(buffer_overflow.contains(&824));
         assert!(buffer_overflow.contains(&839));
+        assert!(!buffer_overflow.contains(&843));
     }
 
     #[test]
@@ -1519,9 +1577,10 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(780), Some(CryptoWeakness));
         assert_eq!(cwe_to_semantic_class(1240), Some(CryptoWeakness));
         assert_eq!(cwe_to_semantic_class(502), Some(Deserialization));
+        assert_eq!(cwe_to_semantic_class(89), Some(SqlInjection));
         assert_eq!(cwe_to_semantic_class(272), Some(ImproperAccessControl));
         assert_eq!(cwe_to_semantic_class(284), Some(ImproperAccessControl));
-        assert_eq!(cwe_to_semantic_class(843), Some(BufferOverflow));
+        assert_eq!(cwe_to_semantic_class(843), Some(TypeConfusion));
         assert_eq!(cwe_to_semantic_class(758), Some(UndefinedBehavior));
         assert_eq!(cwe_to_semantic_class(398), Some(UndefinedBehavior));
         assert_eq!(cwe_to_semantic_class(591), Some(TypeConfusion));
@@ -1570,6 +1629,17 @@ mod tests {
         assert_eq!(cwe_to_semantic_class(427), Some(UntrustedSearchPath));
         assert_eq!(cwe_to_semantic_class(590), Some(InvalidFree));
         assert_eq!(cwe_to_semantic_class(606), Some(UncheckedLoopCondition));
+    }
+
+    #[test]
+    fn test_type_confusion_round_trip_mappings() {
+        let semantic = cwe_to_semantic_class(843).expect("CWE-843 should map to a semantic class");
+        assert_eq!(semantic, SemanticPatternClass::TypeConfusion);
+        assert!(semantic_class_to_cwes(semantic).contains(&843));
+
+        let finding = make_semantic_finding("type_confusion", "process", "cast to wrong type");
+        let inferred = inferred_finding_cwes(&finding);
+        assert!(inferred.contains(&843));
     }
 
     #[test]

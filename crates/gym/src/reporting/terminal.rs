@@ -17,6 +17,30 @@ pub fn print_summary(score: &AggregateScore, suite: &str) {
         "  TP: {}  FP: {}  FN: {}  TN: {}",
         score.true_positives, score.false_positives, score.false_negatives, score.true_negatives
     );
+
+    // Benchmark-disagreement block — only shown when there are BD cases or when
+    // benchmark_precision diverges from plain precision.
+    if score.benchmark_disagreements > 0 || score.adjudicated_precision.is_some() {
+        println!();
+        println!("  BENCHMARK CONCORDANCE:");
+        println!(
+            "  Benchmark precision (answer-key concordance): {:.1}%",
+            score.benchmark_precision * 100.0
+        );
+        println!(
+            "  Benchmark disagreements (BD, pending adjudication): {}",
+            score.benchmark_disagreements
+        );
+        let adj_str = score
+            .adjudicated_precision
+            .map(|p| format!("{:.1}%", p * 100.0))
+            .unwrap_or_else(|| "pending adjudication".to_string());
+        println!("  Adjudicated precision: {}", adj_str);
+        println!(
+            "  \x1b[33mNote:\x1b[0m BD cases may be real bugs the benchmark missed. \
+             Run `skwaq gym adjudicate` to review."
+        );
+    }
     println!();
 
     let mut cwes: Vec<_> = score.per_cwe.values().collect();
@@ -351,6 +375,7 @@ mod tests {
             false_positives: 0,
             false_negatives: 0,
             true_negatives: 0,
+            benchmark_disagreements: 0,
         }
     }
 

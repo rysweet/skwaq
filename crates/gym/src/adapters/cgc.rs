@@ -94,6 +94,7 @@ impl BenchmarkAdapter for CgcAdapter {
         case: &TestCase,
         data_dir: &Path,
         config: &BenchmarkConfig,
+        runtime_config: &skwaq_core::config::Config,
     ) -> anyhow::Result<Vec<DetectedFinding>> {
         // Binary mode: analyze compiled binary
         if config.binary_mode {
@@ -106,9 +107,19 @@ impl BenchmarkAdapter for CgcAdapter {
                 return if config.quick_mode {
                     run_binary_pattern_detection(&binary)
                 } else if config.llm_only {
-                    crate::agentic::run_llm_only_binary_analysis(&binary, config.timeout_secs).await
+                    crate::agentic::run_llm_only_binary_analysis_with_runtime_config(
+                        &binary,
+                        config.timeout_secs,
+                        runtime_config,
+                    )
+                    .await
                 } else {
-                    crate::agentic::run_agentic_binary_analysis(&binary, config.timeout_secs).await
+                    crate::agentic::run_agentic_binary_analysis_with_runtime_config(
+                        &binary,
+                        config.timeout_secs,
+                        runtime_config,
+                    )
+                    .await
                 };
             }
             // No binary available — fall through to source analysis for CGC
@@ -144,11 +155,19 @@ impl BenchmarkAdapter for CgcAdapter {
                 let path = entry.path();
                 if path.extension().and_then(|e| e.to_str()) == Some("c") {
                     let findings = if config.llm_only {
-                        crate::agentic::run_llm_only_source_analysis(&path, config.timeout_secs)
-                            .await
+                        crate::agentic::run_llm_only_source_analysis_with_runtime_config(
+                            &path,
+                            config.timeout_secs,
+                            runtime_config,
+                        )
+                        .await
                     } else {
-                        crate::agentic::run_agentic_source_analysis(&path, config.timeout_secs)
-                            .await
+                        crate::agentic::run_agentic_source_analysis_with_runtime_config(
+                            &path,
+                            config.timeout_secs,
+                            runtime_config,
+                        )
+                        .await
                     };
                     match findings {
                         Ok(f) => all_findings.extend(f),
@@ -163,13 +182,19 @@ impl BenchmarkAdapter for CgcAdapter {
             if config.quick_mode {
                 all_findings = run_source_pattern_detection(&source_path)?;
             } else if config.llm_only {
-                all_findings =
-                    crate::agentic::run_llm_only_source_analysis(&source_path, config.timeout_secs)
-                        .await?;
+                all_findings = crate::agentic::run_llm_only_source_analysis_with_runtime_config(
+                    &source_path,
+                    config.timeout_secs,
+                    runtime_config,
+                )
+                .await?;
             } else {
-                all_findings =
-                    crate::agentic::run_agentic_source_analysis(&source_path, config.timeout_secs)
-                        .await?;
+                all_findings = crate::agentic::run_agentic_source_analysis_with_runtime_config(
+                    &source_path,
+                    config.timeout_secs,
+                    runtime_config,
+                )
+                .await?;
             }
         }
 

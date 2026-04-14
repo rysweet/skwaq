@@ -7833,3 +7833,156 @@ This guidance lets the agent recognize `argv[1]` as user input, see it used in `
 
 ---
 
+## Cycle: fixtures (2026-04-11 00:45 UTC)
+
+### Missed Cases (1 false negatives)
+
+- **multi_file**: Expected CWE-[122, 78], detected CWE-[805, 131, 590, 123, 787, 823, 124, 785, 120, 822, 118, 806, 188, 824, 170, 176, 788, 126, 825, 121, 467, 135, 843, 839, 127, 129, 119, 122, 125], missed CWE-[78]
+  ```
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include "parser.h"
+  #include "processor.h"
+  
+  ```
+
+### Reviewed Improvement Proposals (2 total; 2 accepted, 0 rejected)
+
+- **[Agent Capability Gap] [ACCEPT]** Update the C/C++ graph-analysis agent prompt file (the agent responsible for source/sink and taint review in C code, e.g. the main C/C++ vulnerability triage prompt) with this instruction: "When analyzing C/C++ for injection CWEs (especially CWE-78), do not stop at the current file. If untrusted input enters through `argv`, environment variables, file/network reads, or wrapper/parser functions, explicitly use `get_cross_file_calls`, `get_callers`, `get_callees`, and `get_taint_paths` to trace the value across helper functions and compilation units until you either reach an execution sink (`system`, `popen`, `exec*`, `_popen`, `CreateProcess`, `ShellExecute`) or prove the path is sanitized. Treat parser/transformer functions that return strings as taint-preserving by default unless sanitization is evident. In multi-file cases, inspect both the source-side wrapper and downstream processor/sink files before concluding no command injection exists."
+  CWEs: [78] | From case: multi_file
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection') — The CWE definition and detection signals explicitly frame this as externally influenced input flowing into command-execution APIs such as `system`, `popen`, and `exec*`, which matches the fixture’s described source-to-sink pattern.
+  - [KB] knowledge-pack/codeql-variant-analysis/codeql-variant-analysis — This guidance explicitly recommends taint tracking from untrusted sources like `argv` to dangerous sinks like system calls and emphasizes checking for sanitizers, supporting an agent prompt focused on cross-file taint traversal rather than regex matching.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The recalled accepted lessons show a recurring agent capability gap when functions are absent from the graph or when multi-file flows are not followed, which is consistent with this miss and supports strengthening graph-driven interprocedural analysis instructions.
+  - [MEMORY] failure :: Missed CWE-[22] vulnerability in code with characteristics similar to the target [cwe-22] — Although for a different CWE, this memory reflects a generalized pattern of missed expected CWEs due to insufficient attention to the target vulnerability family; it supports prioritizing explicit agent instructions for missed semantic classes when graph evidence is sparse.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal targets a broadly applicable analysis gap for command injection: cross-file taint tracing from realistic untrusted sources to execution sinks. It is not narrowly coupled to a single fixture artifact; instead it encodes a general review methodology for CWE-78 in C/C++ codebases where input often flows through wrappers, parsers, and helper functions before reaching sinks. The guidance is aligned with CWE-78 semantics and improves real-world detection without hardcoding benchmark-specific function names. The only mildly case-shaped aspect is the explicit listing of graph APIs, but that is an agent-capability instruction rather than fixture overfitting.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection') — CWE-78 is fundamentally about externally influenced input reaching an OS command without proper neutralization, which directly supports cross-file source-to-sink tracing through helper functions and wrappers.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology grounding supports using a structured end-to-end vulnerability analysis process rather than stopping at superficial local-file inspection, which justifies the proposal's deeper graph and taint traversal guidance.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[122, 78] detection — case multi_file has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [122, 78] | From case: multi_file
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[122, 78].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The cross-file traversal recommendation is generally useful for CWE-78, but the combined mapping to CWE-122 is too imprecise and risks overgeneralization. Heap-based buffer overflow analysis usually depends on memory object sizes, allocation/use relationships, index/length propagation, and write operations—not merely 'dangerous sinks' or indirect wrapper paths. As written, the proposal appears benchmark-driven by a single multi_file case and blends two distinct vulnerability classes under one generic traversal heuristic. The result is weaker CWE specificity and a partially inaccurate methodology for CWE-122.
+  Suggested modification: Split the guidance by CWE family. Keep the cross-file taint/source-to-sink traversal language for CWE-78. For CWE-122, replace 'dangerous sinks' with memory-safety-specific guidance such as tracing allocation sizes, buffer lengths, pointer propagation, and write sites across files, and require evidence of out-of-bounds heap write/read conditions rather than generic taint flow alone.
+  - [KB] cwe/CWE-122/CWE-122 Heap-based Buffer Overflow — CWE-122 concerns heap-allocated buffers and out-of-bounds overwrite conditions, which are not accurately captured by generic source-to-sink dangerous-sink tracing language.
+  - [KB] cwe/CWE-78/CWE-78 Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection') — For CWE-78, tracing through wrappers to execution sinks is appropriate, showing the proposal is partially valid but should be scoped specifically to injection rather than merged with heap overflow logic.
+  - [KB] knowledge-pack/cwe-families/cwe-families — The family reference distinguishes memory-safety weaknesses from other classes, supporting the need to avoid collapsing CWE-122 and CWE-78 into one generic detection heuristic.
+  - [MEMORY] failure :: Function-not-found graph gaps can justify deeper graph construction/traversal, but missing coverage alone does not establish a specific CWE without class-appropriate evidence. [cwe-121] — The recalled lesson from prior analysis failures supports improving graph traversal generally, while also illustrating that capability gaps must still be mapped to the correct weakness-specific analysis rather than reused wholesale across unrelated CWEs.
+
+---
+
+## Infrastructure Fix: Multi-File Case Detection (2026-04-11)
+
+### Root Cause: Adapter Single-File Blindness
+
+The `fixtures` adapter registered the `multi_file` case with `path = "multi_file/main.c"` and
+passed only that single file to `run_source_pattern_detection` (quick mode) and
+`run_agentic_source_analysis` (full mode). Since `main.c` contains no dangerous patterns itself
+(it only calls `parse_input(argv[1])` → `process_data(parsed)`), neither the pattern detector
+nor the agent context received the companion files where the actual vulnerabilities live.
+
+**Vulnerability chain:**
+- `main.c`: receives `argv[1]`, calls `parse_input()` and `process_data()` — no sinks
+- `parser.c`: `parse_input()` calls `strcpy(malloc(128), raw_input)` — **CWE-122** heap overflow
+- `processor.c`: `process_data()` calls `system("echo %s | process_tool", parsed)` — **CWE-78** command injection
+
+### Fix Applied
+
+`crates/gym/src/adapters/fixtures.rs` now detects multi-file cases by checking whether the target
+path is inside a subdirectory of `data_dir`. When it is, the adapter:
+1. Collects all C/C++ source and header files in that subdirectory via `collect_companion_files`.
+2. In **quick mode**: calls `run_multi_file_pattern_analysis(&companions)` to run per-file and
+   cross-file pattern detection across all files simultaneously.
+3. In **full agentic mode**: calls `run_agentic_multi_file_source_analysis(&primary, &companions)`
+   to ingest all companion files into a shared Code Property Graph before running the agent pipeline.
+
+### Lesson for Agent Analysis
+
+When the entry-point file has no dangerous patterns but calls helper functions, the helpers MUST be
+read via cross-file tools. `get_callees("<entry>")` → `read_function("<helper>")` chain is the
+minimum required for entry-point-style multi-file cases. Do not conclude "no vulnerability" from
+a pattern scan of main.c alone when it dispatches to separate compilation units.
+
+- **[Infrastructure Fix] [DONE]** Multi-file case detection fixed in `crates/gym/src/adapters/fixtures.rs`
+  — adapter now uses `collect_companion_files` + `run_multi_file_pattern_analysis` for subdirectory cases
+  CWEs: [122, 78] | Case: multi_file
+
+
+## Cycle: fixtures (2026-04-12 20:30 UTC)
+
+### Missed Cases (1 false negatives)
+
+- **cse_path_traversal**: Expected CWE-[22], detected CWE-[], missed CWE-[22]
+  ```
+  /* CWE-22: Improper Limitation of a Pathname to a Restricted Directory
+   * Constructs file path from user input without sanitizing ".." sequences. */
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <string.h>
+  ```
+
+### Reviewed Improvement Proposals (2 total; 0 accepted, 2 modified, 0 rejected)
+
+- **[Taint Rule Gap] [MODIFY]** Add CWE-22/path traversal sink definitions for C filesystem path-consuming APIs, with `fopen` as the immediate priority sink. Mark the pathname argument of `fopen`, `open`, `freopen`, `opendir`, `access`, `stat`, `lstat`, `unlink`, `remove`, `rename`, `mkdir`, and `rmdir` as `filesystem_path` sinks for PathTraversal when tainted by external input (e.g., `argv`, environment, network, file input) and not passed through recognized normalization/validation gates such as `realpath()` followed by prefix confinement or explicit allowlist checks. Ensure taint propagates through string-building functions like `snprintf`, `sprintf`, `strcat`, and `asprintf` so `base_dir + user_input` wrapper patterns are caught.
+  CWEs: [22] | From case: cse_path_traversal
+  - [KB] cwe/CWE-22/CWE-22 Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal') — CWE-22 metadata explicitly lists `fopen(`, `open(`, `opendir(`, `realpath(`, and traversal tokens as detection signals, and notes wrapper-function concatenation of base path plus user input as a common hidden pattern.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology guidance says to map entry points, perform data-flow analysis from untrusted inputs to sinks, and review file I/O APIs; this supports adding a taint rule rather than a brittle regex.
+  - [MEMORY] failure :: Missed CWE-[22] vulnerability in code with characteristics similar to the target [cwe-22] — Durable memory shows CWE-22 is already a recurring blind spot, so adding explicit filesystem-path sinks and propagation through string construction addresses a repeated, general detection gap.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: The core idea is broadly applicable and maps well to CWE-22 because these APIs consume pathnames and are common traversal sinks. However, the proposal is somewhat overfit in its gate logic: treating `realpath()` as a sufficient normalization signal without requiring post-resolution confinement can create false negatives, and blanket sink marking across metadata APIs like `stat`/`access` may need confidence tuning to avoid noisy findings. The holdout signal is based on TP=1 only, so a conservative generalization judgment is warranted.
+  Suggested modification: Keep the sink list and string-builder taint propagation, but require that `realpath()` only counts as a mitigation when paired with verified directory confinement or allowlist enforcement. Add severity/confidence distinctions for read/write/delete/rename sinks versus metadata-check sinks (`stat`, `lstat`, `access`) and support wrapper-based sink inference rather than only exact API names.
+  - [KB] cwe/CWE-22/CWE-22 Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal') — Confirms that external input used to construct pathnames for filesystem operations is the correct vulnerability family and justifies modeling pathname-consuming APIs as sinks.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Supports preferring generalized source-sink-validation modeling over case-specific signatures, which favors the proposal's taint-rule direction but also argues for careful mitigation semantics to preserve real-world accuracy.
+  - [MEMORY] pattern :: Path traversal generalizes best when detectors model user-controlled pathname construction plus canonicalization-and-confinement checks; canonicalization alone is not a reliable sanitizer. [cwe-22] — Justifies modifying the proposal's sanitizer condition to avoid overfitting and false negatives.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[22] detection — case cse_path_traversal has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [22] | From case: cse_path_traversal
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[22].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: HIGH | Applicability: MEDIUM
+  Review reason: The proposal addresses a real generalization gap—path traversal often occurs through wrappers and indirect flows rather than direct regex-matchable sink calls. That said, it is framed too narrowly around one case and specific tool calls, which raises overfitting risk. The guidance should be broadened into a methodology for indirect sink discovery across filesystem-related operations, not a special-case prompt for `cse_path_traversal`. The holdout result is perfect on only one example, so relying on a case-shaped prompt is especially risky.
+  Suggested modification: Rewrite as a generic analysis policy: when no direct dangerous API match is found for suspected CWE-22 flows, traverse cross-file wrappers, summarize candidate pathname parameters, and trace taint from external input to filesystem-path consumers. Avoid mentioning a single benchmark case, and trigger the deeper traversal based on semantic evidence of path construction or file-operation wrappers rather than absence of regex matches alone.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The noted failure mode is incomplete graph/function coverage, which supports improving traversal depth and cross-file analysis rather than relying on surface API matching.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Favors robust analysis methodology improvements over benchmark-specific prompting, supporting a modification from case-specific wording to a general indirect-flow policy.
+  - [MEMORY] failure :: Case-specific agent prompts that reference a single benchmark often improve that fixture while failing to generalize to unseen wrapper names and project structures. [cwe-22] — Directly supports the high overfitting assessment and the need to generalize the prompt.
+
+---
+
+## Cycle: fixtures (2026-04-12 20:31 UTC)
+
+### Missed Cases (1 false negatives)
+
+- **cse_path_traversal**: Expected CWE-[22], detected CWE-[], missed CWE-[22]
+  ```
+  /* CWE-22: Improper Limitation of a Pathname to a Restricted Directory
+   * Constructs file path from user input without sanitizing ".." sequences. */
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <string.h>
+  ```
+
+### Reviewed Improvement Proposals (2 total; 1 accepted, 1 modified, 0 rejected)
+
+- **[Agent Capability Gap] [ACCEPT]** Improve frontend/CPG ingestion so source-only C fixture functions are reliably indexed and exposed to graph/taint tools before vulnerability classification runs. Ensure C source parsing emits Function nodes for ordinary user-defined functions like main and helper wrappers. Add a pre-check in the analysis pipeline: if expected entrypoint-like functions or any file-local functions are missing, trigger a fallback source parse and re-index before scoring. Make path-traversal analysis depend on this recovered graph, then use existing graph workflow to trace argv/CLI input into filesystem sinks such as fopen, especially through intermediate path construction calls like snprintf. This should generalize beyond the benchmark because many real CWE-22 cases use simple source-level wrappers that concatenate a base directory with user input before a file API call, and none can be detected if functions never enter the graph.
+  CWEs: [22] | From case: cse_path_traversal
+  - [KB] cwe/CWE-22/CWE-22 Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal') — CWE-22 guidance explicitly identifies external input used to construct pathnames under a restricted directory and recommends looking for file APIs like fopen(; this matches the code, confirming the missed issue is real and should have been detectable if the function were present in the graph.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The knowledge pack documents a recurring accepted failure mode where expected vulnerable functions are absent from the analysis graph, causing complete false negatives; this strongly supports treating the root cause here as a graph/indexing capability gap rather than inventing a benchmark-specific pattern.
+  - [MEMORY] failure :: Missed CWE-[22] vulnerability in code with characteristics similar to the target [cwe-22] — Durable memory shows prior complete misses for CWE-22, indicating this is a recurring vulnerability-family detection gap and that improving graph coverage for path traversal analysis will generalize beyond this single case.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal addresses an agent capability gap rather than hard-coding benchmark-specific signatures. The knowledge base explicitly documents a failure mode where a vulnerable function was absent from the analysis graph, causing missed detection; fixing ingestion/indexing and adding a recovery parse is a general infrastructure improvement that should help multiple CWEs, including CWE-22, whenever source-only functions are missing. The proposal also maps appropriately to CWE-22 by tracing untrusted argv/CLI input through path construction into filesystem APIs such as fopen, which matches path traversal semantics. Although the perfect holdout score raises overfitting concern overall, this proposal is still low risk because it improves prerequisite graph completeness instead of tuning to a single fixture pattern.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The KB records a concrete failure where the target function was not present in the analysis graph, leading to a missed vulnerability. That directly supports proposals that improve function extraction, graph completeness, and fallback parsing before classification.
+  - [KB] cwe/CWE-22/CWE-22 Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal') — CWE-22 is about external input influencing path resolution outside intended directories. Tracing argv/user input through snprintf-like path construction into fopen aligns with the canonical CWE-22 behavior, so the mapping is sound.
+  - [MEMORY] failure :: Generalized lesson: missing or incomplete graph construction can create false negatives independent of the vulnerability class; parser/indexing recovery is broadly useful and less benchmark-specific than adding new sink heuristics. [cwe-22, cwe-119] — Supports that strengthening ingestion is a cross-cutting reliability improvement with good generalization properties.
+- **[Agent Capability Gap] [MODIFY]** Enhance agent graph traversal for CWE-[22] detection — case cse_path_traversal has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [22] | From case: cse_path_traversal
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[22].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: MEDIUM
+  Review reason: The core idea—using call graph and taint tracing when simple API matching fails—is directionally good and can generalize, but the proposal is too case-shaped and underspecified. It anchors on one fixture and claims absence of regex-matchable APIs, while dangerous filesystem sinks for CWE-22 are not limited to a single pattern and may be in-file or cross-file. As written, it risks overfitting to the benchmark’s wrapper/cross-file structure instead of defining a general escalation strategy for path traversal analysis. The CWE-22 mapping is plausible, but the proposal should be reframed around untrusted path data reaching path-resolution/file-access sinks, with cross-file traversal as one optional mechanism rather than the defining characteristic.
+  Suggested modification: Rewrite as a general fallback rule: when initial sink/pattern matching is inconclusive for suspected filesystem operations, invoke interprocedural taint analysis (intra-file first, cross-file when available) to trace user-controlled input through wrappers, formatters, and path join/normalization helpers into file/path sinks (e.g., fopen/open/opendir/rename). Remove the fixture-specific claim that the case has no regex-matchable APIs, and require evidence of attacker-controlled pathname influence rather than merely indirect calls.
+  - [KB] cwe/CWE-22/CWE-22 Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal') — The CWE definition focuses on external input used to construct pathnames without proper neutralization. A robust proposal should center on attacker-controlled pathname flow to file/path sinks, not on whether a benchmark lacks regex-matchable APIs.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Methodologically, improvements should generalize beyond a single fixture and use principled analysis steps. Reframing the proposal as a general fallback taint-analysis strategy better fits that guidance than a case-specific traversal tweak.
+  - [MEMORY] pattern :: Generalized lesson: proposals that cite one fixture’s exact structural quirk (e.g., cross-file wrappers or no regex-hit APIs) often overfit unless abstracted into a broader interprocedural dataflow rule tied to the CWE’s semantics. [cwe-22] — Justifies modifying rather than outright accepting because the current wording is too benchmark-shaped even though the underlying technique is useful.
+
+---
+

@@ -114,6 +114,7 @@ impl BenchmarkAdapter for BinPoolAdapter {
         case: &TestCase,
         data_dir: &Path,
         config: &BenchmarkConfig,
+        runtime_config: &skwaq_core::config::Config,
     ) -> anyhow::Result<Vec<DetectedFinding>> {
         if !config.binary_mode {
             anyhow::bail!("BinPool only supports binary analysis. Re-run without `--source-only`.");
@@ -132,9 +133,19 @@ impl BenchmarkAdapter for BinPoolAdapter {
             return if config.quick_mode {
                 run_binary_pattern_detection(&binary)
             } else if config.llm_only {
-                crate::agentic::run_llm_only_binary_analysis(&binary, config.timeout_secs).await
+                crate::agentic::run_llm_only_binary_analysis_with_runtime_config(
+                    &binary,
+                    config.timeout_secs,
+                    runtime_config,
+                )
+                .await
             } else {
-                crate::agentic::run_agentic_binary_analysis(&binary, config.timeout_secs).await
+                crate::agentic::run_agentic_binary_analysis_with_runtime_config(
+                    &binary,
+                    config.timeout_secs,
+                    runtime_config,
+                )
+                .await
             };
         }
 
@@ -289,6 +300,7 @@ language = "binary"
                     holdout_fraction: 0.0,
                     max_improvements_per_cycle: 0,
                 },
+                &skwaq_core::config::Config::default(),
             )
             .await
             .unwrap_err();
@@ -332,7 +344,12 @@ language = "binary"
         config.binary_mode = false;
 
         let err = adapter
-            .run_case(&case, temp.path(), &config)
+            .run_case(
+                &case,
+                temp.path(),
+                &config,
+                &skwaq_core::config::Config::default(),
+            )
             .await
             .unwrap_err();
 

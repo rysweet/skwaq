@@ -1,0 +1,66 @@
+CASE_DONE BenchmarkTest00006
+CASE_DONE BenchmarkTest00013
+CASE_DONE BenchmarkTest00014
+CASE_DONE BenchmarkTest00018
+CASE_DONE BenchmarkTest00030
+CASE_DONE BenchmarkTest00005
+CASE_DONE BenchmarkTest00008
+[2m2026-04-12T23:18:23.691428Z[0m [33m WARN[0m [2mskwaq_core::agents::tool_executor[0m[2m:[0m Unknown tool: read_function"
+[2m2026-04-12T23:18:24.063897Z[0m [33m WARN[0m [2mskwaq_gym::agentic[0m[2m:[0m LLM pipeline failed for /home/azureuser/.local/share/skwaq/gym/cache/owasp/src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00024.java, falling back to pattern-only findings: LLM pipeline failed for /home/azureuser/.local/share/skwaq/gym/cache/owasp/src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00024.java: LLM tool loop failed: Bad Request: Bad Request
+
+The request was invalid. Please check your parameters.
+CASE_DONE BenchmarkTest00024
+CASE_DONE BenchmarkTest00012
+CASE_DONE BenchmarkTest00003
+CASE_DONE BenchmarkTest00023
+CASE_DONE BenchmarkTest00066
+[2m2026-04-12T23:30:54.130087Z[0m [33m WARN[0m [2mskwaq_core::agents::tool_executor[0m[2m:[0m Unknown tool: read_function" parameter>
+<parameter name="name
+[2m2026-04-12T23:30:54.506301Z[0m [33m WARN[0m [2mskwaq_gym::agentic[0m[2m:[0m LLM pipeline failed for /home/azureuser/.local/share/skwaq/gym/cache/owasp/src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00004.java, falling back to pattern-only findings: LLM pipeline failed for /home/azureuser/.local/share/skwaq/gym/cache/owasp/src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00004.java: LLM tool loop failed: Bad Request: Bad Request
+
+The request was invalid. Please check your parameters.
+CASE_DONE BenchmarkTest00004
+CASE_DONE BenchmarkTest00087
+CASE_DONE BenchmarkTest00207
+
+======================================================================
+  SKWAQ GYM RESULTS: OWASP
+======================================================================
+
+  Precision:  100.0%
+  Recall:     100.0%
+  F1 Score:   100.0%
+
+  TP: 15  FP: 0  FN: 0  TN: 0
+
+       CWE    Cases       TP       FN    Detect%      Prec%
+  --------------------------------------------------------------
+       614        1        1        0 [32m    100.0%[0m     100.0%
+       327        4        4        0 [32m    100.0%[0m     100.0%
+        74       10       10        0 [32m    100.0%[0m     100.0%
+
+       CWE    Cases       TP       FN    Detect%      Prec%  (original CWE IDs)
+  --------------------------------------------------------------
+        78        1        1        0 [32m    100.0%[0m     100.0%
+       614        1        1        0 [32m    100.0%[0m     100.0%
+        79        3        3        0 [32m    100.0%[0m     100.0%
+       327        1        1        0 [32m    100.0%[0m     100.0%
+       643        1        1        0 [32m    100.0%[0m     100.0%
+       328        1        1        0 [32m    100.0%[0m     100.0%
+        89        3        3        0 [32m    100.0%[0m     100.0%
+       501        1        1        0 [32m    100.0%[0m     100.0%
+        90        1        1        0 [32m    100.0%[0m     100.0%
+       330        2        2        0 [32m    100.0%[0m     100.0%
+
+                Semantic    Cases       TP       FN    Detect%      Prec%
+  --------------------------------------------------------------------------------------
+         operator_misuse        0        0        0 [31m      0.0%[0m       0.0%
+   untrusted_search_path        0        0        0 [31m      0.0%[0m       0.0%
+           sql_injection        3        1        2 [31m     33.3%[0m      12.5%
+    cross_site_scripting        3        2        1 [33m     66.7%[0m      33.3%
+       command_injection        2        2        0 [32m    100.0%[0m      25.0%
+          ldap_injection        1        1        0 [32m    100.0%[0m      12.5%
+         crypto_weakness        5        5        0 [32m    100.0%[0m     100.0%
+
+  SEMANTIC COVERAGE: 7/7 classes exercised, 5 with detections
+

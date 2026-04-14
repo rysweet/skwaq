@@ -117,6 +117,12 @@ fn python_patterns() -> &'static [SourcePattern] {
             severity: Severity::Critical,
             reason: "SQL injection via .format(); use parameterized queries with placeholders",
         },
+        SourcePattern {
+            regex: r#"(?s)\b(?:query|sql)\s*=\s*.*\.format\s*\([^)]*\)\s*.*?\bcursor\.execute\s*\(\s*(?:query|sql)\s*\)"#,
+            category: DangerCategory::Injection,
+            severity: Severity::Critical,
+            reason: "SQL injection via .format()-built query variable; use parameterized queries",
+        },
         // Broader execute with string building (CWE-89)
         SourcePattern {
             regex: r#"\b(?:execute|executemany|executescript)\s*\([^)]*(?:\+|%|\.format)\s*"#,
@@ -404,6 +410,20 @@ fn javascript_patterns() -> &'static [SourcePattern] {
             category: DangerCategory::Xss,
             severity: Severity::High,
             reason: "HTTP response with template literal interpolation; encode output to prevent XSS",
+        },
+        // Self-improvement: from case cse_xss_js (CWEs [79])
+        SourcePattern {
+            regex: r"`[^`]*<[a-zA-Z][^`]*\$\{[^}]+\}[^`]*`",
+            category: DangerCategory::Xss,
+            severity: Severity::High,
+            reason: "Template literal with HTML tags and interpolation (CWE-79: DOM-based XSS)",
+        },
+        // Self-improvement: from case cse_xss_js (CWEs [79])
+        SourcePattern {
+            regex: r"\b(innerHTML|outerHTML)\s*=\s*[^;]*\$\{|\bdocument\.write(ln)?\s*\(",
+            category: DangerCategory::Xss,
+            severity: Severity::High,
+            reason: "innerHTML/outerHTML or document.write with dynamic content (CWE-79: DOM XSS sink)",
         },
         // Command injection via child_process
         SourcePattern {
@@ -1354,6 +1374,19 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::Critical,
             reason: "_execl (MSVC) executes a program; validate all arguments",
         },
+        // Unicode/wide-char conversion patterns (CWE-176) — gym cycle 20260412
+        SourcePattern {
+            regex: r"\bWideCharToMultiByte\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::High,
+            reason: "WideCharToMultiByte without adequate destination-buffer size check may overflow the output buffer (CWE-176/CWE-119); always query required size first and verify the destination buffer is large enough",
+        },
+        SourcePattern {
+            regex: r"\bMultiByteToWideChar\s*\(",
+            category: DangerCategory::Memory,
+            severity: Severity::Medium,
+            reason: "MultiByteToWideChar without destination-buffer size check may overflow the wide-char output buffer (CWE-119); validate required size before conversion",
+        },
         // Integer truncation/cast patterns (CWE-190/195/197) — from self-improvement iteration 8
         SourcePattern {
             regex: r"\(\s*(?:unsigned\s+)?(?:short|char)\s*\)\s*\w",
@@ -1913,12 +1946,14 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::Medium,
             reason: "Thread created; ensure shared data is protected with mutexes or atomic operations",
         },
-        // Uncontrolled search path: putenv with data (CWE-427)
+        // Uncontrolled search path: putenv/setenv/PUTENV with data (CWE-427)
+        // Juliet test suite defines PUTENV as a macro for putenv/_putenv, so we match both
+        // the lowercase function names and the uppercase PUTENV macro form.
         SourcePattern {
-            regex: r"\b(?:putenv|_putenv|_wputenv)\s*\(",
+            regex: r"\b(?:PUTENV|putenv|_putenv|_wputenv|setenv)\s*\(",
             category: DangerCategory::PathTraversal,
             severity: Severity::High,
-            reason: "putenv modifies search path; validate input to prevent PATH hijacking (CWE-427)",
+            reason: "putenv/setenv modifies environment search path with uncontrolled input; validate to prevent PATH hijacking (CWE-427 uncontrolled search path element)",
         },
         // Pointer subtraction on potentially different objects (CWE-469)
         SourcePattern {
@@ -2009,20 +2044,6 @@ fn c_cpp_patterns() -> &'static [SourcePattern] {
             severity: Severity::High,
             reason: "Hardcoded password assignment (CWE-798: password literal in source code)",
         },
-        // Self-improvement: from case cse_xss_js (CWEs [79])
-        SourcePattern {
-            regex: r"`[^`]*<[a-zA-Z][^`]*\$\{[^}]+\}[^`]*`",
-            category: DangerCategory::Injection,
-            severity: Severity::High,
-            reason: "Template literal with HTML tags and interpolation (CWE-79: DOM-based XSS)",
-        },
-        // Self-improvement: from case cse_xss_js (CWEs [79])
-        SourcePattern {
-            regex: r"\b(innerHTML|outerHTML)\s*=\s*[^;]*\$\{|\bdocument\.write(ln)?\s*\(",
-            category: DangerCategory::Injection,
-            severity: Severity::High,
-            reason: "innerHTML/outerHTML or document.write with dynamic content (CWE-79: DOM XSS sink)",
-        },
         // Idea #4: Negative-Space Auditor — detect sensitive credential APIs (CWE-226)
         SourcePattern {
             regex: r"\b(LogonUser[AW]?|CryptDeriveKey|CredRead[AW]?)\s*\(",
@@ -2050,6 +2071,75 @@ fn get_patterns_for_language(language: &str) -> &'static [SourcePattern] {
         "c" | "cpp" => c_cpp_patterns(),
         _ => &[],
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct CPathTraversalChain {
+    sink_api: &'static str,
+    line: usize,
+}
+
+fn c_source_contains_any(content: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|needle| content.contains(needle))
+}
+
+fn c_source_line_for(content: &str, needle: &str) -> Option<usize> {
+    content
+        .lines()
+        .position(|line| line.contains(needle))
+        .map(|idx| idx + 1)
+}
+
+fn detect_c_path_traversal_chains(content: &str) -> Vec<CPathTraversalChain> {
+    const SOURCE_MARKERS: &[&str] = &[
+        "argv[",
+        "getenv(",
+        "fgets(",
+        "scanf(",
+        "recv(",
+        "recvfrom(",
+        "read(",
+        "getline(",
+    ];
+    const PATH_BUILDERS: &[&str] = &[
+        "snprintf(",
+        "sprintf(",
+        "strcat(",
+        "strncat(",
+        "strcpy(",
+        "strncpy(",
+    ];
+    const SINKS: &[(&str, &str)] = &[
+        ("fopen(", "fopen"),
+        ("open(", "open"),
+        ("access(", "access"),
+        ("opendir(", "opendir"),
+        ("stat(", "stat"),
+        ("unlink(", "unlink"),
+        ("rename(", "rename"),
+    ];
+    const SANITIZERS: &[&str] = &[
+        "realpath(",
+        "canonicalize(",
+        "PathCanonicalize",
+        "strstr(",
+        "\"..\"",
+        "strncmp(",
+    ];
+
+    if !c_source_contains_any(content, SOURCE_MARKERS)
+        || !c_source_contains_any(content, PATH_BUILDERS)
+        || c_source_contains_any(content, SANITIZERS)
+    {
+        return Vec::new();
+    }
+
+    SINKS
+        .iter()
+        .filter_map(|(needle, sink_api)| {
+            c_source_line_for(content, needle).map(|line| CPathTraversalChain { sink_api, line })
+        })
+        .collect()
 }
 
 /// Detect dangerous patterns in source content already in memory.
@@ -2104,6 +2194,22 @@ pub fn detect_in_source_content(
                 line: chain.write_line,
             });
         }
+
+        for chain in detect_c_path_traversal_chains(content) {
+            hits.push(DangerousApiHit {
+                function_name: format!("{}(user-controlled path)", chain.sink_api),
+                library: format!("source:{}", language),
+                reason: format!(
+                    "CWE-22: user-controlled path reaches {}() through C path construction \
+                     without visible canonicalization or traversal rejection",
+                    chain.sink_api
+                ),
+                danger_category: DangerCategory::PathTraversal,
+                severity: Severity::High,
+                file: file_path.to_string(),
+                line: chain.line,
+            });
+        }
     }
 
     // Sort by severity (Critical first)
@@ -2139,6 +2245,26 @@ pickle.loads(data)
     }
 
     #[test]
+    fn test_detect_python_sql_injection_via_format_assigned_query() {
+        let detector = DangerousApiDetector::new();
+        let src = r#"
+def search_products(db, category, min_price):
+    cursor = db.cursor()
+    query = "SELECT * FROM products WHERE category = '{}' AND price > {}".format(
+        category, min_price
+    )
+    cursor.execute(query)
+"#;
+        let hits = detector
+            .detect_in_source_content(src, "python", "cse_sqli_py.py")
+            .unwrap();
+        assert!(hits.iter().any(|h| {
+            h.danger_category == DangerCategory::Injection
+                && h.reason.contains(".format()-built query variable")
+        }));
+    }
+
+    #[test]
     fn test_detect_javascript_dangerous() {
         let detector = DangerousApiDetector::new();
         let src = r#"
@@ -2156,6 +2282,24 @@ new Function(input);
             .iter()
             .any(|h| h.danger_category == DangerCategory::Xss));
         assert!(hits.len() >= 3);
+    }
+
+    #[test]
+    fn test_detect_javascript_html_template_literal_xss() {
+        let detector = DangerousApiDetector::new();
+        let src = r#"
+function renderSearchPage(query) {
+    return `<html><body><p>${query}</p></body></html>`;
+}
+"#;
+        let hits = detector
+            .detect_in_source_content(src, "javascript", "cse_xss_js.js")
+            .unwrap();
+        assert!(hits.iter().any(|h| {
+            h.danger_category == DangerCategory::Xss
+                && h.reason
+                    .contains("Template literal with HTML tags and interpolation")
+        }));
     }
 
     #[test]
@@ -2519,6 +2663,59 @@ void vuln() {
     }
 
     #[test]
+    fn test_detect_c_path_traversal_chain_from_argv_to_fopen() {
+        let src = r#"
+int serve_file(const char *filename) {
+    char filepath[512];
+    snprintf(filepath, sizeof(filepath), "%s/%s", BASE_DIR, filename);
+    FILE *f = fopen(filepath, "r");
+    return f ? 0 : -1;
+}
+
+int main(int argc, char **argv) {
+    if (argc < 2) return 1;
+    return serve_file(argv[1]);
+}
+"#;
+        let hits = detect_in_source_content(src, "c", "cse_path_traversal.c").unwrap();
+        assert!(
+            hits.iter().any(|h| {
+                h.danger_category == DangerCategory::PathTraversal
+                    && h.function_name.contains("fopen")
+            }),
+            "Should detect argv -> snprintf -> fopen path traversal chain"
+        );
+    }
+
+    #[test]
+    fn test_detect_c_path_traversal_chain_skips_canonicalized_path() {
+        let src = r#"
+int serve_file(const char *filename) {
+    if (strstr(filename, "..") != NULL) return -1;
+    char filepath[512];
+    snprintf(filepath, sizeof(filepath), "%s/%s", BASE_DIR, filename);
+    char resolved[512];
+    if (!realpath(filepath, resolved)) return -1;
+    FILE *f = fopen(resolved, "r");
+    return f ? 0 : -1;
+}
+
+int main(int argc, char **argv) {
+    if (argc < 2) return 1;
+    return serve_file(argv[1]);
+}
+"#;
+        let hits = detect_in_source_content(src, "c", "cse_path_traversal_safe.c").unwrap();
+        assert!(
+            !hits.iter().any(|h| {
+                h.danger_category == DangerCategory::PathTraversal
+                    && h.function_name.contains("user-controlled path")
+            }),
+            "Canonicalized path flow should not trip the C path traversal chain heuristic"
+        );
+    }
+
+    #[test]
     fn test_detect_c_uninitialized_var_patterns() {
         let src = r#"
 void vuln() {
@@ -2758,6 +2955,34 @@ ctypes.memmove(buf, data, len(data))
             hits.iter()
                 .map(|h| (&h.function_name, &h.danger_category))
                 .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_detect_c_putenv_search_path_patterns() {
+        // Juliet CWE-427 uses #define PUTENV putenv / PUTENV(data) — test both forms.
+        let src = r#"
+#define PUTENV putenv
+void bad(char *data) {
+    PUTENV(data);
+}
+void bad2(char *data) {
+    putenv(data);
+}
+void bad3(char *data) {
+    setenv("PATH", data, 1);
+}
+"#;
+        let hits = detect_in_source_content(src, "c", "cwe427.c").unwrap();
+        let categories: Vec<_> = hits.iter().map(|h| &h.danger_category).collect();
+        assert!(
+            hits.iter()
+                .any(|h| h.danger_category == DangerCategory::PathTraversal
+                    && (h.function_name.contains("PUTENV")
+                        || h.function_name.contains("putenv")
+                        || h.function_name.contains("setenv"))),
+            "Should detect PUTENV/putenv/setenv as CWE-427 search path manipulation, got: {:?}",
+            categories
         );
     }
 }

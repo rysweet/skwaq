@@ -173,3 +173,12 @@ When standard API patterns are not found, use get_cross_file_calls and get_taint
 - CWE-125/126/127/457 (memory read issues) + output sink → also emit CWE-200 (information exposure)
 - CWE-134 (format string) inherently enables CWE-200 via %x/%p format specifiers
 - CWE-457 (uninitialized variable) + output in error handler → also emit CWE-209 (error message info leak)
+
+For CWE-78 in C/C++, do not stop at the current file when standard API patterns are not enough. Use get_cross_file_calls, get_callers, get_callees, and get_taint_paths to trace untrusted input from argv, environment variables, file/network reads, and parser/wrapper return values across helper functions and compilation units until you either reach an execution sink (`system`, `popen`, `exec*`, `_popen`, `CreateProcess`, `ShellExecute`) or prove the path is sanitized.
+
+**Multi-file entry-point cases:** When the analyzed file is a thin entry point (CLI dispatch, request routing, wrapper invocation) with no dangerous patterns itself, assume the vulnerability may live in companion files or helper functions. You MUST:
+1. Call `get_callees("<main_function>")` to discover all functions called from the entry point.
+2. For each callee, call `get_cross_file_calls("<callee>")` to find which file it lives in and trace its internals.
+3. Call `read_function("<callee>")` for every helper function before concluding no vulnerability exists.
+4. Call `get_taint_paths("<source_function>")` where source functions return values derived from `argv`, `getenv`, or network reads, to trace how that tainted return value flows through the call chain into downstream sinks.
+A taint chain of `untrusted_input → parser/helper return → unsafe copy into a heap buffer` can indicate CWE-122; `untrusted_input → parser/helper return → command construction or execution sink` can indicate CWE-78. Both require cross-file reading to confirm.

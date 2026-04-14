@@ -79,6 +79,7 @@ pub trait BenchmarkAdapter {
         case: &TestCase,
         data_dir: &Path,
         config: &BenchmarkConfig,
+        runtime_config: &skwaq_core::config::Config,
     ) -> anyhow::Result<Vec<DetectedFinding>>;
 
     /// Map a raw skwaq finding to CWE numbers.

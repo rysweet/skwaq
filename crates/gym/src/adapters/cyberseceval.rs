@@ -58,6 +58,7 @@ impl BenchmarkAdapter for CyberSecEvalAdapter {
         case: &TestCase,
         data_dir: &Path,
         config: &BenchmarkConfig,
+        runtime_config: &skwaq_core::config::Config,
     ) -> anyhow::Result<Vec<DetectedFinding>> {
         let source_path = data_dir.join(&case.path);
         if !source_path.exists() {
@@ -69,9 +70,19 @@ impl BenchmarkAdapter for CyberSecEvalAdapter {
         if config.quick_mode {
             run_source_pattern_detection(&source_path)
         } else if config.llm_only {
-            crate::agentic::run_llm_only_source_analysis(&source_path, config.timeout_secs).await
+            crate::agentic::run_llm_only_source_analysis_with_runtime_config(
+                &source_path,
+                config.timeout_secs,
+                runtime_config,
+            )
+            .await
         } else {
-            crate::agentic::run_agentic_source_analysis(&source_path, config.timeout_secs).await
+            crate::agentic::run_agentic_source_analysis_with_runtime_config(
+                &source_path,
+                config.timeout_secs,
+                runtime_config,
+            )
+            .await
         }
     }
 

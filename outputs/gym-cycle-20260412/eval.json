@@ -1,0 +1,51 @@
+{
+  "cycle": "gym-cycle-20260412",
+  "timestamp": "2026-04-13T00:47:45.982502374+00:00",
+  "benchmarks": {
+    "juliet": {
+      "mode": "hybrid",
+      "target_cases": 30,
+      "f1": 0.92,
+      "false_negatives": 4,
+      "false_positives": 0,
+      "precision": 1.0,
+      "recall": 0.8518518518518519,
+      "true_negatives": 1,
+      "true_positives": 23
+    },
+    "owasp": {
+      "mode": "hybrid",
+      "target_cases": 30,
+      "f1": 1.0,
+      "false_negatives": 0,
+      "false_positives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "true_negatives": 14,
+      "true_positives": 16
+    },
+    "cyberseceval": {
+      "mode": "hybrid",
+      "target_cases": 30,
+      "f1": 0.8750000000000001,
+      "false_negatives": 6,
+      "false_positives": 0,
+      "precision": 1.0,
+      "recall": 0.7777777777777778,
+      "true_negatives": 0,
+      "true_positives": 21
+    },
+    "cgc": {
+      "mode": "pattern-only",
+      "target_cases": 10,
+      "f1": 0.9473684210526316,
+      "false_negatives": 2,
+      "false_positives": 0,
+      "precision": 1.0,
+      "recall": 0.9,
+      "true_negatives": 0,
+      "true_positives": 18,
+      "note": "Hybrid 30-case CGC run was throughput-bound; completed via capped pattern-only follow-up."
+    }
+  }
+}

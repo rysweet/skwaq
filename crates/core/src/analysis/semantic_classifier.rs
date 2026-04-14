@@ -25,6 +25,7 @@ pub enum SemanticPatternClass {
     InsecureTempFile,
     InvalidFree,
     LdapInjection,
+    SqlInjection,
     OperatorMisuse,
     PathTraversal,
     PointerArithmetic,
@@ -65,6 +66,7 @@ impl SemanticPatternClass {
             Self::InsecureTempFile => "insecure_temp_file",
             Self::InvalidFree => "invalid_free",
             Self::LdapInjection => "ldap_injection",
+            Self::SqlInjection => "sql_injection",
             Self::OperatorMisuse => "operator_misuse",
             Self::PathTraversal => "path_traversal",
             Self::PointerArithmetic => "pointer_arithmetic",
@@ -96,6 +98,7 @@ impl SemanticPatternClass {
             Self::CommandInjection
             | Self::Deserialization
             | Self::LdapInjection
+            | Self::SqlInjection
             | Self::EmbeddedMaliciousCode => "code_execution",
             Self::CrossSiteScripting | Self::PrototypePollution => "web_data_flow",
             Self::InsecureTempFile
@@ -149,6 +152,9 @@ impl SemanticPatternClassifier {
         }
         if is_command_injection(&category, &title, &function_name) {
             classes.insert(SemanticPatternClass::CommandInjection);
+        }
+        if is_sql_injection(&category, &title, &function_name) {
+            classes.insert(SemanticPatternClass::SqlInjection);
         }
         if is_cross_site_scripting(&category, &title) {
             classes.insert(SemanticPatternClass::CrossSiteScripting);
@@ -351,6 +357,42 @@ fn is_command_injection(_category: &str, title: &str, function_name: &str) -> bo
     is_function(function_name, COMMAND_APIS) || contains_any(title, COMMAND_TERMS)
 }
 
+fn is_sql_injection(category: &str, title: &str, function_name: &str) -> bool {
+    const SQL_APIS: &[&str] = &[
+        "execute",
+        "executemany",
+        "executescript",
+        "query",
+        "sqlite3_exec",
+        "pqexec",
+        "mysql_query",
+        "sql_exec",
+        "execute_query",
+        "db_query",
+    ];
+    const SQL_TERMS: &[&str] = &[
+        "sql injection",
+        "sql query injection",
+        "database query injection",
+        "parameterized queries",
+    ];
+    const SQL_KEYWORDS: &[&str] = &[
+        "select ",
+        "insert ",
+        "update ",
+        "delete ",
+        " from ",
+        " where ",
+        " order by ",
+        " values ",
+    ];
+
+    category == "sql_injection"
+        || contains_any(title, SQL_TERMS)
+        || (category == "injection"
+            && (is_function(function_name, SQL_APIS) || contains_any(title, SQL_KEYWORDS)))
+}
+
 fn is_format_string(category: &str, title: &str, function_name: &str) -> bool {
     const FORMAT_APIS: &[&str] = &[
         "sprintf",
@@ -417,7 +459,16 @@ fn is_path_traversal(category: &str, title: &str, function_name: &str) -> bool {
 }
 
 fn is_untrusted_search_path(category: &str, title: &str, function_name: &str) -> bool {
-    const SEARCH_PATH_APIS: &[&str] = &["dlopen", "loadlibrary", "loadlibraryex"];
+    const SEARCH_PATH_APIS: &[&str] = &[
+        "dlopen",
+        "loadlibrary",
+        "loadlibraryex",
+        // Environment variable / PATH manipulation (CWE-427)
+        "putenv",
+        "_putenv",
+        "_wputenv",
+        "setenv",
+    ];
     const SEARCH_PATH_TERMS: &[&str] = &[
         "untrusted search path",
         "uncontrolled search path",
@@ -426,6 +477,10 @@ fn is_untrusted_search_path(category: &str, title: &str, function_name: &str) ->
         "dll search path",
         "loadlibrary",
         "dlopen",
+        // env-path mutation APIs (CWE-427): matched via title "Dangerous API: putenv(" or "Dangerous API: PUTENV("
+        "putenv",
+        "PUTENV",
+        "setenv",
     ];
 
     is_function(function_name, SEARCH_PATH_APIS)
@@ -994,6 +1049,28 @@ mod tests {
     }
 
     #[test]
+    fn classifies_sql_injection_from_execute_api() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "injection",
+            "Dangerous pattern: cursor.execute(query)",
+            "execute",
+        );
+
+        assert!(classes.contains(&SemanticPatternClass::SqlInjection));
+    }
+
+    #[test]
+    fn classifies_sql_injection_from_title_keywords() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "injection",
+            "LLM: SQL injection in authenticate query builder",
+            "authenticate",
+        );
+
+        assert!(classes.contains(&SemanticPatternClass::SqlInjection));
+    }
+
+    #[test]
     fn classifies_tempfile_from_mktemp_without_race_overlap() {
         let classes = SemanticPatternClassifier::new().classify(
             "temp_file",
@@ -1015,6 +1092,49 @@ mod tests {
 
         assert!(classes.contains(&SemanticPatternClass::UntrustedSearchPath));
         assert!(!classes.contains(&SemanticPatternClass::PathTraversal));
+    }
+
+    #[test]
+    fn classifies_putenv_as_untrusted_search_path_cwe427() {
+        // Production title when source pattern fires: "Dangerous API: putenv("
+        let classes = SemanticPatternClassifier::new().classify(
+            "path_traversal",
+            "Dangerous API: putenv(",
+            "putenv(",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UntrustedSearchPath),
+            "putenv should be CWE-427 UntrustedSearchPath"
+        );
+        assert!(!classes.contains(&SemanticPatternClass::PathTraversal));
+    }
+
+    #[test]
+    fn classifies_putenv_macro_uppercase_as_untrusted_search_path_cwe427() {
+        // Juliet uses #define PUTENV putenv, so matched text is "PUTENV("
+        let classes = SemanticPatternClassifier::new().classify(
+            "path_traversal",
+            "Dangerous API: PUTENV(",
+            "PUTENV(",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UntrustedSearchPath),
+            "PUTENV macro should be CWE-427 UntrustedSearchPath"
+        );
+        assert!(!classes.contains(&SemanticPatternClass::PathTraversal));
+    }
+
+    #[test]
+    fn classifies_setenv_as_untrusted_search_path_cwe427() {
+        let classes = SemanticPatternClassifier::new().classify(
+            "path_traversal",
+            "Dangerous API: setenv(",
+            "setenv(",
+        );
+        assert!(
+            classes.contains(&SemanticPatternClass::UntrustedSearchPath),
+            "setenv should be CWE-427 UntrustedSearchPath"
+        );
     }
 
     #[test]
@@ -1421,12 +1541,21 @@ mod tests {
         let classes = classifier.classify("injection", "command injection in run", "system");
         assert!(classes.contains(&SemanticPatternClass::CommandInjection));
         assert!(!classes.contains(&SemanticPatternClass::LdapInjection));
+        assert!(!classes.contains(&SemanticPatternClass::SqlInjection));
     }
 
     #[test]
     fn ldap_injection_clusters_with_code_execution() {
         assert_eq!(
             SemanticPatternClass::LdapInjection.confidence_cluster(),
+            "code_execution"
+        );
+    }
+
+    #[test]
+    fn sql_injection_clusters_with_code_execution() {
+        assert_eq!(
+            SemanticPatternClass::SqlInjection.confidence_cluster(),
             "code_execution"
         );
     }

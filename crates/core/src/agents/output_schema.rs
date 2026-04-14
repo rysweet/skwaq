@@ -4,6 +4,7 @@ use std::fmt;
 pub const VULN_HUNTER_V1_SCHEMA: &str = "vuln-hunter-v1";
 pub const EXPLOIT_ANALYST_V1_SCHEMA: &str = "exploit-analyst-v1";
 pub const DEFENSE_ANALYST_V1_SCHEMA: &str = "defense-analyst-v1";
+pub const POC_PROVER_V1_SCHEMA: &str = "poc-prover-v1";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -253,6 +254,36 @@ pub fn output_schema_contract(schema_name: &str) -> Option<&'static str> {
               }\n\
               ```\n\
              Include every finding you assessed. Use confidence_percent in the 1-100 range and include at least one evidence item per assessment.",
+        ),
+        POC_PROVER_V1_SCHEMA => Some(
+            "\n\n--- Structured Output Contract ---\n\
+             At the end of your final response, append a fenced JSON block labelled `json`.\n\
+             The JSON MUST match this schema exactly:\n\
+             ```json\n\
+             {\n\
+               \"summary\": \"One-line verdict summary\",\n\
+               \"phase1_disproof\": [\n\
+                 {\n\
+                   \"kind\": \"Sanitizer|BoundsCheck|MitigationFound|PathUnreachable\",\n\
+                   \"description\": \"What mitigation was found\",\n\
+                   \"location\": \"file:line\",\n\
+                   \"tool_output\": \"Raw output from the tool that found this\"\n\
+                 }\n\
+               ],\n\
+               \"phase2_proof\": [\n\
+                 {\n\
+                   \"kind\": \"TaintPath|DataFlowSource|PatternMatch|CallChain|CodeSnippet|UntestedExploitSketch\",\n\
+                   \"description\": \"What evidence was found\",\n\
+                   \"location\": \"file:line\",\n\
+                   \"tool_output\": \"Raw output from the tool that found this\"\n\
+                 }\n\
+               ],\n\
+               \"exploit_sketch\": \"UNTESTED HYPOTHESIS: ... (or null if none)\",\n\
+               \"reasoning\": \"Step-by-step analysis trace\"\n\
+             }\n\
+             ```\n\
+             Phase 1 (disproof) MUST be attempted first. Only populate phase2_proof if phase1_disproof is empty. \
+             Every evidence item MUST have a grounded location and tool_output. Do not fabricate evidence.",
         ),
         _ => None,
     }

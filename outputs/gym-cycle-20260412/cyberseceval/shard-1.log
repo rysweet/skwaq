@@ -1,0 +1,78 @@
+CASE_DONE cyberseceval_140_c
+CASE_DONE cyberseceval_59_c
+CASE_DONE cyberseceval_1574_python
+CASE_DONE cyberseceval_64_c
+[2m2026-04-12T23:53:04.108322Z[0m [33m WARN[0m [2mskwaq_core::agents::tool_executor[0m[2m:[0m Unknown tool: read_function" parameter_reassembly="true
+[2m2026-04-12T23:53:04.532019Z[0m [33m WARN[0m [2mskwaq_gym::agentic[0m[2m:[0m LLM pipeline failed for /home/azureuser/.local/share/skwaq/gym/cache/cyberseceval/cases/cyberseceval_67_c.c, falling back to pattern-only findings: LLM pipeline failed for /home/azureuser/.local/share/skwaq/gym/cache/cyberseceval/cases/cyberseceval_67_c.c: LLM tool loop failed: Bad Request: Bad Request
+
+The request was invalid. Please check your parameters.
+CASE_DONE cyberseceval_67_c
+CASE_DONE cyberseceval_2_c
+CASE_DONE cyberseceval_1578_python
+CASE_DONE cyberseceval_97_c
+CASE_DONE cyberseceval_29_c
+[2m2026-04-13T00:01:14.754382Z[0m [33m WARN[0m [2mskwaq_core::agents::tool_executor[0m[2m:[0m Unknown tool: read_function" parameter>
+<parameter name="name
+[2m2026-04-13T00:01:15.216758Z[0m [33m WARN[0m [2mskwaq_gym::agentic[0m[2m:[0m LLM pipeline failed for /home/azureuser/.local/share/skwaq/gym/cache/cyberseceval/cases/cyberseceval_195_c.c, falling back to pattern-only findings: LLM pipeline failed for /home/azureuser/.local/share/skwaq/gym/cache/cyberseceval/cases/cyberseceval_195_c.c: LLM tool loop failed: Bad Request: Bad Request
+
+The request was invalid. Please check your parameters.
+CASE_DONE cyberseceval_195_c
+[2m2026-04-13T00:04:33.068635Z[0m [33m WARN[0m [2mskwaq_core::agents::tool_executor[0m[2m:[0m Unknown tool: read_function" parameter="name
+[2m2026-04-13T00:04:33.310221Z[0m [33m WARN[0m [2mskwaq_gym::agentic[0m[2m:[0m LLM pipeline failed for /home/azureuser/.local/share/skwaq/gym/cache/cyberseceval/cases/cyberseceval_0_c.c, falling back to pattern-only findings: LLM pipeline failed for /home/azureuser/.local/share/skwaq/gym/cache/cyberseceval/cases/cyberseceval_0_c.c: LLM tool loop failed: Bad Request: Bad Request
+
+The request was invalid. Please check your parameters.
+CASE_DONE cyberseceval_0_c
+CASE_DONE cyberseceval_160_c
+CASE_DONE cyberseceval_8_c
+CASE_DONE cyberseceval_91_c
+CASE_DONE cyberseceval_143_c
+
+======================================================================
+  SKWAQ GYM RESULTS: CYBERSECEVAL
+======================================================================
+
+  Precision:  100.0%
+  Recall:     80.0%
+  F1 Score:   88.9%
+
+  TP: 12  FP: 0  FN: 3  TN: 0
+
+       CWE    Cases       TP       FN    Detect%      Prec%
+  --------------------------------------------------------------
+       798        1        0        1 [31m      0.0%[0m       0.0%
+       327        8        6        2 [33m     75.0%[0m     100.0%
+       676        1        1        0 [32m    100.0%[0m     100.0%
+       190        1        1        0 [32m    100.0%[0m     100.0%
+       119        1        1        0 [32m    100.0%[0m     100.0%
+       502        1        1        0 [32m    100.0%[0m     100.0%
+       377        1        1        0 [32m    100.0%[0m     100.0%
+       312        1        1        0 [32m    100.0%[0m     100.0%
+
+       CWE    Cases       TP       FN    Detect%      Prec%  (original CWE IDs)
+  --------------------------------------------------------------
+      1240        1        0        1 [31m      0.0%[0m       0.0%
+       347        1        0        1 [31m      0.0%[0m       0.0%
+       798        1        0        1 [31m      0.0%[0m       0.0%
+       323        1        1        0 [32m    100.0%[0m     100.0%
+       676        1        1        0 [32m    100.0%[0m     100.0%
+       502        1        1        0 [32m    100.0%[0m     100.0%
+       312        1        1        0 [32m    100.0%[0m     100.0%
+       590        1        1        0 [32m    100.0%[0m     100.0%
+       377        1        1        0 [32m    100.0%[0m     100.0%
+       338        2        2        0 [32m    100.0%[0m     100.0%
+       680        1        1        0 [32m    100.0%[0m     100.0%
+       328        3        3        0 [32m    100.0%[0m     100.0%
+
+                Semantic    Cases       TP       FN    Detect%      Prec%
+  --------------------------------------------------------------------------------------
+          type_confusion        0        0        0 [31m      0.0%[0m       0.0%
+         buffer_overflow        0        0        0 [31m      0.0%[0m       0.0%
+         crypto_weakness       10        7        3 [33m     70.0%[0m     100.0%
+        integer_overflow        1        1        0 [32m    100.0%[0m     100.0%
+        unsafe_api_usage        1        1        0 [32m    100.0%[0m     100.0%
+         deserialization        1        1        0 [32m    100.0%[0m     100.0%
+      insecure_temp_file        1        1        0 [32m    100.0%[0m     100.0%
+            invalid_free        1        1        0 [32m    100.0%[0m     100.0%
+
+  SEMANTIC COVERAGE: 8/8 classes exercised, 6 with detections
+

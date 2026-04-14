@@ -61,6 +61,7 @@ impl BenchmarkAdapter for RealWorldAdapter {
         case: &TestCase,
         data_dir: &Path,
         config: &BenchmarkConfig,
+        runtime_config: &skwaq_core::config::Config,
     ) -> anyhow::Result<Vec<DetectedFinding>> {
         let path = data_dir.join(&case.path);
         if !path.exists() {
@@ -74,9 +75,19 @@ impl BenchmarkAdapter for RealWorldAdapter {
         if config.quick_mode {
             run_source_pattern_detection(&path)
         } else if config.llm_only {
-            crate::agentic::run_llm_only_source_analysis(&path, config.timeout_secs).await
+            crate::agentic::run_llm_only_source_analysis_with_runtime_config(
+                &path,
+                config.timeout_secs,
+                runtime_config,
+            )
+            .await
         } else {
-            crate::agentic::run_agentic_source_analysis(&path, config.timeout_secs).await
+            crate::agentic::run_agentic_source_analysis_with_runtime_config(
+                &path,
+                config.timeout_secs,
+                runtime_config,
+            )
+            .await
         }
     }
 
@@ -159,7 +170,12 @@ mod tests {
             language: "c".to_string(),
         };
         let findings = adapter
-            .run_case(&case, &test_data_dir(), &test_config())
+            .run_case(
+                &case,
+                &test_data_dir(),
+                &test_config(),
+                &skwaq_core::config::Config::default(),
+            )
             .await
             .unwrap();
         // memcpy should be detected as a dangerous memory operation
@@ -185,7 +201,12 @@ mod tests {
             language: "c".to_string(),
         };
         let findings = adapter
-            .run_case(&case, &test_data_dir(), &test_config())
+            .run_case(
+                &case,
+                &test_data_dir(),
+                &test_config(),
+                &skwaq_core::config::Config::default(),
+            )
             .await
             .unwrap();
         // Safe code should have no or minimal findings.

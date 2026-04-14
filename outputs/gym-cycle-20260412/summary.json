@@ -1,0 +1,86 @@
+{
+  "generated_at": "2026-04-13T00:47:45.981297763+00:00",
+  "mode": "mixed",
+  "metadata": {
+    "started_at": "2026-04-12T22:29:59.972006278+00:00",
+    "completed_at": "2026-04-13T00:47:45.981297763+00:00",
+    "git_commits": [
+      "1c2c341b03ceb8823bf22e0108bd247d0208b235",
+      "24ad851c97e63a42de7ca42f97f75634f3c0a248"
+    ],
+    "git_dirty": true,
+    "mode": "mixed",
+    "suites": [
+      "juliet",
+      "owasp",
+      "cyberseceval",
+      "cgc"
+    ],
+    "llm_backend": "copilot",
+    "llm_model": "claude-opus-4.6",
+    "binary_mode": true,
+    "skwaq_version": "0.5.0",
+    "notes": [
+      "This directory contains per-suite artifacts from multiple sub-runs in one broader local gym cycle.",
+      "CGC completed via a pattern-only 10-case follow-up after the hybrid 30-case path proved throughput-bound."
+    ]
+  },
+  "suites": [
+    {
+      "suite": "juliet",
+      "mode": "hybrid",
+      "skwaq_commit": "1c2c341b03ceb8823bf22e0108bd247d0208b235",
+      "precision": 1.0,
+      "recall": 0.8518518518518519,
+      "f1": 0.92,
+      "true_positives": 23,
+      "false_positives": 0,
+      "false_negatives": 4,
+      "true_negatives": 1,
+      "target_cases": 30,
+      "partial": false
+    },
+    {
+      "suite": "owasp",
+      "mode": "hybrid",
+      "skwaq_commit": "24ad851c97e63a42de7ca42f97f75634f3c0a248",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "true_positives": 16,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "true_negatives": 14,
+      "target_cases": 30,
+      "partial": false
+    },
+    {
+      "suite": "cyberseceval",
+      "mode": "hybrid",
+      "skwaq_commit": "24ad851c97e63a42de7ca42f97f75634f3c0a248",
+      "precision": 1.0,
+      "recall": 0.7777777777777778,
+      "f1": 0.8750000000000001,
+      "true_positives": 21,
+      "false_positives": 0,
+      "false_negatives": 6,
+      "true_negatives": 0,
+      "target_cases": 30,
+      "partial": false
+    },
+    {
+      "suite": "cgc",
+      "mode": "pattern-only",
+      "skwaq_commit": "24ad851c97e63a42de7ca42f97f75634f3c0a248",
+      "precision": 1.0,
+      "recall": 0.9,
+      "f1": 0.9473684210526316,
+      "true_positives": 18,
+      "false_positives": 0,
+      "false_negatives": 2,
+      "true_negatives": 0,
+      "target_cases": 10,
+      "partial": false
+    }
+  ]
+}
