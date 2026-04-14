@@ -593,7 +593,7 @@ pub fn build_analysis_context_with_limit(
     // Include findings from taint analyzer and orchestrator
     if let Ok(mut stmt) = db.conn().prepare(
         "SELECT title, evidence, severity, category FROM findings \
-         WHERE investigation_id = ?1 AND agent IN ('taint-analyzer', 'orchestrator') \
+         WHERE investigation_id = ?1 AND agent IN ('taint-tracer', 'taint-analyzer', 'orchestrator') \
          AND status != 'invalidated' LIMIT 15",
     ) {
         if let Ok(rows) = stmt.query_map([investigation_id], |row| {
@@ -979,6 +979,73 @@ mod tests {
         assert!(
             !ctx.contains("sym_59"),
             "Should respect 50-row limit on symbols"
+        );
+    }
+
+    // ===== P1: taint-tracer findings appear in context builder =====
+
+    #[test]
+    fn test_build_analysis_context_includes_taint_tracer_findings() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv-taint";
+
+        // Insert a finding with agent='taint-tracer' (the pipeline agent name)
+        db.conn()
+            .execute(
+                "INSERT INTO findings (id, title, evidence, agent, timestamp, \
+                 investigation_id, status, severity, category) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                rusqlite::params![
+                    "f-taint-1",
+                    "SQL injection via taint flow",
+                    "unsanitized input reaches query()",
+                    "taint-tracer",
+                    "2026-01-01T00:00:00Z",
+                    inv_id,
+                    "new",
+                    "high",
+                    "CWE-89"
+                ],
+            )
+            .unwrap();
+
+        let ctx = build_analysis_context("target.c", inv_id, &db);
+        assert!(
+            ctx.contains("SQL injection via taint flow"),
+            "Context should include taint-tracer findings. Got:\n{}",
+            &ctx[..ctx.len().min(2000)]
+        );
+    }
+
+    #[test]
+    fn test_build_analysis_context_includes_taint_analyzer_findings() {
+        let db = GraphDb::in_memory().unwrap();
+        let inv_id = "test-inv-analyzer";
+
+        // Insert a finding with agent='taint-analyzer' (the gym static analysis name)
+        db.conn()
+            .execute(
+                "INSERT INTO findings (id, title, evidence, agent, timestamp, \
+                 investigation_id, status, severity, category) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                rusqlite::params![
+                    "f-analyzer-1",
+                    "Unsafe memcpy via static taint",
+                    "static analysis: buffer flows to memcpy",
+                    "taint-analyzer",
+                    "2026-01-01T00:00:00Z",
+                    inv_id,
+                    "new",
+                    "critical",
+                    "CWE-120"
+                ],
+            )
+            .unwrap();
+
+        let ctx = build_analysis_context("target.c", inv_id, &db);
+        assert!(
+            ctx.contains("Unsafe memcpy via static taint"),
+            "Context should still include taint-analyzer findings for backward compat"
         );
     }
 }

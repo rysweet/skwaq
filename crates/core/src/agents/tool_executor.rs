@@ -42,7 +42,7 @@ pub fn execute_tool_with_memory(
         "get_callees" => execute_get_call_neighbors(db, investigation_id, args, false),
         "lookup_cwe" => execute_lookup_cwe(db, args),
         "create_finding" => {
-            super::tool_translate::execute_create_finding(db, investigation_id, args)
+            super::tool_translate::execute_create_finding(db, investigation_id, args, agent_name)
         }
         "rename_function" => execute_rename_function(db, investigation_id, args),
         "search_similar" => {

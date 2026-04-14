@@ -159,7 +159,7 @@ impl<'a> AnalysisOrchestrator<'a> {
             }
 
             let agent = match finding.category.as_str() {
-                "taint" => "taint-analyzer",
+                "taint" => "taint-tracer",
                 "indirect" => "context-validator",
                 _ => "pattern-detector",
             };
