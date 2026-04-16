@@ -1,0 +1,25 @@
+# Standard binary analysis pipeline.
+#
+# Flow: decompile-renamer -> attack-surface -> vuln-hunter* -> critic
+# Used by: default_pipeline(), default_pipeline_for_target(target)
+
+stages:
+  - agent: decompile-renamer
+    context: from_graph
+    client_role: decompilation
+
+  - agent: attack-surface
+    context: from_graph
+    client_role: reasoning
+
+  - agent: "vuln-hunter*"
+    context: from_graph
+    client_role: reasoning
+
+  - agent: critic
+    context: from_previous_results
+    client_role: reasoning
+    preamble: >-
+      Review the following vulnerability findings and validate each one.
+      For each finding, determine if it is a true positive or false
+      positive, and adjust severity if needed.

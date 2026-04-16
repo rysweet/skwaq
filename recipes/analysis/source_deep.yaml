@@ -1,0 +1,58 @@
+# Deep source analysis pipeline with debate and CWE classification.
+#
+# Flow: attack-surface -> taint-tracer -> vuln-hunter*
+#         -> [exploit-analyst + defense-analyst debate]
+#         -> verdict-synthesizer -> cwe-classifier
+#
+# Used by: source_deep_pipeline_for_target(target)
+
+stages:
+  - agent: attack-surface
+    context: from_graph
+    client_role: reasoning
+
+  - agent: taint-tracer
+    context: from_previous_results
+    client_role: reasoning
+    preamble: >-
+      The attack surface has been mapped. Trace data flow from
+      untrusted sources to dangerous sinks. Use get_taint_paths and
+      get_cross_file_calls to find unsanitized paths.
+
+  - agent: "vuln-hunter*"
+    context: from_graph
+    client_role: reasoning
+
+  - agent: verdict-synthesizer
+    context: from_previous_results
+    client_role: reasoning
+    preamble: >-
+      You have received findings from attack-surface mapping, taint
+      tracing, vulnerability hunting, and the exploit/defense debate.
+      Synthesize a final verdict for each finding: CONFIRMED,
+      DOWNGRADED, or REJECTED.
+
+  - agent: cwe-classifier
+    context: from_previous_results
+    client_role: reasoning
+    preamble: >-
+      Review each confirmed finding and ensure the CWE classification
+      is precise. Use lookup_cwe to verify. Assign the most specific
+      CWE, not generic parent CWEs.
+
+debate:
+  after_stage: 3
+  agent_a:
+    name: exploit-analyst
+    preamble: >-
+      Review each vulnerability finding below. For each one, evaluate
+      whether it can actually be triggered by an attacker. Check reachability
+      from external inputs, controllability of parameters, and real impact.
+      Respond with CONFIRMED, DOWNGRADED, or REJECTED for each finding.
+  agent_b:
+    name: defense-analyst
+    preamble: >-
+      Review each vulnerability finding below. For each one, check whether
+      defensive controls (input validation, sanitization, safe wrappers,
+      architectural mitigations) make it non-exploitable.
+      Respond with VULNERABLE, MITIGATED, or SAFE for each finding.

@@ -1270,18 +1270,6 @@ fn collect_defense_evidence(assessments: &[&DefenseAnalystAssessment]) -> Vec<St
     evidence.into_iter().collect()
 }
 
-fn vuln_hunter_stage(agent_name: String, _include_create_finding_preamble: bool) -> PipelineStage {
-    // Vuln-hunter gets FromGraph context so it sees source code, graph data,
-    // and prior findings. The attack-surface results are available in the
-    // graph as findings. With 128K output tokens, there's plenty of room
-    // for both source code and multi-turn tool calling.
-    PipelineStage {
-        agent_name,
-        context_mode: ContextMode::FromGraph,
-        client_role: ClientRole::Reasoning,
-    }
-}
-
 /// Build the default analysis pipeline: decompile-renamer -> attack-surface -> vuln-hunter -> critic.
 pub fn default_pipeline() -> AnalysisPipeline {
     default_pipeline_for_target("")
@@ -1295,38 +1283,7 @@ pub fn default_pipeline() -> AnalysisPipeline {
 /// cross-file vulnerabilities where the source and sink are in different
 /// functions or files.
 pub fn source_pipeline_for_target(target: &str) -> AnalysisPipeline {
-    let hunter = select_vuln_hunter(target);
-    AnalysisPipeline {
-        stages: vec![
-            PipelineStage {
-                agent_name: "attack-surface".into(),
-                context_mode: ContextMode::FromGraph,
-                client_role: ClientRole::Reasoning,
-            },
-            PipelineStage {
-                agent_name: "taint-tracer".into(),
-                context_mode: ContextMode::FromPreviousResults {
-                    preamble: "The attack surface has been mapped. Now trace data flow from \
-                               untrusted sources to dangerous sinks. Use get_taint_paths and \
-                               get_cross_file_calls to find unsanitized paths. Create findings \
-                               for each confirmed taint flow."
-                        .into(),
-                },
-                client_role: ClientRole::Reasoning,
-            },
-            vuln_hunter_stage(hunter, false),
-            PipelineStage {
-                agent_name: "critic".into(),
-                context_mode: ContextMode::FromPreviousResults {
-                    preamble: "Review the following vulnerability findings and validate each one. \
-                               For each finding, determine if it is a true positive or false \
-                               positive, and adjust severity if needed."
-                        .into(),
-                },
-                client_role: ClientRole::Reasoning,
-            },
-        ],
-    }
+    super::recipe_loader::load_source_recipe(target).pipeline
 }
 
 /// Build a deep source pipeline with exploit/defense debate and CWE classification.
@@ -1339,81 +1296,12 @@ pub fn source_pipeline_for_target(target: &str) -> AnalysisPipeline {
 /// The debate stage surfaces disagreements between offense and defense
 /// perspectives. The CWE-classifier ensures precise vulnerability taxonomy.
 pub fn source_deep_pipeline_for_target(target: &str) -> AnalysisPipeline {
-    let hunter = select_vuln_hunter(target);
-    AnalysisPipeline {
-        stages: vec![
-            PipelineStage {
-                agent_name: "attack-surface".into(),
-                context_mode: ContextMode::FromGraph,
-                client_role: ClientRole::Reasoning,
-            },
-            PipelineStage {
-                agent_name: "taint-tracer".into(),
-                context_mode: ContextMode::FromPreviousResults {
-                    preamble: "The attack surface has been mapped. Trace data flow from \
-                               untrusted sources to dangerous sinks. Use get_taint_paths and \
-                               get_cross_file_calls to find unsanitized paths."
-                        .into(),
-                },
-                client_role: ClientRole::Reasoning,
-            },
-            vuln_hunter_stage(hunter, true), // deep mode = true
-            // NOTE: exploit-analyst and defense-analyst run via debate group
-            // after vuln-hunter (stage index 2), not as pipeline stages.
-            PipelineStage {
-                agent_name: "verdict-synthesizer".into(),
-                context_mode: ContextMode::FromPreviousResults {
-                    preamble: "You have received findings from attack-surface mapping, taint \
-                               tracing, vulnerability hunting, and the exploit/defense debate. \
-                               Synthesize a final verdict for each finding: CONFIRMED, \
-                               DOWNGRADED, or REJECTED."
-                        .into(),
-                },
-                client_role: ClientRole::Reasoning,
-            },
-            PipelineStage {
-                agent_name: "cwe-classifier".into(),
-                context_mode: ContextMode::FromPreviousResults {
-                    preamble: "Review each confirmed finding and ensure the CWE classification \
-                               is precise. Use lookup_cwe to verify. Assign the most specific \
-                               CWE, not generic parent CWEs."
-                        .into(),
-                },
-                client_role: ClientRole::Reasoning,
-            },
-        ],
-    }
+    super::recipe_loader::load_source_deep_recipe(target).pipeline
 }
 
 /// Build the default analysis pipeline with language-aware vuln-hunter selection.
 pub fn default_pipeline_for_target(target: &str) -> AnalysisPipeline {
-    let hunter = select_vuln_hunter(target);
-    AnalysisPipeline {
-        stages: vec![
-            // Pre-processing: improve decompiled code readability
-            PipelineStage {
-                agent_name: "decompile-renamer".into(),
-                context_mode: ContextMode::FromGraph,
-                client_role: ClientRole::Decompilation,
-            },
-            PipelineStage {
-                agent_name: "attack-surface".into(),
-                context_mode: ContextMode::FromGraph,
-                client_role: ClientRole::Reasoning,
-            },
-            vuln_hunter_stage(hunter, false),
-            PipelineStage {
-                agent_name: "critic".into(),
-                context_mode: ContextMode::FromPreviousResults {
-                    preamble: "Review the following vulnerability findings and validate each one. \
-                               For each finding, determine if it is a true positive or false \
-                               positive, and adjust severity if needed."
-                        .into(),
-                },
-                client_role: ClientRole::Reasoning,
-            },
-        ],
-    }
+    super::recipe_loader::load_standard_recipe(target).pipeline
 }
 
 /// Build a deep analysis pipeline with parallel debate between exploit-analyst
@@ -1432,64 +1320,18 @@ pub fn deep_pipeline() -> AnalysisPipeline {
 
 /// Build a deep analysis pipeline with language-aware vuln-hunter selection.
 pub fn deep_pipeline_for_target(target: &str) -> AnalysisPipeline {
-    let hunter = select_vuln_hunter(target);
-    AnalysisPipeline {
-        stages: vec![
-            // Pre-processing: improve decompiled code readability
-            PipelineStage {
-                agent_name: "decompile-renamer".into(),
-                context_mode: ContextMode::FromGraph,
-                client_role: ClientRole::Decompilation,
-            },
-            // Discovery phase
-            PipelineStage {
-                agent_name: "attack-surface".into(),
-                context_mode: ContextMode::FromGraph,
-                client_role: ClientRole::Reasoning,
-            },
-            vuln_hunter_stage(hunter, true),
-            // NOTE: exploit-analyst and defense-analyst are NOT listed here.
-            // They run via the debate group in deep_pipeline_with_debate().
-            // Synthesis: final verdict based on all validation perspectives
-            PipelineStage {
-                agent_name: "verdict-synthesizer".into(),
-                context_mode: ContextMode::FromPreviousResults {
-                    preamble: "You have received the complete output from all agents in the pipeline: \
-                               attack-surface mapping, vulnerability hunting, exploit analysis, and \
-                               defense analysis. A DEBATE SUMMARY highlights agreements and \
-                               disagreements between the offense and defense analysts. \
-                               Pay special attention to DISAGREEMENTS — read the code yourself to \
-                               break ties. \
-                               For each finding that is genuinely exploitable (confirmed by exploit-analyst \
-                               AND not fully mitigated per defense-analyst), use create_finding to record \
-                               the confirmed vulnerability. Reject false positives and explain why. \
-                                Be decisive — false positives damage credibility more than false negatives."
-                        .into(),
-                },
-                client_role: ClientRole::Reasoning,
-            },
-        ],
-    }
+    super::recipe_loader::load_deep_recipe(target).pipeline
 }
 
 /// Build the debate group for the deep pipeline.
 ///
 /// Both agents independently review the same vuln-hunter findings.
 pub fn deep_pipeline_debate() -> DebateGroup {
-    DebateGroup {
-        agent_a: "exploit-analyst".into(),
-        preamble_a: "Review each vulnerability finding below. For each one, evaluate \
-                      whether it can actually be triggered by an attacker. Check reachability \
-                      from external inputs, controllability of parameters, and real impact. \
-                      Respond with CONFIRMED, DOWNGRADED, or REJECTED for each finding."
-            .into(),
-        agent_b: "defense-analyst".into(),
-        preamble_b: "Review each vulnerability finding below. For each one, check whether \
-                      defensive controls (input validation, sanitization, safe wrappers, \
-                      architectural mitigations) make it non-exploitable. \
-                      Respond with VULNERABLE, MITIGATED, or SAFE for each finding."
-            .into(),
-    }
+    let loaded = super::recipe_loader::load_deep_recipe("");
+    loaded
+        .debate
+        .expect("deep recipe must define a debate section")
+        .group
 }
 
 /// Convenience: run the deep pipeline with the debate stage.
@@ -1505,12 +1347,21 @@ pub async fn run_deep_pipeline_with_debate(
     clients: PipelineClients,
     budget: &mut TokenBudget,
 ) -> anyhow::Result<Vec<AgentResult>> {
-    let pipeline = deep_pipeline_for_target(target);
-    let debate = deep_pipeline_debate();
-    // Debate runs after stage index 3 (after vuln-hunter, which is stages[2]),
-    // before verdict-synthesizer (stages[3]).
-    pipeline
-        .run_with_debate(target, investigation_id, db, clients, budget, &debate, 3)
+    let loaded = super::recipe_loader::load_deep_recipe(target);
+    let debate = loaded
+        .debate
+        .expect("deep recipe must define a debate section");
+    loaded
+        .pipeline
+        .run_with_debate(
+            target,
+            investigation_id,
+            db,
+            clients,
+            budget,
+            &debate.group,
+            debate.after_stage,
+        )
         .await
 }
 

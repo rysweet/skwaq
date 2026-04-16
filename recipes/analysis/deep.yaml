@@ -1,0 +1,53 @@
+# Deep binary analysis pipeline with exploit/defense debate.
+#
+# Flow: decompile-renamer -> attack-surface -> vuln-hunter*
+#         -> [exploit-analyst + defense-analyst debate]
+#         -> verdict-synthesizer
+#
+# Used by: deep_pipeline(), deep_pipeline_for_target(target),
+#          deep_pipeline_debate(), run_deep_pipeline_with_debate()
+
+stages:
+  - agent: decompile-renamer
+    context: from_graph
+    client_role: decompilation
+
+  - agent: attack-surface
+    context: from_graph
+    client_role: reasoning
+
+  - agent: "vuln-hunter*"
+    context: from_graph
+    client_role: reasoning
+
+  - agent: verdict-synthesizer
+    context: from_previous_results
+    client_role: reasoning
+    preamble: >-
+      You have received the complete output from all agents in the pipeline:
+      attack-surface mapping, vulnerability hunting, exploit analysis, and
+      defense analysis. A DEBATE SUMMARY highlights agreements and
+      disagreements between the offense and defense analysts.
+      Pay special attention to DISAGREEMENTS — read the code yourself to
+      break ties.
+      For each finding that is genuinely exploitable (confirmed by exploit-analyst
+      AND not fully mitigated per defense-analyst), use create_finding to record
+      the confirmed vulnerability. Reject false positives and explain why.
+      Be decisive — false positives damage credibility more than false negatives.
+
+debate:
+  after_stage: 3
+  agent_a:
+    name: exploit-analyst
+    preamble: >-
+      Review each vulnerability finding below. For each one, evaluate
+      whether it can actually be triggered by an attacker. Check reachability
+      from external inputs, controllability of parameters, and real impact.
+      Respond with CONFIRMED, DOWNGRADED, or REJECTED for each finding.
+  agent_b:
+    name: defense-analyst
+    preamble: >-
+      Review each vulnerability finding below. For each one, check whether
+      defensive controls (input validation, sanitization, safe wrappers,
+      architectural mitigations) make it non-exploitable.
+      Respond with VULNERABLE, MITIGATED, or SAFE for each finding.

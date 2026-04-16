@@ -14,6 +14,7 @@ pub mod discovery;
 pub mod mcp_client;
 pub mod output_schema;
 pub mod pipeline;
+pub(crate) mod recipe_loader;
 pub mod runner;
 pub mod tool_definitions;
 pub mod tool_executor;
