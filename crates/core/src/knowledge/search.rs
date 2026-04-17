@@ -132,12 +132,26 @@ pub fn load_cwe_knowledge_graph() -> Option<CweKnowledgeGraph> {
     serde_json::from_str(&content).ok()
 }
 
-/// Load CWE entries — from the JSON data file if available, else from fallback.
+/// Load CWE entries — from the JSON data file if available, else from the
+/// minimal compile-time catalog.
+///
+/// NOT a silent fallback: when the 944-entry JSON file is absent we emit a
+/// loud `tracing::warn!` announcing that the minimal 15-entry catalog is in
+/// use, so callers / log readers can distinguish dev/test environments from
+/// a misconfigured production install.
 fn load_cwe_entries() -> Vec<CweEntry> {
     if let Some(kg) = load_cwe_knowledge_graph() {
+        tracing::debug!(
+            count = kg.cwes.len(),
+            "loaded full CWE knowledge graph from JSON data file"
+        );
         return kg.cwes;
     }
-    // Fallback: convert the minimal const array to CweEntry structs
+    tracing::warn!(
+        count = FALLBACK_CWES.len(),
+        "CWE knowledge JSON file not found; using minimal compile-time catalog \
+         (expected in tests/dev — misconfiguration in production)"
+    );
     FALLBACK_CWES
         .iter()
         .map(|(id, name, desc)| CweEntry {
