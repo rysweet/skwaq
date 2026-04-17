@@ -1368,7 +1368,7 @@ pub async fn run_deep_pipeline_with_debate(
 /// Select the best vuln-hunter agent for the given target file.
 ///
 /// Returns a language-specialized agent name if one exists for the file's
-/// language, otherwise falls back to the generic `vuln-hunter`.
+/// language, otherwise returns the generic `vuln-hunter`.
 pub fn select_vuln_hunter(target: &str) -> String {
     let ext = target.rsplit('.').next().unwrap_or("").to_lowercase();
 

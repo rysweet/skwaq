@@ -2,7 +2,7 @@
 //!
 //! `TaintAnalyzer` queries the graph for data-flow paths from sources to
 //! sinks that lack sanitisation. Uses native Cypher via LadybugDB when
-//! available, falling back to SQLite recursive CTEs.
+//! available, with a SQLite recursive-CTE path for pre-migration databases.
 
 use crate::graph::GraphDb;
 use regex::Regex;

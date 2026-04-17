@@ -227,7 +227,7 @@ pub fn generate_sarif(findings: &[Value]) -> anyhow::Result<String> {
 /// Parse a severity string from finding evidence text.
 ///
 /// Looks for patterns like "severity=critical" or "severity=high" in the
-/// evidence string. Falls back to "medium" if no severity is found.
+/// evidence string. Defaults to "medium" if no severity is found.
 fn parse_severity_from_evidence(evidence: &str) -> &str {
     let lower = evidence.to_lowercase();
     if lower.contains("severity=critical") || lower.contains("critical") {

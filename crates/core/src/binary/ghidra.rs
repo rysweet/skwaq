@@ -17,7 +17,7 @@ pub struct GhidraRunner {
 /// Result of attempting to load Ghidra analysis for a binary.
 ///
 /// The loader prefers a validated cached analysis when available, otherwise it
-/// falls back to a fresh Ghidra run if Ghidra is installed.
+/// triggers a fresh Ghidra run if Ghidra is installed.
 #[derive(Debug)]
 pub enum GhidraLoadOutcome {
     NotAvailable,

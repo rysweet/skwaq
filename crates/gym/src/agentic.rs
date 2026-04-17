@@ -731,20 +731,27 @@ pub async fn run_agentic_source_analysis_with_hints_and_runtime_config(
             file_str,
         );
     } else {
-        let agent_results =
-            match run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs, runtime_config).await {
-                Ok(results) => results,
-                Err(e) => {
-                    tracing::warn!(
-                        "LLM pipeline failed for {}, falling back to pattern-only findings: {}",
+        let agent_results = match run_llm_pipeline(
+            &db,
+            &inv_id,
+            &file_str,
+            timeout_secs,
+            runtime_config,
+        )
+        .await
+        {
+            Ok(results) => results,
+            Err(e) => {
+                tracing::error!(
+                        "LLM pipeline failed for {}: {} — surfacing as case failure (no silent degradation to pattern-only)",
                         file_str,
                         e
                     );
-                    // Gracefully degrade to pattern-detected findings already in the graph.
-                    let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
-                    return Ok(dedup_findings_by_best_severity(all_findings));
-                }
-            };
+                return Err(e).with_context(|| {
+                    format!("LLM pipeline failed during agentic source analysis of {file_str}")
+                });
+            }
+        };
 
         // Extract confidence from structured agent outputs and enrich findings.
         let confidence_map = extract_confidence_from_agent_results(&agent_results);
@@ -893,13 +900,14 @@ pub async fn run_agentic_binary_analysis_with_runtime_config(
     } else if let Err(e) =
         run_llm_pipeline(&db, &inv_id, &file_str, timeout_secs, runtime_config).await
     {
-        tracing::warn!(
-            "LLM pipeline failed for binary {}, falling back to pattern-only findings: {}",
+        tracing::error!(
+            "LLM pipeline failed for binary {}: {} — surfacing as case failure (no silent degradation to pattern-only)",
             file_str,
             e
         );
-        let all_findings = collect_all_findings_from_db(&db, &inv_id)?;
-        return Ok(dedup_findings_by_best_severity(all_findings));
+        return Err(e).with_context(|| {
+            format!("LLM pipeline failed during agentic binary analysis of {file_str}")
+        });
     }
 
     // Synthesis — weigh all evidence

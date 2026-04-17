@@ -156,8 +156,8 @@ impl BenchmarkAdapter for CyberGymAdapter {
             .or_else(|| paired_case_affected_files(case, data_dir, &case_dir))
             .unwrap_or_else(|| {
                 tracing::warn!(
-                    "CyberGym case {}: patch path resolution failed, \
-                     falling back to shallow source scan (≤25 files from {})",
+                    "CyberGym case {}: patch path resolution failed; \
+                     scanning at most 25 source files from {} (analysis is incomplete)",
                     case.id,
                     case_dir.display()
                 );

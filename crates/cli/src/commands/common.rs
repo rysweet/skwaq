@@ -35,7 +35,7 @@ pub fn most_recent_investigation(db: &GraphDb) -> anyhow::Result<String> {
 /// Resolve an investigation ID from an optional user-provided value.
 ///
 /// If `explicit_id` is `Some`, validates it exists in the database.
-/// If `None`, falls back to the most recent investigation.
+/// If `None`, uses the most recent investigation.
 /// Returns a clear error message in either failure case.
 pub fn resolve_investigation(db: &GraphDb, explicit_id: Option<&str>) -> anyhow::Result<String> {
     match explicit_id {
