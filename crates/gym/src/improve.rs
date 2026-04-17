@@ -232,7 +232,7 @@ pub struct ImproveRunMetadata {
 pub struct ApplyReport {
     /// Proposals successfully applied to source files or DB.
     pub applied: usize,
-    /// Proposals skipped (non-accepted review status or unsupported kind).
+    /// Total proposals skipped (sum of per-reason counters below).
     pub skipped: usize,
     /// Proposals blocked due to missing DB, missing target file, or invalid patch content.
     pub blocked: usize,
@@ -240,6 +240,12 @@ pub struct ApplyReport {
     pub total: usize,
     /// Human-readable reason for each blocked proposal.
     pub blocked_reasons: Vec<String>,
+    /// Proposals skipped because the reviewer returned REJECT or MODIFY (not ACCEPT).
+    pub skipped_review_rejected: usize,
+    /// Proposals skipped because the improvement kind has no apply handler.
+    pub skipped_unsupported_kind: usize,
+    /// Proposals skipped because the patch was empty (guidance-only).
+    pub skipped_empty_patch: usize,
 }
 
 fn review_proposal_id(index: usize) -> String {
@@ -2999,6 +3005,7 @@ pub fn apply_accepted_proposals(
                 proposal.description
             );
             report.skipped += 1;
+            report.skipped_review_rejected += 1;
             continue;
         }
         if matches!(proposal.kind, ImprovementKind::GroundTruthFix) {
@@ -3020,6 +3027,7 @@ pub fn apply_accepted_proposals(
                 | ImprovementKind::RecipeChange
         ) {
             report.skipped += 1;
+            report.skipped_unsupported_kind += 1;
             continue;
         }
         if proposal.patch.replace.is_empty() {
@@ -3031,6 +3039,7 @@ pub fn apply_accepted_proposals(
                 proposal.description
             );
             report.skipped += 1;
+            report.skipped_empty_patch += 1;
             continue;
         }
         applicable.push(proposal);
@@ -3382,6 +3391,7 @@ pub fn apply_accepted_proposals(
             }
             _ => {
                 report.skipped += 1;
+                report.skipped_unsupported_kind += 1;
                 continue;
             }
         };

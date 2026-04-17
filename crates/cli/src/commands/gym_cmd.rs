@@ -1391,13 +1391,19 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             }
             if report.skipped > 0 {
                 println!(
-                    "  {} proposal(s) skipped (non-accepted review or unsupported kind).",
-                    report.skipped
+                    "  {} proposal(s) skipped ({} review-rejected, {} unsupported-kind, {} empty-patch)",
+                    report.skipped,
+                    report.skipped_review_rejected,
+                    report.skipped_unsupported_kind,
+                    report.skipped_empty_patch,
                 );
             }
             println!(
-                "  Apply summary: {}/{} applied, {} blocked, {} skipped",
-                report.applied, report.total, report.blocked, report.skipped
+                "  Apply summary: {}/{} applied, {} blocked, {} skipped ({} review-rejected, {} unsupported-kind, {} empty-patch)",
+                report.applied, report.total, report.blocked, report.skipped,
+                report.skipped_review_rejected,
+                report.skipped_unsupported_kind,
+                report.skipped_empty_patch,
             );
 
             skwaq_gym::improve::print_proposals(&cycle);
