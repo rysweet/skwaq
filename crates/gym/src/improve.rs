@@ -1505,7 +1505,7 @@ async fn run_overfitting_review_batch(
     let mut reviewed = Vec::new();
     let mut accepted_count = 0usize;
 
-    for (proposal, review) in proposals.into_iter().zip(decisions.into_iter()) {
+    for (proposal, review) in proposals.into_iter().zip(decisions) {
         let mut proposal = proposal;
         if matches!(review.verdict, ReviewVerdict::Reject) {
             tracing::info!(
