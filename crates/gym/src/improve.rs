@@ -625,6 +625,28 @@ async fn analyze_false_negatives(
     let mut seen = std::collections::HashSet::new();
     proposals.retain(|p| seen.insert(p.description.clone()));
 
+    // Deterministic pre-screen: reject proposals containing forbidden vocabulary
+    // before the LLM reviewer call. This prevents the reviewer itself from
+    // re-introducing purged terminology (see #502).
+    let pre_screen_count = proposals.len();
+    proposals.retain(|p| {
+        if contains_forbidden_vocabulary(&p.description)
+            || contains_forbidden_vocabulary(&p.patch.replace)
+        {
+            tracing::warn!(
+                "Pre-screen rejected proposal '{}': contains forbidden vocabulary",
+                p.description.chars().take(80).collect::<String>()
+            );
+            false
+        } else {
+            true
+        }
+    });
+    let rejected_count = pre_screen_count - proposals.len();
+    if rejected_count > 0 {
+        tracing::info!("Forbidden-vocabulary pre-screen rejected {rejected_count} proposal(s)");
+    }
+
     // Run overfitting review gate on proposals
     proposals = run_overfitting_review(
         proposals,
@@ -3416,6 +3438,54 @@ pub fn apply_accepted_proposals(
     Ok(report)
 }
 
+/// Returns `true` if `text` contains vocabulary that was purged from the
+/// codebase in PRs #496/#497/#499. Used as a deterministic pre-screen before
+/// the LLM reviewer so that proposals cannot re-introduce the terminology.
+fn contains_forbidden_vocabulary(text: &str) -> bool {
+    // Case-insensitive check. Using a simple approach: lowercase once, match substrings.
+    let lower = text.to_lowercase();
+
+    // "fallback" family
+    if lower.contains("fallback")
+        || lower.contains("fall back")
+        || lower.contains("falls back")
+        || lower.contains("falling back")
+    {
+        return true;
+    }
+
+    // "silently <verb>" — match "silently" followed by a word
+    // We check for "silently " (with trailing space) to avoid matching
+    // e.g. "silently" at end of sentence (which is fine in prose like
+    // "fail loudly rather than silently").
+    // The forbidden pattern is "silently <verb>", e.g. "silently degrade",
+    // "silently substitute", "silently retry".
+    for prefix in &[
+        "silently degrad",
+        "silently substitut",
+        "silently retry",
+        "silently revert",
+        "silently ignor",
+        "silently drop",
+        "silently discard",
+        "silently swallow",
+        "silently conclud",
+        "silently fail",
+        "silently return",
+    ] {
+        if lower.contains(prefix) {
+            return true;
+        }
+    }
+
+    // "gracefully degrade" / "gracefully fall back"
+    if lower.contains("gracefully degrad") || lower.contains("gracefully fall") {
+        return true;
+    }
+
+    false
+}
+
 /// Infer the DangerCategory name from target CWE numbers.
 fn infer_danger_category(cwes: &[u32]) -> &'static str {
     for &cwe in cwes {
@@ -5847,5 +5917,54 @@ debate:
             recipe_proposals[0].target_file,
             PathBuf::from("recipes/analysis/standard.yaml")
         );
+    }
+
+    // ===== #502: Forbidden vocabulary pre-screen tests =====
+
+    #[test]
+    fn test_forbidden_vocabulary_rejects_fallback_variants() {
+        assert!(contains_forbidden_vocabulary("use a fallback path"));
+        assert!(contains_forbidden_vocabulary("fall back to secondary"));
+        assert!(contains_forbidden_vocabulary("the system falls back"));
+        assert!(contains_forbidden_vocabulary("falling back to default"));
+        assert!(contains_forbidden_vocabulary("FALLBACK strategy"));
+    }
+
+    #[test]
+    fn test_forbidden_vocabulary_rejects_silently_verb() {
+        assert!(contains_forbidden_vocabulary(
+            "silently degrade to weaker method"
+        ));
+        assert!(contains_forbidden_vocabulary(
+            "silently substitute a default"
+        ));
+        assert!(contains_forbidden_vocabulary(
+            "silently retry the operation"
+        ));
+        assert!(contains_forbidden_vocabulary("silently ignore the error"));
+        assert!(contains_forbidden_vocabulary("Silently Drop the result"));
+    }
+
+    #[test]
+    fn test_forbidden_vocabulary_rejects_graceful_degradation() {
+        assert!(contains_forbidden_vocabulary(
+            "gracefully degrade to backup"
+        ));
+        assert!(contains_forbidden_vocabulary("gracefully fall back to"));
+    }
+
+    #[test]
+    fn test_forbidden_vocabulary_allows_clean_text() {
+        // Normal text should pass
+        assert!(!contains_forbidden_vocabulary(
+            "fail loudly with a diagnostic"
+        ));
+        assert!(!contains_forbidden_vocabulary("detect crypto weakness"));
+        assert!(!contains_forbidden_vocabulary(
+            "inspect local functions directly"
+        ));
+        assert!(!contains_forbidden_vocabulary(
+            "rather than silently" // end-of-sentence usage (no verb follows)
+        ));
     }
 }
