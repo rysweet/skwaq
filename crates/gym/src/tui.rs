@@ -206,7 +206,7 @@ impl DashboardState {
                 },
             })
             .collect();
-        agents.sort_by(|a, b| b.call_count.cmp(&a.call_count));
+        agents.sort_by_key(|b| std::cmp::Reverse(b.call_count));
 
         let case_spans = query_spans_since(telemetry_dir, Some("gym.case"), None, 500000, since)
             .unwrap_or_default();

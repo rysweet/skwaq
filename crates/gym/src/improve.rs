@@ -750,7 +750,13 @@ async fn run_failure_analyst_agent(
              - KNOWLEDGE | source=... | topic=... | title=... | rationale=...\n\
              - MEMORY | type=... | context=... | tags=tag1,tag2 | rationale=...\n\
              Every proposal must include at least one Evidence entry. Do not emit prose \
-             before ## Case:.",
+             before ## Case:.\n\n\
+             NO-FALLBACK INVARIANT: Do NOT propose fallback, degradation, or silent \
+             alternate-path behavior. If a primary analysis/tool/path fails, the correct \
+             fix is to fail loudly with a diagnostic error naming the primary path and why \
+             no secondary is attempted — never to silently retry with a weaker method or \
+             return a degraded placeholder. Proposals whose description or patch contains \
+             'fallback', 'silently degrade', or 'try alternate' language will be rejected.",
             suite,
             fn_case.case_id,
             fn_case.expected_cwes,
@@ -1043,6 +1049,11 @@ fn convert_llm_proposal(
     fn_case: &FalseNegativeCase,
     proposal_number: usize,
 ) -> anyhow::Result<Improvement> {
+    // No-silent-degradation invariant is enforced semantically by the overfitting-reviewer
+    // LLM pass (see run_overfitting_review_batch) rather than a brittle string match here.
+    // A deterministic keyword filter both misses rewordings and produces false positives on
+    // normal English, so we rely on the reviewer's semantic judgment instead.
+    let _ = proposal_number;
     let kind = match proposal.kind.to_uppercase().as_str() {
         "NEW_PATTERN" | "NEWPATTERN" | "PATTERN" => ImprovementKind::NewPattern,
         "AGENT_PROMPT"
@@ -1430,7 +1441,11 @@ async fn run_overfitting_review_batch(
          - proposal_id must match exactly.\n\
          - proposal_description should also match exactly.\n\
          - Each review entry must include at least one evidence_refs item.\n\
-         - Do not emit prose outside the JSON block.\n\n\
+         - Do not emit prose outside the JSON block.\n\
+         - REJECT any proposal whose description or patch introduces fallback, \
+           silent degradation, or silent alternate-path behavior. The project's \
+           invariant is: fail loudly with a diagnostic error instead of silently \
+           degrading to a weaker code path.\n\n\
          Review these proposals:\n\n",
         holdout_header,
         knowledge_context,
@@ -1490,7 +1505,7 @@ async fn run_overfitting_review_batch(
     let mut reviewed = Vec::new();
     let mut accepted_count = 0usize;
 
-    for (proposal, review) in proposals.into_iter().zip(decisions.into_iter()) {
+    for (proposal, review) in proposals.into_iter().zip(decisions) {
         let mut proposal = proposal;
         if matches!(review.verdict, ReviewVerdict::Reject) {
             tracing::info!(
