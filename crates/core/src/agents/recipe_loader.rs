@@ -199,6 +199,19 @@ fn build_loaded_recipe(recipe: &RecipeYaml, target: &str) -> LoadedRecipe {
 // Parsing + validation
 // ---------------------------------------------------------------------------
 
+/// Validate a YAML string against the recipe schema.
+///
+/// Parses the YAML via serde and runs semantic checks (non-empty stages,
+/// preamble requirements, debate bounds).  Returns `Ok(())` if valid.
+/// This is the public entry point for external crates (e.g., gym) that need
+/// to validate proposed recipe modifications before writing them to disk.
+pub fn validate_recipe_yaml(yaml: &str) -> anyhow::Result<()> {
+    let recipe: RecipeYaml = serde_yaml_ng::from_str(yaml)
+        .map_err(|e| anyhow::anyhow!("recipe YAML parse error: {e}"))?;
+    validate_recipe(&recipe)?;
+    Ok(())
+}
+
 fn parse_recipe(yaml: &str) -> anyhow::Result<RecipeYaml> {
     let recipe: RecipeYaml = serde_yaml_ng::from_str(yaml)?;
     validate_recipe(&recipe)?;

@@ -71,6 +71,8 @@ pub enum ImprovementKind {
     TaintRule,
     /// The ground truth was wrong/incomplete
     GroundTruthFix,
+    /// Modify a YAML analysis recipe (add/remove/reorder stages, adjust config)
+    RecipeChange,
 }
 
 #[derive(Debug, Clone)]
@@ -741,7 +743,7 @@ async fn run_failure_analyst_agent(
              File: {{path}}\n\
              Vulnerability: {{what the actual vuln is, with line numbers}}\n\
              Detection failure reason: {{why we missed it}}\n\
-             Proposed fix: {{NEW_PATTERN|DEEPER_ANALYSIS|NEW_AGENT_CAPABILITY|CWE_MAPPING|TAINT_RULE}}\n\
+             Proposed fix: {{NEW_PATTERN|DEEPER_ANALYSIS|NEW_AGENT_CAPABILITY|CWE_MAPPING|TAINT_RULE|RECIPE_CHANGE}}\n\
              Details: {{specific actionable proposal}}\n\
              Priority: {{HIGH|MEDIUM|LOW}}\n\
              Evidence:\n\
@@ -1051,6 +1053,7 @@ fn convert_llm_proposal(
         | "NEWAGENTCAPABILITY" => ImprovementKind::AgentPrompt,
         "CWE_MAPPING" | "CWEMAPPING" => ImprovementKind::CweMapping,
         "TAINT_RULE" | "TAINTRULE" => ImprovementKind::TaintRule,
+        "RECIPE_CHANGE" | "RECIPECHANGE" | "RECIPE" => ImprovementKind::RecipeChange,
         "GROUND_TRUTH_ERROR" | "GROUNDTRUTHERROR" | "GROUND_TRUTH" | "GROUNDTRUTH" => {
             return Err(anyhow::anyhow!(
                 "proposal {} for case {} requested unsupported ground-truth editing; \
@@ -1114,6 +1117,7 @@ fn convert_llm_proposal(
                 ImprovementKind::CweMapping => PathBuf::from("crates/gym/src/scoring.rs"),
                 ImprovementKind::TaintRule => PathBuf::from("crates/core/src/analysis/taint.rs"),
                 ImprovementKind::GroundTruthFix => PathBuf::from("data/gym/ground_truth/"),
+                ImprovementKind::RecipeChange => PathBuf::from("recipes/analysis/standard.yaml"),
                 _ => unreachable!(),
             }),
     };
@@ -1440,6 +1444,7 @@ async fn run_overfitting_review_batch(
             ImprovementKind::CweMapping => "CWE_MAPPING",
             ImprovementKind::TaintRule => "TAINT_RULE",
             ImprovementKind::GroundTruthFix => "GROUND_TRUTH",
+            ImprovementKind::RecipeChange => "RECIPE_CHANGE",
         };
         proposal_text.push_str(&format!(
             "{}. Proposal ID: {}\n   Kind: [{}] {}\n   Target CWEs: {:?}\n   Patch: {}\n   From case: {}\n\n",
@@ -2330,6 +2335,68 @@ fn heuristic_failure_analysis_impl(false_negatives: &[FalseNegativeCase]) -> Vec
         }
     }
 
+    // Phase 4: Propose RecipeChange for CWE families with ≥3 false negatives
+    // If many cases share a CWE family, a dedicated specialist stage may help.
+    let mut cwe_family_counts: std::collections::HashMap<u32, Vec<String>> =
+        std::collections::HashMap::new();
+    for fn_case in false_negatives {
+        for &cwe in &fn_case.expected_cwes {
+            let family = scoring::cwe_family(cwe);
+            cwe_family_counts
+                .entry(family)
+                .or_default()
+                .push(fn_case.case_id.clone());
+        }
+    }
+
+    // Known CWE families with clear specialist agent names
+    let specialist_agents: &[(u32, &str, &str)] = &[
+        (22, "path-traversal-specialist", "Path traversal"),
+        (78, "injection-specialist", "Command injection"),
+        (119, "memory-safety-specialist", "Memory safety"),
+        (190, "integer-overflow-specialist", "Integer overflow"),
+        (416, "use-after-free-specialist", "Use-after-free"),
+        (502, "deserialization-specialist", "Deserialization"),
+    ];
+
+    let all_cases_with_proposals: std::collections::HashSet<String> =
+        proposals.iter().map(|p| p.source_case.clone()).collect();
+
+    for (family, agent_name, description) in specialist_agents {
+        if let Some(case_ids) = cwe_family_counts.get(family) {
+            if case_ids.len() >= 3 {
+                let representative_case = case_ids
+                    .iter()
+                    .find(|c| !all_cases_with_proposals.contains(*c))
+                    .unwrap_or(&case_ids[0]);
+                proposals.push(Improvement {
+                    kind: ImprovementKind::RecipeChange,
+                    description: format!(
+                        "Add {} stage to standard.yaml for better CWE-{} ({}) detection \
+                         ({} cases missed)",
+                        agent_name,
+                        family,
+                        description,
+                        case_ids.len()
+                    ),
+                    target_cwes: vec![*family],
+                    target_file: PathBuf::from("recipes/analysis/standard.yaml"),
+                    patch: Patch {
+                        find: String::new(),
+                        replace: format!(
+                            "  - agent: {}\n    context: from_graph\n    client_role: reasoning\n",
+                            agent_name
+                        ),
+                    },
+                    source_case: representative_case.clone(),
+                    priority: Priority::Medium,
+                    supporting_evidence: Vec::new(),
+                    review: None,
+                });
+            }
+        }
+    }
+
     proposals
 }
 
@@ -2536,6 +2603,7 @@ fn store_fn_insights(
                 ImprovementKind::CweMapping => "CWE Mapping Gap",
                 ImprovementKind::TaintRule => "Taint Rule Gap",
                 ImprovementKind::GroundTruthFix => "Ground Truth Issue",
+                ImprovementKind::RecipeChange => "Recipe Gap",
             };
             let review_status = proposal
                 .review
@@ -2749,6 +2817,9 @@ pub fn store_improvement_lessons(cycle: &ImprovementCycle) -> anyhow::Result<()>
             ImprovementKind::TaintRule => {
                 (skwaq_core::memory::ExperienceType::Pattern, "orchestrator")
             }
+            ImprovementKind::RecipeChange => {
+                (skwaq_core::memory::ExperienceType::Insight, "orchestrator")
+            }
             ImprovementKind::GroundTruthFix => continue, // Not a generalizable lesson
         };
 
@@ -2931,6 +3002,7 @@ pub fn apply_accepted_proposals(
                 | ImprovementKind::AgentPrompt
                 | ImprovementKind::TaintRule
                 | ImprovementKind::CweMapping
+                | ImprovementKind::RecipeChange
         ) {
             report.skipped += 1;
             continue;
@@ -2960,6 +3032,34 @@ pub fn apply_accepted_proposals(
         // TaintRule proposals use the DB, not files — handle separately
         if matches!(proposal.kind, ImprovementKind::TaintRule) {
             // TaintRule handler is inline below in the match; skip file checks
+        } else if matches!(proposal.kind, ImprovementKind::RecipeChange) {
+            // RecipeChange: validate path BEFORE checking file existence
+            let target_str = target.to_string_lossy();
+            let is_temp = target_str.starts_with("/tmp")
+                || target_str.contains("tmp")
+                || target_str.starts_with(&std::env::temp_dir().to_string_lossy().to_string());
+            let is_recipe =
+                target_str.starts_with("recipes/analysis/") && target_str.ends_with(".yaml");
+            let has_traversal = target
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir));
+            if has_traversal || (!is_temp && !is_recipe) {
+                let reason = format!(
+                    "Rejecting RecipeChange: target {} is outside allowed recipes/analysis/ directory",
+                    target.display()
+                );
+                report.blocked += 1;
+                report.blocked_reasons.push(reason.clone());
+                warn_or_bail(strict_mode, reason)?;
+                continue;
+            }
+            if !target.exists() {
+                let reason = format!("Proposal target file does not exist: {}", target.display());
+                report.blocked += 1;
+                report.blocked_reasons.push(reason.clone());
+                warn_or_bail(strict_mode, reason)?;
+                continue;
+            }
         } else if !target.exists() {
             let reason = format!("Proposal target file does not exist: {}", target.display());
             report.blocked += 1;
@@ -3222,6 +3322,49 @@ pub fn apply_accepted_proposals(
                     continue;
                 }
             }
+            ImprovementKind::RecipeChange => {
+                // Path validation already done above; proceed to apply the patch
+                let new_yaml = if proposal.patch.find.is_empty() {
+                    // Append mode: add content before `debate:` section or at end
+                    if let Some(debate_pos) = content.find("\ndebate:") {
+                        let mut result = content[..debate_pos].to_string();
+                        result.push('\n');
+                        result.push_str(&proposal.patch.replace);
+                        result.push_str(&content[debate_pos..]);
+                        result
+                    } else {
+                        format!("{}\n{}\n", content.trim_end(), proposal.patch.replace)
+                    }
+                } else if content.contains(&proposal.patch.find) {
+                    content.replacen(&proposal.patch.find, &proposal.patch.replace, 1)
+                } else {
+                    let reason = format!(
+                        "RecipeChange patch find text not found in {}: '{}'",
+                        target.display(),
+                        proposal.patch.find.chars().take(50).collect::<String>()
+                    );
+                    report.blocked += 1;
+                    report.blocked_reasons.push(reason.clone());
+                    warn_or_bail(strict_mode, reason)?;
+                    continue;
+                };
+
+                // Validate the resulting YAML against the recipe schema
+                match skwaq_core::agents::validate_recipe_yaml(&new_yaml) {
+                    Ok(()) => new_yaml,
+                    Err(e) => {
+                        let reason = format!(
+                            "RecipeChange proposal '{}' produces invalid recipe YAML: {}",
+                            proposal.description.chars().take(60).collect::<String>(),
+                            e
+                        );
+                        report.blocked += 1;
+                        report.blocked_reasons.push(reason.clone());
+                        warn_or_bail(strict_mode, reason)?;
+                        continue;
+                    }
+                }
+            }
             _ => {
                 report.skipped += 1;
                 continue;
@@ -3335,6 +3478,7 @@ pub fn print_proposals(cycle: &ImprovementCycle) {
             ImprovementKind::CweMapping => "CWE_MAPPING",
             ImprovementKind::TaintRule => "TAINT_RULE",
             ImprovementKind::GroundTruthFix => "GROUND_TRUTH",
+            ImprovementKind::RecipeChange => "RECIPE_CHANGE",
         };
         let priority = match &proposal.priority {
             Priority::High => "HIGH",
@@ -3386,6 +3530,7 @@ pub fn print_proposals(cycle: &ImprovementCycle) {
                 ImprovementKind::CweMapping => "CWE_MAPPING",
                 ImprovementKind::TaintRule => "TAINT_RULE",
                 ImprovementKind::GroundTruthFix => "GROUND_TRUTH",
+                ImprovementKind::RecipeChange => "RECIPE_CHANGE",
             };
             let priority = match &proposal.priority {
                 Priority::High => "HIGH",
@@ -5378,6 +5523,304 @@ os.system(user_input)
         assert!(
             gap > HOLDOUT_OVERFITTING_GAP_THRESHOLD * 100.0,
             "30pp gap must exceed 15pp threshold"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // RecipeChange tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_recipe_change_apply_valid_yaml() {
+        let dir = tempfile::tempdir().unwrap();
+        let recipe_path = dir.path().join("test_recipe.yaml");
+        let initial_yaml = "\
+stages:
+  - agent: decompile-renamer
+    context: from_graph
+    client_role: reasoning
+  - agent: vuln-hunter
+    context: from_graph
+    client_role: reasoning
+";
+        std::fs::write(&recipe_path, initial_yaml).unwrap();
+
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: AggregateScore::default(),
+            holdout_score: None,
+            false_negatives: Vec::new(),
+            proposals: vec![Improvement {
+                kind: ImprovementKind::RecipeChange,
+                description: "Add specialist stage".to_string(),
+                target_cwes: vec![22],
+                target_file: recipe_path.clone(),
+                patch: Patch {
+                    find: String::new(),
+                    replace: "  - agent: path-traversal-specialist\n    context: from_graph\n    client_role: reasoning\n".to_string(),
+                },
+                source_case: "test-case-1".to_string(),
+                priority: Priority::Medium,
+                supporting_evidence: Vec::new(),
+                review: None,
+            }],
+            reviewed_proposals: Vec::new(),
+            holdout_case_count: 0,
+            training_case_count: 0,
+            cross_validation_pending: vec![],
+            run_metadata: None,
+        };
+
+        let report = apply_accepted_proposals(&cycle, None).unwrap();
+        assert_eq!(report.applied, 1);
+        assert_eq!(report.blocked, 0);
+
+        // Verify the written YAML is valid
+        let result_yaml = std::fs::read_to_string(&recipe_path).unwrap();
+        assert!(skwaq_core::agents::validate_recipe_yaml(&result_yaml).is_ok());
+        assert!(result_yaml.contains("path-traversal-specialist"));
+    }
+
+    #[test]
+    fn test_recipe_change_rejects_invalid_yaml() {
+        let dir = tempfile::tempdir().unwrap();
+        let recipe_path = dir.path().join("test_recipe.yaml");
+        let initial_yaml = "\
+stages:
+  - agent: decompile-renamer
+    context: from_graph
+    client_role: reasoning
+";
+        std::fs::write(&recipe_path, initial_yaml).unwrap();
+
+        // This patch replaces the valid content with invalid YAML (empty stages)
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: AggregateScore::default(),
+            holdout_score: None,
+            false_negatives: Vec::new(),
+            proposals: vec![Improvement {
+                kind: ImprovementKind::RecipeChange,
+                description: "Bad recipe change".to_string(),
+                target_cwes: vec![78],
+                target_file: recipe_path.clone(),
+                patch: Patch {
+                    find: "stages:\n  - agent: decompile-renamer\n    context: from_graph\n    client_role: reasoning\n".to_string(),
+                    replace: "stages: []\n".to_string(),
+                },
+                source_case: "test-case-2".to_string(),
+                priority: Priority::Medium,
+                supporting_evidence: Vec::new(),
+                review: None,
+            }],
+            reviewed_proposals: Vec::new(),
+            holdout_case_count: 0,
+            training_case_count: 0,
+            cross_validation_pending: vec![],
+            run_metadata: None,
+        };
+
+        let report = apply_accepted_proposals(&cycle, None).unwrap();
+        assert_eq!(report.applied, 0);
+        assert_eq!(report.blocked, 1);
+        assert!(report.blocked_reasons[0].contains("invalid recipe YAML"));
+    }
+
+    #[test]
+    fn test_recipe_change_blocks_path_traversal() {
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: AggregateScore::default(),
+            holdout_score: None,
+            false_negatives: Vec::new(),
+            proposals: vec![Improvement {
+                kind: ImprovementKind::RecipeChange,
+                description: "Malicious path".to_string(),
+                target_cwes: vec![78],
+                target_file: PathBuf::from("recipes/analysis/../../etc/passwd"),
+                patch: Patch {
+                    find: String::new(),
+                    replace: "evil".to_string(),
+                },
+                source_case: "test-case-3".to_string(),
+                priority: Priority::Medium,
+                supporting_evidence: Vec::new(),
+                review: None,
+            }],
+            reviewed_proposals: Vec::new(),
+            holdout_case_count: 0,
+            training_case_count: 0,
+            cross_validation_pending: vec![],
+            run_metadata: None,
+        };
+
+        let report = apply_accepted_proposals(&cycle, None).unwrap();
+        assert_eq!(report.applied, 0);
+        assert_eq!(report.blocked, 1);
+        assert!(report.blocked_reasons[0].contains("outside allowed"));
+    }
+
+    #[test]
+    fn test_recipe_change_blocks_non_recipe_path() {
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: AggregateScore::default(),
+            holdout_score: None,
+            false_negatives: Vec::new(),
+            proposals: vec![Improvement {
+                kind: ImprovementKind::RecipeChange,
+                description: "Wrong directory".to_string(),
+                target_cwes: vec![78],
+                target_file: PathBuf::from("crates/core/src/main.rs"),
+                patch: Patch {
+                    find: String::new(),
+                    replace: "evil".to_string(),
+                },
+                source_case: "test-case-4".to_string(),
+                priority: Priority::Medium,
+                supporting_evidence: Vec::new(),
+                review: None,
+            }],
+            reviewed_proposals: Vec::new(),
+            holdout_case_count: 0,
+            training_case_count: 0,
+            cross_validation_pending: vec![],
+            run_metadata: None,
+        };
+
+        let report = apply_accepted_proposals(&cycle, None).unwrap();
+        assert_eq!(report.applied, 0);
+        assert_eq!(report.blocked, 1);
+        assert!(report.blocked_reasons[0].contains("outside allowed"));
+    }
+
+    #[test]
+    fn test_convert_llm_proposal_recipe_change() {
+        let proposal = LlmProposal {
+            kind: "RECIPE_CHANGE".to_string(),
+            description: "Add specialist stage".to_string(),
+            target_cwes: vec![22],
+            priority: Some("HIGH".to_string()),
+            target_file: Some("recipes/analysis/deep.yaml".to_string()),
+            regex_pattern: None,
+            patch_find: None,
+            patch_replace: Some(
+                "  - agent: specialist\n    context: from_graph\n    client_role: reasoning\n"
+                    .to_string(),
+            ),
+            evidence_refs: Vec::new(),
+        };
+
+        let fn_case = FalseNegativeCase {
+            case_id: "test-1".to_string(),
+            expected_cwes: vec![22],
+            detected_cwes: Vec::new(),
+            source_path: PathBuf::from("test.c"),
+            source_content: String::new(),
+        };
+
+        let result = convert_llm_proposal(proposal, &fn_case, 1).unwrap();
+        assert!(matches!(result.kind, ImprovementKind::RecipeChange));
+        assert_eq!(
+            result.target_file,
+            PathBuf::from("recipes/analysis/deep.yaml")
+        );
+    }
+
+    #[test]
+    fn test_recipe_change_apply_with_debate_section() {
+        let dir = tempfile::tempdir().unwrap();
+        let recipe_path = dir.path().join("test_recipe_debate.yaml");
+        let initial_yaml = "\
+stages:
+  - agent: decompile-renamer
+    context: from_graph
+    client_role: reasoning
+  - agent: vuln-hunter
+    context: from_graph
+    client_role: reasoning
+
+debate:
+  after_stage: 2
+  agent_a:
+    name: skeptic
+    preamble: Challenge findings
+  agent_b:
+    name: advocate
+    preamble: Defend findings
+";
+        std::fs::write(&recipe_path, initial_yaml).unwrap();
+
+        let cycle = ImprovementCycle {
+            suite: "fixtures".to_string(),
+            baseline_score: AggregateScore::default(),
+            holdout_score: None,
+            false_negatives: Vec::new(),
+            proposals: vec![Improvement {
+                kind: ImprovementKind::RecipeChange,
+                description: "Add specialist before debate".to_string(),
+                target_cwes: vec![22],
+                target_file: recipe_path.clone(),
+                patch: Patch {
+                    find: String::new(),
+                    replace: "  - agent: path-traversal-specialist\n    context: from_graph\n    client_role: reasoning\n".to_string(),
+                },
+                source_case: "test-case-5".to_string(),
+                priority: Priority::Medium,
+                supporting_evidence: Vec::new(),
+                review: None,
+            }],
+            reviewed_proposals: Vec::new(),
+            holdout_case_count: 0,
+            training_case_count: 0,
+            cross_validation_pending: vec![],
+            run_metadata: None,
+        };
+
+        let report = apply_accepted_proposals(&cycle, None).unwrap();
+        assert_eq!(report.applied, 1);
+
+        let result_yaml = std::fs::read_to_string(&recipe_path).unwrap();
+        // Stage should be inserted before the debate section
+        let specialist_pos = result_yaml.find("path-traversal-specialist").unwrap();
+        let debate_pos = result_yaml.find("debate:").unwrap();
+        assert!(
+            specialist_pos < debate_pos,
+            "specialist stage should be before debate section"
+        );
+        // Validate the resulting YAML is still valid
+        assert!(skwaq_core::agents::validate_recipe_yaml(&result_yaml).is_ok());
+    }
+
+    #[test]
+    fn test_heuristic_emits_recipe_change_for_cwe_cluster() {
+        // Create 3+ false negative cases for the same CWE family to trigger RecipeChange
+        let fn_cases: Vec<FalseNegativeCase> = (0..4)
+            .map(|i| FalseNegativeCase {
+                case_id: format!("path-traversal-{}", i),
+                expected_cwes: vec![22],
+                detected_cwes: Vec::new(),
+                source_path: PathBuf::from(format!("test{}.c", i)),
+                source_content: "int main() { return 0; }".to_string(),
+            })
+            .collect();
+
+        let proposals = heuristic_failure_analysis_impl(&fn_cases);
+        let recipe_proposals: Vec<_> = proposals
+            .iter()
+            .filter(|p| matches!(p.kind, ImprovementKind::RecipeChange))
+            .collect();
+
+        assert!(
+            !recipe_proposals.is_empty(),
+            "should emit RecipeChange for 4 path-traversal FN cases"
+        );
+        assert!(recipe_proposals[0]
+            .description
+            .contains("path-traversal-specialist"));
+        assert_eq!(
+            recipe_proposals[0].target_file,
+            PathBuf::from("recipes/analysis/standard.yaml")
         );
     }
 }

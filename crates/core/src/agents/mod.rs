@@ -14,7 +14,7 @@ pub mod discovery;
 pub mod mcp_client;
 pub mod output_schema;
 pub mod pipeline;
-pub(crate) mod recipe_loader;
+pub mod recipe_loader;
 pub mod runner;
 pub mod tool_definitions;
 pub mod tool_executor;
@@ -31,6 +31,7 @@ pub use pipeline::{
     select_vuln_hunter, source_deep_pipeline_for_target, source_pipeline_for_target,
     AnalysisPipeline, ClientRole, DebateGroup, PipelineClients, PipelineStage,
 };
+pub use recipe_loader::validate_recipe_yaml;
 pub use runner::{AgentContextFrame, AgentResult, AgentRunner};
 pub use tool_definitions::{agent_tools, filter_tools};
 pub use tool_executor::{execute_tool, execute_tool_with_memory};

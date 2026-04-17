@@ -81,12 +81,19 @@ application strategy:
 | `AgentPrompt`     | `agents/*.md` | Find/replace or append after last `##` heading |
 | `CweMapping`      | `crates/gym/src/scoring.rs` | Find/replace patch on CWE mapping functions |
 | `TaintRule`       | SQLite database (`data_sources` / `data_sinks` table) | `INSERT OR IGNORE` via parameterized SQL |
+| `RecipeChange`    | `recipes/analysis/*.yaml` | Find/replace or append before `debate:` section |
 | `GroundTruthFix`  | `data/gym/ground_truth/fixtures.toml` | Find/replace |
 
 **File-based proposals** (`NewPattern`, `AgentPrompt`, `CweMapping`,
-`GroundTruthFix`) use exact string matching. If the target string is not
-found, the patch is skipped with a warning — never a partial apply. File
-paths are canonicalized and directory-checked to prevent traversal attacks.
+`RecipeChange`, `GroundTruthFix`) use exact string matching. If the target
+string is not found, the patch is skipped with a warning — never a partial
+apply. File paths are canonicalized and directory-checked to prevent traversal
+attacks.
+
+**Recipe proposals** (`RecipeChange`) are additionally validated: the
+resulting YAML must parse against the `RecipeDefinition` serde schema
+(including `deny_unknown_fields`). Invalid YAML is rejected before any file
+write occurs.
 
 **Database proposals** (`TaintRule`) use pipe-delimited format
 (`name|source_type|location`) and insert directly into the CPG database.
@@ -189,7 +196,7 @@ skwaq gym case-diff
 
 ## Proposal Types
 
-The improvement engine generates five types of proposals:
+The improvement engine generates six types of proposals:
 
 ### NewPattern
 
@@ -258,6 +265,44 @@ Target: data/gym/ground_truth/fixtures.toml
 
 Ground truth fixes are rare and receive extra scrutiny from the overfitting
 reviewer.
+
+### RecipeChange
+
+Modifies an analysis pipeline recipe YAML file. This allows the improvement
+loop to propose structural changes to the analysis pipeline itself — adding
+specialist agent stages, adjusting context modes, or reordering stages.
+
+```
+Kind: RecipeChange
+Target: recipes/analysis/*.yaml (restricted directory)
+Example: Add a path-traversal-specialist stage to source.yaml
+```
+
+RecipeChange proposals are generated in two ways:
+
+1. **LLM failure-analyst** — When the analyst determines that pipeline
+   structure (rather than agent prompts or patterns) is the root cause of
+   missed detections, it emits a `RECIPE_CHANGE` proposal targeting a
+   specific recipe file.
+
+2. **Heuristic Phase 4** — When ≥3 false negatives share the same CWE
+   family (e.g., multiple path traversal misses), the heuristic analyzer
+   automatically proposes adding a dedicated specialist stage to
+   `standard.yaml`.
+
+Supports two patch modes:
+
+- **Append mode** (empty `patch.find`): New stage YAML is inserted before the
+  `debate:` section if one exists, otherwise appended to the end of the file
+- **Replace mode** (`patch.find` contains text): Exact find/replace on the
+  recipe file
+
+**Security:**
+- Target path must match `recipes/analysis/*.yaml` — all other paths are
+  rejected
+- Path traversal (`..`) is blocked via component inspection
+- Resulting YAML is validated against the `RecipeDefinition` schema before
+  writing — malformed YAML never reaches disk
 
 ## Scoring Metrics
 
@@ -450,6 +495,10 @@ git add -A && git commit -m "gym: improve fixtures F1 85.2%→86.3% (+1.1%)"
 - Knowledge file writes are capped at 50KB per operation
 - Path validation on fixture manifests rejects `..` traversals and absolute
   paths
+- **Recipe change validation** — `RecipeChange` proposals are restricted to
+  `recipes/analysis/*.yaml` with path traversal blocking and post-edit schema
+  validation via `validate_recipe_yaml()`. Invalid YAML is rejected before
+  file write
 - SQL queries use parameterized `?` placeholders exclusively (no `format!()`)
 
 For the full security model, see [Gym Safety Hardening](gym-safety-hardening.md).

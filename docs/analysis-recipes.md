@@ -77,3 +77,93 @@ Recipes are validated on first parse:
 - `preamble` forbidden when `context: from_graph`
 - `debate.after_stage` must not exceed stage count
 - Unknown YAML fields are rejected (`#[serde(deny_unknown_fields)]`)
+
+## Gym Self-Improvement Integration
+
+The gym improvement loop can propose modifications to recipe files via
+`RecipeChange` proposals. This enables the self-improvement system to evolve
+pipeline structure — not just agent prompts and patterns.
+
+### How It Works
+
+When the failure-analyst identifies that missed vulnerabilities are due to
+pipeline coverage gaps (e.g., no dedicated path-traversal specialist), it
+generates a `RECIPE_CHANGE` proposal. The heuristic analyzer also emits
+`RecipeChange` proposals when ≥3 false negatives share a CWE family.
+
+```
+False Negatives → Failure Analysis → RecipeChange Proposal → Overfitting Review → Schema Validation → Apply
+```
+
+### Validation Gate
+
+Before any recipe file is modified, the proposed YAML is parsed against the
+`RecipeDefinition` schema using `validate_recipe_yaml()`. This enforces:
+
+- At least one stage is present
+- `preamble` is required for `from_previous_results` context, forbidden for
+  `from_graph`
+- `debate.after_stage` is within bounds
+- No unknown fields (`deny_unknown_fields`)
+
+Invalid YAML is rejected — malformed proposals never reach disk.
+
+### Path Security
+
+`RecipeChange` targets are restricted to `recipes/analysis/*.yaml`. The
+apply logic rejects:
+
+- Paths outside `recipes/analysis/` (e.g., `agents/vuln-hunter.md`)
+- Path traversal via `..` components (e.g., `recipes/analysis/../../Cargo.toml`)
+- Non-YAML files (e.g., `recipes/analysis/exploit.rs`)
+
+### Example Proposals
+
+**Heuristic: Add specialist stage** (triggered by ≥3 FN for CWE-22):
+
+```yaml
+# Appended before debate: section (or at end) of standard.yaml
+  - agent: path-traversal-specialist
+    context: from_graph
+    client_role: reasoning
+```
+
+**LLM: Modify debate threshold** (analyst identifies debate misconfiguration):
+
+```
+Kind: RECIPE_CHANGE
+Target: recipes/analysis/deep.yaml
+Find: "after_stage: 3"
+Replace: "after_stage: 2"
+Reason: Debate should run earlier to catch false positives before synthesis
+```
+
+**LLM: Add taint-tracer to binary pipeline** (missing dataflow analysis):
+
+```
+Kind: RECIPE_CHANGE
+Target: recipes/analysis/standard.yaml
+Find: |
+  - agent: "vuln-hunter*"
+    context: from_graph
+    client_role: reasoning
+Replace: |
+  - agent: taint-tracer
+    context: from_graph
+    client_role: reasoning
+
+  - agent: "vuln-hunter*"
+    context: from_graph
+    client_role: reasoning
+```
+
+### Public API
+
+```rust
+/// Validates a YAML string against the RecipeDefinition schema.
+/// Returns Ok(()) if valid, Err with a descriptive message if not.
+pub fn validate_recipe_yaml(yaml: &str) -> anyhow::Result<()>;
+```
+
+This function is re-exported from `skwaq_core::agents` and can be used by
+any crate that needs to validate recipe YAML before applying changes.
