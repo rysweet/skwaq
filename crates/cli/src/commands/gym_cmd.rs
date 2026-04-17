@@ -996,11 +996,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                         }
                     }
                     let target = suite_cases.get(suite.as_str()).copied().unwrap_or(0);
-                    let pct = if target > 0 {
-                        total_cases * 100 / target
-                    } else {
-                        0
-                    };
+                    let pct = (total_cases * 100).checked_div(target).unwrap_or(0);
                     let failed_count = failed_shards.len();
                     if failed_count > 0 {
                         println!(
