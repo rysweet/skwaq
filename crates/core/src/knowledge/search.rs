@@ -33,8 +33,8 @@ pub struct CweKnowledgeGraph {
     pub cwes: Vec<CweEntry>,
 }
 
-/// Minimal fallback CWEs used when the JSON data file is not available (e.g. tests).
-const FALLBACK_CWES: [(&str, &str, &str); 15] = [
+/// Minimal compile-time CWE catalog used when the JSON data file is not available (e.g. tests).
+const MINIMAL_CWE_CATALOG: [(&str, &str, &str); 15] = [
     (
         "CWE-119",
         "Improper Restriction of Operations within the Bounds of a Memory Buffer",
@@ -125,7 +125,7 @@ pub fn find_cwe_kg_file() -> Option<PathBuf> {
 }
 
 /// Load the CWE knowledge graph from the JSON data file.
-/// Returns None if the file is not found (fallback to FALLBACK_CWES).
+/// Returns None if the file is not found (caller uses MINIMAL_CWE_CATALOG).
 pub fn load_cwe_knowledge_graph() -> Option<CweKnowledgeGraph> {
     let path = find_cwe_kg_file()?;
     let content = std::fs::read_to_string(&path).ok()?;
@@ -135,7 +135,7 @@ pub fn load_cwe_knowledge_graph() -> Option<CweKnowledgeGraph> {
 /// Load CWE entries — from the JSON data file if available, else from the
 /// minimal compile-time catalog.
 ///
-/// NOT a silent fallback: when the 944-entry JSON file is absent we emit a
+/// Not silent: when the 944-entry JSON file is absent we emit a
 /// loud `tracing::warn!` announcing that the minimal 15-entry catalog is in
 /// use, so callers / log readers can distinguish dev/test environments from
 /// a misconfigured production install.
@@ -148,11 +148,11 @@ fn load_cwe_entries() -> Vec<CweEntry> {
         return kg.cwes;
     }
     tracing::warn!(
-        count = FALLBACK_CWES.len(),
+        count = MINIMAL_CWE_CATALOG.len(),
         "CWE knowledge JSON file not found; using minimal compile-time catalog \
          (expected in tests/dev — misconfiguration in production)"
     );
-    FALLBACK_CWES
+    MINIMAL_CWE_CATALOG
         .iter()
         .map(|(id, name, desc)| CweEntry {
             cwe_id: id.to_string(),
@@ -478,7 +478,7 @@ mod tests {
         let first = initialize_cwe_catalog(&db).unwrap();
         let second = initialize_cwe_catalog(&db).unwrap();
 
-        // With the JSON data file, we get 944 CWEs (full MITRE); without it, 15 fallback entries.
+        // With the JSON data file, we get 944 CWEs (full MITRE); without it, 15 minimal-catalog entries.
         assert!(
             first.total_seed_cwes >= 15,
             "expected at least 15 seed CWEs, got {}",
@@ -578,7 +578,7 @@ mod tests {
         std::fs::create_dir_all(&knowledge_dir).unwrap();
         initialize_cwe_catalog_with_dir(&db, &knowledge_dir).unwrap();
 
-        // Query enriched columns for CWE-119 (always present in fallback or full)
+        // Query enriched columns for CWE-119 (always present in minimal-catalog or full)
         let (semantic_class, detection_signals, fn_insight): (String, String, String) = db
             .conn()
             .query_row(
@@ -603,9 +603,9 @@ mod tests {
     }
 
     #[test]
-    fn test_fallback_when_json_missing() {
-        // The fallback CWEs should always work even if JSON is gone
-        let entries: Vec<CweEntry> = FALLBACK_CWES
+    fn test_minimal_catalog_when_json_missing() {
+        // The minimal-catalog CWEs should always work even if JSON is gone
+        let entries: Vec<CweEntry> = MINIMAL_CWE_CATALOG
             .iter()
             .map(|(id, name, desc)| CweEntry {
                 cwe_id: id.to_string(),

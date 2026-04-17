@@ -101,7 +101,7 @@ impl<'a> TaintAnalyzer<'a> {
         Ok(results)
     }
 
-    /// Query pre-computed taint flows — try Cypher first, fall back to SQL.
+    /// Query pre-computed taint flows — try Cypher first, then SQL.
     fn query_precomputed_flows(&self) -> anyhow::Result<Vec<TaintPath>> {
         {
             // LadybugDB is always available

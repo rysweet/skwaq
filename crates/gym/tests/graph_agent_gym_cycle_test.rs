@@ -435,7 +435,7 @@ fn test_cwe_mapping_skips_when_find_text_missing() {
 }
 
 #[test]
-fn test_cwe_mapping_fallback_append_when_no_insertion_point() {
+fn test_cwe_mapping_appends_when_no_insertion_point() {
     let tmp = tempfile::NamedTempFile::new().unwrap();
     // File without the "_ => None," insertion point
     std::fs::write(tmp.path(), "fn some_function() {}").unwrap();
@@ -447,7 +447,10 @@ fn test_cwe_mapping_fallback_append_when_no_insertion_point() {
     )]);
 
     let applied = apply_accepted_proposals(&cycle, None).unwrap();
-    assert_eq!(applied.applied, 1, "CweMapping should fallback to append");
+    assert_eq!(
+        applied.applied, 1,
+        "CweMapping should append when no insertion point matches"
+    );
 
     let result = std::fs::read_to_string(tmp.path()).unwrap();
     assert!(
@@ -753,7 +756,7 @@ void execute_cmd(const char *input) {
     }
 
     #[test]
-    fn test_heuristic_generates_fallback_agent_prompt_for_no_api_match() {
+    fn test_heuristic_generates_default_agent_prompt_for_no_api_match() {
         // A false negative with no recognizable taint source/sink — should produce
         // a generic AgentPrompt for deeper graph analysis
         let fn_cases = vec![make_false_negative(

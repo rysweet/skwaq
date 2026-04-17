@@ -1,7 +1,7 @@
 //! `skwaq investigate-binary <binary>` — binary investigation with AI agents.
 //!
 //! Ingests the binary, runs Ghidra decompilation, pattern analysis,
-//! and the full AI agent pipeline. Errors propagate — no silent fallbacks.
+//! and the full AI agent pipeline. Errors propagate — no silent degradation paths.
 
 use std::path::Path;
 

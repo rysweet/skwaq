@@ -850,7 +850,7 @@ fn build_debate_summary(agent_a: &AgentResult, agent_b: &AgentResult) -> String 
 
     if (a_positive > 0 && b_safe > 0) || (a_rejects > 0 && b_positive > 0) {
         summary.push_str(
-            "\nDISAGREEMENTS DETECTED: Offense and Defense reached opposing conclusions in the fallback debate summary.\n\
+            "\nDISAGREEMENTS DETECTED: Offense and Defense reached opposing conclusions in the partial debate summary.\n\
              The verdict-synthesizer should carefully examine these conflicts and read the code \
              before making a final decision.\n",
         );
@@ -1378,7 +1378,7 @@ pub fn select_vuln_hunter(target: &str) -> String {
         _ => "vuln-hunter",
     };
 
-    // Verify the specialized agent actually exists; fall back to generic if not.
+    // Verify the specialized agent actually exists; use the generic agent if not.
     match load_agent(agent_name) {
         Ok(_) => agent_name.to_string(),
         Err(_) => {
@@ -2756,26 +2756,26 @@ mod tests {
     fn test_build_debate_summary_marks_threshold_hints_unavailable_on_parse_failure() {
         let result_a = AgentResult {
             agent_name: "exploit-analyst".into(),
-            output: "CONFIRMED finding from fallback text".into(),
+            output: "CONFIRMED finding from partial text".into(),
             tokens_used: 0,
             context_frame: AgentContextFrame::synthetic(
                 "exploit-analyst",
                 "Validates exploitability of vulnerability findings",
                 None,
-                "CONFIRMED finding from fallback text",
+                "CONFIRMED finding from partial text",
             ),
             parsed_output: None,
             parsed_output_error: Some("failed to parse exploit-analyst-v1".into()),
         };
         let result_b = AgentResult {
             agent_name: "defense-analyst".into(),
-            output: "SAFE finding from fallback text".into(),
+            output: "SAFE finding from partial text".into(),
             tokens_used: 0,
             context_frame: AgentContextFrame::synthetic(
                 "defense-analyst",
                 "Identifies mitigations and defensive controls",
                 None,
-                "SAFE finding from fallback text",
+                "SAFE finding from partial text",
             ),
             parsed_output: None,
             parsed_output_error: Some("failed to parse defense-analyst-v1".into()),
@@ -2791,7 +2791,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_debate_summary_flags_rejected_vs_vulnerable_fallback_disagreement() {
+    fn test_build_debate_summary_flags_rejected_vs_vulnerable_partial_summary_disagreement() {
         let result_a = AgentResult {
             agent_name: "exploit-analyst".into(),
             output: "REJECTED: attacker cannot reach sink".into(),
@@ -2827,29 +2827,29 @@ mod tests {
     }
 
     #[test]
-    fn test_build_debate_context_summary_preserves_unavailable_note_on_fallback_summary() {
+    fn test_build_debate_context_summary_preserves_unavailable_note_on_partial_summary() {
         let result_a = AgentResult {
             agent_name: "exploit-analyst".into(),
-            output: "CONFIRMED finding from fallback text".into(),
+            output: "CONFIRMED finding from partial text".into(),
             tokens_used: 0,
             context_frame: AgentContextFrame::synthetic(
                 "exploit-analyst",
                 "Validates exploitability of vulnerability findings",
                 None,
-                "CONFIRMED finding from fallback text",
+                "CONFIRMED finding from partial text",
             ),
             parsed_output: None,
             parsed_output_error: Some("failed to parse exploit-analyst-v1".into()),
         };
         let result_b = AgentResult {
             agent_name: "defense-analyst".into(),
-            output: "SAFE finding from fallback text".into(),
+            output: "SAFE finding from partial text".into(),
             tokens_used: 0,
             context_frame: AgentContextFrame::synthetic(
                 "defense-analyst",
                 "Identifies mitigations and defensive controls",
                 None,
-                "SAFE finding from fallback text",
+                "SAFE finding from partial text",
             ),
             parsed_output: None,
             parsed_output_error: Some("failed to parse defense-analyst-v1".into()),
@@ -2864,7 +2864,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_debate_context_summary_preserves_fallback_disagreement_warning() {
+    fn test_build_debate_context_summary_preserves_disagreement_warning_in_partial_summary() {
         let result_a = AgentResult {
             agent_name: "exploit-analyst".into(),
             output: "REJECTED: attacker cannot reach sink".into(),
@@ -3156,7 +3156,7 @@ mod tests {
             .collect();
         assert_eq!(names[0], "attack-surface");
         assert_eq!(names[1], "taint-tracer");
-        assert_eq!(names[2], "vuln-hunter"); // language-fallback for .c
+        assert_eq!(names[2], "vuln-hunter"); // language-default for .c
         assert_eq!(names[3], "verdict-synthesizer");
         assert_eq!(names[4], "cwe-classifier");
     }

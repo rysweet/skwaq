@@ -20,7 +20,7 @@ use crate::ground_truth::GroundTruth;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-const FALLBACK_SOURCE_SCAN_MAX_DEPTH: u32 = 5;
+const SOURCE_SCAN_MAX_DEPTH: u32 = 5;
 const CASE_READY_MARKER: &str = ".extracted";
 
 /// Directory names that signal "we are already at the project root" — descending
@@ -364,7 +364,7 @@ fn collect_source_files_recursive_limited(
     depth: u32,
     limit: usize,
 ) {
-    if depth > FALLBACK_SOURCE_SCAN_MAX_DEPTH || files.len() >= limit {
+    if depth > SOURCE_SCAN_MAX_DEPTH || files.len() >= limit {
         return;
     }
     let Ok(entries) = std::fs::read_dir(dir) else {

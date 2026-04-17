@@ -180,7 +180,7 @@ fn execute_read_function(
         }
     }
 
-    // SQL fallback — always works (SQLite-only mode or LadybugDB miss)
+    // SQL path — always works (SQLite-only mode or LadybugDB miss)
     if let Ok(row) = db.conn().query_row(
         "SELECT id, name, address, decompiled, confidence FROM functions \
          WHERE investigation_id = ?1 AND (name = ?2 OR address = ?2) LIMIT 1",
@@ -283,7 +283,7 @@ fn execute_get_call_neighbors(
             }
         }
     } else {
-        // SQL fallback for SQLite-only mode
+        // SQL path for SQLite-only mode
         let sql = if callers {
             "SELECT f1.name, f1.address FROM calls c \
              JOIN functions f2 ON c.callee_id = f2.id \
@@ -581,7 +581,7 @@ fn execute_rename_function(
         }
     }
 
-    // SQL fallback — works in SQLite-only mode
+    // SQL path — works in SQLite-only mode
     let updated = db
         .execute(
             "UPDATE functions SET decompiled = ?1 \

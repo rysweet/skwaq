@@ -155,8 +155,8 @@ impl DashboardState {
         // Active jobs from sidecar file (written at run start, removed on finish)
         let active_runs = read_active_runs(telemetry_dir);
 
-        // Compute time bound: earliest active run start, or fall back to 24h ago
-        let fallback_since = {
+        // Compute time bound: earliest active run start, or default to 24h ago
+        let default_since = {
             let day_ago = chrono::Utc::now() - chrono::Duration::hours(24);
             day_ago.to_rfc3339()
         };
@@ -164,7 +164,7 @@ impl DashboardState {
             .iter()
             .map(|r| r.started_at.as_str())
             .min()
-            .unwrap_or(fallback_since.as_str());
+            .unwrap_or(default_since.as_str());
 
         // Agent stats from recent telemetry spans (time-bounded)
         let agent_spans = query_spans_since(telemetry_dir, Some("gym.agent"), None, 100000, since)

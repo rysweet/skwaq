@@ -226,7 +226,7 @@ model = "claude-opus-4.6"
         // Create the dir but don't write config.toml
         std::fs::create_dir_all(paths.profile_dir()).unwrap();
 
-        // load_merged_config should gracefully fall back to base
+        // load_merged_config should return the base config
         let base_config = Config::default();
         let merged = paths.load_merged_config(&base_config).unwrap();
         assert_eq!(merged.llm.reasoning, base_config.llm.reasoning);

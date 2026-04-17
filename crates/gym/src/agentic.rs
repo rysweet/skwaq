@@ -37,7 +37,7 @@ pub struct SynthesisStats {
     expert_routed_count: AtomicU32,
     llm_synthesis_count: AtomicU32,
     consensus_early_exit_count: AtomicU32,
-    fallback_count: AtomicU32,
+    retained_all_count: AtomicU32,
     failed_count: AtomicU32,
 }
 
@@ -49,7 +49,7 @@ impl Default for SynthesisStats {
             expert_routed_count: AtomicU32::new(0),
             llm_synthesis_count: AtomicU32::new(0),
             consensus_early_exit_count: AtomicU32::new(0),
-            fallback_count: AtomicU32::new(0),
+            retained_all_count: AtomicU32::new(0),
             failed_count: AtomicU32::new(0),
         }
     }
@@ -83,8 +83,8 @@ impl SynthesisStats {
             .fetch_add(1, Ordering::Relaxed);
     }
 
-    fn record_fallback(&self) {
-        self.fallback_count.fetch_add(1, Ordering::Relaxed);
+    fn record_retained_all(&self) {
+        self.retained_all_count.fetch_add(1, Ordering::Relaxed);
     }
 
     #[cfg(test)]
@@ -103,22 +103,22 @@ impl SynthesisStats {
         let expert_routed = self.expert_routed_count.load(Ordering::Relaxed);
         let llm = self.llm_synthesis_count.load(Ordering::Relaxed);
         let consensus = self.consensus_early_exit_count.load(Ordering::Relaxed);
-        let fallback = self.fallback_count.load(Ordering::Relaxed);
+        let retained_all = self.retained_all_count.load(Ordering::Relaxed);
         let failed = self.failed_count.load(Ordering::Relaxed);
         let total = pattern_confidence
             + semantic_confidence
             + expert_routed
             + llm
             + consensus
-            + fallback
+            + retained_all
             + failed;
         if total == 0 {
             tracing::info!("Synthesis: no dual-source cases (nothing to synthesize)");
             return;
         }
-        if fallback > 0 || failed > 0 {
+        if retained_all > 0 || failed > 0 {
             tracing::warn!(
-                "Synthesis summary: {}/{} pattern-confidence early-exit, {}/{} semantic-confidence fast-path, {}/{} expert-routed, {}/{} LLM synthesis, {}/{} consensus early-exit, {}/{} fallback (kept all findings), {} failed",
+                "Synthesis summary: {}/{} pattern-confidence early-exit, {}/{} semantic-confidence fast-path, {}/{} expert-routed, {}/{} LLM synthesis, {}/{} consensus early-exit, {}/{} retained-all (kept all findings after synthesis error), {} failed",
                 pattern_confidence,
                 total,
                 semantic_confidence,
@@ -129,15 +129,15 @@ impl SynthesisStats {
                 total,
                 consensus,
                 total,
-                fallback,
+                retained_all,
                 total,
                 failed,
             );
-            if fallback > 0 {
+            if retained_all > 0 {
                 eprintln!(
-                    "\n  NOTE: {}/{} synthesis cases used fallback (kept all findings due to LLM errors).\n  \
+                    "\n  NOTE: {}/{} synthesis cases retained all findings due to LLM errors.\n  \
                      Scoring is still valid but synthesis quality is degraded for those cases.\n",
-                    fallback, total,
+                    retained_all, total,
                 );
             }
             if failed > 0 {
@@ -252,7 +252,7 @@ pub async fn run_agentic_multi_file_source_analysis_with_runtime_config(
     runtime_config: &Config,
 ) -> anyhow::Result<Vec<DetectedFinding>> {
     if companions.len() <= 1 {
-        // No companions — fall back to single-file analysis
+        // No companions — use single-file analysis
         return run_agentic_source_analysis_with_runtime_config(
             primary,
             timeout_secs,
@@ -1586,12 +1586,12 @@ async fn synthesize_findings(
             Ok(synthesized)
         }
         Err(e) => {
-            // Synthesis failed. Per the no-fallback design principle, we do NOT
+            // Synthesis failed. Per the no-silent-degradation design principle, we do NOT
             // silently return all findings. Instead, return ONLY the pattern
             // findings (high precision) and drop the unvalidated LLM findings.
             // This preserves precision at the cost of recall when the LLM is
             // unavailable, which is the correct trade-off.
-            SYNTHESIS_STATS.record_fallback();
+            SYNTHESIS_STATS.record_retained_all();
             tracing::warn!(
                 "LLM synthesis failed — keeping {} pattern findings, dropping {} unvalidated LLM findings: {}",
                 pattern_findings.len(),
@@ -2981,7 +2981,7 @@ mod tests {
         assert_eq!(helper_count, 1);
     }
 
-    // merge_findings_deterministic tests removed — function deleted (no fallback paths)
+    // merge_findings_deterministic tests removed — function deleted (no silent-degradation paths)
 
     #[tokio::test]
     async fn test_synthesize_findings_empty() {
@@ -3315,14 +3315,15 @@ mod tests {
         let stats = synthesis_stats();
         let before_llm = stats.llm_synthesis_count.load(Ordering::Relaxed);
         let before_consensus = stats.consensus_early_exit_count.load(Ordering::Relaxed);
-        let before_fallback = stats.fallback_count.load(Ordering::Relaxed);
+        let before_retained_all = stats.retained_all_count.load(Ordering::Relaxed);
         let before_failed = stats.failed_count.load(Ordering::Relaxed);
 
         let runtime_config = Config::default();
         let result = synthesize_findings(findings, &cats, &db, 30, &runtime_config).await;
-        // With graceful fallback, synthesis always returns Ok — either via
-        // LLM synthesis, consensus, or fallback (keeping all findings).
-        let findings = result.expect("synthesize_findings should not fail with graceful fallback");
+        // With explicit retain-all on synthesis error, the call always returns Ok — either via
+        // LLM synthesis, consensus, or retain-all (keeping all findings on error).
+        let findings =
+            result.expect("synthesize_findings should not fail under the retain-all policy");
         assert!(
             findings.len() <= 2,
             "Synthesis should return a bounded subset of the candidate findings"
@@ -3330,20 +3331,20 @@ mod tests {
 
         let after_llm = stats.llm_synthesis_count.load(Ordering::Relaxed);
         let after_consensus = stats.consensus_early_exit_count.load(Ordering::Relaxed);
-        let after_fallback = stats.fallback_count.load(Ordering::Relaxed);
+        let after_retained_all = stats.retained_all_count.load(Ordering::Relaxed);
         let after_failed = stats.failed_count.load(Ordering::Relaxed);
 
         // One of the four counters must increase.
         let total_increase = (after_llm - before_llm)
             + (after_consensus - before_consensus)
-            + (after_fallback - before_fallback)
+            + (after_retained_all - before_retained_all)
             + (after_failed - before_failed);
         assert!(
             total_increase > 0,
-            "Synthesis must track its outcome: llm_delta={}, consensus_delta={}, fallback_delta={}, failed_delta={} (none changed!)",
+            "Synthesis must track its outcome: llm_delta={}, consensus_delta={}, retained_all_delta={}, failed_delta={} (none changed!)",
             after_llm - before_llm,
             after_consensus - before_consensus,
-            after_fallback - before_fallback,
+            after_retained_all - before_retained_all,
             after_failed - before_failed,
         );
     }
@@ -3356,7 +3357,7 @@ mod tests {
         stats.record_llm_synthesis();
         stats.record_llm_synthesis();
         stats.record_consensus_early_exit();
-        stats.record_fallback();
+        stats.record_retained_all();
         stats.record_failure();
         // Just verify it doesn't panic — the output goes to tracing/eprintln
         stats.report();
@@ -4064,12 +4065,12 @@ mod tests {
     }
 
     #[test]
-    fn test_synthesis_stats_fallback_counter() {
+    fn test_synthesis_stats_retained_all_counter() {
         let stats = SynthesisStats::new();
-        assert_eq!(stats.fallback_count.load(Ordering::Relaxed), 0);
-        stats.record_fallback();
-        stats.record_fallback();
-        assert_eq!(stats.fallback_count.load(Ordering::Relaxed), 2);
+        assert_eq!(stats.retained_all_count.load(Ordering::Relaxed), 0);
+        stats.record_retained_all();
+        stats.record_retained_all();
+        assert_eq!(stats.retained_all_count.load(Ordering::Relaxed), 2);
         stats.report();
     }
 

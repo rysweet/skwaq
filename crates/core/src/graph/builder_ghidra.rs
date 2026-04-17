@@ -95,7 +95,7 @@ impl<'a> GraphBuilder<'a> {
                     }
                 })
                 .or_else(|| {
-                    // Fall back to name matching - reliable for non-stripped binaries
+                    // Match by name - reliable for non-stripped binaries
                     let base_name = gfunc.name.split('@').next().unwrap_or(&gfunc.name);
                     // Skip generic Ghidra names like FUN_00101234
                     if !base_name.starts_with("FUN_") && !base_name.starts_with("DAT_") {
