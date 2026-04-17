@@ -1044,55 +1044,16 @@ fn find_outermost_block(text: &str, open: char, close: char) -> Option<String> {
     None
 }
 
-fn contains_banned_fallback_language(text: &str) -> Option<&'static str> {
-    // Case-insensitive scan for banned terms. Whole-substring match; we intentionally
-    // keep the list short to avoid false positives on phrases like "pattern matching"
-    // or normal English usage of "alternate".
-    let lower = text.to_ascii_lowercase();
-    const BANNED: &[&str] = &[
-        "fallback",
-        "fall back",
-        "silently degrade",
-        "silent degradation",
-        "graceful degradation",
-        "try alternate",
-    ];
-    BANNED.iter().find(|&&term| lower.contains(term)).copied()
-}
-
 fn convert_llm_proposal(
     proposal: LlmProposal,
     fn_case: &FalseNegativeCase,
     proposal_number: usize,
 ) -> anyhow::Result<Improvement> {
-    // No-fallback invariant: reject any LLM proposal that would introduce a silent
-    // fallback / degradation / alternate-path pattern. Scan the description and the
-    // proposed patch-replace text (pre-conversion) for banned terms so that fabricated
-    // "graceful degradation" patches never reach apply_accepted_proposals. We fail
-    // loudly here instead of silently filtering, per the project-wide no-fallback rule.
-    let scan_text_desc = proposal.description.as_str();
-    let scan_text_patch = proposal
-        .regex_pattern
-        .as_deref()
-        .or(proposal.patch_replace.as_deref())
-        .unwrap_or("");
-    if let Some(term) = contains_banned_fallback_language(scan_text_desc) {
-        let msg = format!(
-            "proposal {} for case {} rejected: description contains banned fallback term '{}' — the no-fallback invariant requires failing loudly instead of silently degrading",
-            proposal_number, fn_case.case_id, term
-        );
-        tracing::warn!("{msg}");
-        return Err(anyhow::anyhow!(msg));
-    }
-    if let Some(term) = contains_banned_fallback_language(scan_text_patch) {
-        let msg = format!(
-            "proposal {} for case {} rejected: patch replace text contains banned fallback term '{}' — the no-fallback invariant requires failing loudly instead of silently degrading",
-            proposal_number, fn_case.case_id, term
-        );
-        tracing::warn!("{msg}");
-        return Err(anyhow::anyhow!(msg));
-    }
-
+    // No-silent-degradation invariant is enforced semantically by the overfitting-reviewer
+    // LLM pass (see run_overfitting_review_batch) rather than a brittle string match here.
+    // A deterministic keyword filter both misses rewordings and produces false positives on
+    // normal English, so we rely on the reviewer's semantic judgment instead.
+    let _ = proposal_number;
     let kind = match proposal.kind.to_uppercase().as_str() {
         "NEW_PATTERN" | "NEWPATTERN" | "PATTERN" => ImprovementKind::NewPattern,
         "AGENT_PROMPT"
@@ -5779,112 +5740,6 @@ stages:
             result.target_file,
             PathBuf::from("recipes/analysis/deep.yaml")
         );
-    }
-
-    #[test]
-    fn test_contains_banned_fallback_language_detects_terms() {
-        assert_eq!(
-            contains_banned_fallback_language("add a fallback path"),
-            Some("fallback")
-        );
-        assert_eq!(
-            contains_banned_fallback_language("FALLBACK when LLM errors"),
-            Some("fallback")
-        );
-        assert_eq!(
-            contains_banned_fallback_language("fall back to regex"),
-            Some("fall back")
-        );
-        assert_eq!(
-            contains_banned_fallback_language("silently degrade on failure"),
-            Some("silently degrade")
-        );
-        assert_eq!(
-            contains_banned_fallback_language("use graceful degradation"),
-            Some("graceful degradation")
-        );
-        assert_eq!(
-            contains_banned_fallback_language("try alternate decoder"),
-            Some("try alternate")
-        );
-        assert_eq!(contains_banned_fallback_language("normal prose text"), None);
-        assert_eq!(contains_banned_fallback_language(""), None);
-    }
-
-    fn sample_fn_case_for_filter_test() -> FalseNegativeCase {
-        FalseNegativeCase {
-            case_id: "case-filter".to_string(),
-            expected_cwes: vec![78],
-            detected_cwes: Vec::new(),
-            source_path: PathBuf::from("foo.c"),
-            source_content: String::new(),
-        }
-    }
-
-    #[test]
-    fn test_convert_llm_proposal_rejects_fallback_in_description() {
-        let proposal = LlmProposal {
-            kind: "NEW_PATTERN".to_string(),
-            description: "Add a fallback path when regex fails".to_string(),
-            target_cwes: vec![78],
-            priority: Some("MEDIUM".to_string()),
-            target_file: None,
-            regex_pattern: Some("system\\(".to_string()),
-            patch_find: None,
-            patch_replace: None,
-            evidence_refs: Vec::new(),
-        };
-        let err = convert_llm_proposal(proposal, &sample_fn_case_for_filter_test(), 1)
-            .expect_err("proposal with fallback in description must be rejected");
-        let msg = err.to_string();
-        assert!(
-            msg.contains("banned fallback term") && msg.contains("'fallback'"),
-            "error message should name the banned term: {msg}"
-        );
-    }
-
-    #[test]
-    fn test_convert_llm_proposal_rejects_fallback_in_patch() {
-        let proposal = LlmProposal {
-            kind: "AGENT_PROMPT".to_string(),
-            description: "Strengthen taint-tracer prompt".to_string(),
-            target_cwes: vec![78],
-            priority: Some("MEDIUM".to_string()),
-            target_file: Some("agents/vuln-hunter.md".to_string()),
-            regex_pattern: None,
-            patch_find: Some("old".to_string()),
-            patch_replace: Some(
-                "If analysis fails, use a graceful degradation path and keep all findings."
-                    .to_string(),
-            ),
-            evidence_refs: Vec::new(),
-        };
-        let err = convert_llm_proposal(proposal, &sample_fn_case_for_filter_test(), 2)
-            .expect_err("proposal with fallback in patch replace must be rejected");
-        let msg = err.to_string();
-        assert!(
-            msg.contains("patch replace text contains banned fallback term"),
-            "error message should mention patch replace text: {msg}"
-        );
-    }
-
-    #[test]
-    fn test_convert_llm_proposal_accepts_clean_proposal() {
-        let proposal = LlmProposal {
-            kind: "NEW_PATTERN".to_string(),
-            description: "Detect command injection via system() calls".to_string(),
-            target_cwes: vec![78],
-            priority: Some("HIGH".to_string()),
-            target_file: None,
-            regex_pattern: Some(r"system\s*\(".to_string()),
-            patch_find: None,
-            patch_replace: None,
-            evidence_refs: Vec::new(),
-        };
-        let result = convert_llm_proposal(proposal, &sample_fn_case_for_filter_test(), 3)
-            .expect("clean proposal should convert successfully");
-        assert!(matches!(result.kind, ImprovementKind::NewPattern));
-        assert_eq!(result.target_cwes, vec![78]);
     }
 
     #[test]
