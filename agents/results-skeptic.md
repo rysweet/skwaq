@@ -77,5 +77,5 @@ Reason: <explanation>
 1. Never approve results where > 20% of cases were silently skipped.
 2. Never approve F1 > 95% without verifying coverage.
 3. Always report the ACTUAL number of cases evaluated, not just TP+FP+FN+TN.
-4. Flag any "fallback" or "skip" behavior in adapters — these hide real performance.
+4. Flag any silent-degradation or "skip" behavior in adapters — these hide real performance.
 5. Compare to previous checkpoint results — unexplained improvements are suspicious.

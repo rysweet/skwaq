@@ -24,7 +24,7 @@ Supported backends:
 | Anthropic API | `"anthropic"` | `ANTHROPIC_API_KEY` env var |
 
 Run `skwaq gym preflight` to verify connectivity, model availability, and
-no-fallback readiness before starting an improvement cycle.
+no-silent-degradation readiness before starting an improvement cycle.
 
 ## BenchmarkConfig Fields
 

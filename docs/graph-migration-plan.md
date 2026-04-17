@@ -152,7 +152,7 @@ Key templates:
 | Tool | SQL Summary |
 |------|-------------|
 | `query_graph` | Delegates to `translate_to_sql()` → `execute_read_query()` |
-| `read_function` | `SELECT … FROM functions WHERE name = ?` (fallback by address) |
+| `read_function` | `SELECT … FROM functions WHERE name = ?` (lookup by address if name lookup misses) |
 | `get_callers` | `JOIN calls → functions` filtering by callee name |
 | `get_callees` | `JOIN calls → functions` filtering by caller name |
 | `get_taint_paths` | `JOIN taint_flows → data_sources → data_sinks`, optional location prefix filter |
@@ -571,7 +571,7 @@ safety net.
    - Keep the read-only and injection-prevention checks.
 4. Rewrite `queries.rs` helper functions to use Cypher.
 5. **Tests:** All existing tests pass. Add Cypher-specific query tests.
-   Optionally add a feature flag `--features sqlite-fallback` to toggle the
+   Optionally add a feature flag `--features sqlite-readback` to toggle the
    read backend during the transition.
 
 ### Phase 3 — Remove SQLite  *(estimated: 1–2 PRs)*
@@ -668,7 +668,7 @@ string collation).
 **Mitigation:** Phase 1 adds comparison tests that assert both backends
 return identical results for a representative workload. Phase 2 runs the
 full test suite against Kuzu reads. Any divergence is caught before Phase 3
-removes the fallback.
+removes the SQLite read path.
 
 ### 7.8  Agent-Generated Cypher
 

@@ -531,7 +531,7 @@ The synthesis layer routes findings through one of six paths, tracked by
 | Expert routed | Sent to specialized agent (exploit/defense) |
 | LLM synthesis | Full multi-agent debate then synthesizer verdict |
 | Consensus early exit | All agents agree — accept without synthesis |
-| Fallback | Synthesis failed — keep all findings |
+| Retained-all | Synthesis failed — keep all findings (counter `retained_all_count`) |
 
 ---
 
