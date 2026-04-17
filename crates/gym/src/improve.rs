@@ -1554,7 +1554,11 @@ async fn run_overfitting_review_batch(
     Ok(reviewed)
 }
 
-fn prepare_improvement_knowledge_db() -> anyhow::Result<skwaq_core::graph::GraphDb> {
+/// Open an in-memory knowledge DB seeded with the CWE catalog.
+///
+/// Public so the CLI caller can pass it to [`apply_accepted_proposals`] for
+/// `TaintRule` proposals that insert data sources/sinks.
+pub fn prepare_improvement_knowledge_db() -> anyhow::Result<skwaq_core::graph::GraphDb> {
     let db = skwaq_core::graph::GraphDb::in_memory()?;
     let summary = skwaq_core::knowledge::search::initialize_cwe_catalog(&db)?;
     if summary.total_seed_cwes == 0 {
