@@ -184,7 +184,7 @@ Create `skwaq.toml` in your project directory:
 ```toml
 [llm]
 reasoning = "copilot"       # default; or "anthropic" (requires ANTHROPIC_API_KEY)
-decompilation = "copilot"   # backend for decompile-* stages; no hidden fallback
+decompilation = "copilot"   # backend for decompile-* stages; no silent backend substitution
 
 [llm.copilot]
 model = "claude-opus-4.6"   # default model for Copilot backend

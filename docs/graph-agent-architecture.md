@@ -411,7 +411,7 @@ back to regex-based analysis:
 | Sparse call graph | Function has < 2 callers/callees in a multi-file project | `AgentPrompt` — improve cross-file tracing |
 | No data sources | Investigation has zero `data_sources` entries | `TaintRule` — add data source entries |
 | Unmapped CWE family | Expected CWE has no `cwe_family()` mapping | `CweMapping` — add family mapping |
-| Missing regex (fallback) | No pattern matches and graph analysis is complete | `NewPattern` — add detection pattern |
+| Missing regex (default) | No pattern matches and graph analysis is complete | `NewPattern` — add detection pattern |
 
 ## Context Budget Management
 

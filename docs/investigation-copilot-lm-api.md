@@ -6,7 +6,7 @@
 
 ## Summary
 
-RustyClawd already has a production-ready Copilot backend. Only skwaqr-side configuration and model name changes are needed. No upstream RustyClawd code changes are required for the primary Copilot endpoint, but the GitHub Models fallback endpoint has a model prefix bug for non-OpenAI models.
+RustyClawd already has a production-ready Copilot backend. Only skwaqr-side configuration and model name changes are needed. No upstream RustyClawd code changes are required for the primary Copilot endpoint, but the GitHub Models secondary endpoint has a model prefix bug for non-OpenAI models.
 
 ## Architecture: Current State
 
@@ -14,7 +14,7 @@ RustyClawd already has a production-ready Copilot backend. Only skwaqr-side conf
 Skwaqr Agents → skwaq_core::llm::create_client() → RustyClawd Client
                                                         ├── Backend::Anthropic → api.anthropic.com (default)
                                                         └── Backend::Copilot   → api.githubcopilot.com (primary)
-                                                                               → models.github.ai (fallback)
+                                                                               → models.github.ai (secondary)
 ```
 
 RustyClawd's Copilot backend (`copilot.rs`, ~1120 lines) translates between Anthropic Messages API and OpenAI Chat Completions API format. The translation covers:
@@ -64,9 +64,9 @@ RustyClawd's `CopilotAuth::qualify_model()` method:
 - **Copilot endpoint** (`api.githubcopilot.com`): Model names pass through as-is — works correctly
 - **GitHub Models endpoint** (`models.github.ai`): Hardcodes `openai/` prefix for non-namespaced models
 
-This means `claude-opus-4.6` would incorrectly become `openai/claude-opus-4.6` on the fallback endpoint. It should be `anthropic/claude-opus-4.6`.
+This means `claude-opus-4.6` would incorrectly become `openai/claude-opus-4.6` on the secondary endpoint. It should be `anthropic/claude-opus-4.6`.
 
-**Mitigation**: The primary Copilot endpoint is tried first. Since Claude models are confirmed in the Copilot catalog, the fallback should rarely trigger.
+**Mitigation**: The primary Copilot endpoint is tried first. Since Claude models are confirmed in the Copilot catalog, the secondary endpoint should rarely be reached.
 
 ## Required Changes
 
@@ -96,7 +96,7 @@ This means `claude-opus-4.6` would incorrectly become `openai/claude-opus-4.6` o
 - Update associated test assertions
 
 ### 4. Auto-detect logic — `crates/core/src/llm/mod.rs` (OPTIONAL)
-- Consider flipping fallback priority (Copilot first, Anthropic second)
+- Consider flipping endpoint priority (Copilot first, Anthropic second)
 
 ## Authentication Migration
 
@@ -109,7 +109,7 @@ This means `claude-opus-4.6` would incorrectly become `openai/claude-opus-4.6` o
 
 ## No Upstream RustyClawd Changes Needed
 
-For the primary Copilot endpoint, RustyClawd works as-is. The `qualify_model()` prefix issue only affects the GitHub Models fallback endpoint and could be addressed separately if needed.
+For the primary Copilot endpoint, RustyClawd works as-is. The `qualify_model()` prefix issue only affects the GitHub Models secondary endpoint and could be addressed separately if needed.
 
 ## Implementation Status
 

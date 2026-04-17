@@ -212,7 +212,7 @@ Agents use a simple tool-loop pattern (LLM requests tool calls, Skwaq executes t
 
 **Token budget management**: Agents receive a configurable token budget. Large binaries are analyzed in chunks, prioritized by attack surface proximity. The orchestrator tracks spend and stops when budget is exhausted.
 
-**Prompts loaded from disk** (not compiled in): `~/.skwaq/prompts/vuln_hunter.md`. Editable without recompilation. Bundled defaults as fallback.
+**Prompts loaded from disk** (not compiled in): `~/.skwaq/prompts/vuln_hunter.md`. Editable without recompilation. Bundled defaults used when no on-disk override exists.
 
 ### 8. LLM Provider Flexibility
 

@@ -179,7 +179,7 @@ For each detected finding, CWEs are inferred using a three-level cascade:
 
 ```
 Explicit CWEs on finding  →  Semantic class CWEs  →  Category CWEs
-     (highest priority)         (if no explicit)       (fallback)
+     (highest priority)         (if no explicit)       (last resort)
 ```
 
 This is implemented in `inferred_finding_cwes()`:

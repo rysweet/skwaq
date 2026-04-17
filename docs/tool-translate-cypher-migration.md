@@ -1,13 +1,13 @@
 # Tool Execution: Cypher-Native Query Layer
 
-> **Status:** Complete (SQL fallbacks removed)
+> **Status:** Complete (legacy SQL paths removed)
 > **Relates to:** [Graph Migration Plan](graph-migration-plan.md), [Graph Agent Architecture](graph-agent-architecture.md)
 > **Files:** `crates/core/src/agents/tool_translate.rs`, `crates/core/src/agents/tool_executor.rs`
 
 ## Overview
 
 The agent tool execution layer runs all graph queries as native Cypher against
-LadybugDB. The SQL fallback paths that existed during the migration window have
+LadybugDB. The legacy SQL paths that existed during the migration window have
 been removed. SQLite is retained **only** for the `lookup_cwe` tool, which
 queries a static reference table (`cwes`) that has no graph equivalent.
 
@@ -36,7 +36,7 @@ LLM query string
 ```
 
 Both steps use `db.cypher_query()` which routes through LadybugDB's C++ FFI
-bridge. There is no SQL fallback — if both steps fail, the tool returns an
+bridge. There is no SQL retry path — if both steps fail, the tool returns an
 error to the agent.
 
 ### Backend Routing
@@ -53,7 +53,7 @@ All tool handlers route to a single backend:
 | `get_callers` / `get_callees` | Cypher | `investigation_id`-scoped call graph |
 | `get_data_sources` / `get_imports` | Cypher | `investigation_id`-scoped |
 | `create_finding` | Cypher | Single-write (no dual-write) |
-| `search_similar` | Cypher | Single-read (no SQL fallback) |
+| `search_similar` | Cypher | Single-read (no SQL retry) |
 | `lookup_cwe` | **SQLite** | Static reference table, parameterized queries |
 | `store_memory` / `recall_memory` | LadybugDB (via MemoryStore) | — |
 

@@ -76,11 +76,11 @@ cargo run -p skwaq -- gym eval --suites fixtures
 # Compile check (important after merging refactoring PRs)
 cargo build -p skwaq
 
-# LLM readiness (optional — heuristic fallback exists)
+# LLM readiness (optional — heuristic analyzer runs without LLM)
 cargo run -p skwaq -- gym preflight
 ```
 
-If the LLM backend is unavailable, the improvement engine falls back to
+If the LLM backend is unavailable, the improvement engine uses
 heuristic gap detection, which still produces AgentPrompt and TaintRule
 proposals based on graph context analysis.
 
@@ -265,7 +265,7 @@ A well-functioning graph-agent cycle shows:
 | TaintRule proposals skipped with "no database" | `db=None` in quick mode | Expected — TaintRule inserts need DB connection |
 | Quick-mode regression after AgentPrompt patches | Agent .md file syntax broken | Check for malformed Markdown in agents/ |
 
-## Heuristic Fallback
+## Heuristic Analyzer
 
 When the LLM backend is unavailable, the improvement engine uses a heuristic
 analyzer that checks for graph context gaps:
@@ -276,10 +276,10 @@ analyzer that checks for graph context gaps:
 | Function has < 2 callers/callees in multi-file project | `AgentPrompt` — improve cross-file tracing |
 | Investigation has zero `data_sources` entries | `TaintRule` — add data source entries |
 | Expected CWE has no `cwe_family()` mapping | `CweMapping` — add family mapping |
-| No graph gap found | `NewPattern` — add detection pattern (fallback) |
+| No graph gap found | `NewPattern` — add detection pattern (default) |
 
 The heuristic analyzer runs in parallel with the LLM failure-analyst. If the
-LLM is available, its proposals take precedence. If not, heuristic proposals
+LLM is available, its proposals take precedence. Otherwise, heuristic proposals
 are used.
 
 ## Configuration

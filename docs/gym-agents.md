@@ -72,7 +72,7 @@ You are [Agent], a [specialist]. Your job is to [task].
 
 The graph-query tools (`get_taint_paths`, `get_cross_file_calls`,
 `get_data_sources`, `get_imports`) are the primary discovery mechanism.
-Agents should use these tools first, then fall back to `query_graph` for
+Agents should use these tools first, then use `query_graph` for
 custom queries and `read_function` for source-level confirmation. See
 [Graph-Agent Architecture](graph-agent-architecture.md) for details.
 
@@ -118,12 +118,12 @@ knowledge base context.
 3. `CweMapping` — fix CWE family mapping gaps
 4. `NewPattern` — add regex patterns only when graph detection is insufficient
 
-**Graph gap detection** (heuristic fallback):
+**Graph gap detection** (heuristic classification):
 - Missing taint flows for functions handling external data → `TaintRule`
 - Sparse cross-file call graph → `AgentPrompt`
 - No data sources in investigation → `TaintRule`
 - Unmapped CWE family → `CweMapping`
-- No graph gap found → `NewPattern` (fallback)
+- No graph gap found → `NewPattern` (default)
 
 **Anti-overfitting rules** (built into the prompt):
 - Reject patterns that match benchmark-specific naming (e.g., `test_case_*`)

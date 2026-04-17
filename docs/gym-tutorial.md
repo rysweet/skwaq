@@ -21,7 +21,7 @@ Expected output:
 ```
 [OK] Copilot backend reachable
 [OK] Model: claude-opus-4.6
-[OK] No fallback model configured
+[OK] No-silent-degradation check (reasoning=copilot, decompilation=copilot)
 [OK] Token budget: 3,000,000 per cycle
 ```
 

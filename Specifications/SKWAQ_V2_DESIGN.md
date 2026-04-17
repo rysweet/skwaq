@@ -773,7 +773,7 @@ impl VulnHunterAgent {
     }
 
     fn load_prompt(&self, filename: &str) -> anyhow::Result<String> {
-        // Try user-customized prompt, fall back to bundled default
+        // Try user-customized prompt, otherwise use the bundled default
         let user_path = dirs::home_dir()
             .unwrap_or_default()
             .join(".skwaq/prompts")
