@@ -34,7 +34,7 @@ pub fn apply_accepted_proposals(
 ```
 
 Applies accepted proposals from a completed improvement cycle. Handles all
-five proposal types:
+six proposal types:
 
 | Kind | Strategy | Target |
 |------|----------|--------|
@@ -42,6 +42,7 @@ five proposal types:
 | `AgentPrompt` | File patch (append or find/replace) | `agents/*.md` |
 | `CweMapping` | Source patch | `scoring.rs` |
 | `TaintRule` | Database INSERT | `data_sources` / `data_sinks` table |
+| `RecipeChange` | YAML patch (append or find/replace) | `recipes/analysis/*.yaml` |
 | `GroundTruthFix` | Source patch | `fixtures.toml` |
 
 The `db` parameter is required for `TaintRule` proposals. Pass `None` if
@@ -109,6 +110,7 @@ pub enum ImprovementKind {
     AgentPrompt,      // Agent role card modification
     CweMapping,       // CWE family mapping → scoring.rs
     TaintRule,        // Taint source/sink → taint.rs
+    RecipeChange,     // Pipeline recipe modification → recipes/analysis/*.yaml
     GroundTruthFix,   // Ground truth correction → fixtures.toml
 }
 ```
