@@ -182,3 +182,5 @@ For CWE-78 in C/C++, do not stop at the current file when standard API patterns 
 3. Call `read_function("<callee>")` for every helper function before concluding no vulnerability exists.
 4. Call `get_taint_paths("<source_function>")` where source functions return values derived from `argv`, `getenv`, or network reads, to trace how that tainted return value flows through the call chain into downstream sinks.
 A taint chain of `untrusted_input → parser/helper return → unsafe copy into a heap buffer` can indicate CWE-122; `untrusted_input → parser/helper return → command construction or execution sink` can indicate CWE-78. Both require cross-file reading to confirm.
+
+When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[22].

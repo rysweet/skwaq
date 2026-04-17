@@ -7986,3 +7986,41 @@ a pattern scan of main.c alone when it dispatches to separate compilation units.
 
 ---
 
+## Cycle: fixtures (2026-04-17 21:57 UTC)
+
+### Missed Cases (1 false negatives)
+
+- **cse_path_traversal**: Expected CWE-[22], detected CWE-[], missed CWE-[22]
+  ```
+  /* CWE-22: Improper Limitation of a Pathname to a Restricted Directory
+   * Constructs file path from user input without sanitizing ".." sequences. */
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <string.h>
+  ```
+
+### Reviewed Improvement Proposals (2 total; 1 accepted, 1 modified, 0 rejected)
+
+- **[Taint Rule Gap] [MODIFY]** Add a path-traversal taint rule for C/C++ filesystem path sinks. Treat command-line arguments (`argv[...]`), environment-derived strings, and other network/file/user input APIs already considered untrusted as sources. Preserve taint through string construction and path assembly functions such as `snprintf`, `sprintf`, `strcat`, `strncat`, `asprintf`, and equivalent concatenation into buffers. Mark pathname arguments of filesystem access APIs as CWE-22 sinks, including at minimum `fopen`, `open`, `freopen`, `opendir`, `stat`, `lstat`, `access`, `unlink`, `remove`, `rename`, and `chdir`. Report CWE-22 when tainted input reaches one of these path sinks and there is no evidence of canonicalization or restriction enforcement on the path, such as `realpath`, strict allowlist validation, prefix check on canonicalized path, or explicit rejection of traversal elements. This captures the pattern where a trusted base directory is joined with an attacker-controlled filename and then passed to a filesystem API.
+  CWEs: [22] | From case: cse_path_traversal
+  - [KB] cwe/CWE-22/CWE-22 Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal') — The CWE definition explicitly describes external input being used to construct a pathname under a restricted directory without neutralizing special elements; that matches this case exactly and supports modeling filesystem APIs as sinks for tainted path data.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology emphasizes mapping entry points and tracing untrusted data from sources to sinks, which is the correct general strategy for this multi-step path traversal pattern.
+  - [MEMORY] failure :: Missed CWE-[22] vulnerability in code with characteristics similar to the target [cwe-22] — Prior durable memory shows repeated complete misses for CWE-22, indicating a systematic coverage gap best addressed with a general taint rule for untrusted path construction flowing into filesystem APIs.
+  Overfitting review: MODIFY | Risk: MEDIUM | Applicability: HIGH
+  Review reason: The proposal is directionally correct and maps well to CWE-22 by focusing on untrusted input flowing into filesystem path sinks without proper neutralization. However, as written it risks overfitting to the fixture by using a broad negative heuristic ('no evidence of canonicalization or restriction enforcement') that may fire on many real-world safe patterns or miss nuanced sanitizers. It should be narrowed into a confidence-graded rule that distinguishes definite traversal controls from weak indicators, and it should avoid assuming every string-building function preserves dangerous path semantics in all contexts. The holdout perfect score increases concern that benchmark-specific rule shaping may not generalize unless guardrails are added.
+  Suggested modification: Convert this into a tiered CWE-22 rule: require (1) an untrusted source, (2) dataflow into a pathname parameter of a filesystem API, and (3) either explicit traversal tokens/control over path segments or absence of a recognized confinement check after canonicalization. Treat canonicalization alone as insufficient unless followed by confinement validation (for example, canonicalized-prefix enforcement against an allowed root). Support wrapper/path-builder propagation, but score findings higher when attacker input controls a full path or appended segment and lower when only a basename is constrained by an allowlist. Keep the sink list extensible rather than fixed to the fixture APIs.
+  - [KB] cwe/CWE-22/CWE-22 Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal') — The proposal aligns to CWE-22 because it models external input used to construct restricted paths without proper neutralization of traversal elements. CWE-22 supports the focus on path construction plus inadequate restriction enforcement.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — The methodology grounding supports preferring rules that generalize beyond a single fixture and that use defensible evidence chains rather than benchmark-shaped heuristics. This justifies modifying the proposal to use stronger, staged criteria.
+  - [MEMORY] pattern :: Taint-to-sink rules generalize well when source, propagation, sink, and sanitizer semantics are explicit, but broad 'absence of sanitizer' checks often create fixture-specific false positives across wrappers and custom validation code. [cwe-22] — This generalized lesson supports accepting the core idea while requiring refinement to reduce overfitting and improve real-world precision.
+- **[Agent Capability Gap] [ACCEPT]** Enhance agent graph traversal for CWE-[22] detection — case cse_path_traversal has no regex-matchable APIs, requires deeper cross-file call graph and taint flow tracing
+  CWEs: [22] | From case: cse_path_traversal
+  Suggested pattern: `When standard API patterns are not found, use get_cross_file_calls and get_taint_paths to trace data flow through wrapper functions. Look for indirect paths to dangerous sinks for CWE-[22].`
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — This deterministic heuristic proposal was grounded in the knowledge-base hit for query 'methodology' so it preserves the cited-evidence contract.
+  Overfitting review: ACCEPT | Risk: LOW | Applicability: HIGH
+  Review reason: This proposal improves analysis methodology rather than encoding a fixture-specific signature. Extending traversal to use cross-file calls and taint paths when direct API matches are absent is a broadly applicable capability improvement for finding indirect CWE-22 flows through wrappers. It does not introduce silent degradation; instead it explicitly adds a deeper analysis path for cases where shallow matching fails. This also matches prior evidence that missing or incomplete graph coverage can cause false negatives.
+  - [KB] knowledge-pack/fn-insights/fn-insights — The knowledge-pack explicitly notes a capability gap where a function was absent from the analysis graph, causing a missed vulnerability. That supports improving graph traversal and deeper analysis rather than relying only on regex/API matching.
+  - [KB] knowledge-pack/vuln-analysis-methodology/vuln-analysis-methodology — Methodology guidance favors deeper, evidence-based interprocedural analysis when shallow indicators are insufficient. Cross-file call graph and taint tracing are standard general-purpose analysis improvements.
+  - [MEMORY] failure :: Static analyses that depend only on direct sink regexes often miss vulnerabilities routed through helper functions, wrappers, and cross-file abstractions; adding graph and taint exploration reduces false negatives across many CWEs. [cwe-22] — This generalized failure mode supports accepting the proposal as a broad capability enhancement with good real-world transfer.
+
+---
+
