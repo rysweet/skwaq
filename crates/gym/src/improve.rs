@@ -232,7 +232,7 @@ pub struct ImproveRunMetadata {
 pub struct ApplyReport {
     /// Proposals successfully applied to source files or DB.
     pub applied: usize,
-    /// Proposals skipped (non-accepted review status or unsupported kind).
+    /// Total proposals skipped (sum of per-reason counters below).
     pub skipped: usize,
     /// Proposals blocked due to missing DB, missing target file, or invalid patch content.
     pub blocked: usize,
@@ -240,6 +240,12 @@ pub struct ApplyReport {
     pub total: usize,
     /// Human-readable reason for each blocked proposal.
     pub blocked_reasons: Vec<String>,
+    /// Proposals skipped because the reviewer returned REJECT or MODIFY (not ACCEPT).
+    pub skipped_review_rejected: usize,
+    /// Proposals skipped because the improvement kind has no apply handler.
+    pub skipped_unsupported_kind: usize,
+    /// Proposals skipped because the patch was empty (guidance-only).
+    pub skipped_empty_patch: usize,
 }
 
 fn review_proposal_id(index: usize) -> String {
@@ -615,9 +621,59 @@ async fn analyze_false_negatives(
     );
     proposals.extend(heuristic_proposals);
 
-    // Deduplicate proposals by description
+    // Deduplicate proposals by description (exact match)
     let mut seen = std::collections::HashSet::new();
     proposals.retain(|p| seen.insert(p.description.clone()));
+
+    // Near-duplicate dedup for AGENT_PROMPT proposals: reject any proposal whose
+    // patch text has Jaccard token-overlap >= 0.6 with an already-accepted proposal
+    // targeting the same file. Prevents semantically identical prompts from
+    // accumulating across cycles (#503).
+    let pre_dedup_count = proposals.len();
+    let mut accepted_patches: Vec<(PathBuf, std::collections::HashSet<String>)> = Vec::new();
+    proposals.retain(|p| {
+        if !matches!(p.kind, ImprovementKind::AgentPrompt) {
+            return true;
+        }
+        let tokens = tokenize_for_jaccard(&p.patch.replace);
+        for (path, existing_tokens) in &accepted_patches {
+            if *path == p.target_file && jaccard_similarity(&tokens, existing_tokens) >= 0.6 {
+                tracing::info!(
+                    "Near-duplicate AGENT_PROMPT dedup: rejecting '{}' (Jaccard >= 0.6 with existing proposal)",
+                    p.description.chars().take(80).collect::<String>()
+                );
+                return false;
+            }
+        }
+        accepted_patches.push((p.target_file.clone(), tokens));
+        true
+    });
+    let dedup_rejected = pre_dedup_count - proposals.len();
+    if dedup_rejected > 0 {
+        tracing::info!("Near-duplicate dedup rejected {dedup_rejected} AGENT_PROMPT proposal(s)");
+    }
+
+    // Deterministic pre-screen: reject proposals containing forbidden vocabulary
+    // before the LLM reviewer call. This prevents the reviewer itself from
+    // re-introducing purged terminology (see #502).
+    let pre_screen_count = proposals.len();
+    proposals.retain(|p| {
+        if contains_forbidden_vocabulary(&p.description)
+            || contains_forbidden_vocabulary(&p.patch.replace)
+        {
+            tracing::warn!(
+                "Pre-screen rejected proposal '{}': contains forbidden vocabulary",
+                p.description.chars().take(80).collect::<String>()
+            );
+            false
+        } else {
+            true
+        }
+    });
+    let rejected_count = pre_screen_count - proposals.len();
+    if rejected_count > 0 {
+        tracing::info!("Forbidden-vocabulary pre-screen rejected {rejected_count} proposal(s)");
+    }
 
     // Run overfitting review gate on proposals
     proposals = run_overfitting_review(
@@ -1526,7 +1582,11 @@ async fn run_overfitting_review_batch(
     Ok(reviewed)
 }
 
-fn prepare_improvement_knowledge_db() -> anyhow::Result<skwaq_core::graph::GraphDb> {
+/// Open an in-memory knowledge DB seeded with the CWE catalog.
+///
+/// Public so the CLI caller can pass it to [`apply_accepted_proposals`] for
+/// `TaintRule` proposals that insert data sources/sinks.
+pub fn prepare_improvement_knowledge_db() -> anyhow::Result<skwaq_core::graph::GraphDb> {
     let db = skwaq_core::graph::GraphDb::in_memory()?;
     let summary = skwaq_core::knowledge::search::initialize_cwe_catalog(&db)?;
     if summary.total_seed_cwes == 0 {
@@ -2999,6 +3059,7 @@ pub fn apply_accepted_proposals(
                 proposal.description
             );
             report.skipped += 1;
+            report.skipped_review_rejected += 1;
             continue;
         }
         if matches!(proposal.kind, ImprovementKind::GroundTruthFix) {
@@ -3020,6 +3081,7 @@ pub fn apply_accepted_proposals(
                 | ImprovementKind::RecipeChange
         ) {
             report.skipped += 1;
+            report.skipped_unsupported_kind += 1;
             continue;
         }
         if proposal.patch.replace.is_empty() {
@@ -3031,6 +3093,7 @@ pub fn apply_accepted_proposals(
                 proposal.description
             );
             report.skipped += 1;
+            report.skipped_empty_patch += 1;
             continue;
         }
         applicable.push(proposal);
@@ -3382,6 +3445,7 @@ pub fn apply_accepted_proposals(
             }
             _ => {
                 report.skipped += 1;
+                report.skipped_unsupported_kind += 1;
                 continue;
             }
         };
@@ -3404,6 +3468,79 @@ pub fn apply_accepted_proposals(
     }
 
     Ok(report)
+}
+
+/// Returns `true` if `text` contains vocabulary that was purged from the
+/// codebase in PRs #496/#497/#499. Used as a deterministic pre-screen before
+/// the LLM reviewer so that proposals cannot re-introduce the terminology.
+/// Tokenize text into lowercase words for Jaccard similarity comparison.
+fn tokenize_for_jaccard(text: &str) -> std::collections::HashSet<String> {
+    text.split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.len() >= 3)
+        .map(|w| w.to_lowercase())
+        .collect()
+}
+
+/// Compute Jaccard similarity coefficient between two token sets.
+/// Returns 0.0 for empty sets.
+fn jaccard_similarity(
+    a: &std::collections::HashSet<String>,
+    b: &std::collections::HashSet<String>,
+) -> f64 {
+    if a.is_empty() && b.is_empty() {
+        return 0.0;
+    }
+    let intersection = a.intersection(b).count();
+    let union = a.union(b).count();
+    if union == 0 {
+        return 0.0;
+    }
+    intersection as f64 / union as f64
+}
+
+fn contains_forbidden_vocabulary(text: &str) -> bool {
+    // Case-insensitive check. Using a simple approach: lowercase once, match substrings.
+    let lower = text.to_lowercase();
+
+    // "fallback" family
+    if lower.contains("fallback")
+        || lower.contains("fall back")
+        || lower.contains("falls back")
+        || lower.contains("falling back")
+    {
+        return true;
+    }
+
+    // "silently <verb>" — match "silently" followed by a word
+    // We check for "silently " (with trailing space) to avoid matching
+    // e.g. "silently" at end of sentence (which is fine in prose like
+    // "fail loudly rather than silently").
+    // The forbidden pattern is "silently <verb>", e.g. "silently degrade",
+    // "silently substitute", "silently retry".
+    for prefix in &[
+        "silently degrad",
+        "silently substitut",
+        "silently retry",
+        "silently revert",
+        "silently ignor",
+        "silently drop",
+        "silently discard",
+        "silently swallow",
+        "silently conclud",
+        "silently fail",
+        "silently return",
+    ] {
+        if lower.contains(prefix) {
+            return true;
+        }
+    }
+
+    // "gracefully degrade" / "gracefully fall back"
+    if lower.contains("gracefully degrad") || lower.contains("gracefully fall") {
+        return true;
+    }
+
+    false
 }
 
 /// Infer the DangerCategory name from target CWE numbers.
@@ -5837,5 +5974,105 @@ debate:
             recipe_proposals[0].target_file,
             PathBuf::from("recipes/analysis/standard.yaml")
         );
+    }
+
+    // ===== #502: Forbidden vocabulary pre-screen tests =====
+
+    #[test]
+    fn test_forbidden_vocabulary_rejects_fallback_variants() {
+        assert!(contains_forbidden_vocabulary("use a fallback path"));
+        assert!(contains_forbidden_vocabulary("fall back to secondary"));
+        assert!(contains_forbidden_vocabulary("the system falls back"));
+        assert!(contains_forbidden_vocabulary("falling back to default"));
+        assert!(contains_forbidden_vocabulary("FALLBACK strategy"));
+    }
+
+    #[test]
+    fn test_forbidden_vocabulary_rejects_silently_verb() {
+        assert!(contains_forbidden_vocabulary(
+            "silently degrade to weaker method"
+        ));
+        assert!(contains_forbidden_vocabulary(
+            "silently substitute a default"
+        ));
+        assert!(contains_forbidden_vocabulary(
+            "silently retry the operation"
+        ));
+        assert!(contains_forbidden_vocabulary("silently ignore the error"));
+        assert!(contains_forbidden_vocabulary("Silently Drop the result"));
+    }
+
+    #[test]
+    fn test_forbidden_vocabulary_rejects_graceful_degradation() {
+        assert!(contains_forbidden_vocabulary(
+            "gracefully degrade to backup"
+        ));
+        assert!(contains_forbidden_vocabulary("gracefully fall back to"));
+    }
+
+    #[test]
+    fn test_forbidden_vocabulary_allows_clean_text() {
+        // Normal text should pass
+        assert!(!contains_forbidden_vocabulary(
+            "fail loudly with a diagnostic"
+        ));
+        assert!(!contains_forbidden_vocabulary("detect crypto weakness"));
+        assert!(!contains_forbidden_vocabulary(
+            "inspect local functions directly"
+        ));
+        assert!(!contains_forbidden_vocabulary(
+            "rather than silently" // end-of-sentence usage (no verb follows)
+        ));
+    }
+
+    // ===== #503: Jaccard dedup tests =====
+
+    #[test]
+    fn test_jaccard_identical_texts() {
+        let a = tokenize_for_jaccard("detect buffer overflow in C code");
+        let b = tokenize_for_jaccard("detect buffer overflow in C code");
+        assert!((jaccard_similarity(&a, &b) - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_jaccard_disjoint_texts() {
+        let a = tokenize_for_jaccard("detect buffer overflow");
+        let b = tokenize_for_jaccard("analyze network traffic");
+        assert!(jaccard_similarity(&a, &b) < 0.01);
+    }
+
+    #[test]
+    fn test_jaccard_near_duplicate_above_threshold() {
+        // Same idea, slightly different wording
+        let a = tokenize_for_jaccard(
+            "When analyzing C/C++ code for CWE-22 path traversal, \
+             inspect file open calls and check for directory traversal sequences",
+        );
+        let b = tokenize_for_jaccard(
+            "When analyzing C/C++ code for CWE-22 path traversal vulnerabilities, \
+             inspect file open calls and verify directory traversal sequence detection",
+        );
+        let sim = jaccard_similarity(&a, &b);
+        assert!(
+            sim >= 0.6,
+            "Near-duplicate text should have Jaccard >= 0.6, got {sim:.3}"
+        );
+    }
+
+    #[test]
+    fn test_jaccard_empty_sets() {
+        let empty: std::collections::HashSet<String> = std::collections::HashSet::new();
+        assert!((jaccard_similarity(&empty, &empty)).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_tokenize_filters_short_words() {
+        let tokens = tokenize_for_jaccard("a to the CWE-22 buffer overflow");
+        // "a", "to" are < 3 chars and should be filtered out
+        assert!(!tokens.contains("a"));
+        assert!(!tokens.contains("to"));
+        assert!(tokens.contains("the"));
+        assert!(tokens.contains("cwe"));
+        assert!(tokens.contains("buffer"));
     }
 }

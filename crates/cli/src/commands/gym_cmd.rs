@@ -1375,8 +1375,9 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             skwaq_gym::improve::store_improvement_lessons(&cycle)?;
             skwaq_gym::improve::append_learned_patterns(&cycle);
 
-            // Apply accepted proposals to the codebase
-            let report = skwaq_gym::improve::apply_accepted_proposals(&cycle, None)?;
+            // Open a knowledge DB so TaintRule proposals can insert data sources/sinks.
+            let knowledge_db = skwaq_gym::improve::prepare_improvement_knowledge_db()?;
+            let report = skwaq_gym::improve::apply_accepted_proposals(&cycle, Some(&knowledge_db))?;
             if report.applied > 0 {
                 println!(
                     "\n  {} proposal(s) applied to source code. Run `cargo test` to validate.",
@@ -1391,13 +1392,19 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
             }
             if report.skipped > 0 {
                 println!(
-                    "  {} proposal(s) skipped (non-accepted review or unsupported kind).",
-                    report.skipped
+                    "  {} proposal(s) skipped ({} review-rejected, {} unsupported-kind, {} empty-patch)",
+                    report.skipped,
+                    report.skipped_review_rejected,
+                    report.skipped_unsupported_kind,
+                    report.skipped_empty_patch,
                 );
             }
             println!(
-                "  Apply summary: {}/{} applied, {} blocked, {} skipped",
-                report.applied, report.total, report.blocked, report.skipped
+                "  Apply summary: {}/{} applied, {} blocked, {} skipped ({} review-rejected, {} unsupported-kind, {} empty-patch)",
+                report.applied, report.total, report.blocked, report.skipped,
+                report.skipped_review_rejected,
+                report.skipped_unsupported_kind,
+                report.skipped_empty_patch,
             );
 
             skwaq_gym::improve::print_proposals(&cycle);
