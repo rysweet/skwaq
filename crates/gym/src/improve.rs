@@ -605,7 +605,7 @@ async fn analyze_false_negatives(
     );
     proposals.extend(llm_proposals);
 
-    // Heuristics are an explicit second signal, not a hidden fallback path.
+    // Heuristics are an explicit second signal, not a hidden secondary path.
     let heuristic_proposals =
         annotate_heuristic_proposals(&knowledge_db, heuristic_failure_analysis(false_negatives))?;
     tracing::info!(
@@ -751,12 +751,12 @@ async fn run_failure_analyst_agent(
              - MEMORY | type=... | context=... | tags=tag1,tag2 | rationale=...\n\
              Every proposal must include at least one Evidence entry. Do not emit prose \
              before ## Case:.\n\n\
-             NO-FALLBACK INVARIANT: Do NOT propose fallback, degradation, or silent \
+             NO-SILENT-DEGRADATION INVARIANT: Do NOT propose silent degradation, silent alternate paths, or silent \
              alternate-path behavior. If a primary analysis/tool/path fails, the correct \
              fix is to fail loudly with a diagnostic error naming the primary path and why \
              no secondary is attempted — never to silently retry with a weaker method or \
              return a degraded placeholder. Proposals whose description or patch contains \
-             'fallback', 'silently degrade', or 'try alternate' language will be rejected.",
+             silent degradation and silent alternate-path language will be rejected.",
             suite,
             fn_case.case_id,
             fn_case.expected_cwes,
@@ -1442,8 +1442,8 @@ async fn run_overfitting_review_batch(
          - proposal_description should also match exactly.\n\
          - Each review entry must include at least one evidence_refs item.\n\
          - Do not emit prose outside the JSON block.\n\
-         - REJECT any proposal whose description or patch introduces fallback, \
-           silent degradation, or silent alternate-path behavior. The project's \
+         - REJECT any proposal whose description or patch introduces \
+           silent degradation or silent alternate-path behavior. The project's \
            invariant is: fail loudly with a diagnostic error instead of silently \
            degrading to a weaker code path.\n\n\
          Review these proposals:\n\n",
@@ -2241,7 +2241,7 @@ fn heuristic_failure_analysis_impl(false_negatives: &[FalseNegativeCase]) -> Vec
     let _phase1_cases: std::collections::HashSet<String> =
         proposals.iter().map(|p| p.source_case.clone()).collect();
 
-    // Phase 2: Fall back to regex pattern proposals for remaining gaps
+    // Phase 2: Emit regex pattern proposals for remaining gaps
     let missing_patterns: Vec<(&str, &str, &[u32])> = vec![
         (r"\bexecl\s*\(", "injection", &[78]),
         (r"\bexecv\s*\(", "injection", &[78]),
@@ -3320,7 +3320,7 @@ pub fn apply_accepted_proposals(
                         result.push_str(&content[insert_pos..]);
                         result
                     } else {
-                        // Fallback: append
+                        // No insertion point matched; append at end
                         format!("{}\n{}\n", content.trim_end(), proposal.patch.replace)
                     }
                 } else if content.contains(&proposal.patch.find) {
@@ -4444,7 +4444,7 @@ os.system(user_input)
             // Specific CWEs should NOT fall through to the generic hint
             assert_ne!(
                 hint, "Trace user-controlled data from input sources to dangerous sinks.",
-                "CWE-{cwe} should have a specific hint, not the generic fallback"
+                "CWE-{cwe} should have a specific hint, not the generic default"
             );
         }
     }

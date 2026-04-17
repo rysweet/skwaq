@@ -177,7 +177,7 @@ impl BenchmarkAdapter for CgcAdapter {
             }
         }
 
-        // Fallback: analyze just the listed file if directory walk found nothing
+        // If the directory walk found nothing, analyze just the listed file
         if all_findings.is_empty() && source_path.exists() {
             if config.quick_mode {
                 all_findings = run_source_pattern_detection(&source_path)?;

@@ -217,7 +217,7 @@ pub fn translate_to_cypher(
         ));
     }
 
-    // --- Fallback for MATCH queries: schema summary ---
+    // --- Schema-summary response for MATCH queries without a specific translation ---
     if upper.starts_with("MATCH") {
         return Ok(schema_summary(&inv));
     }
@@ -655,7 +655,7 @@ mod tests {
     }
 
     #[test]
-    fn test_translate_to_cypher_match_fallback() {
+    fn test_translate_to_cypher_match_schema_summary() {
         let result = translate_to_cypher("MATCH (x:SomeUnknown) RETURN x", "inv1");
         assert!(result.is_ok());
         let (cypher, cols) = result.unwrap();

@@ -690,7 +690,7 @@ mod edge_cases {
         let paths = ProfilePaths::new(&name, &base);
         paths.ensure().unwrap();
 
-        // Write empty config — should fall back to base entirely
+        // Write empty config — should load the base config only
         std::fs::write(paths.config_path(), "").unwrap();
 
         let base_config = skwaq_core::config::Config::default();

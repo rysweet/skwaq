@@ -94,7 +94,7 @@ impl BenchmarkAdapter for BinMetricAdapter {
             };
         }
 
-        // Source fallback for BinMetric cases that include source
+        // Source analysis path for BinMetric cases that include source
         let source = data_dir.join(&case.path);
         if config.quick_mode {
             run_source_pattern_detection(&source)

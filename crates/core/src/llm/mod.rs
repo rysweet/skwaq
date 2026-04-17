@@ -254,7 +254,7 @@ fn validate_backend_name(raw_backend: &str, field_name: &str) -> anyhow::Result<
             backend.as_str()
         };
         anyhow::bail!(
-            "Unsupported {} backend {:?}. Set {} explicitly to \"copilot\", \"anthropic\", or \"azure\"; hidden fallback is disabled.",
+            "Unsupported {} backend {:?}. Set {} explicitly to \"copilot\", \"anthropic\", or \"azure\"; silent backend substitution is disabled.",
             field_name,
             display,
             field_name
@@ -306,7 +306,9 @@ mod tests {
         assert!(err
             .to_string()
             .contains("Unsupported llm.reasoning backend"));
-        assert!(err.to_string().contains("hidden fallback is disabled"));
+        assert!(err
+            .to_string()
+            .contains("silent backend substitution is disabled"));
     }
 
     #[test]

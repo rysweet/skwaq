@@ -795,10 +795,10 @@ impl ProofStrategy for ConfigProofStrategy {
 }
 
 // ---------------------------------------------------------------------------
-// Generic fallback strategy
+// Generic strategy
 // ---------------------------------------------------------------------------
 
-/// Generic fallback strategy for CWEs without a specialized proof strategy.
+/// Generic strategy for CWEs without a specialized proof strategy.
 ///
 /// **Template-mode strategy**: Produces structured evidence templates for the poc-prover
 /// agent.

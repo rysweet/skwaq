@@ -214,7 +214,7 @@ pub enum GymSub {
         action: ProfileAction,
     },
 
-    /// Preflight check: verify Copilot backend, auth, model, and no-fallback readiness.
+    /// Preflight check: verify Copilot backend, auth, model, and no-silent-degradation readiness.
     /// Run this before hybrid benchmark runs to ensure the LLM pipeline will work.
     Preflight,
 
@@ -919,7 +919,7 @@ pub async fn run(sub: &GymSub) -> anyhow::Result<()> {
                                 "ERROR: [{suite}] shard {idx} died early (exit code: {}).",
                                 code.map_or("signal".to_string(), |c| c.to_string())
                             );
-                            // Print stderr content for context (prefer stderr.log, fall back to log)
+                            // Print stderr content for context (prefer stderr.log, then log)
                             let stderr_content = std::fs::read_to_string(&stderr_path)
                                 .ok()
                                 .filter(|s| !s.trim().is_empty());
@@ -1643,7 +1643,7 @@ async fn run_preflight() -> anyhow::Result<()> {
         }
     }
 
-    print!("  No-fallback check ... ");
+    print!("  No-silent-degradation check ... ");
     if config.llm.reasoning == "copilot" && config.llm.decompilation == "copilot" {
         println!(
             "OK (reasoning={}, decompilation={})",
