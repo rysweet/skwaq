@@ -2110,7 +2110,7 @@ fn parse_review_rating(
 
 /// Heuristic analysis of false negatives (no LLM needed).
 /// Checks for graph context gaps first (missing taint rules, agent prompt gaps),
-/// then falls back to missing regex patterns.
+/// then proposes missing regex patterns as a last resort.
 #[cfg(not(feature = "test-heuristic-api"))]
 fn heuristic_failure_analysis(false_negatives: &[FalseNegativeCase]) -> Vec<Improvement> {
     heuristic_failure_analysis_impl(false_negatives)
