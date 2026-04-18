@@ -2823,7 +2823,7 @@ pub fn append_learned_patterns(cycle: &ImprovementCycle) {
         .proposals
         .iter()
         .filter(|p| matches!(p.kind, ImprovementKind::NewPattern))
-        .filter(|p| !p.patch.replace.is_empty())
+        .filter(|p| !p.patch.replace.trim().is_empty())
         .collect();
 
     if pattern_proposals.is_empty() {
@@ -3973,7 +3973,7 @@ mod tests {
             .proposals
             .iter()
             .filter(|p| matches!(p.kind, ImprovementKind::NewPattern))
-            .filter(|p| !p.patch.replace.is_empty())
+            .filter(|p| !p.patch.replace.trim().is_empty())
             .collect();
 
         assert_eq!(
