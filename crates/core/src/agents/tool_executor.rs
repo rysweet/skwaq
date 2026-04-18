@@ -164,7 +164,11 @@ fn execute_read_function(
              RETURN f.id, f.name, f.address, f.decompiled, f.confidence LIMIT 1"
         );
 
-        if let Some(val) = read_function_from_rows(db.cypher_query(&cypher).ok()) {
+        let rows = db.cypher_query(&cypher).map_err(|e| {
+            tracing::error!("read_function name lookup failed: {e}");
+            anyhow::anyhow!("read_function name lookup failed: {e}")
+        })?;
+        if let Some(val) = read_function_from_rows(Some(rows)) {
             return Ok(val);
         }
 
@@ -175,13 +179,17 @@ fn execute_read_function(
              RETURN f.id, f.name, f.address, f.decompiled, f.confidence LIMIT 1"
         );
 
-        if let Some(val) = read_function_from_rows(db.cypher_query(&cypher).ok()) {
+        let rows = db.cypher_query(&cypher).map_err(|e| {
+            tracing::error!("read_function address lookup failed: {e}");
+            anyhow::anyhow!("read_function address lookup failed: {e}")
+        })?;
+        if let Some(val) = read_function_from_rows(Some(rows)) {
             return Ok(val);
         }
     }
 
     // SQL path — always works (SQLite-only mode or LadybugDB miss)
-    if let Ok(row) = db.conn().query_row(
+    let row_result = db.conn().query_row(
         "SELECT id, name, address, decompiled, confidence FROM functions \
          WHERE investigation_id = ?1 AND (name = ?2 OR address = ?2) LIMIT 1",
         rusqlite::params![investigation_id, func_name],
@@ -194,16 +202,26 @@ fn execute_read_function(
                 row.get::<_, f64>(4)?,
             ))
         },
-    ) {
-        let safe_decompiled = format!("<code_data>\n{}\n</code_data>", row.3);
-        return Ok(serde_json::json!({
-            "status": "ok",
-            "function_id": row.0,
-            "function": row.1,
-            "address": row.2,
-            "decompiled": safe_decompiled,
-            "confidence": row.4
-        }));
+    );
+    match row_result {
+        Ok(row) => {
+            let safe_decompiled = format!("<code_data>\n{}\n</code_data>", row.3);
+            return Ok(serde_json::json!({
+                "status": "ok",
+                "function_id": row.0,
+                "function": row.1,
+                "address": row.2,
+                "decompiled": safe_decompiled,
+                "confidence": row.4
+            }));
+        }
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            // Genuine not-found — fall through to not_found response.
+        }
+        Err(e) => {
+            tracing::error!("read_function sql query failed: {e}");
+            anyhow::bail!("read_function sql query failed: {e}");
+        }
     }
 
     Ok(serde_json::json!({
@@ -760,22 +778,23 @@ fn execute_get_taint_paths(
     let func_esc = esc(&function);
 
     // Get the function's file prefix to match taint sources/sinks in the same file
-    let file_prefix: Option<String> = db
+    let prefix_rows = db
         .cypher_query(&format!(
             "MATCH (f:Function) WHERE f.investigation_id = '{inv}' AND f.name = '{func_esc}' \
-             RETURN f.address LIMIT 1"
+         RETURN f.address LIMIT 1"
         ))
-        .ok()
-        .and_then(|rows| {
-            rows.first().and_then(|row| {
-                LadybugGraphDb::as_str(&row[0]).and_then(|addr| {
-                    addr.split(':')
-                        .next()
-                        .filter(|s| !s.is_empty())
-                        .map(|s| s.to_string())
-                })
-            })
-        });
+        .map_err(|e| {
+            tracing::error!("get_taint_paths prefix lookup failed: {e}");
+            anyhow::anyhow!("get_taint_paths prefix lookup failed: {e}")
+        })?;
+    let file_prefix: Option<String> = prefix_rows.first().and_then(|row| {
+        LadybugGraphDb::as_str(&row[0]).and_then(|addr| {
+            addr.split(':')
+                .next()
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+        })
+    });
 
     let cypher = if let Some(ref prefix) = file_prefix {
         let pfx = esc(prefix);
@@ -835,18 +854,18 @@ fn execute_get_cross_file_calls(
     let func_esc = esc(&function);
 
     // Get the function's file prefix from its address
-    let file_prefix: Option<String> = db
+    let prefix_rows = db
         .cypher_query(&format!(
             "MATCH (f:Function) WHERE f.investigation_id = '{inv}' AND f.name = '{func_esc}' \
-             RETURN f.address LIMIT 1"
+         RETURN f.address LIMIT 1"
         ))
-        .ok()
-        .and_then(|rows| {
-            rows.first().and_then(|row| {
-                LadybugGraphDb::as_str(&row[0])
-                    .map(|addr| addr.split(':').next().unwrap_or("").to_string())
-            })
-        });
+        .map_err(|e| {
+            tracing::error!("get_cross_file_calls prefix lookup failed: {e}");
+            anyhow::anyhow!("get_cross_file_calls prefix lookup failed: {e}")
+        })?;
+    let file_prefix: Option<String> = prefix_rows.first().and_then(|row| {
+        LadybugGraphDb::as_str(&row[0]).map(|addr| addr.split(':').next().unwrap_or("").to_string())
+    });
 
     let mut results = Vec::new();
 
@@ -857,18 +876,20 @@ fn execute_get_cross_file_calls(
              WHERE f1.investigation_id = '{inv}' AND f1.name = '{func_esc}' \
              RETURN f2.name, f2.address LIMIT 50"
         );
-        if let Ok(rows) = db.cypher_query(&cypher) {
-            for row in &rows {
-                let name = LadybugGraphDb::as_str(&row[0]).unwrap_or("").to_string();
-                let address = LadybugGraphDb::as_str(&row[1]).unwrap_or("").to_string();
-                let callee_prefix = address.split(':').next().unwrap_or("");
-                if callee_prefix != prefix {
-                    results.push(serde_json::json!({
-                        "name": name,
-                        "address": address,
-                        "direction": "callee",
-                    }));
-                }
+        let rows = db.cypher_query(&cypher).map_err(|e| {
+            tracing::error!("get_cross_file_calls callee query failed: {e}");
+            anyhow::anyhow!("get_cross_file_calls callee query failed: {e}")
+        })?;
+        for row in &rows {
+            let name = LadybugGraphDb::as_str(&row[0]).unwrap_or("").to_string();
+            let address = LadybugGraphDb::as_str(&row[1]).unwrap_or("").to_string();
+            let callee_prefix = address.split(':').next().unwrap_or("");
+            if callee_prefix != prefix {
+                results.push(serde_json::json!({
+                    "name": name,
+                    "address": address,
+                    "direction": "callee",
+                }));
             }
         }
 
@@ -878,18 +899,20 @@ fn execute_get_cross_file_calls(
              WHERE f2.investigation_id = '{inv}' AND f2.name = '{func_esc}' \
              RETURN f1.name, f1.address LIMIT 50"
         );
-        if let Ok(rows) = db.cypher_query(&cypher) {
-            for row in &rows {
-                let name = LadybugGraphDb::as_str(&row[0]).unwrap_or("").to_string();
-                let address = LadybugGraphDb::as_str(&row[1]).unwrap_or("").to_string();
-                let caller_prefix = address.split(':').next().unwrap_or("");
-                if caller_prefix != prefix {
-                    results.push(serde_json::json!({
-                        "name": name,
-                        "address": address,
-                        "direction": "caller",
-                    }));
-                }
+        let rows = db.cypher_query(&cypher).map_err(|e| {
+            tracing::error!("get_cross_file_calls caller query failed: {e}");
+            anyhow::anyhow!("get_cross_file_calls caller query failed: {e}")
+        })?;
+        for row in &rows {
+            let name = LadybugGraphDb::as_str(&row[0]).unwrap_or("").to_string();
+            let address = LadybugGraphDb::as_str(&row[1]).unwrap_or("").to_string();
+            let caller_prefix = address.split(':').next().unwrap_or("");
+            if caller_prefix != prefix {
+                results.push(serde_json::json!({
+                    "name": name,
+                    "address": address,
+                    "direction": "caller",
+                }));
             }
         }
     }
