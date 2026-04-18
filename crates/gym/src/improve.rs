@@ -3103,9 +3103,11 @@ pub fn apply_accepted_proposals(
             report.skipped_unsupported_kind += 1;
             continue;
         }
-        if proposal.patch.replace.is_empty() {
-            // Empty patch means the proposal is guidance only (e.g., architectural
-            // improvements) and cannot be auto-applied regardless of review status.
+        if proposal.patch.replace.trim().is_empty() {
+            // Empty (or whitespace-only) patch means the proposal is guidance only
+            // (e.g., architectural improvements) and cannot be auto-applied regardless
+            // of review status. Use trim() to match the pre-screen logic in
+            // analyze_false_negatives so defense-in-depth stays consistent.
             // Count as skipped — not blocked — so the cycle completes cleanly.
             tracing::info!(
                 "Accepted proposal '{}' has no auto-apply patch; counting as skipped",
