@@ -278,8 +278,8 @@ fn execute_get_call_neighbors(
                 })
                 .collect(),
             Err(e) => {
-                tracing::debug!("get_{direction} query failed: {e}");
-                Vec::new()
+                tracing::error!("get_{direction} cypher query failed: {e}");
+                anyhow::bail!("get_{direction} cypher query failed: {e}");
             }
         }
     } else {
@@ -295,18 +295,33 @@ fn execute_get_call_neighbors(
              JOIN functions f2 ON c.callee_id = f2.id \
              WHERE f1.name = ?1 AND f1.investigation_id = ?2 LIMIT 50"
         };
-        let mut stmt = db
-            .conn()
-            .prepare(sql)
-            .unwrap_or_else(|_| db.conn().prepare("SELECT '' WHERE 0").unwrap());
-        stmt.query_map(rusqlite::params![func_name, investigation_id], |row| {
-            Ok(serde_json::json!({
-                "name": row.get::<_, String>(0)?,
-                "address": row.get::<_, String>(1)?
-            }))
-        })
-        .map(|rows| rows.filter_map(|r| r.ok()).collect())
-        .unwrap_or_default()
+        let conn = db.conn();
+        let mut stmt = conn.prepare(sql).map_err(|e| {
+            tracing::error!("get_{direction} sql prepare failed: {e}");
+            anyhow::anyhow!("get_{direction} sql prepare failed: {e}")
+        })?;
+        let rows = stmt
+            .query_map(rusqlite::params![func_name, investigation_id], |row| {
+                Ok(serde_json::json!({
+                    "name": row.get::<_, String>(0)?,
+                    "address": row.get::<_, String>(1)?
+                }))
+            })
+            .map_err(|e| {
+                tracing::error!("get_{direction} sql query failed: {e}");
+                anyhow::anyhow!("get_{direction} sql query failed: {e}")
+            })?;
+        let mut out = Vec::new();
+        for r in rows {
+            match r {
+                Ok(v) => out.push(v),
+                Err(e) => {
+                    tracing::error!("get_{direction} sql row read failed: {e}");
+                    anyhow::bail!("get_{direction} sql row read failed: {e}");
+                }
+            }
+        }
+        out
     };
 
     Ok(serde_json::json!({
@@ -541,11 +556,14 @@ fn execute_rename_function(
             "MATCH (f:Function) WHERE f.investigation_id = '{inv}' AND f.name = '{name_esc}' \
              RETURN f.name LIMIT 1"
         );
-        if db
-            .cypher_query(&check)
-            .map(|r| !r.is_empty())
-            .unwrap_or(false)
-        {
+        let exists_by_name = match db.cypher_query(&check) {
+            Ok(rows) => !rows.is_empty(),
+            Err(e) => {
+                tracing::error!("rename_function existence-by-name check failed: {e}");
+                anyhow::bail!("rename_function existence-by-name check failed: {e}");
+            }
+        };
+        if exists_by_name {
             let update = format!(
                 "MATCH (f:Function) WHERE f.investigation_id = '{inv}' AND f.name = '{name_esc}' \
                  SET f.decompiled = '{code}'"
@@ -563,11 +581,14 @@ fn execute_rename_function(
             "MATCH (f:Function) WHERE f.investigation_id = '{inv}' AND f.address = '{name_esc}' \
              RETURN f.name LIMIT 1"
         );
-        if db
-            .cypher_query(&check)
-            .map(|r| !r.is_empty())
-            .unwrap_or(false)
-        {
+        let exists_by_addr = match db.cypher_query(&check) {
+            Ok(rows) => !rows.is_empty(),
+            Err(e) => {
+                tracing::error!("rename_function existence-by-address check failed: {e}");
+                anyhow::bail!("rename_function existence-by-address check failed: {e}");
+            }
+        };
+        if exists_by_addr {
             let update = format!(
                 "MATCH (f:Function) WHERE f.investigation_id = '{inv}' AND f.address = '{name_esc}' \
                  SET f.decompiled = '{code}'"
@@ -592,7 +613,10 @@ fn execute_rename_function(
                 &func_name,
             ],
         )
-        .unwrap_or(0);
+        .map_err(|e| {
+            tracing::error!("rename_function sql update failed: {e}");
+            anyhow::anyhow!("rename_function sql update failed: {e}")
+        })?;
 
     if updated > 0 {
         return Ok(serde_json::json!({
@@ -784,8 +808,8 @@ fn execute_get_taint_paths(
             })
             .collect(),
         Err(e) => {
-            tracing::debug!("get_taint_paths query failed: {e}");
-            Vec::new()
+            tracing::error!("get_taint_paths query failed: {e}");
+            anyhow::bail!("get_taint_paths query failed: {e}");
         }
     };
 
@@ -907,8 +931,8 @@ fn execute_get_data_sources(
             })
             .collect(),
         Err(e) => {
-            tracing::debug!("get_data_sources query failed: {e}");
-            Vec::new()
+            tracing::error!("get_data_sources query failed: {e}");
+            anyhow::bail!("get_data_sources query failed: {e}");
         }
     };
 
@@ -947,8 +971,8 @@ fn execute_get_imports(
             })
             .collect(),
         Err(e) => {
-            tracing::debug!("get_imports query failed: {e}");
-            Vec::new()
+            tracing::error!("get_imports query failed: {e}");
+            anyhow::bail!("get_imports query failed: {e}");
         }
     };
 
@@ -1899,4 +1923,26 @@ mod tests {
             assert!(!insight.is_empty(), "fn_insight should be non-empty");
         }
     }
+
+    // ===== #507: Tool error propagation =====
+    //
+    // The fixes in this file replace silent-error patterns
+    // (`.unwrap_or(false)`, `.unwrap_or(0)`, `_ => Vec::new()` swallowing
+    // `Err(e)`) with explicit `bail!` / `?` propagation in five tools:
+    //   - get_callers / get_callees
+    //   - get_taint_paths
+    //   - get_data_sources
+    //   - get_imports
+    //   - rename_function
+    //
+    // Direct unit tests for the Err path are impractical: LadybugDB does not
+    // return Err for "label has no nodes" — it returns an empty result set,
+    // which is the correct happy-path behavior already exercised by the
+    // existing `_empty` and `_isolation` tests above. To meaningfully exercise
+    // the Err path we would need to inject a corrupted/closed DB handle, which
+    // would require refactoring `GraphDb` for dependency injection (out of
+    // scope for this fix). The change is therefore covered by:
+    //   1. Existing happy-path tests (no regression on Ok results)
+    //   2. Code review of the bail!/`?` patterns
+    //   3. Integration-level testing via `cargo run -- gym run fixtures --quick`
 }
