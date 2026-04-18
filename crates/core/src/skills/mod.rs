@@ -21,7 +21,7 @@ pub mod discovery;
 
 use std::path::{Path, PathBuf};
 
-use crate::agents::{agent_tools, execute_tool, filter_tools};
+use crate::agents::{agent_tools, execute_tool_with_memory, filter_tools};
 use crate::config::Config;
 use crate::graph::GraphDb;
 use crate::llm::{execute_with_tools, Client, TokenBudget};
@@ -173,6 +173,7 @@ pub async fn run_skill(
 
     let tokens_before = budget.used;
     let inv_id = investigation_id.unwrap_or("").to_string();
+    let skill_name = skill.name.clone();
 
     let output = execute_with_tools(
         &llm,
@@ -182,7 +183,9 @@ pub async fn run_skill(
         &tools,
         |tool_name, args| {
             let inv = inv_id.clone();
-            let result = execute_tool(&db, &inv, &tool_name, &args);
+            let agent_name = skill_name.clone();
+            let result =
+                execute_tool_with_memory(&db, &inv, &tool_name, &args, None, Some(&agent_name));
             async move { result }
         },
         &mut budget,
