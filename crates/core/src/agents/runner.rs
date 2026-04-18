@@ -10,7 +10,7 @@ use crate::memory::MemoryStore;
 use super::definition::{AgentDefinition, AgentRoleMetadata};
 use super::output_schema::{output_schema_contract, parse_structured_output, ParsedAgentOutput};
 use super::tool_definitions::{agent_tools, filter_tools};
-use super::tool_executor::{execute_tool, execute_tool_with_memory};
+use super::tool_executor::execute_tool_with_memory;
 
 /// Lightweight structured summary passed between pipeline stages.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,6 +127,7 @@ impl AgentRunner {
 
         let tokens_before = budget.used;
         let inv_id = investigation_id.to_string();
+        let agent_name_str = agent.name.clone();
 
         let output = execute_with_tools(
             &self.client,
@@ -136,7 +137,9 @@ impl AgentRunner {
             &tools,
             |tool_name, args| {
                 let inv = inv_id.clone();
-                let result = execute_tool(db, &inv, &tool_name, &args);
+                let name = agent_name_str.clone();
+                let result =
+                    execute_tool_with_memory(db, &inv, &tool_name, &args, None, Some(&name));
                 async move { result }
             },
             budget,

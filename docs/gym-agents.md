@@ -67,7 +67,7 @@ You are [Agent], a [specialist]. Your job is to [task].
 | `lookup_knowledge` | Search the CWE knowledge base and knowledge packs |
 | `store_memory` | Persist findings/insights for other agents |
 | `recall_memory` | Retrieve findings stored by other agents |
-| `create_finding` | Register a vulnerability finding |
+| `create_finding` | Register a vulnerability finding (attributed to the calling agent) |
 | `search_similar` | Find code patterns similar to a snippet |
 
 The graph-query tools (`get_taint_paths`, `get_cross_file_calls`,
@@ -257,7 +257,10 @@ Used in CyberGym (OSS-Fuzz) and CGC (DARPA) benchmarks.
 ### taint-tracer
 
 Traces data flow from untrusted sources to dangerous sinks across function
-boundaries. Uses get_taint_paths and get_cross_file_calls tools.
+boundaries. Uses get_taint_paths and get_cross_file_calls tools. Findings
+created by taint-tracer carry `agent: "taint-tracer"` in the database, enabling
+downstream agents (vuln-hunter) to query and incorporate taint analysis results.
+See [Agent Finding Attribution](agent-finding-attribution.md).
 
 ### patch-diff-analyst
 
@@ -289,5 +292,7 @@ do everything.
 
 - [Graph-Agent Gym Cycle](graph-agent-gym-cycle.md) — Running improvement
   cycles that generate AgentPrompt proposals to tune agent behavior
+- [Agent Finding Attribution](agent-finding-attribution.md) — How findings
+  are attributed to the agent that created them
 - [Graph-Agent Architecture](graph-agent-architecture.md) — How agents use
   graph tools for vulnerability detection

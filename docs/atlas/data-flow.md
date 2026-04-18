@@ -77,7 +77,7 @@ decompile-renamer → attack-surface → vuln-hunter → [exploit-analyst ↔ de
 
 ### Agent tools available at runtime
 
-All agents access graph queries, function reading, CWE lookup, knowledge search, and memory via `agents::tool_executor`.
+All agents access graph queries, function reading, CWE lookup, knowledge search, and memory via `agents::tool_executor`. Each agent's findings carry the agent's name in the `agent` field (see [Agent Finding Attribution](../agent-finding-attribution.md)), enabling inter-agent context passing and per-agent audit trails.
 
 ### Specialist agents (invoked on demand)
 
