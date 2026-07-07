@@ -1,0 +1,57 @@
+name: "skwaq security - RUSTSEC-2026-0204 crossbeam-epoch patched"
+description: "Verifies crossbeam-epoch is bumped to a patched version (>= 0.9.20) and that cargo audit no longer reports RUSTSEC-2026-0204 (invalid pointer dereference in fmt::Pointer)."
+version: "1.0.0"
+
+config:
+  timeout: 180000
+  retries: 0
+  parallel: false
+
+agents:
+  - name: "skwaq-cli"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "."
+      timeout: 180000
+      capture_output: true
+
+steps:
+  - name: "Run RUSTSEC-2026-0204 security check"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "./tests/qa/bin/security-rustsec-2026-0204.sh"
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "security check: RUSTSEC-2026-0204 (crossbeam-epoch)"
+        - "crossbeam-epoch version check ... OK (locked"
+        - "cargo audit check ......... OK (RUSTSEC-2026-0204 not reported)"
+        - "All RUSTSEC-2026-0204 security checks passed."
+    timeout: 180000
+
+assertions:
+  - name: "Security check command succeeds"
+    type: "command_success"
+    agent: "skwaq-cli"
+    params:
+      step: "Run RUSTSEC-2026-0204 security check"
+
+  - name: "Patched version and cleared advisory are reported"
+    type: "output_contains_all"
+    agent: "skwaq-cli"
+    params:
+      step: "Run RUSTSEC-2026-0204 security check"
+      required_strings:
+        - "crossbeam-epoch version check ... OK (locked"
+        - "cargo audit check ......... OK (RUSTSEC-2026-0204 not reported)"
+
+metadata:
+  tags:
+    - "security"
+    - "dependencies"
+    - "rustsec"
+    - "cargo-audit"
+  priority: "high"
+  author: "copilot-cli"
