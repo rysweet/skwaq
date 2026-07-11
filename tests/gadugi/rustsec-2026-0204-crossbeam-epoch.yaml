@@ -1,0 +1,55 @@
+name: "RUSTSEC-2026-0204 crossbeam-epoch advisory cleared"
+description: |
+  Verifies the lockfile resolves crossbeam-epoch to the fixed 0.9.20 release
+  and that cargo-deny no longer reports RUSTSEC-2026-0204. Other pre-existing
+  advisories may still make cargo-deny exit nonzero and are intentionally out
+  of scope for this focused security bump.
+version: "1.0.0"
+
+config:
+  timeout: 120000
+  retries: 0
+  parallel: false
+
+agents:
+  - name: "cli-agent"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "."
+      timeout: 120000
+      capture_output: true
+
+steps:
+  - name: "Confirm crossbeam-epoch advisory is absent"
+    agent: "cli-agent"
+    action: "execute_command"
+    params:
+      command: >
+        tmpfile="$(mktemp)" &&
+        cargo metadata --locked --format-version 1 >/dev/null &&
+        grep -A3 'name = "crossbeam-epoch"' Cargo.lock | grep 'version = "0.9.20"' &&
+        set +e;
+        cargo deny check advisories >"$tmpfile" 2>&1;
+        deny_status=$?;
+        set -e;
+        if grep -Eq 'ID: RUSTSEC-2026-0204|crossbeam-epoch v' "$tmpfile"; then
+          cat "$tmpfile";
+          rm -f "$tmpfile";
+          exit 1;
+        fi;
+        echo "crossbeam-epoch locked at 0.9.20";
+        echo "target advisory absent; cargo-deny exit was $deny_status due to unrelated advisories";
+        rm -f "$tmpfile"
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "version = \"0.9.20\""
+        - "crossbeam-epoch locked at 0.9.20"
+        - "target advisory absent"
+    timeout: 120000
+
+metadata:
+  tags: ["cli", "security", "dependency", "rustsec", "crossbeam-epoch"]
+  priority: "high"
+  author: "copilot-cli"
