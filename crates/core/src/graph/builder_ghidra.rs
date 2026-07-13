@@ -80,7 +80,7 @@ impl<'a> GraphBuilder<'a> {
             let existing_id = addr_to_id
                 .get(&gfunc.address)
                 .or_else(|| {
-                    let with_prefix = format!("0x{}", &gfunc.address);
+                    let with_prefix = format!("0x{}", gfunc.address);
                     addr_to_id.get(&with_prefix)
                 })
                 .or_else(|| {
@@ -122,7 +122,7 @@ impl<'a> GraphBuilder<'a> {
                 ghidra_addr_to_db_id.insert(gfunc.address.clone(), func_id.clone());
             } else {
                 // New function discovered by Ghidra - insert it
-                let func_id = format!("ghidra-{}-{}", &gfunc.address, &gfunc.name);
+                let func_id = format!("ghidra-{}-{}", gfunc.address, gfunc.name);
                 self.db().execute(
                     "INSERT OR IGNORE INTO functions \
                      (id, name, address, decompiled, parameter_count, investigation_id) \

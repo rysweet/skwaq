@@ -41,7 +41,7 @@ impl<'a> GraphBuilder<'a> {
         for sym in &info.symbols {
             // goblin st_type: STT_FUNC = 2. Debug format produces "2".
             if sym.symbol_type == "2" || sym.symbol_type.contains("Func") {
-                let id = format!("func-{:x}-{}", sym.address, &sym.name);
+                let id = format!("func-{:x}-{}", sym.address, sym.name);
                 self.db().execute(
                     "INSERT OR IGNORE INTO functions (id, name, address, investigation_id) \
                      VALUES (?1, ?2, ?3, ?4)",
@@ -58,7 +58,7 @@ impl<'a> GraphBuilder<'a> {
 
         // Insert import nodes as symbols.
         for imp in &info.imports {
-            let id = format!("imp-{}", &imp.name);
+            let id = format!("imp-{}", imp.name);
             self.db().execute(
                 "INSERT OR IGNORE INTO symbols (id, name, symbol_type, binding, investigation_id) \
                  VALUES (?1, ?2, 'import', 'dynamic', ?3)",
@@ -69,7 +69,7 @@ impl<'a> GraphBuilder<'a> {
             // Classify as data source.
             let base = imp.name.split('@').next().unwrap_or(&imp.name);
             if SOURCE_PATTERNS.contains(&base) {
-                let src_id = format!("src-{}", &imp.name);
+                let src_id = format!("src-{}", imp.name);
                 let source_type = classify_source(base);
                 self.db().execute(
                     "INSERT OR IGNORE INTO data_sources (id, name, source_type, investigation_id) \
@@ -86,7 +86,7 @@ impl<'a> GraphBuilder<'a> {
 
             // Classify as data sink.
             if SINK_PATTERNS.contains(&base) {
-                let sink_id = format!("sink-{}", &imp.name);
+                let sink_id = format!("sink-{}", imp.name);
                 let danger = classify_sink_danger(base);
                 self.db().execute(
                     "INSERT OR IGNORE INTO data_sinks (id, name, sink_type, danger_level, investigation_id) \
