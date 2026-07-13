@@ -314,7 +314,7 @@ pub fn print_span_summary(spans: &[SpanRecord]) {
             "{:<30} {:>8.1}ms {:>12} {}",
             truncate(&span.name, 30),
             span.duration_ms,
-            &span.status,
+            span.status,
             key_attrs.join(", ")
         );
     }
