@@ -1,0 +1,56 @@
+name: "dependency audit - crossbeam-epoch RUSTSEC-2026-0204"
+description: "Verifies the lockfile pins crossbeam-epoch to the fixed release and cargo-deny no longer reports RUSTSEC-2026-0204."
+version: "1.0.0"
+
+config:
+  timeout: 180000
+  retries: 0
+  parallel: false
+
+agents:
+  - name: "skwaq-cli"
+    type: "system"
+    config:
+      shell: "bash"
+      cwd: "."
+      timeout: 180000
+      capture_output: true
+
+steps:
+  - name: "Verify crossbeam-epoch advisory fix"
+    agent: "skwaq-cli"
+    action: "execute_command"
+    params:
+      command: "./tests/qa/bin/crossbeam-epoch-rustsec-2026-0204.sh"
+    expect:
+      exit_code: 0
+      stdout_contains:
+        - "crossbeam-epoch version: 0.9.20"
+        - "RUSTSEC-2026-0204: absent"
+        - "unrelated advisories: out of scope"
+    timeout: 180000
+
+assertions:
+  - name: "Advisory fix verification succeeds"
+    type: "command_success"
+    agent: "skwaq-cli"
+    params:
+      step: "Verify crossbeam-epoch advisory fix"
+
+  - name: "Output confirms target advisory absence"
+    type: "output_contains_all"
+    agent: "skwaq-cli"
+    params:
+      step: "Verify crossbeam-epoch advisory fix"
+      required_strings:
+        - "crossbeam-epoch version: 0.9.20"
+        - "RUSTSEC-2026-0204: absent"
+        - "unrelated advisories: out of scope"
+
+metadata:
+  tags:
+    - "dependency"
+    - "security"
+    - "rustsec"
+  priority: "high"
+  author: "copilot-cli"
