@@ -675,6 +675,25 @@ async fn analyze_false_negatives(
         tracing::info!("Forbidden-vocabulary pre-screen rejected {rejected_count} proposal(s)");
     }
 
+    // Empty-patch pre-screen: reject proposals with no actual patch content
+    // before wasting reviewer LLM budget (#509).
+    let empty_patch_pre_count = proposals.len();
+    proposals.retain(|p| {
+        if p.patch.replace.trim().is_empty() {
+            tracing::warn!(
+                "Pre-screen rejected proposal '{}': empty patch (guidance-only)",
+                p.description.chars().take(80).collect::<String>()
+            );
+            false
+        } else {
+            true
+        }
+    });
+    let empty_patch_rejected = empty_patch_pre_count - proposals.len();
+    if empty_patch_rejected > 0 {
+        tracing::info!("Empty-patch pre-screen rejected {empty_patch_rejected} proposal(s)");
+    }
+
     // Run overfitting review gate on proposals
     proposals = run_overfitting_review(
         proposals,
@@ -2804,7 +2823,7 @@ pub fn append_learned_patterns(cycle: &ImprovementCycle) {
         .proposals
         .iter()
         .filter(|p| matches!(p.kind, ImprovementKind::NewPattern))
-        .filter(|p| !p.patch.replace.is_empty())
+        .filter(|p| !p.patch.replace.trim().is_empty())
         .collect();
 
     if pattern_proposals.is_empty() {
@@ -3084,9 +3103,11 @@ pub fn apply_accepted_proposals(
             report.skipped_unsupported_kind += 1;
             continue;
         }
-        if proposal.patch.replace.is_empty() {
-            // Empty patch means the proposal is guidance only (e.g., architectural
-            // improvements) and cannot be auto-applied regardless of review status.
+        if proposal.patch.replace.trim().is_empty() {
+            // Empty (or whitespace-only) patch means the proposal is guidance only
+            // (e.g., architectural improvements) and cannot be auto-applied regardless
+            // of review status. Use trim() to match the pre-screen logic in
+            // analyze_false_negatives so defense-in-depth stays consistent.
             // Count as skipped — not blocked — so the cycle completes cleanly.
             tracing::info!(
                 "Accepted proposal '{}' has no auto-apply patch; counting as skipped",
@@ -3952,7 +3973,7 @@ mod tests {
             .proposals
             .iter()
             .filter(|p| matches!(p.kind, ImprovementKind::NewPattern))
-            .filter(|p| !p.patch.replace.is_empty())
+            .filter(|p| !p.patch.replace.trim().is_empty())
             .collect();
 
         assert_eq!(
@@ -5985,6 +6006,38 @@ debate:
         assert!(contains_forbidden_vocabulary("the system falls back"));
         assert!(contains_forbidden_vocabulary("falling back to default"));
         assert!(contains_forbidden_vocabulary("FALLBACK strategy"));
+    }
+
+    // ===== #509: Empty-patch pre-screen test =====
+
+    #[test]
+    fn test_empty_patch_pre_screen() {
+        let mk = |desc: &str, replace: &str| Improvement {
+            kind: ImprovementKind::NewPattern,
+            description: desc.to_string(),
+            target_cwes: vec![79],
+            target_file: PathBuf::from("crates/core/src/analysis/patterns_source.rs"),
+            patch: Patch {
+                find: String::new(),
+                replace: replace.to_string(),
+            },
+            source_case: "case_x".to_string(),
+            priority: Priority::High,
+            supporting_evidence: Vec::new(),
+            review: None,
+        };
+
+        let mut proposals = vec![
+            mk("Valid pattern with real patch", r"\beval\s*\("),
+            mk("Empty patch — guidance only", ""),
+            mk("Whitespace-only patch", "   \n  "),
+        ];
+
+        // Mirror the pre-screen used in analyze_false_negatives()
+        proposals.retain(|p| !p.patch.replace.trim().is_empty());
+
+        assert_eq!(proposals.len(), 1);
+        assert!(proposals[0].description.contains("Valid pattern"));
     }
 
     #[test]
