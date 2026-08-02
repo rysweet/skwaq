@@ -67,6 +67,21 @@ lazy_static::lazy_static! {
         &["suite"],
         vec![10.0, 30.0, 60.0, 120.0, 300.0, 600.0, 1200.0]
     ).unwrap();
+
+    /// Azure API retry count, labeled by suite and reason.
+    pub static ref API_RETRIES_TOTAL: CounterVec = register_counter_vec!(
+        "skwaq_gym_api_retries_total",
+        "Azure API retry attempts",
+        &["suite", "reason"]
+    ).unwrap();
+
+    /// Azure API retry wait time histogram, labeled by suite.
+    pub static ref API_RETRY_WAIT_SECONDS: HistogramVec = register_histogram_vec!(
+        "skwaq_gym_api_retry_wait_seconds",
+        "Time spent waiting on API retries",
+        &["suite"],
+        vec![0.1, 1.0, 5.0, 10.0, 30.0, 60.0, 120.0]
+    ).unwrap();
 }
 
 /// Handle a single HTTP request. Only `/metrics` returns data; everything else
@@ -145,6 +160,17 @@ mod tests {
             .with_label_values(&["attack-surface"])
             .observe(1.5);
         CASE_DURATION.with_label_values(&["test"]).observe(42.0);
+    }
+
+    #[test]
+    fn api_retry_metrics_registered() {
+        // Verify the new retry metrics are accessible without panic.
+        API_RETRIES_TOTAL
+            .with_label_values(&["test", "rate_limited"])
+            .inc();
+        API_RETRY_WAIT_SECONDS
+            .with_label_values(&["test"])
+            .observe(1.0);
     }
 
     #[test]
