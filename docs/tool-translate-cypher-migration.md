@@ -113,8 +113,15 @@ args. Returns `{"status": "created", "id": "<uuid>"}`.
 
 **Required fields:** `title`
 **Optional fields:** `evidence`, `severity`, `category`
-**Auto-populated:** `id` (UUID), `agent` (from context), `timestamp` (ISO 8601),
+**Auto-populated:** `id` (UUID), `agent` (from calling agent's name, falls back
+to `"vuln_hunter"` if not provided), `timestamp` (ISO 8601),
 `investigation_id`, `status` ("open"), `cycle_discovered` (0)
+
+The `agent` field is set from the `agent_name` parameter passed through the
+tool execution chain. Both `run_agent_with_db` and `run_agent_with_db_and_memory`
+propagate the agent's name from its `AgentDefinition`. See
+[Agent Finding Attribution](agent-finding-attribution.md) for the full
+propagation path.
 
 #### `execute_search_similar(db: &GraphDb, investigation_id: &str, args: &Value) -> Result<Value>`
 

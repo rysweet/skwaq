@@ -294,6 +294,8 @@ The vuln-hunter agent uses graph traversal as its primary detection method:
 5. **Verify with source** — Confirm the vulnerability exists in the actual
    code, not just the graph abstraction
 6. **Create finding** — Record confirmed vulnerabilities with evidence chain
+   (findings are attributed to the calling agent; see
+   [Agent Finding Attribution](agent-finding-attribution.md))
 
 Regex pattern hits from the pattern detector appear in the context as hints.
 The agent uses them to direct attention but never treats a pattern match
